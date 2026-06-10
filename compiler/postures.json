@@ -1,0 +1,11 @@
+{
+  "_note": "stance = authority stance the compiler keys on. gender selects the Host voice (Andrew male / Andrea female) — Model 1: one host identity, one voice per gender, postures as register shifts. voice = ElevenLabs id, TBD (avatar/voice backfill). Not used by the compiler; consumed at call setup.",
+  "jarl":   { "name": "Jarl",   "stance": "apex",        "gender": "male",   "voice": null },
+  "skald":  { "name": "Skald",  "stance": "lateral",     "gender": "female", "voice": null },
+  "hersir": { "name": "Hersir", "stance": "striver",     "gender": "male",   "voice": null },
+  "thrall": { "name": "Thrall", "stance": "subordinate", "gender": "female", "voice": null },
+  "bondi":  { "name": "Bondi",  "stance": "owner",       "gender": "male",   "voice": null },
+  "volva":  { "name": "Völva",  "stance": "outside",     "gender": "female", "voice": null },
+  "rynir":  { "name": "Rýnir",  "stance": "gatekeeper",  "gender": "male",   "voice": null },
+  "thul":   { "name": "Thul",   "stance": "floor",       "gender": "male",   "voice": null }
+}

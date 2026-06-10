@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/chat/completions", "destination": "/api/chat/completions" }
+  ]
+}

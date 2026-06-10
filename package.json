@@ -1,0 +1,9 @@
+{
+  "name": "posture-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SpamViking Posture Engine — Phase 1 pass-through (Vapi <-> Claude)",
+  "dependencies": {
+    "@vercel/functions": "^3.7.0"
+  }
+}

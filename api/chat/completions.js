@@ -1,0 +1,318 @@
+// SpamViking — Posture Engine
+// PHASE 1: DUMB PROXY
+//
+// Sits between Vapi and Claude as an OpenAI-compatible /chat/completions
+// endpoint. Vapi POSTs the conversation every turn (OpenAI format); we
+// forward it to Anthropic's Messages API with streaming, translate the
+// Anthropic SSE stream into OpenAI-style SSE deltas, and stream it back.
+//
+// Goal of this phase: the call sounds IDENTICAL to today, but the brain
+// is now ours. No posture, no store, no rules yet — that's Phase 2+.
+//
+// THE INVARIANT (carried from the BUILD plan): the voice never waits on a
+// slow decision. The only LLM the speech path awaits is this Host line.
+// Phase 4's Governor will run via waitUntil() (see note at bottom) so it
+// never blocks this stream.
+
+export const config = { runtime: "edge" };
+
+import { getCall, setCall } from "../_store.js";
+import { applyForce, directiveFor } from "../_gears.js";
+import { waitUntil } from "@vercel/functions";
+
+const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_VERSION = "2023-06-01";
+
+// Set ANTHROPIC_MODEL in Vercel to match (or beat) whatever the Vapi
+// assistant uses today. Haiku is the low-latency default for voice; bump
+// to a Sonnet if the bait character needs more wit and the latency holds.
+const MODEL = () => process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
+const MAX_TOKENS = () => parseInt(process.env.MAX_TOKENS || "1024", 10);
+
+export default async function handler(req) {
+  // Browser health check — hit the URL to confirm the deploy is live.
+  if (req.method === "GET") {
+    return json({ ok: true, service: "posture-engine", phase: 1 });
+  }
+  if (req.method !== "POST") {
+    return new Response("Method Not Allowed", { status: 405 });
+  }
+
+  // Optional shared secret. If PROXY_SHARED_SECRET is set, Vapi must send
+  // it as `Authorization: Bearer <secret>`. Leave unset to skip auth while
+  // first wiring things up.
+  const secret = process.env.PROXY_SHARED_SECRET;
+  if (secret) {
+    const auth = req.headers.get("authorization") || "";
+    if (auth !== `Bearer ${secret}`) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+  }
+
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return new Response("Bad Request", { status: 400 });
+  }
+
+  const { system: vapiSystem, messages } = splitMessages(body.messages || []);
+
+  // PRE-SNAP PREFIX: if a frozen prefix was assembled for this call at
+  // pre-snap (POST /api/presnap) and stored, use it as the cached block and
+  // the stored posture line as the mutable block. This is the ONE sanctioned
+  // hot-path read (a single indexed row, NOT an LLM call). If there's no
+  // stored prefix, fall back to Vapi's raw system prompt (Phase 1 behavior),
+  // so nothing breaks before pre-snap is wired into the Mead Hall.
+  const callId = body.call?.id ?? body.metadata?.callId ?? body.call_id;
+  let stored = null;
+  try {
+    stored = await getCall(callId);
+  } catch {
+    stored = null;
+  }
+
+  const systemBlocks = stored
+    ? buildPostureSystem(stored, body.messages || [], callId)
+    : vapiSystem
+    ? [{ type: "text", text: vapiSystem, cache_control: { type: "ephemeral" } }]
+    : null;
+
+  const anthropicReq = {
+    model: MODEL(),
+    max_tokens: MAX_TOKENS(),
+    stream: true,
+    messages,
+    ...(systemBlocks ? { system: systemBlocks } : {}),
+  };
+
+  const upstream = await fetch(ANTHROPIC_URL, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": process.env.ANTHROPIC_API_KEY,
+      "anthropic-version": ANTHROPIC_VERSION,
+    },
+    body: JSON.stringify(anthropicReq),
+  });
+
+  if (!upstream.ok || !upstream.body) {
+    const errText = await upstream.text().catch(() => "");
+    return new Response(`Upstream error ${upstream.status}: ${errText}`, {
+      status: 502,
+    });
+  }
+
+  const meta = {
+    id: "chatcmpl-" + crypto.randomUUID(),
+    created: Math.floor(Date.now() / 1000),
+    model: MODEL(),
+  };
+
+  return new Response(anthropicToOpenAISSE(upstream.body, meta), {
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive",
+    },
+  });
+}
+
+// --- message mapping -------------------------------------------------------
+// OpenAI messages -> Anthropic shape. Anthropic wants `system` as a separate
+// top-level string, messages limited to user/assistant, starting with user,
+// with no two consecutive same-role turns.
+// --- gear / posture (Phase 3 FORCE-SET) -----------------------------------
+// Build the two system blocks for a call that has a stored prefix:
+//   [0] the FROZEN, CACHED prefix (never changes mid-call)
+//   [1] the MUTABLE posture line, derived from the current doubt-gear
+// FORCE-SET runs here: instant pure-code rules over the latest caller line
+// flip the gear for THIS turn, and the new gear is persisted for NEXT turn
+// off the hot path (waitUntil) so the voice never waits on the write.
+function buildPostureSystem(stored, messages, callId) {
+  const latest = lastUserText(messages);
+  const { gear, changed } = applyForce(stored.gear || "alive", latest);
+  if (changed) {
+    waitUntil(setCall(callId, { gear }).catch(() => {})); // never awaited
+  }
+  return [
+    { type: "text", text: stored.prefix, cache_control: { type: "ephemeral" } },
+    { type: "text", text: `CURRENT POSTURE (gear: ${gear}): ${directiveFor(gear)}` },
+  ];
+}
+
+function lastUserText(messages) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === "user") return extractText(messages[i].content);
+  }
+  return "";
+}
+
+function splitMessages(openaiMessages) {
+  const systemParts = [];
+  const mapped = [];
+
+  for (const m of openaiMessages) {
+    const text = extractText(m.content);
+    if (m.role === "system") {
+      if (text) systemParts.push(text);
+      continue;
+    }
+    // tool / function / anything-else collapses to user for Phase 1.
+    const role = m.role === "assistant" ? "assistant" : "user";
+    mapped.push({ role, content: text });
+  }
+
+  // Anthropic requires the first message to be `user`.
+  while (mapped.length && mapped[0].role !== "user") mapped.shift();
+
+  // Merge consecutive same-role turns.
+  const merged = [];
+  for (const m of mapped) {
+    const last = merged[merged.length - 1];
+    if (last && last.role === m.role) last.content += "\n" + m.content;
+    else merged.push({ role: m.role, content: m.content });
+  }
+
+  // Never send an empty conversation (Anthropic would 400).
+  if (merged.length === 0) {
+    merged.push({ role: "user", content: "(call connected)" });
+  }
+
+  return { system: systemParts.join("\n\n"), messages: merged };
+}
+
+function extractText(content) {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((p) => (typeof p === "string" ? p : p.text || ""))
+      .join("");
+  }
+  return "";
+}
+
+// --- stream translation ----------------------------------------------------
+// Anthropic SSE  ->  OpenAI chat.completion.chunk SSE.
+// We only care about three Anthropic event types: message_start (emit the
+// opening role delta), content_block_delta/text_delta (emit content), and
+// message_stop (emit finish_reason + [DONE]). Everything else (ping,
+// content_block_start/stop, message_delta) is ignored.
+function anthropicToOpenAISSE(anthropicBody, meta) {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  const chunkStr = (delta, finish_reason = null) =>
+    "data: " +
+    JSON.stringify({
+      id: meta.id,
+      object: "chat.completion.chunk",
+      created: meta.created,
+      model: meta.model,
+      choices: [{ index: 0, delta, finish_reason }],
+    }) +
+    "\n\n";
+
+  return new ReadableStream({
+    async start(controller) {
+      const reader = anthropicBody.getReader();
+      let buffer = "";
+      let roleSent = false;
+      let finished = false;
+
+      const send = (delta, finish_reason = null) =>
+        controller.enqueue(encoder.encode(chunkStr(delta, finish_reason)));
+      const done = () =>
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+
+      try {
+        while (true) {
+          const { done: streamDone, value } = await reader.read();
+          if (streamDone) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          let idx;
+          while ((idx = buffer.indexOf("\n\n")) !== -1) {
+            const rawEvent = buffer.slice(0, idx);
+            buffer = buffer.slice(idx + 2);
+
+            const dataLine = rawEvent
+              .split("\n")
+              .find((l) => l.startsWith("data:"));
+            if (!dataLine) continue;
+            const payload = dataLine.slice(5).trim();
+            if (!payload) continue;
+
+            let p;
+            try {
+              p = JSON.parse(payload);
+            } catch {
+              continue;
+            }
+
+            if (p.type === "message_start") {
+              // MEASURE: usage on message_start carries cache stats. Logged
+              // so Vercel logs prove caching on the real proxy path —
+              // cache_read_input_tokens should be ~0 on a call's first turn
+              // (cache created) and large on every turn after (cache hit).
+              const u = p.message?.usage;
+              if (u) {
+                console.log(
+                  "cache " +
+                    JSON.stringify({
+                      input: u.input_tokens,
+                      cache_creation: u.cache_creation_input_tokens,
+                      cache_read: u.cache_read_input_tokens,
+                    })
+                );
+              }
+              if (!roleSent) {
+                send({ role: "assistant" });
+                roleSent = true;
+              }
+            } else if (
+              p.type === "content_block_delta" &&
+              p.delta?.type === "text_delta"
+            ) {
+              if (p.delta.text) send({ content: p.delta.text });
+            } else if (p.type === "message_stop" || p.type === "error") {
+              send({}, "stop");
+              done();
+              finished = true;
+              break;
+            }
+          }
+          if (finished) break;
+        }
+
+        // Stream ended without an explicit message_stop — close cleanly.
+        if (!finished) {
+          send({}, "stop");
+          done();
+        }
+      } catch {
+        try {
+          send({}, "stop");
+          done();
+        } catch {
+          /* controller already closed */
+        }
+      } finally {
+        controller.close();
+      }
+    },
+  });
+}
+
+function json(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+// --- PHASE 4 PREVIEW (not wired yet) --------------------------------------
+// The Governor will run as a background task that NEVER blocks this stream.
+// On Vercel, import { waitUntil } from "@vercel/functions" and wrap the
+// async Governor call in waitUntil(...) so it runs after the voice already
+// has its line. Last write wins; no version guard (locked decision).
