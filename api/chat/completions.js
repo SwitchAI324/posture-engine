@@ -16,7 +16,7 @@
 
 export const config = { runtime: "edge" };
 
-import { getCall, setCall } from "../_store.js";
+import { getCall, setCall, isConfigured } from "../_store.js";
 import { applyForce, directiveFor } from "../_gears.js";
 import { waitUntil } from "@vercel/functions";
 
@@ -72,10 +72,12 @@ export default async function handler(req) {
     stored = null;
   }
 
-  const systemBlocks = stored
-    ? buildPostureSystem(stored, body.messages || [], callId)
-    : vapiSystem
-    ? [{ type: "text", text: vapiSystem, cache_control: { type: "ephemeral" } }]
+  // Base system: the assembled prefix if one was frozen at pre-snap, else
+  // Vapi's own prompt (Stage 1/2 — keeps Andrew sounding exactly as he is).
+  // The doubt-gears layer on top of whichever base is in play.
+  const baseSystem = stored && stored.prefix ? stored.prefix : vapiSystem;
+  const systemBlocks = baseSystem
+    ? buildSystemBlocks(baseSystem, stored, messages, callId)
     : null;
 
   const anthropicReq = {
@@ -123,22 +125,31 @@ export default async function handler(req) {
 // top-level string, messages limited to user/assistant, starting with user,
 // with no two consecutive same-role turns.
 // --- gear / posture (Phase 3 FORCE-SET) -----------------------------------
-// Build the two system blocks for a call that has a stored prefix:
-//   [0] the FROZEN, CACHED prefix (never changes mid-call)
+// Build the system blocks for the call:
+//   [0] the base prompt (Vapi's, or an assembled prefix) — cached
 //   [1] the MUTABLE posture line, derived from the current doubt-gear
-// FORCE-SET runs here: instant pure-code rules over the latest caller line
-// flip the gear for THIS turn, and the new gear is persisted for NEXT turn
-// off the hot path (waitUntil) so the voice never waits on the write.
-function buildPostureSystem(stored, messages, callId) {
-  const latest = lastUserText(messages);
-  const { gear, changed } = applyForce(stored.gear || "alive", latest);
-  if (changed) {
-    waitUntil(setCall(callId, { gear }).catch(() => {})); // never awaited
-  }
-  return [
-    { type: "text", text: stored.prefix, cache_control: { type: "ephemeral" } },
-    { type: "text", text: `CURRENT POSTURE (gear: ${gear}): ${directiveFor(gear)}` },
+// The gear layer runs only when the store is configured (so we can track
+// the gear per call). FORCE-SET runs here: instant pure-code rules over the
+// latest caller line flip the gear for THIS turn; the new gear is persisted
+// for NEXT turn off the hot path (waitUntil) so the voice never waits on the
+// write. The gear row is created lazily on the first turn — no pre-snap call
+// needed for gears to work.
+function buildSystemBlocks(baseSystem, stored, messages, callId) {
+  const blocks = [
+    { type: "text", text: baseSystem, cache_control: { type: "ephemeral" } },
   ];
+  if (isConfigured() && callId) {
+    const current = (stored && stored.gear) || "alive";
+    const { gear, changed } = applyForce(current, lastUserText(messages));
+    blocks.push({
+      type: "text",
+      text: `CURRENT POSTURE (gear: ${gear}): ${directiveFor(gear)}`,
+    });
+    if (changed || !stored) {
+      waitUntil(setCall(callId, { gear }).catch(() => {})); // never awaited
+    }
+  }
+  return blocks;
 }
 
 function lastUserText(messages) {

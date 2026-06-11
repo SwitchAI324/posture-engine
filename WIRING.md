@@ -49,7 +49,7 @@ In Supabase (project `lxmzwftmshqghkyapibg`) → SQL editor:
 ```sql
 create table if not exists call_prefix (
   call_id      text primary key,
-  prefix       text not null,
+  prefix       text,
   posture_line text,
   gear         text default 'alive',
   updated_at   timestamptz default now()
