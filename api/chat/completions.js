@@ -65,6 +65,26 @@ export default async function handler(req) {
   // stored prefix, fall back to Vapi's raw system prompt (Phase 1 behavior),
   // so nothing breaks before pre-snap is wired into the Mead Hall.
   const callId = body.call?.id ?? body.metadata?.callId ?? body.call_id;
+
+  // DIAGNOSTIC (temporary): proves WHY the gear/cache path runs or skips.
+  // The gear+cache block requires (isConfigured() && callId). If you see
+  // resolvedCallId:null here, Vapi is sending the id somewhere we don't read,
+  // and that's why there are no `gears` lines and the cache stays at 0.
+  console.log(
+    "req " +
+      JSON.stringify({
+        bodyKeys: Object.keys(body || {}),
+        idTry: {
+          "call.id": body.call?.id ?? null,
+          "metadata.callId": body.metadata?.callId ?? null,
+          call_id: body.call_id ?? null,
+        },
+        resolvedCallId: callId ?? null,
+        configured: isConfigured(),
+        hasVapiSystem: Boolean(vapiSystem),
+      })
+  );
+
   let stored = null;
   try {
     stored = await getCall(callId);
