@@ -31,8 +31,16 @@ const MAX_TOKENS = () => parseInt(process.env.MAX_TOKENS || "1024", 10);
 
 export default async function handler(req) {
   // Browser health check — hit the URL to confirm the deploy is live.
+  // `build` is a version stamp: if you don't see it in the browser, the
+  // edited file didn't actually deploy.
   if (req.method === "GET") {
-    return json({ ok: true, service: "posture-engine", phase: 1 });
+    return json({
+      ok: true,
+      service: "posture-engine",
+      phase: 1,
+      build: "diag-2",
+      gearsConfigured: isConfigured(),
+    });
   }
   if (req.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
