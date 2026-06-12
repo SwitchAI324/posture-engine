@@ -18,6 +18,7 @@
 const URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const TABLE = "call_prefix";
+const EVENTS = "gear_events";
 
 export function isConfigured() {
   return Boolean(URL && KEY);
@@ -29,7 +30,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-    `&select=prefix,posture_line,gear`;
+    `&select=prefix,posture_line,gear,pressure,engagement,slip`;
   const r = await fetch(url, {
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
@@ -39,13 +40,19 @@ export async function getCall(callId) {
   return {
     prefix: rows[0].prefix,
     postureLine: rows[0].posture_line,
-    gear: rows[0].gear || "alive",
+    gear: rows[0].gear || "alive", // gear column = SUSPICION axis
+    pressure: rows[0].pressure || "calm",
+    engagement: rows[0].engagement || "hooked",
+    slip: rows[0].slip ?? 0, // suspicion slip accumulator (hysteresis)
   };
 }
 
 // WRITE (upsert) — used at pre-snap to freeze the prefix, and later by the
 // posture engine to update just the posture line.
-export async function setCall(callId, { prefix, postureLine, gear }) {
+export async function setCall(
+  callId,
+  { prefix, postureLine, gear, pressure, engagement, slip }
+) {
   if (!isConfigured()) {
     throw new Error(
       "store not configured — set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY"
@@ -54,7 +61,10 @@ export async function setCall(callId, { prefix, postureLine, gear }) {
   const row = { call_id: callId, updated_at: new Date().toISOString() };
   if (prefix !== undefined) row.prefix = prefix;
   if (postureLine !== undefined) row.posture_line = postureLine;
-  if (gear !== undefined) row.gear = gear;
+  if (gear !== undefined) row.gear = gear; // gear column = SUSPICION axis
+  if (pressure !== undefined) row.pressure = pressure;
+  if (engagement !== undefined) row.engagement = engagement;
+  if (slip !== undefined) row.slip = slip;
 
   const r = await fetch(`${URL}/rest/v1/${TABLE}`, {
     method: "POST",
@@ -70,4 +80,35 @@ export async function setCall(callId, { prefix, postureLine, gear }) {
     throw new Error(`store write failed: ${r.status} ${await r.text()}`);
   }
   return true;
+}
+
+// APPEND a per-turn breadcrumb to gear_events — the history that powers the
+// gear-trace graph. Append-only (one row per turn), best-effort, and only
+// ever called via waitUntil() so it never touches the hot path. Failures are
+// swallowed: telemetry must never break a call.
+export async function appendGearEvent(
+  callId,
+  { turn, suspicion, pressure, engagement, slip, utterance }
+) {
+  if (!isConfigured() || !callId) return false;
+  const row = {
+    call_id: callId,
+    turn,
+    suspicion,
+    pressure,
+    engagement,
+    slip,
+    utterance: (utterance || "").slice(0, 500),
+  };
+  const r = await fetch(`${URL}/rest/v1/${EVENTS}`, {
+    method: "POST",
+    headers: {
+      apikey: KEY,
+      authorization: `Bearer ${KEY}`,
+      "content-type": "application/json",
+      prefer: "return=minimal",
+    },
+    body: JSON.stringify(row),
+  });
+  return r.ok;
 }

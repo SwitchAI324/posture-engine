@@ -16,8 +16,8 @@
 
 export const config = { runtime: "edge" };
 
-import { getCall, setCall, isConfigured } from "../_store.js";
-import { applyForce, directiveFor } from "../_gears.js";
+import { getCall, setCall, isConfigured, appendGearEvent } from "../_store.js";
+import { applyForceAll, postureBlock, defaultState } from "../_gears.js";
 import { waitUntil } from "@vercel/functions";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -124,30 +124,69 @@ export default async function handler(req) {
 // OpenAI messages -> Anthropic shape. Anthropic wants `system` as a separate
 // top-level string, messages limited to user/assistant, starting with user,
 // with no two consecutive same-role turns.
-// --- gear / posture (Phase 3 FORCE-SET) -----------------------------------
+// --- gears / posture (Phase 3 FORCE-SET, three axes) ----------------------
 // Build the system blocks for the call:
 //   [0] the base prompt (Vapi's, or an assembled prefix) — cached
-//   [1] the MUTABLE posture line, derived from the current doubt-gear
-// The gear layer runs only when the store is configured (so we can track
-// the gear per call). FORCE-SET runs here: instant pure-code rules over the
-// latest caller line flip the gear for THIS turn; the new gear is persisted
-// for NEXT turn off the hot path (waitUntil) so the voice never waits on the
-// write. The gear row is created lazily on the first turn — no pre-snap call
-// needed for gears to work.
+//   [1] the MUTABLE posture block — three gear lines (suspicion / pressure /
+//       engagement), the only thing that changes turn to turn.
+// The gear layer runs only when the store is configured (so we can track the
+// gears per call). FORCE-SET runs over the latest caller line, moves any of
+// the three dials for THIS turn, and persists the new state for NEXT turn off
+// the hot path (waitUntil) so the voice never waits on the write. The row is
+// created lazily on the first turn — no pre-snap call needed for gears.
 function buildSystemBlocks(baseSystem, stored, messages, callId) {
   const blocks = [
     { type: "text", text: baseSystem, cache_control: { type: "ephemeral" } },
   ];
   if (isConfigured() && callId) {
-    const current = (stored && stored.gear) || "alive";
-    const { gear, changed } = applyForce(current, lastUserText(messages));
-    blocks.push({
-      type: "text",
-      text: `CURRENT POSTURE (gear: ${gear}): ${directiveFor(gear)}`,
-    });
-    if (changed || !stored) {
-      waitUntil(setCall(callId, { gear }).catch(() => {})); // never awaited
+    const current = stored
+      ? {
+          suspicion: stored.gear,
+          pressure: stored.pressure,
+          engagement: stored.engagement,
+          slip: stored.slip,
+        }
+      : defaultState();
+    const { state, changes, dirty } = applyForceAll(
+      current,
+      lastUserText(messages)
+    );
+
+    blocks.push({ type: "text", text: postureBlock(state) });
+
+    // VISIBILITY: print the gears every turn so they're watchable in Vercel
+    // logs. Shows the full triple, and an arrow trail when a dial moved.
+    const trail = changes.length
+      ? "  <- " + changes.map((c) => `${c.axis}:${c.from}->${c.to}`).join(", ")
+      : "";
+    console.log("gears " + JSON.stringify(state) + trail);
+
+    // SNAPSHOT: persist the latest state (read by the proxy next turn).
+    // Persist when anything moved — including the slip accumulator with no
+    // gear flip — so the count carries to next turn. Off the hot path.
+    if (dirty || !stored) {
+      waitUntil(
+        setCall(callId, {
+          gear: state.suspicion,
+          pressure: state.pressure,
+          engagement: state.engagement,
+          slip: state.slip,
+        }).catch(() => {})
+      ); // never awaited
     }
+
+    // HISTORY: append a per-turn breadcrumb for the gear-trace graph. Every
+    // turn (so the trace is continuous), off the hot path, best-effort.
+    waitUntil(
+      appendGearEvent(callId, {
+        turn: countUserTurns(messages),
+        suspicion: state.suspicion,
+        pressure: state.pressure,
+        engagement: state.engagement,
+        slip: state.slip,
+        utterance: lastUserText(messages),
+      }).catch(() => {})
+    ); // never awaited
   }
   return blocks;
 }
@@ -157,6 +196,11 @@ function lastUserText(messages) {
     if (messages[i].role === "user") return extractText(messages[i].content);
   }
   return "";
+}
+
+// Turn index for gear_events: how many caller turns we've seen so far.
+function countUserTurns(messages) {
+  return messages.filter((m) => m.role === "user").length;
 }
 
 function splitMessages(openaiMessages) {
