@@ -55,13 +55,22 @@ export default async function handler(req) {
           .slice(0, 60);
         return jsonRes({ calls });
       }
+      if (data === "bits") {
+        const callId = u.searchParams.get("call_id");
+        if (!callId) return jsonRes({ error: "call_id required" }, 400);
+        const bits = await sb(
+          "bit_events?call_id=eq." + encodeURIComponent(callId) +
+          "&select=turn,bit_id,name,score,fired,why&order=turn.asc"
+        );
+        return jsonRes({ bits });
+      }
       if (data === "trace") {
         const callId = u.searchParams.get("call_id");
         if (!callId) return jsonRes({ error: "call_id required" }, 400);
         const events = await sb(
           "gear_events?call_id=eq." +
             encodeURIComponent(callId) +
-            "&select=turn,ts,suspicion,pressure,engagement,slip,utterance&order=turn.asc"
+            "&select=turn,ts,suspicion,pressure,engagement,slip,accusation,utterance&order=turn.asc"
         );
         return jsonRes({ events });
       }
@@ -134,6 +143,15 @@ const PAGE = `<!doctype html>
   .pip{width:16px;height:16px;border-radius:4px;background:#2a2118;border:1px solid var(--line)}
   .pip.on{background:var(--slip);border-color:var(--slip)}
   .meta{color:var(--faint);font-size:12.5px;margin-top:9px}
+  .verdict{font:400 21px/1.4 ui-serif,Georgia,serif;color:var(--ink);
+    margin:0 0 14px;max-width:780px}
+  .score{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:8px}
+  .tile.sc{padding:12px 14px}
+  .tile .vsm{font:600 16px/1.2 ui-serif,Georgia,serif;margin-top:6px;
+    text-transform:capitalize;display:flex;align-items:center;gap:7px}
+  .cdot{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .cdot.s-alive{background:var(--alive)} .cdot.s-slipping{background:var(--slip)}
+  .cdot.s-foregone{background:var(--gone)}
 
   /* the track */
   .trackwrap{display:flex;border:1px solid var(--line);border-radius:11px;
@@ -163,6 +181,11 @@ const PAGE = `<!doctype html>
   .slipbar span{position:absolute;top:-15px;left:50%;transform:translateX(-50%);
     font-size:10px;color:var(--muted)}
   .change{outline:2px solid #efe7da55;outline-offset:-2px}
+  .a-ai{background:#7a4fa8;color:#f1ebfb} .a-scam{background:#c14a32;color:#f0d8d0}
+  .a-time_waste{background:#6b6457;color:#e8e0d2}
+  .chip-acc{border-color:#7a4fa8;color:#c6a8e8}
+  .bit-fired{background:#caa23a;color:#1a140a;font-weight:700}
+  .bit-cand{background:#241c14;color:#9a8c74;box-shadow:inset 0 0 0 1px #3a3026}
 
   /* detail */
   .detail{margin-top:16px;background:var(--panel);border:1px solid var(--line);
@@ -242,16 +265,34 @@ const PAGE = `<!doctype html>
     });
   }
 
+  var bitsByTurn = {};
   function loadTrace(){
     if(!current) return;
-    fetch("?data=trace&call_id="+encodeURIComponent(current)).then(function(r){return r.json();})
-    .then(function(d){
+    Promise.all([
+      fetch("?data=trace&call_id="+encodeURIComponent(current)).then(function(r){return r.json();}),
+      fetch("?data=bits&call_id="+encodeURIComponent(current)).then(function(r){return r.json();}).catch(function(){return {bits:[]};})
+    ]).then(function(res){
+      var d=res[0]||{}, b=res[1]||{};
       if(d.error){ body.innerHTML='<div class="empty err">'+esc(d.error)+'</div>'; return; }
       events = d.events||[];
+      bitsByTurn = {};
+      (b.bits||[]).forEach(function(x){ bitsByTurn[x.turn]=x; });
       render();
     });
   }
+  function bitName(nm){ return (nm||"").replace(/^The /,""); }
+  function bitAbbr(nm){ var s=bitName(nm); return s.length>6?s.slice(0,6):s; }
 
+  function bitCell(b){
+    if(!b) return '<div class="cell empty">&middot;</div>';
+    var cls = b.fired ? "bit-fired" : "bit-cand";
+    return '<div class="cell '+cls+'" title="'+esc(bitName(b.name))+' &middot; score '+(b.score!=null?b.score.toFixed(1):"")+(b.fired?" &middot; FIRED":" &middot; top candidate")+'">'+esc(bitAbbr(b.name))+'</div>';
+  }
+  function accuseCell(val){
+    if(!val) return '<div class="cell empty">&middot;</div>';
+    var ab = val==="time_waste" ? "TIME" : val.toUpperCase();
+    return '<div class="cell a-'+val+'" title="accused: '+val+'">'+ab+'</div>';
+  }
   function stateCell(prefix, val, prev){
     if(val==null) return '<div class="cell empty">&middot;</div>';
     var ab = val.length>5 ? val.slice(0,4) : val;
@@ -268,7 +309,7 @@ const PAGE = `<!doctype html>
     var pips = "";
     for(var i=0;i<Math.max(3,maxSlip);i++){ pips += '<div class="pip'+((last.slip||0)>i?" on":"")+'"></div>'; }
     var now =
-      '<div class="eyebrow">Current stance &middot; turn '+last.turn+' &middot; '+ago(last.ts)+'</div>'+
+      '<div class="eyebrow">Current stance &middot; turn '+last.turn+' &middot; '+ago(last.ts)+(lastAccusation(events)?' &middot; accused of '+lastAccusation(events):'')+'</div>'+
       '<div class="now">'+
         tile("Suspicion", last.suspicion, "s") +
         tile("Pressure", last.pressure, "p") +
@@ -280,7 +321,7 @@ const PAGE = `<!doctype html>
     // the track
     var labels = '<div class="labels"><div class="turn">turn</div>'+
       '<div class="row">Suspicion</div><div class="row">Pressure</div>'+
-      '<div class="row">Engagement</div><div class="row">Slip</div></div>';
+      '<div class="row">Engagement</div><div class="row">Accusation</div><div class="row">Slip</div></div>';
     var cols = "";
     for(var j=0;j<events.length;j++){
       var e = events[j], pr = events[j-1] || {};
@@ -291,8 +332,10 @@ const PAGE = `<!doctype html>
           stateCell("s", e.suspicion, pr.suspicion)+
           stateCell("p", e.pressure, pr.pressure)+
           stateCell("e", e.engagement, pr.engagement)+
+          accuseCell(e.accusation)+
           '<div class="slipcell"><div class="slipbar" style="height:'+h+'px">'+
             '<span>'+(e.slip||0)+'</span></div></div>'+
+          bitCell(bitsByTurn[e.turn])+
         '</div>';
     }
     var track = '<div class="eyebrow">The track &middot; '+events.length+' turns &middot; left to right</div>'+
@@ -308,7 +351,7 @@ const PAGE = `<!doctype html>
         '<div class="grp">white edge = a gear changed this turn</div>'+
       '</div>';
 
-    body.innerHTML = now + track +
+    body.innerHTML = scorecard(events) + now + track +
       '<div class="detail" id="detail"><div class="t">Pick a turn</div>'+
       '<div class="said">Tap any column to read what the caller said.</div></div>' + legend;
 
@@ -321,6 +364,54 @@ const PAGE = `<!doctype html>
     if(selected!=null && selected<events.length) markSel();
   }
 
+  function lastAccusation(evs){
+    for(var i=evs.length-1;i>=0;i--){ if(evs[i].accusation) return evs[i].accusation; }
+    return null;
+  }
+  function scorecard(evs){
+    var turns = evs.length;
+    var susps = evs.map(function(e){return e.suspicion;});
+    var blownIdx = susps.indexOf("foregone");
+    var slipIdx = susps.indexOf("slipping");
+    var peakSlip = evs.reduce(function(m,e){return Math.max(m,e.slip||0);},0);
+    var acc = {ai:0,scam:0,time_waste:0};
+    evs.forEach(function(e){ if(e.accusation && acc[e.accusation]!=null) acc[e.accusation]++; });
+    var accTotal = acc.ai+acc.scam+acc.time_waste;
+    var engs = evs.map(function(e){return e.engagement;});
+    var bestEng = engs.indexOf("stunned")>=0?"stunned":(engs.indexOf("hooked")>=0?"hooked":"bored");
+    var press = evs.map(function(e){return e.pressure;});
+    var peakPress = press.indexOf("extracting")>=0?"extracting":(press.indexOf("pushing")>=0?"pushing":"calm");
+
+    var cover, dotClass;
+    if(blownIdx>=0){ cover="Blown &middot; turn "+evs[blownIdx].turn; dotClass="s-foregone"; }
+    else if(slipIdx>=0){
+      var recovered = susps.slice(slipIdx).indexOf("alive")>=0;
+      cover = recovered ? "Wobbled, recovered" : "Slipping &middot; turn "+evs[slipIdx].turn;
+      dotClass="s-slipping";
+    } else { cover="Held all call"; dotClass="s-alive"; }
+
+    var v;
+    if(blownIdx>=0) v="They cracked the cover at turn "+evs[blownIdx].turn+" — but you ran them "+turns+" turns first.";
+    else if(slipIdx>=0) v=turns+" turns. They doubted you"+(accTotal?" ("+accTotal+" accusation"+(accTotal>1?"s":"")+")":"")+", but never proved it.";
+    else v=turns+" turns, and the cover never even wobbled.";
+    if(bestEng==="stunned") v+=" You stunned them along the way.";
+
+    var accStr = accTotal===0 ? "none" : [acc.ai?acc.ai+" AI":"",acc.scam?acc.scam+" scam":"",acc.time_waste?acc.time_waste+" time":""].filter(Boolean).join(", ");
+
+    function st(k,val,extra){ return '<div class="tile sc"><div class="k">'+k+'</div><div class="vsm">'+val+'</div>'+(extra||"")+'</div>'; }
+    return '<div class="eyebrow">Saga scorecard</div>'+
+      '<div class="verdict">'+v+'</div>'+
+      '<div class="score">'+
+        st("Turns survived", turns) +
+        st("Cover", '<span class="cdot '+dotClass+'"></span>'+cover) +
+        st("Peak slip", peakSlip+" / 2") +
+        st("Accusations", accStr) +
+        st("Best engagement", bestEng) +
+      '</div>';
+  }
+  function bitsFiredCount(){ var n=0; for(var k in bitsByTurn){ if(bitsByTurn[k].fired) n++; } return n; }
+  function _scNoop(){
+  }
   function tile(k, val, p){
     var v = val || "—";
     return '<div class="tile"><div class="k">'+k+'</div><div class="v">'+v+'</div>'+
@@ -339,7 +430,16 @@ const PAGE = `<!doctype html>
         '<span class="chip">pressure: '+esc(e.pressure)+'</span>'+
         '<span class="chip">engagement: '+esc(e.engagement)+'</span>'+
         '<span class="chip">slip: '+(e.slip||0)+'</span>'+
-      '</div>';
+        (e.accusation?'<span class="chip chip-acc">accused: '+esc(e.accusation)+'</span>':'')+
+      '</div>'+
+      (bitsByTurn[e.turn]?'<div class="t" style="margin-top:12px">Fit read</div>'+
+        '<div class="said" style="font-size:15px">'+
+          (bitsByTurn[e.turn].fired?'&#9876; Fired: ':'Top candidate: ')+
+          '<b>'+esc(bitName(bitsByTurn[e.turn].name))+'</b> '+
+          '<span style="color:var(--faint)">(score '+(bitsByTurn[e.turn].score!=null?bitsByTurn[e.turn].score.toFixed(1):"?")+')</span>'+
+        '</div>'+
+        '<div class="t" style="margin-top:6px;text-transform:none;color:var(--faint)">'+esc(bitsByTurn[e.turn].why||"")+'</div>'
+      :'');
   }
   function markSel(){
     var cols = document.querySelectorAll(".col");

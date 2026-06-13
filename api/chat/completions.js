@@ -16,8 +16,9 @@
 
 export const config = { runtime: "edge" };
 
-import { getCall, setCall, isConfigured, appendGearEvent } from "../_store.js";
-import { applyForceAll, postureBlock, defaultState } from "../_gears.js";
+import { getCall, setCall, isConfigured, appendGearEvent, appendBitEvent } from "../_store.js";
+import { applyForceAll, postureBlock, defaultState, detectAccusation } from "../_gears.js";
+import { selectBit } from "../_bits.js";
 import { waitUntil } from "@vercel/functions";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -28,6 +29,19 @@ const ANTHROPIC_VERSION = "2023-06-01";
 // to a Sonnet if the bait character needs more wit and the latency holds.
 const MODEL = () => process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
 const MAX_TOKENS = () => parseInt(process.env.MAX_TOKENS || "1024", 10);
+
+// Bit injection tuning (starting values — tune from real calls / DEC-2).
+// In the flat-fit era (all bits universal, no archetype yet) scores cluster
+// low, so the bar is modest and the gap keeps Andrew from spamming beats.
+const INJECT_BAR = parseFloat(process.env.INJECT_BAR || "3.0");
+const MIN_GAP = parseInt(process.env.MIN_GAP || "3", 10);
+// PHASE: warm up before throwing any bit, then get mildly more willing to fire
+// as the call goes (they're invested — swing a little more).
+const WARMUP_TURNS = parseInt(process.env.WARMUP_TURNS || "2", 10);
+function effectiveBar(turn) {
+  if (turn <= WARMUP_TURNS) return Infinity; // no bits during warm-up
+  return Math.max(INJECT_BAR - 0.1 * Math.max(0, turn - 6), INJECT_BAR - 1);
+}
 
 export default async function handler(req) {
   // Browser health check — hit the URL to confirm the deploy is live.
@@ -153,41 +167,110 @@ function buildSystemBlocks(baseSystem, stored, messages, callId) {
       lastUserText(messages)
     );
 
-    blocks.push({ type: "text", text: postureBlock(state) });
+    const accusation = detectAccusation(lastUserText(messages));
+    const turn = countUserTurns(messages);
 
-    // VISIBILITY: print the gears every turn so they're watchable in Vercel
-    // logs. Shows the full triple, and an arrow trail when a dial moved.
-    const trail = changes.length
-      ? "  <- " + changes.map((c) => `${c.axis}:${c.from}->${c.to}`).join(", ")
-      : "";
+    // --- FIT: rank the bits for THIS moment (pure in-memory math) ----------
+    // archetype is "universal" until the Archetype layer wires real types, so
+    // fit currently discriminates on accusation + gear_bias. recency comes from
+    // the last bit we fired (read in the same call_prefix lookup, no extra hop).
+    const recency =
+      stored && stored.lastBitId && stored.lastBitTurn != null
+        ? { [stored.lastBitId]: Math.max(0, turn - stored.lastBitTurn) }
+        : {};
+    const scorerState = {
+      archetype: "universal",
+      accusation,
+      gears: {
+        suspicion: state.suspicion,
+        pressure: state.pressure,
+        engagement: state.engagement,
+      },
+      recency,
+    };
+    // LOADOUT then rank: selectBit narrows to the bits that fit this moment,
+    // then ranks that focused set (not all 71). threshold:0 so we apply our own
+    // INJECT_BAR below; we just want the ranked loadout + its size.
+    const sel = selectBit(scorerState, { threshold: 0 });
+    const ranked = sel.ranked;
+    const top = ranked[0] || null;
+    const poolSize = sel.pool;
+    const gap = stored && stored.lastBitTurn != null ? turn - stored.lastBitTurn : 99;
+    const bar = effectiveBar(turn);
+    const fire = !!(top && top.score >= bar && gap >= MIN_GAP);
+
+    // MUTABLE block: posture lines + (on fire) a gentle in-character bit cue.
+    // Goes AFTER the cached base, so injecting never busts the prompt cache.
+    let mutable = postureBlock(state);
+    if (fire) {
+      mutable +=
+        '\n\nIMPROV BEAT — work the bit "' + top.name +
+        '" into your next line ONLY if it lands naturally. ' +
+        "Never name it; never break character.";
+    }
+    blocks.push({ type: "text", text: mutable });
+
+    // VISIBILITY: gears + the fit read, every turn, watchable in Vercel logs.
+    const trail =
+      (changes.length
+        ? "  <- " + changes.map((c) => `${c.axis}:${c.from}->${c.to}`).join(", ")
+        : "") + (accusation ? "  accuse:" + accusation : "");
     console.log("gears " + JSON.stringify(state) + trail);
+    if (top) {
+      console.log(
+        "fit " +
+          JSON.stringify({
+            pick: top.name,
+            score: +top.score.toFixed(2),
+            fired: fire,
+            gap,
+            bar: turn <= WARMUP_TURNS ? "warmup" : +bar.toFixed(2),
+            pool: poolSize,
+            top3: ranked.slice(0, 3).map((r) => r.name + ":" + r.score.toFixed(1)),
+          })
+      );
+    }
 
-    // SNAPSHOT: persist the latest state (read by the proxy next turn).
-    // Persist when anything moved — including the slip accumulator with no
-    // gear flip — so the count carries to next turn. Off the hot path.
-    if (dirty || !stored) {
+    // SNAPSHOT: persist gears (+ the fired bit, for recency/pacing next turn).
+    if (dirty || !stored || fire) {
       waitUntil(
         setCall(callId, {
           gear: state.suspicion,
           pressure: state.pressure,
           engagement: state.engagement,
           slip: state.slip,
+          ...(fire ? { lastBitId: top.id, lastBitTurn: turn } : {}),
         }).catch(() => {})
       ); // never awaited
     }
 
-    // HISTORY: append a per-turn breadcrumb for the gear-trace graph. Every
-    // turn (so the trace is continuous), off the hot path, best-effort.
+    // HISTORY: the gear trace + the fit trace, both off the hot path.
     waitUntil(
       appendGearEvent(callId, {
-        turn: countUserTurns(messages),
+        turn,
         suspicion: state.suspicion,
         pressure: state.pressure,
         engagement: state.engagement,
         slip: state.slip,
+        accusation,
         utterance: lastUserText(messages),
       }).catch(() => {})
-    ); // never awaited
+    );
+    if (top) {
+      waitUntil(
+        appendBitEvent(callId, {
+          turn,
+          bit_id: top.id,
+          name: top.name,
+          score: top.score,
+          fit: top.breakdown.fit,
+          gear_bias: top.breakdown.gearBias,
+          recency: top.breakdown.recency,
+          fired: fire,
+          why: (top.breakdown.why || []).join("; "),
+        }).catch(() => {})
+      );
+    }
   }
   return blocks;
 }

@@ -258,6 +258,19 @@ export function deathBlow(state, finisher = "default") {
   return { ...state, suspicion: "foregone", slip: 0, _finisher: finisher };
 }
 
+// ACCUSATION — the same utterance scan, classifying what (if anything) the
+// caller accused Andrew of this turn. Parallel to the gears: it doesn't move a
+// dial, it emits a LABEL (or null) that feeds fit_score and the AI-reveal
+// death blow. Priority ai > scam > time_waste — the AI-reveal is the signature
+// finisher, so we surface that accusation first when more than one matches.
+export function detectAccusation(utterance) {
+  const u = utterance || "";
+  if (TELLS.accusation.ai.test(u)) return "ai";
+  if (TELLS.accusation.scam.test(u)) return "scam";
+  if (TELLS.accusation.time_waste.test(u)) return "time_waste";
+  return null;
+}
+
 // _governor_inputs (Phase 4, NOT built here — harvested spec from §5.6/§5.8).
 // These curated signals have NO keyword and cannot live in FORCE-SET; they are
 // trend/meta reads the async Governor must judge. Captured here so the prompt

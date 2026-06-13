@@ -18,4 +18,9 @@ export const TELLS = {
     stunned: /\b(ha ?ha|lol|that'?s (?:funny|hilarious|ridiculous|wild|insane|absurd)|you'?re (?:funny|hilarious|ridiculous|killing me|something else)|wait,? what|what are you (?:talking about|saying|on about)|what (?:is happening|on earth)|i'?m (?:confused|so confused|lost)|you lost me|i don'?t (?:understand|get it)|are you (?:serious|kidding|for real|pranking|punking)|no way|excuse me\?|come again|huh\?|i can'?t (?:even|believe))\b/i,
     hooked: /\b(tell me more|go on|interesting|i'?m listening|how does (?:that|it) work|sounds (?:good|great)|okay (?:so )?(?:what|how)|really\?|what else|as i was saying|let'?s (?:hear it|continue)|next steps?|send me (?:a )?(?:proposal|quote|contract)|what'?s the (?:price|pricing|cost|timeline)|how much|my (?:colleague|team|boss|partner)|loop (?:in|her|him|them)|set up a (?:call|meeting|demo)|schedule (?:a|the))\b/i,
   },
+  accusation: {
+    ai: /\b(are you (?:a |an )?(?:ai|bot|robot|recording|machine)|you'?re (?:a )?(?:bot|ai|robot|recording)|is this (?:a |an )?(?:ai|bot|recording|automated)|this is (?:automated|a recording|pre-?recorded)|are you reading|you sound (?:automated|robotic|scripted)|talking to (?:a )?(?:bot|machine|computer))\b/i,
+    scam: /\b(this is a scam ?bot|this is (?:a )?scam|you'?re (?:a )?scam|(?:it'?s|this is) (?:a )?fraud|reporting (?:you|this)|i'?m (?:gonna |going to )?report|scammer)\b/i,
+    time_waste: /\b(wasting my time|waste of (?:my )?time|you'?re (?:just )?wasting|stop wasting|quit stalling|(?:are you|you'?re) stalling)\b/i,
+  },
 };
