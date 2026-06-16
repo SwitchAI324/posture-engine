@@ -30,7 +30,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-    `&select=prefix,posture_line,gear,pressure,engagement,slip,last_bit_id,last_bit_turn`;
+    `&select=prefix,posture_line,gear,pressure,engagement,slip,last_bit_id,last_bit_turn,archetype`;
   const r = await fetch(url, {
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
@@ -46,6 +46,7 @@ export async function getCall(callId) {
     slip: rows[0].slip ?? 0, // suspicion slip accumulator (hysteresis)
     lastBitId: rows[0].last_bit_id || null,
     lastBitTurn: rows[0].last_bit_turn ?? null,
+    archetype: rows[0].archetype || null,
   };
 }
 
@@ -53,7 +54,7 @@ export async function getCall(callId) {
 // posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, gear, pressure, engagement, slip, lastBitId, lastBitTurn }
+  { prefix, postureLine, gear, pressure, engagement, slip, lastBitId, lastBitTurn, archetype }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -69,6 +70,7 @@ export async function setCall(
   if (slip !== undefined) row.slip = slip;
   if (lastBitId !== undefined) row.last_bit_id = lastBitId;
   if (lastBitTurn !== undefined) row.last_bit_turn = lastBitTurn;
+  if (archetype !== undefined) row.archetype = archetype;
 
   const r = await fetch(`${URL}/rest/v1/${TABLE}`, {
     method: "POST",

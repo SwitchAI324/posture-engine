@@ -19,6 +19,7 @@ export const config = { runtime: "edge" };
 import { getCall, setCall, isConfigured, appendGearEvent, appendBitEvent } from "../_store.js";
 import { applyForceAll, postureBlock, defaultState, detectAccusation } from "../_gears.js";
 import { selectBit } from "../_bits.js";
+import { archetypeFromBody } from "../_archetype.js";
 import { waitUntil } from "@vercel/functions";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -92,7 +93,7 @@ export default async function handler(req) {
   // The doubt-gears layer on top of whichever base is in play.
   const baseSystem = stored && stored.prefix ? stored.prefix : vapiSystem;
   const systemBlocks = baseSystem
-    ? buildSystemBlocks(baseSystem, stored, messages, callId)
+    ? buildSystemBlocks(baseSystem, stored, messages, callId, body)
     : null;
 
   const anthropicReq = {
@@ -149,7 +150,7 @@ export default async function handler(req) {
 // the three dials for THIS turn, and persists the new state for NEXT turn off
 // the hot path (waitUntil) so the voice never waits on the write. The row is
 // created lazily on the first turn — no pre-snap call needed for gears.
-function buildSystemBlocks(baseSystem, stored, messages, callId) {
+function buildSystemBlocks(baseSystem, stored, messages, callId, body) {
   const blocks = [
     { type: "text", text: baseSystem, cache_control: { type: "ephemeral" } },
   ];
@@ -178,8 +179,14 @@ function buildSystemBlocks(baseSystem, stored, messages, callId) {
       stored && stored.lastBitId && stored.lastBitTurn != null
         ? { [stored.lastBitId]: Math.max(0, turn - stored.lastBitTurn) }
         : {};
+    // sticky if already hydrated; else from this request's metadata; else flat.
+    const archetype =
+      (stored && stored.archetype) || archetypeFromBody(body) || "universal";
+    const archetypeNew =
+      archetype !== "universal" && (!stored || stored.archetype !== archetype);
+
     const scorerState = {
-      archetype: "universal",
+      archetype,
       accusation,
       gears: {
         suspicion: state.suspicion,
@@ -187,6 +194,8 @@ function buildSystemBlocks(baseSystem, stored, messages, callId) {
         engagement: state.engagement,
       },
       recency,
+      // sequencing anchor — without this, chain + category spacing never fire.
+      lastBitId: stored ? stored.lastBitId || null : null,
     };
     // LOADOUT then rank: selectBit narrows to the bits that fit this moment,
     // then ranks that focused set (not all 71). threshold:0 so we apply our own
@@ -221,6 +230,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId) {
         "fit " +
           JSON.stringify({
             pick: top.name,
+            arch: archetype,
             score: +top.score.toFixed(2),
             fired: fire,
             gap,
@@ -232,7 +242,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId) {
     }
 
     // SNAPSHOT: persist gears (+ the fired bit, for recency/pacing next turn).
-    if (dirty || !stored || fire) {
+    if (dirty || !stored || fire || archetypeNew) {
       waitUntil(
         setCall(callId, {
           gear: state.suspicion,
@@ -240,6 +250,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId) {
           engagement: state.engagement,
           slip: state.slip,
           ...(fire ? { lastBitId: top.id, lastBitTurn: turn } : {}),
+          ...(archetypeNew ? { archetype } : {}),
         }).catch(() => {})
       ); // never awaited
     }
