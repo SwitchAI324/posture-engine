@@ -57,12 +57,17 @@ export default async function handler(req) {
   if (!slug) return jsonRes({ error: "missing slug" }, 400);
   if (!SB_URL || !SB_KEY) return jsonRes({ error: "store not configured" }, 500);
 
-  // read the token by slug
+  // read the token by slug. select=* so a column-name difference in Data's
+  // canon can't 400 the read; we pull the fields we need defensively below.
   const tRes = await sb(
-    `booking_tokens?slug=eq.${encodeURIComponent(slug)}` +
-      `&select=slug,archetype,booked_slot,vapi_call_id&limit=1`
+    `booking_tokens?slug=eq.${encodeURIComponent(slug)}&select=*&limit=1`
   );
-  if (!tRes.ok) return jsonRes({ error: "token read failed", status: tRes.status }, 502);
+  if (!tRes.ok) {
+    const raw = await tRes.text();
+    let detail;
+    try { detail = JSON.parse(raw); } catch { detail = raw; }
+    return jsonRes({ error: "token read failed", status: tRes.status, detail }, 502);
+  }
   const token = (await tRes.json())[0];
   if (!token) return jsonRes({ error: "unknown slug" }, 404);
 
@@ -116,14 +121,18 @@ export default async function handler(req) {
   // write vapi_call_id back onto the token (the call<->booking link). Best-effort
   // but awaited here — it's pre-call, off the spoken path, so the cost is fine.
   if (vapiCallId) {
-    await sb(`booking_tokens?slug=eq.${encodeURIComponent(slug)}`, {
+    const wRes = await sb(`booking_tokens?slug=eq.${encodeURIComponent(slug)}`, {
       method: "PATCH",
       headers: { prefer: "return=minimal" },
       body: JSON.stringify({
         vapi_call_id: vapiCallId,
         joined_at: new Date().toISOString(),
       }),
-    }).catch((e) => console.log("join writeback failed " + String(e)));
+    }).catch(() => null);
+    if (!wRes || !wRes.ok) {
+      const d = wRes ? await wRes.text().catch(() => "") : "network error";
+      console.log("join writeback failed " + (wRes ? wRes.status : "") + " " + d);
+    }
   }
 
   // hand the join page everything it needs to connect the scammer to THIS
