@@ -1,7 +1,7 @@
 // AUTO-GENERATED — compiled bit registry (Bits Library handoff).
-// Source: registry/bits.source.json (from SpamViking_Bits.md Metadata
-// blocks). Do NOT hand-edit. Regenerate when the Bits Library recompiles.
-// 71 bits (de-duped from 73).
+// Source: SpamViking_BitsRegistry.json (v10.9, from SpamViking_Bits.md).
+// Do NOT hand-edit. Regenerate when the Bits Library recompiles.
+// 73 bits.
 
 export const BITS = [
   {
@@ -254,6 +254,45 @@ export const BITS = [
     "name": "The Negation Drop"
   },
   {
+    "id": "BIT-119",
+    "name": "The Hype Spiral",
+    "archetypes": [
+      "crypto_investment"
+    ],
+    "gear": {
+      "engagement": {
+        "bored": -1.0,
+        "hooked": 2.0,
+        "stunned": 2.0
+      },
+      "pressure": {
+        "calm": 1.0,
+        "pushing": 2.0,
+        "extracting": 1.0
+      }
+    },
+    "cooldown": 5
+  },
+  {
+    "id": "BIT-120",
+    "name": "The Emotional Crescendo",
+    "archetypes": [
+      "crypto_investment"
+    ],
+    "gear": {
+      "engagement": {
+        "bored": -1.0,
+        "hooked": 2.0,
+        "stunned": 3.0
+      },
+      "pressure": {
+        "pushing": 1.0,
+        "extracting": 2.0
+      }
+    },
+    "cooldown": 5
+  },
+  {
     "id": "BIT-201",
     "name": "The Competitor Bit",
     "archetypes": "universal",
@@ -323,7 +362,9 @@ export const BITS = [
     "name": "The Reschedule Bit"
   },
   {
-    "archetypes": "universal",
+    "archetypes": [
+      "b2b_saas"
+    ],
     "cooldown": 4,
     "gear": {
       "pressure": {
@@ -461,7 +502,9 @@ export const BITS = [
     "name": "No You Go"
   },
   {
-    "archetypes": "universal",
+    "archetypes": [
+      "b2b_saas"
+    ],
     "cooldown": 4,
     "gear": {
       "pressure": {
@@ -553,7 +596,9 @@ export const BITS = [
     "name": "The Insect Bit"
   },
   {
-    "archetypes": "universal",
+    "archetypes": [
+      "crypto_investment"
+    ],
     "cooldown": 5,
     "gear": {
       "pressure": {
