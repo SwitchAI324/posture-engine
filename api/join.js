@@ -67,30 +67,27 @@ export default async function handler(req) {
       slug,
       archetype,
       booked_slot: token.booked_slot || null,
-      vapi_call_id: token.vapi_call_id || null,
-      minted: !!token.vapi_call_id,
+      joined_at: token.joined_at || null,
+      joined: !!token.joined_at,
     });
   }
   if (req.method !== "POST") return jsonRes({ error: "method not allowed" }, 405);
 
-  // POST: record the vapi_call_id the page got back from vapi.start().
-  const callId = u.searchParams.get("call_id") || u.searchParams.get("vapi_call_id");
-  if (!callId) {
-    return jsonRes(
-      { error: "call_id required — the web call is started client-side; pass its id back here to record" },
-      400
-    );
-  }
+  // POST: mark the token joined. The call carries `slug` in its metadata, so
+  // call<->token correlation is by slug — no vapi_call_id column needed (and
+  // Data's canon doesn't have one). We just stamp joined_at, and log the call
+  // id for easy log correlation.
+  const callId = u.searchParams.get("call_id") || u.searchParams.get("vapi_call_id") || null;
   const wRes = await sb(`booking_tokens?slug=eq.${encodeURIComponent(slug)}`, {
     method: "PATCH",
     headers: { prefer: "return=minimal" },
-    body: JSON.stringify({ vapi_call_id: callId, joined_at: new Date().toISOString() }),
+    body: JSON.stringify({ joined_at: new Date().toISOString() }),
   }).catch(() => null);
   if (!wRes || !wRes.ok) {
     const d = wRes ? await wRes.text().catch(() => "") : "network error";
     console.log("join writeback failed " + (wRes ? wRes.status : "") + " " + d);
     return jsonRes({ error: "writeback failed", detail: d }, 502);
   }
-  console.log("join slug=" + slug + " archetype=" + archetype + " vapi_call_id=" + callId);
+  console.log("join slug=" + slug + " archetype=" + archetype + " call_id=" + (callId || "none"));
   return jsonRes({ ok: true, slug, archetype, vapi_call_id: callId });
 }

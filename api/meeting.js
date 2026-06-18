@@ -187,7 +187,7 @@ if(vapi){
   vapi.on("message", function(m){
     if(m && m.type === "transcript" && m.transcriptType === "final" && m.transcript){
       $("caption").style.display = "block";
-      $("captionText").textContent = m.transcript;
+      $("captionText").textContent = m.transcript.replace(/\[\[[^\]]*\]\]/g, "").trim();
     }
   });
   vapi.on("error", function(e){ toast("Call error: " + (e && e.message ? e.message : "see console")); });

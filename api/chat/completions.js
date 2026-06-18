@@ -20,6 +20,7 @@ import { getCall, setCall, isConfigured, appendGearEvent, appendBitEvent } from 
 import { applyForceAll, postureBlock, defaultState, detectAccusation } from "../_gears.js";
 import { selectBit } from "../_bits.js";
 import { archetypeFromBody } from "../_archetype.js";
+import { benchCue } from "../_bench.js";
 import { waitUntil } from "@vercel/functions";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -217,6 +218,16 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body) {
         '" into your next line ONLY if it lands naturally. ' +
         "Never name it; never break character.";
     }
+
+    // BENCH: on the trigger, invite a character in. The LLM writes their line
+    // tagged [[NAME]]; the TTS proxy voices them. v1 is one deterministic
+    // arrival to prove a second voice — gear-driven triggers + persistence next.
+    const bench = benchCue(turn);
+    if (bench) {
+      mutable += bench.cue;
+      console.log("bench arrive=" + bench.tag + " turn=" + turn);
+    }
+
     blocks.push({ type: "text", text: mutable });
 
     // VISIBILITY: gears + the fit read, every turn, watchable in Vercel logs.

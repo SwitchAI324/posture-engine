@@ -25,3 +25,24 @@ export function parseSpeaker(text) {
 export function voiceFor(speaker) {
   return VOICES[speaker] || VOICES[DEFAULT_SPEAKER];
 }
+
+// Split a turn into ordered segments by [[NAME]] markers, so a single chunk
+// that spans a speaker change still gets each part in the right voice. Text
+// before the first marker is the default speaker (host).
+export function parseSegments(text) {
+  const s = String(text);
+  const re = /\[\[\s*([A-Za-z0-9_\- ]+?)\s*\]\]/g;
+  const segs = [];
+  let lastIdx = 0;
+  let speaker = DEFAULT_SPEAKER;
+  let m;
+  while ((m = re.exec(s)) !== null) {
+    const before = s.slice(lastIdx, m.index).trim();
+    if (before) segs.push({ speaker, text: before });
+    speaker = m[1].trim().toUpperCase();
+    lastIdx = re.lastIndex;
+  }
+  const tail = s.slice(lastIdx).trim();
+  if (tail) segs.push({ speaker, text: tail });
+  return segs.length ? segs : [{ speaker: DEFAULT_SPEAKER, text: s.trim() }];
+}
