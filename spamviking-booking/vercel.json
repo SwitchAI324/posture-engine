@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/book/:slug", "destination": "/book.html" },
+    { "source": "/join/:slug", "destination": "/join.html" }
+  ]
+}
