@@ -45,11 +45,19 @@ export function benchCue(turn) {
   const c = BENCH[ARRIVE_WHO] || BENCH.CONRAD;
   const name = cap(c.tag);
   const cue =
-    "\n\nBENCH ARRIVAL — " + name + ", " + c.note + ", joins the call right now. " +
-    "In your next reply, give Andrew's own line first, then have " + name +
-    " cut in. Tag EVERY " + name + " line EXACTLY like this: [[" + c.tag +
-    "]] their words here. Do NOT tag Andrew's own lines. Keep it short and " +
-    "in-world — never mention tags, bits, or that anyone 'joined,' and don't " +
-    "narrate the arrival; just let " + name + " start talking.";
+    "\n\n=== BENCH ARRIVAL (HARD FORMAT RULE — follow exactly) ===\n" +
+    name + " — " + c.note + " — barges into the call RIGHT NOW and speaks.\n" +
+    "Your reply THIS TURN must contain a line spoken by " + name + ", and every " +
+    "line " + name + " speaks MUST begin with the literal marker [[" + c.tag + "]] " +
+    "on its own, before his words. This marker is required — it is how " + name +
+    "'s voice is produced. If you do not write [[" + c.tag + "]], he is silent and " +
+    "the moment fails.\n" +
+    "Write Andrew's own line with NO marker, then " + name + "'s line WITH the marker.\n" +
+    "EXAMPLE of the exact shape (write your own words, keep this structure):\n" +
+    "Of course, let me just pull up your account details now.\n" +
+    "[[" + c.tag + "]] Hold on — who is this exactly, and why is this taking twenty minutes?\n" +
+    "Do NOT narrate the arrival ('my boss walked in'). Do NOT describe " + name +
+    " in the third person. Just let him speak, tagged. Keep both lines short and " +
+    "in-world.";
   return { tag: c.tag, cue };
 }
