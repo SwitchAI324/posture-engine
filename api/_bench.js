@@ -62,5 +62,5 @@ function pick(a) {
 export function benchInject(turn) {
   if (turn !== ARRIVE_TURN) return null;
   const c = BENCH[ARRIVE_WHO] || BENCH.CONRAD;
-  return { tag: c.tag, line: pick(c.lines) };
+  return { tag: c.tag, note: c.note, line: pick(c.lines) };
 }

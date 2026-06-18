@@ -32,6 +32,47 @@ const ANTHROPIC_VERSION = "2023-06-01";
 const MODEL = () => process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
 const MAX_TOKENS = () => parseInt(process.env.MAX_TOKENS || "1024", 10);
 
+// Generate a bench character's barge-in line, in character, reacting to the
+// live call. Fast non-streaming Haiku call (short cap). Returns the spoken line
+// or null (caller falls back to a canned line). Fired in PARALLEL with the host
+// reply so it adds ~no latency — it's awaited only at stream close.
+async function generateBenchLine(bench, messages) {
+  try {
+    const convo = messages
+      .slice(-6)
+      .map((m) => (m.role === "user" ? "Caller: " : "Host: ") + m.content)
+      .join("\n");
+    const name = bench.tag.charAt(0) + bench.tag.slice(1).toLowerCase();
+    const sys =
+      "You are " + name + ", " + bench.note + ". You have just barged into this " +
+      "live call, cutting the host off mid-sentence. Say ONE short spoken line " +
+      "(max ~25 words), blunt and fully in character, reacting to what is being " +
+      "discussed. Output ONLY the spoken words — no name label, no quotes, no " +
+      "stage directions.";
+    const r = await fetch(ANTHROPIC_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": ANTHROPIC_VERSION,
+      },
+      body: JSON.stringify({
+        model: MODEL(),
+        max_tokens: 80,
+        system: sys,
+        messages: [{ role: "user", content: convo + "\n\n(" + name + " cuts in:)" }],
+      }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const txt = (j.content || []).map((c) => c.text || "").join("").trim();
+    if (!txt || txt.length > 240) return null;
+    return txt;
+  } catch {
+    return null;
+  }
+}
+
 // Bit injection tuning (starting values — tune from real calls / DEC-2).
 // In the flat-fit era (all bits universal, no archetype yet) scores cluster
 // low, so the bar is modest and the gap keeps Andrew from spamming beats.
@@ -76,10 +117,17 @@ export default async function handler(req) {
 
   // BENCH: decide if a character barges in THIS turn. If so, the engine appends
   // their tagged line to the stream itself (the model won't emit the tag, so we
-  // guarantee it). Independent of the gears store — just needs the turn count.
-  const bench = benchInject(countUserTurns(messages));
-  const benchAppend = bench ? "\n\n[[" + bench.tag + "]] " + bench.line : null;
-  if (bench) console.log("bench inject=" + bench.tag + " turn=" + countUserTurns(messages));
+  // guarantee it). The line is generated in character from the live call, in
+  // PARALLEL with the host reply, and only awaited when the stream closes — so
+  // it costs ~no latency. Falls back to a canned line if generation fails.
+  const benchTurn = countUserTurns(messages);
+  const bench = benchInject(benchTurn);
+  const benchAppend = bench
+    ? generateBenchLine(bench, messages)
+        .then((line) => "\n\n[[" + bench.tag + "]] " + (line || bench.line))
+        .catch(() => "\n\n[[" + bench.tag + "]] " + bench.line)
+    : null;
+  if (bench) console.log("bench inject=" + bench.tag + " turn=" + benchTurn);
 
   // PRE-SNAP PREFIX: if a frozen prefix was assembled for this call at
   // pre-snap (POST /api/presnap) and stored, use it as the cached block and
@@ -385,14 +433,19 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
       const done = () =>
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
 
-      // Close out the turn: if the engine has a bench line to inject, emit it as
-      // a final content delta (tagged), THEN finish. Guarantees the [[NAME]]
-      // marker reaches Vapi/TTS regardless of what the model wrote.
-      const finishUp = () => {
+      // Close out the turn: if the engine has a bench line to inject, await it
+      // (it was generated in parallel and is usually ready), emit it as a final
+      // tagged content delta, THEN finish. Guarantees the [[NAME]] marker
+      // reaches Vapi/TTS regardless of what the model wrote.
+      const finishUp = async () => {
         if (appendText && !appendSent) {
-          if (!roleSent) { send({ role: "assistant" }); roleSent = true; }
-          send({ content: appendText });
           appendSent = true;
+          let txt = null;
+          try { txt = await appendText; } catch { txt = null; }
+          if (txt) {
+            if (!roleSent) { send({ role: "assistant" }); roleSent = true; }
+            send({ content: txt });
+          }
         }
         send({}, "stop");
         done();
@@ -449,7 +502,7 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
             ) {
               if (p.delta.text) send({ content: p.delta.text });
             } else if (p.type === "message_stop" || p.type === "error") {
-              finishUp();
+              await finishUp();
               finished = true;
               break;
             }
@@ -459,11 +512,11 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
 
         // Stream ended without an explicit message_stop — close cleanly.
         if (!finished) {
-          finishUp();
+          await finishUp();
         }
       } catch {
         try {
-          finishUp();
+          await finishUp();
         } catch {
           /* controller already closed */
         }
