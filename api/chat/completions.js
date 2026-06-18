@@ -81,18 +81,6 @@ export default async function handler(req) {
   // so nothing breaks before pre-snap is wired into the Mead Hall.
   const callId = body.call?.id ?? body.metadata?.callId ?? body.call_id;
 
-  // TEMP PROBE (remove after): show what Vapi actually sends, so we can see
-  // where the call id / metadata land. Watch Vercel logs for "REQ ".
-  try {
-    const pc = body.call || {};
-    console.log(
-      "REQ keys=[" + Object.keys(body).join(",") +
-      "] callKeys=[" + Object.keys(pc).join(",") +
-      "] callId=" + (callId || "NONE") +
-      "] metaKeys=[" + Object.keys(pc.metadata || body.metadata || {}).join(",") + "]"
-    );
-  } catch (e) { console.log("REQ probe error " + String(e)); }
-
   let stored = null;
   try {
     stored = await getCall(callId);
