@@ -21,6 +21,16 @@ const AN_MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
 const HOST_VOICE = process.env.VOICE_HOST || "nscgRrDRVT6a2RCQs92V";
 const SB_URL = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const VAPI_KEY = process.env.VAPI_API_KEY;
+const VAPI_ASSISTANT = process.env.VAPI_ASSISTANT_ID || "c8917a9c-dee6-4044-bf20-39212d63937d";
+function vapi(path, opts) {
+  opts = opts || {};
+  return fetch("https://api.vapi.ai" + path, {
+    method: opts.method || "GET",
+    headers: { authorization: "Bearer " + VAPI_KEY, "content-type": "application/json" },
+    body: opts.body,
+  });
+}
 
 const BLOCKS = [
   { label:"FRAME", note:"Mission & orientation. Never spoken — tells the model why he's here.", on:true,
@@ -52,6 +62,9 @@ Andrew: "Mm. Sure. So what's it cost?"` },
 ];
 
 function json(o, s = 200) { return new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } }); }
+function stripStage(t) {
+  return String(t).replace(/\*[^*]*\*/g, "").replace(/\[[^\]]*\]/g, "").replace(/\s{2,}/g, " ").trim();
+}
 function sb(path, opts) {
   opts = opts || {};
   return fetch(SB_URL + "/rest/v1/" + path, {
@@ -80,14 +93,14 @@ export default async function handler(req) {
     }).catch(() => null);
     if (!r || !r.ok) { const d = r ? await r.text().catch(() => "") : "fetch error"; return json({ error: "anthropic " + (r ? r.status : ""), detail: String(d).slice(0, 300) }, 502); }
     const j = await r.json();
-    return json({ text: (j.content || []).map((c) => c.text || "").join("").trim() });
+    return json({ text: stripStage((j.content || []).map((c) => c.text || "").join("")) });
   }
 
   if (action === "preview" && req.method === "POST") {
     if (!EL_KEY) return json({ error: "ELEVENLABS_API_KEY not set" }, 500);
     let b; try { b = await req.json(); } catch { return json({ error: "bad json" }, 400); }
     const voiceId = String(b.voiceId || HOST_VOICE).trim();
-    const text = String(b.text || "").trim();
+    const text = stripStage(String(b.text || ""));
     const model = String(b.model || "eleven_flash_v2_5").trim();
     if (!text) return json({ error: "text required" }, 400);
     const vs = {};
@@ -153,6 +166,35 @@ export default async function handler(req) {
     const r = await sb("voice_tunings?id=eq." + encodeURIComponent(id), { method: "DELETE", headers: { prefer: "return=minimal" } }).catch(() => null);
     if (!r || !r.ok) return json({ error: "delete failed" }, 502);
     return json({ ok: true });
+  }
+
+  if (action === "vapiget") {
+    if (!VAPI_KEY) return json({ error: "VAPI_API_KEY not set" }, 500);
+    const r = await vapi("/assistant/" + VAPI_ASSISTANT, {}).catch(() => null);
+    if (!r || !r.ok) { const d = r ? await r.text().catch(() => "") : "fetch error"; return json({ error: "vapi get " + (r ? r.status : ""), detail: String(d).slice(0, 300) }, 502); }
+    const a = await r.json();
+    const msgs = (a.model && a.model.messages) || [];
+    const sys = msgs.find((m) => m.role === "system");
+    return json({ prompt: sys ? sys.content : "", provider: a.model && a.model.provider, model: a.model && a.model.model });
+  }
+  if (action === "vapipush" && req.method === "POST") {
+    if (!VAPI_KEY) return json({ error: "VAPI_API_KEY not set" }, 500);
+    let b; try { b = await req.json(); } catch { return json({ error: "bad json" }, 400); }
+    const prompt = String(b.prompt || "").trim();
+    if (!prompt) return json({ error: "prompt required" }, 400);
+    // read current model so we send the COMPLETE object back (Vapi has no partial nested update)
+    const gr = await vapi("/assistant/" + VAPI_ASSISTANT, {}).catch(() => null);
+    if (!gr || !gr.ok) { const d = gr ? await gr.text().catch(() => "") : "fetch error"; return json({ error: "vapi get " + (gr ? gr.status : ""), detail: String(d).slice(0, 300) }, 502); }
+    const a = await gr.json();
+    const model = Object.assign({}, a.model || {});
+    let msgs = Array.isArray(model.messages) ? model.messages.slice() : [];
+    const idx = msgs.findIndex((m) => m.role === "system");
+    if (idx >= 0) msgs[idx] = Object.assign({}, msgs[idx], { content: prompt });
+    else msgs = [{ role: "system", content: prompt }].concat(msgs);
+    model.messages = msgs;
+    const pr = await vapi("/assistant/" + VAPI_ASSISTANT, { method: "PATCH", body: JSON.stringify({ model }) }).catch(() => null);
+    if (!pr || !pr.ok) { const d = pr ? await pr.text().catch(() => "") : "fetch error"; return json({ error: "vapi patch " + (pr ? pr.status : ""), detail: String(d).slice(0, 400) }, 502); }
+    return json({ ok: true, length: prompt.length });
   }
 
   return new Response(PAGE, { headers: { "content-type": "text/html; charset=utf-8" } });
@@ -261,6 +303,7 @@ const PAGE = `<!doctype html><meta charset="utf-8">
 <div id="out"></div>
 
 <h2>Rate &amp; save</h2>
+<div class="hint" style="margin-bottom:6px">This <b>records</b> the prompt + samples + rating to the shared table for review. It does <b>not</b> change live calls — use “Push to Vapi” below for that.</div>
 <label class="h">Your name</label><input type="text" id="reviewer" placeholder="who's reviewing">
 <label class="h" style="margin-top:8px">Register</label><input type="text" id="reg_save" placeholder="e.g. Sarcastic">
 <label class="h" style="margin-top:8px">Best for character</label><input type="text" id="best_for" list="chars" placeholder="Host / Conrad…"><datalist id="chars"><option>Host</option><option>Conrad</option><option>Bonnie</option><option>Andrea</option></datalist>
@@ -268,6 +311,12 @@ const PAGE = `<!doctype html><meta charset="utf-8">
 <label class="h" style="margin-top:8px">Comments</label><textarea id="comments" style="height:60px" placeholder="what worked, what didn't"></textarea>
 <button class="save" id="save" style="margin-top:8px">＋  Save result</button>
 <div class="msg" id="smsg"></div>
+
+<h2>Go live</h2>
+<div class="hint" style="margin-bottom:6px">Sends the <b>assembled prompt</b> (left column) to the live Vapi assistant. This is what changes real calls. Block edits don't persist on reload — push or save before closing.</div>
+<button class="gen" id="pushvapi" style="background:#b5482f;color:#fff">▲  Push assembled prompt to Vapi (LIVE)</button>
+<button class="preset" id="checklive" style="margin-left:6px">Check live prompt</button>
+<div class="msg" id="vmsg"></div>
 </div>
 
 </div>
@@ -422,6 +471,26 @@ $("addVoice").addEventListener("click",function(){
   if(!vid){alert("Enter a voice ID");return;}
   fetch("/api/soundboard?action=voiceadd",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({label:label,voice_id:vid})})
    .then(function(r){return r.json();}).then(function(j){if(j.error){alert(j.error+(j.detail?" — "+j.detail:""));return;}$("newVoiceLabel").value="";$("newVoiceId").value="";loadVoices();});
+});
+
+$("pushvapi").addEventListener("click",function(){
+  var prompt=assembled();
+  if(!prompt){alert("Nothing to push — the assembled prompt is empty.");return;}
+  if(!confirm("This replaces the LIVE system prompt on real calls ("+prompt.length+" characters). Continue?"))return;
+  $("pushvapi").disabled=true;$("vmsg").innerHTML="Pushing to Vapi…";
+  fetch("/api/soundboard?action=vapipush",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({prompt:prompt})})
+   .then(function(r){return r.json();}).then(function(j){
+     if(j.error){$("vmsg").innerHTML='<span class="err">'+esc(j.error)+(j.detail?" — "+esc(j.detail):"")+'</span>';}
+     else{$("vmsg").innerHTML='<span class="ok">✓ Live. Pushed '+j.length+' chars to the Vapi assistant. Make a test call to confirm.</span>';}
+     $("pushvapi").disabled=false;
+   }).catch(function(e){$("vmsg").innerHTML='<span class="err">'+esc(e.message)+'</span>';$("pushvapi").disabled=false;});
+});
+$("checklive").addEventListener("click",function(){
+  $("vmsg").innerHTML="Checking live prompt…";
+  fetch("/api/soundboard?action=vapiget").then(function(r){return r.json();}).then(function(j){
+    if(j.error){$("vmsg").innerHTML='<span class="err">'+esc(j.error)+(j.detail?" — "+esc(j.detail):"")+'</span>';return;}
+    $("vmsg").innerHTML='<span class="ok">Live system prompt: '+(j.prompt?j.prompt.length:0)+' chars'+(j.provider?" · provider "+esc(j.provider):"")+'.</span>';
+  }).catch(function(e){$("vmsg").innerHTML='<span class="err">'+esc(e.message)+'</span>';});
 });
 
 sync();loadTable();loadVoices();

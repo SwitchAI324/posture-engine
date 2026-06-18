@@ -17,7 +17,7 @@
 // VOICE_<NAME> (opt per-voice overrides).
 // ----------------------------------------------------------------------
 
-import { parseSegments, voiceFor } from "./_voices.js";
+import { parseSegments, voiceFor, stripStage } from "./_voices.js";
 
 export const config = { runtime: "edge" };
 
@@ -85,7 +85,10 @@ export default async function handler(req) {
   const sampleRate = msg.sampleRate || 24000;
   const fmt = RATE_FMT[sampleRate] || "pcm_24000";
 
-  const segments = parseSegments(text);
+  const segments = parseSegments(text)
+    .map((s) => ({ speaker: s.speaker, text: stripStage(s.text) }))
+    .filter((s) => s.text);
+  if (!segments.length) return err(400, "empty after strip");
   const t0 = Date.now();
 
   // FAST PATH: one speaker for the whole chunk — stream straight through.
