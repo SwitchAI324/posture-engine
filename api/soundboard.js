@@ -162,7 +162,7 @@ const PAGE = `<!doctype html><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Voice & prompt lab</title>
 <style>
-  body{background:#14110d;color:#efe7da;font:15px/1.5 ui-sans-serif,system-ui,sans-serif;max-width:860px;margin:24px auto;padding:0 18px}
+  body{background:#14110d;color:#efe7da;font:15px/1.5 ui-sans-serif,system-ui,sans-serif;max-width:1180px;margin:24px auto;padding:0 18px}
   h1{font:600 23px/1 ui-serif,Georgia,serif;margin-bottom:2px}
   h2{font:600 13px ui-sans-serif;color:#d9a441;margin:22px 0 8px;text-transform:uppercase;letter-spacing:.05em}
   p.sub{color:#a99b85;font-size:13px;margin-top:4px}
@@ -203,65 +203,76 @@ const PAGE = `<!doctype html><meta charset="utf-8">
   th,td{text-align:left;padding:6px 7px;border-bottom:1px solid #221b12;vertical-align:top}
   th{color:#a99b85;font-size:10.5px;text-transform:uppercase}td.s{color:#e8b54a;white-space:nowrap}
   .del{background:#3a1d1d;color:#e0a0a0;border:1px solid #5a2d2d;padding:3px 8px;font-size:11px}
+.cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;align-items:start;margin-top:12px}
+  .col{min-width:0}
+  .col h2:first-child{margin-top:0}
+  @media(max-width:820px){.cols{grid-template-columns:1fr}}
 </style>
 <h1>Voice &amp; prompt lab</h1>
-<p class="sub">Build the host out of blocks — reorder (↑↓), toggle, edit. Pick a scenario, Generate 3 samples, hear them, rate &amp; save. Two knobs: TALK (the blocks) and VOICE (settings below).</p>
+<p class="sub">Left: build the host. Middle: voice &amp; scenario. Right: generate &amp; rate. Saved results below.</p>
 
-<h2>1 · Prompt blocks (TALK)</h2>
+<div class="cols">
+
+<div class="col">
+<h2>Prompt blocks</h2>
 <input type="text" id="prompt_label" placeholder="version label, e.g. terse-v2" value="v1">
 <div id="blocks"></div>
-
-<label class="h" style="margin-top:12px">Micro-edits (find/replace on the assembled prompt)</label>
+<label class="h" style="margin-top:12px">Micro-edits (find/replace)</label>
 <div class="hint" style="margin-bottom:4px">Replace must match exactly. ✓ matched = applied. Toggle off to A/B.</div>
 <div id="tweaks"></div>
 <button class="preset" id="addtweak" style="margin-top:6px">＋ Add a micro-edit</button>
 <details style="margin-top:10px"><summary>▸ See assembled prompt</summary><div class="out" id="eff" style="font:12px ui-monospace,monospace;max-height:230px;overflow:auto;color:#cfc4b0;white-space:pre-wrap"></div></details>
-
-<h2>2 · Scenario</h2>
-<div class="row" id="scen"></div>
-<textarea id="scenario" style="height:52px;margin-top:8px"></textarea>
-<div class="row" style="margin-top:8px">
-  <div style="flex:1;min-width:200px"><label class="h">Register nudge (optional)</label><input type="text" id="register" placeholder="blank = let prompt drive it; or: Sarcastic…"></div>
-  <div style="width:120px"><label class="h">Samples</label><input type="number" id="samples" value="3" min="1" max="5"></div>
 </div>
-<button class="gen" id="gen" style="margin-top:12px">⚙  Generate</button>
-<div class="msg" id="gmsg"></div>
-<div id="out"></div>
 
-<h2>3 · Voice (VOICE)</h2>
+<div class="col">
+<h2>Voice</h2>
 <div class="row">
   <button class="preset on" data-v="nscgRrDRVT6a2RCQs92V">Host (Voice B)</button>
   <button class="preset" data-v="DGSEKmUV19t0w4RseLao">Test voice</button>
   <button class="preset" data-v="21m00Tcm4TlvDq8ikWAM">Rachel</button>
-  <button class="preset on" data-m="eleven_flash_v2_5">Flash</button>
-  <button class="preset" data-m="eleven_multilingual_v2">Multilingual v2</button>
 </div>
 <input type="text" id="voiceId" value="nscgRrDRVT6a2RCQs92V" style="margin-top:8px">
-<div class="hint" style="margin-top:3px">↑ Paste ANY ElevenLabs voice ID here to try it. Save the good ones to your palette below.</div>
-<label class="h" style="margin-top:10px">My voices (saved palette)</label>
+<div class="hint" style="margin-top:3px">Paste ANY ElevenLabs voice ID to try it.</div>
+<label class="h" style="margin-top:10px">My voices (palette)</label>
 <div class="row" id="palette"><span class="muted">loading…</span></div>
 <div class="row" style="margin-top:6px">
-  <input type="text" id="newVoiceLabel" placeholder="label (e.g. Gravelly Mike)" style="flex:1;min-width:120px">
-  <input type="text" id="newVoiceId" placeholder="voice ID" style="flex:1;min-width:120px">
-  <button class="preset" id="addVoice">＋ Save voice</button>
+  <input type="text" id="newVoiceLabel" placeholder="label" style="flex:1;min-width:80px">
+  <input type="text" id="newVoiceId" placeholder="voice ID" style="flex:1;min-width:80px">
+  <button class="preset" id="addVoice">＋ Save</button>
 </div>
-<div class="ctl"><label>Stability <b id="vStability">0.50</b></label><input type="range" id="stability" min="0" max="1" step="0.05" value="0.5"><div class="hint">Lower = more expressive. Higher = steadier/flatter.</div></div>
+<div class="ctl"><label>Stability <b id="vStability">0.50</b></label><input type="range" id="stability" min="0" max="1" step="0.05" value="0.5"><div class="hint">Lower = more expressive.</div></div>
 <div class="ctl"><label>Style <b id="vStyle">0.00</b></label><input type="range" id="style" min="0" max="1" step="0.05" value="0"></div>
 <div class="ctl"><label>Similarity <b id="vSimilarity">0.75</b></label><input type="range" id="similarity" min="0" max="1" step="0.05" value="0.75"></div>
 <div class="ctl"><label style="justify-content:flex-start;gap:8px"><input type="checkbox" id="speaker_boost" checked> Speaker boost</label></div>
 
-<h2>4 · Rate &amp; save</h2>
-<div class="grid">
-  <div><label class="h">Your name</label><input type="text" id="reviewer" placeholder="who's reviewing"></div>
-  <div><label class="h">Register</label><input type="text" id="reg_save" placeholder="e.g. Sarcastic"></div>
-  <div><label class="h">Best for character</label><input type="text" id="best_for" list="chars" placeholder="Host / Conrad…"><datalist id="chars"><option>Host</option><option>Conrad</option><option>Bonnie</option><option>Andrea</option></datalist></div>
-  <div><label class="h">Rating</label><div class="stars" id="stars"><span data-n="1">★</span><span data-n="2">★</span><span data-n="3">★</span><span data-n="4">★</span><span data-n="5">★</span></div></div>
+<h2>Scenario</h2>
+<div class="row" id="scen"></div>
+<textarea id="scenario" style="height:60px;margin-top:8px"></textarea>
+<label class="h" style="margin-top:8px">Register nudge (optional)</label>
+<input type="text" id="register" placeholder="blank = let prompt drive it">
+<label class="h" style="margin-top:8px">Samples</label>
+<input type="number" id="samples" value="3" min="1" max="5">
 </div>
-<label class="h" style="margin-top:8px">Comments</label><textarea id="comments" style="height:52px" placeholder="what worked, what didn't"></textarea>
+
+<div class="col">
+<h2>Generate</h2>
+<button class="gen" id="gen">⚙  Generate</button>
+<div class="msg" id="gmsg"></div>
+<div id="out"></div>
+
+<h2>Rate &amp; save</h2>
+<label class="h">Your name</label><input type="text" id="reviewer" placeholder="who's reviewing">
+<label class="h" style="margin-top:8px">Register</label><input type="text" id="reg_save" placeholder="e.g. Sarcastic">
+<label class="h" style="margin-top:8px">Best for character</label><input type="text" id="best_for" list="chars" placeholder="Host / Conrad…"><datalist id="chars"><option>Host</option><option>Conrad</option><option>Bonnie</option><option>Andrea</option></datalist>
+<label class="h" style="margin-top:8px">Rating</label><div class="stars" id="stars"><span data-n="1">★</span><span data-n="2">★</span><span data-n="3">★</span><span data-n="4">★</span><span data-n="5">★</span></div>
+<label class="h" style="margin-top:8px">Comments</label><textarea id="comments" style="height:60px" placeholder="what worked, what didn't"></textarea>
 <button class="save" id="save" style="margin-top:8px">＋  Save result</button>
 <div class="msg" id="smsg"></div>
+</div>
 
-<h2>5 · Saved results</h2>
+</div>
+
+<h2>Saved results</h2>
 <div id="table"><span class="muted">loading…</span></div>
 
 <script>
