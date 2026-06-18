@@ -1,63 +1,66 @@
-// SpamViking — the BENCH BRAIN (v1).
+// SpamViking — the BENCH BRAIN (v1, engine-injected).
 // ----------------------------------------------------------------------
-// One engine, host leads, bench follows. On a trigger, the engine tells the
-// LLM to bring a bench character into the call and tag their lines [[NAME]];
-// the TTS proxy (tts.js) then voices that character. This file owns the two
-// decisions: WHEN someone arrives, and WHO.
+// One engine, host leads, bench follows. We learned the model will NOT emit a
+// [[NAME]] tag on request — the single-host persona is too strong, so it just
+// ignores the cue. So the engine stops asking and WRITES the bench line itself:
+// on an arrival turn it appends "[[CONRAD]] <line>" to the streamed output, so
+// the marker is guaranteed and the TTS proxy voices Conrad. No model compliance
+// required.
 //
-// v1 is the dumbest reliable trigger — a single deterministic arrival on a set
-// turn — so we can prove a second voice on a live call. Gear-driven triggers
-// (arrive when ENGAGEMENT hits stunned, or SUSPICION slips), persistence
-// ("Conrad stays and interjects"), and multiple characters are v2.
+// v1 uses canned arrival lines (instant, guaranteed) to prove the second voice
+// on a live call. v2: generate Conrad's line from the live conversation, let
+// him persist and interject, and drive arrival off the gears (stunned/slipping)
+// instead of a fixed turn.
 //
-// Tuning (Vercel env, no redeploy of logic needed):
+// Tuning (Vercel env):
 //   BENCH_ARRIVE_TURN  which user-turn the arrival fires on   (default 2)
-//   BENCH_ARRIVE_WHO   which character arrives                (default CONRAD)
-// Names must match the VOICES map in _voices.js (HOST/CONRAD/BONNIE/ANDREA).
+//   BENCH_ARRIVE_WHO   CONRAD | BONNIE | ANDREA               (default CONRAD)
+// Names must match the VOICES map in _voices.js.
 // ----------------------------------------------------------------------
 
 export const BENCH = {
   CONRAD: {
     tag: "CONRAD",
-    note: "Andrew's boss — blunt, impatient, openly suspicious this call is wasting his team's time",
+    note: "Andrew's boss — blunt, impatient, suspicious this is wasting time",
+    lines: [
+      "Hold on, hold on. Who is this, and why is this taking so long?",
+      "Andrew. Andrew. Is this that vendor call? What are we even looking at here?",
+      "Wait a second. What exactly are we paying for? Because I'm not hearing it.",
+      "Who am I talking to? Because so far this sounds like a whole lot of nothing.",
+      "Let me jump in here. I've got about ninety seconds. Give me the real number.",
+    ],
   },
   BONNIE: {
     tag: "BONNIE",
-    note: "a sharp, no-nonsense colleague who asks the pointed question Andrew is too polite to ask",
+    note: "sharp, no-nonsense colleague who asks the pointed question",
+    lines: [
+      "Sorry to cut in — can you just tell us who you actually are first?",
+      "Quick question before we go further: who referred you to us, exactly?",
+      "Hang on. Before Andrew gets excited, what's this actually going to cost?",
+    ],
   },
   ANDREA: {
     tag: "ANDREA",
-    note: "an over-eager junior who keeps trying to 'help' and talks over people",
+    note: "over-eager junior who talks over people trying to help",
+    lines: [
+      "Oh! Oh, I can take notes! Wait, what did they just say? I missed it!",
+      "Hi! Hi, sorry, I just joined — are we doing the thing? What thing are we doing?",
+      "I love this already! Should I pull up the spreadsheet? I'll pull up the spreadsheet!",
+    ],
   },
 };
 
 const ARRIVE_TURN = parseInt(process.env.BENCH_ARRIVE_TURN || "2", 10);
 const ARRIVE_WHO = (process.env.BENCH_ARRIVE_WHO || "CONRAD").toUpperCase();
 
-function cap(s) {
-  return s.charAt(0) + s.slice(1).toLowerCase();
+function pick(a) {
+  return a[Math.floor(Math.random() * a.length)];
 }
 
-// Decide the bench move for THIS turn. Returns { tag, cue } to inject into the
-// mutable system block, or null. v1: one deterministic arrival on ARRIVE_TURN.
-export function benchCue(turn) {
+// Decide the bench move for THIS turn. Returns { tag, line } to append to the
+// streamed output (tagged), or null. v1: one deterministic arrival.
+export function benchInject(turn) {
   if (turn !== ARRIVE_TURN) return null;
   const c = BENCH[ARRIVE_WHO] || BENCH.CONRAD;
-  const name = cap(c.tag);
-  const cue =
-    "\n\n=== BENCH ARRIVAL (HARD FORMAT RULE — follow exactly) ===\n" +
-    name + " — " + c.note + " — barges into the call RIGHT NOW and speaks.\n" +
-    "Your reply THIS TURN must contain a line spoken by " + name + ", and every " +
-    "line " + name + " speaks MUST begin with the literal marker [[" + c.tag + "]] " +
-    "on its own, before his words. This marker is required — it is how " + name +
-    "'s voice is produced. If you do not write [[" + c.tag + "]], he is silent and " +
-    "the moment fails.\n" +
-    "Write Andrew's own line with NO marker, then " + name + "'s line WITH the marker.\n" +
-    "EXAMPLE of the exact shape (write your own words, keep this structure):\n" +
-    "Of course, let me just pull up your account details now.\n" +
-    "[[" + c.tag + "]] Hold on — who is this exactly, and why is this taking twenty minutes?\n" +
-    "Do NOT narrate the arrival ('my boss walked in'). Do NOT describe " + name +
-    " in the third person. Just let him speak, tagged. Keep both lines short and " +
-    "in-world.";
-  return { tag: c.tag, cue };
+  return { tag: c.tag, line: pick(c.lines) };
 }

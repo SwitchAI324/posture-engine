@@ -20,7 +20,7 @@ import { getCall, setCall, isConfigured, appendGearEvent, appendBitEvent } from 
 import { applyForceAll, postureBlock, defaultState, detectAccusation } from "../_gears.js";
 import { selectBit } from "../_bits.js";
 import { archetypeFromBody } from "../_archetype.js";
-import { benchCue } from "../_bench.js";
+import { benchInject } from "../_bench.js";
 import { waitUntil } from "@vercel/functions";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -73,6 +73,13 @@ export default async function handler(req) {
   }
 
   const { system: vapiSystem, messages } = splitMessages(body.messages || []);
+
+  // BENCH: decide if a character barges in THIS turn. If so, the engine appends
+  // their tagged line to the stream itself (the model won't emit the tag, so we
+  // guarantee it). Independent of the gears store — just needs the turn count.
+  const bench = benchInject(countUserTurns(messages));
+  const benchAppend = bench ? "\n\n[[" + bench.tag + "]] " + bench.line : null;
+  if (bench) console.log("bench inject=" + bench.tag + " turn=" + countUserTurns(messages));
 
   // PRE-SNAP PREFIX: if a frozen prefix was assembled for this call at
   // pre-snap (POST /api/presnap) and stored, use it as the cached block and
@@ -128,7 +135,7 @@ export default async function handler(req) {
     model: MODEL(),
   };
 
-  return new Response(anthropicToOpenAISSE(upstream.body, meta), {
+  return new Response(anthropicToOpenAISSE(upstream.body, meta, benchAppend), {
     headers: {
       "content-type": "text/event-stream; charset=utf-8",
       "cache-control": "no-cache, no-transform",
@@ -217,15 +224,6 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body) {
         '\n\nIMPROV BEAT — work the bit "' + top.name +
         '" into your next line ONLY if it lands naturally. ' +
         "Never name it; never break character.";
-    }
-
-    // BENCH: on the trigger, invite a character in. The LLM writes their line
-    // tagged [[NAME]]; the TTS proxy voices them. v1 is one deterministic
-    // arrival to prove a second voice — gear-driven triggers + persistence next.
-    const bench = benchCue(turn);
-    if (bench) {
-      mutable += bench.cue;
-      console.log("bench arrive=" + bench.tag + " turn=" + turn);
     }
 
     blocks.push({ type: "text", text: mutable });
@@ -359,7 +357,7 @@ function extractText(content) {
 // opening role delta), content_block_delta/text_delta (emit content), and
 // message_stop (emit finish_reason + [DONE]). Everything else (ping,
 // content_block_start/stop, message_delta) is ignored.
-function anthropicToOpenAISSE(anthropicBody, meta) {
+function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
 
@@ -380,11 +378,25 @@ function anthropicToOpenAISSE(anthropicBody, meta) {
       let buffer = "";
       let roleSent = false;
       let finished = false;
+      let appendSent = false;
 
       const send = (delta, finish_reason = null) =>
         controller.enqueue(encoder.encode(chunkStr(delta, finish_reason)));
       const done = () =>
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+
+      // Close out the turn: if the engine has a bench line to inject, emit it as
+      // a final content delta (tagged), THEN finish. Guarantees the [[NAME]]
+      // marker reaches Vapi/TTS regardless of what the model wrote.
+      const finishUp = () => {
+        if (appendText && !appendSent) {
+          if (!roleSent) { send({ role: "assistant" }); roleSent = true; }
+          send({ content: appendText });
+          appendSent = true;
+        }
+        send({}, "stop");
+        done();
+      };
 
       try {
         while (true) {
@@ -437,8 +449,7 @@ function anthropicToOpenAISSE(anthropicBody, meta) {
             ) {
               if (p.delta.text) send({ content: p.delta.text });
             } else if (p.type === "message_stop" || p.type === "error") {
-              send({}, "stop");
-              done();
+              finishUp();
               finished = true;
               break;
             }
@@ -448,13 +459,11 @@ function anthropicToOpenAISSE(anthropicBody, meta) {
 
         // Stream ended without an explicit message_stop — close cleanly.
         if (!finished) {
-          send({}, "stop");
-          done();
+          finishUp();
         }
       } catch {
         try {
-          send({}, "stop");
-          done();
+          finishUp();
         } catch {
           /* controller already closed */
         }
