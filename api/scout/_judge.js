@@ -4,9 +4,14 @@
 // host sound deranged, so the model is told to return [] unless it's sure.
 // Output is strict JSON, parsed defensively.
 //
-// Default model is haiku (cheap, matches the PE stack). If dossier_negation
-// precision disappoints, set SCOUT_JUDGE_MODEL=claude-sonnet-4-6.
-const MODEL = process.env.SCOUT_JUDGE_MODEL || 'claude-haiku-4-5-20251001';
+// Model resolution: a judge-specific override wins, then this project's
+// existing ANTHROPIC_MODEL, then a safe default. To tune the judge alone
+// without touching the rest of the stack, set SCOUT_JUDGE_MODEL. If
+// dossier_negation precision disappoints, set it to claude-sonnet-4-6.
+const MODEL =
+  process.env.SCOUT_JUDGE_MODEL ||
+  process.env.ANTHROPIC_MODEL ||
+  'claude-haiku-4-5-20251001';
 
 const SYSTEM = `You score scouted material about a scam operation and emit \
 "hooks" — real facts a caller can reference to sound specifically informed \
