@@ -26,6 +26,17 @@ export function voiceFor(speaker) {
   return VOICES[speaker] || VOICES[DEFAULT_SPEAKER];
 }
 
+// Remove stage directions the model sometimes writes (*pauses*, [sighs]) so the
+// voice never reads them aloud. Keeps parentheses (a real spoken aside). MUST be
+// called AFTER [[NAME]] markers are split out, so it never eats a speaker tag.
+export function stripStage(text) {
+  return String(text)
+    .replace(/\*[^*]*\*/g, "")
+    .replace(/\[[^\]]*\]/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 // Split a turn into ordered segments by [[NAME]] markers, so a single chunk
 // that spans a speaker change still gets each part in the right voice. Text
 // before the first marker is the default speaker (host).

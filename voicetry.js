@@ -17,7 +17,7 @@
 // VOICE_<NAME> (opt per-voice overrides).
 // ----------------------------------------------------------------------
 
-import { parseSegments, voiceFor } from "./_voices.js";
+import { parseSegments, voiceFor, stripStage } from "./_voices.js";
 
 export const config = { runtime: "edge" };
 
@@ -39,15 +39,29 @@ function err(status, msg) {
   });
 }
 
+// Optional voice tuning from env — only applied if set, so default behavior
+// (the current good sound) is untouched. Tune these live in /api/soundboard.
+function voiceSettings() {
+  const s = {};
+  if (process.env.VOICE_STABILITY) s.stability = parseFloat(process.env.VOICE_STABILITY);
+  if (process.env.VOICE_SIMILARITY) s.similarity_boost = parseFloat(process.env.VOICE_SIMILARITY);
+  if (process.env.VOICE_STYLE) s.style = parseFloat(process.env.VOICE_STYLE);
+  if (process.env.VOICE_SPEAKER_BOOST) s.use_speaker_boost = process.env.VOICE_SPEAKER_BOOST === "true";
+  return Object.keys(s).length ? s : null;
+}
+
 function elFetch(voiceId, text, fmt) {
-  const url =
-    "https://api.elevenlabs.io/v1/text-to-speech/" + voiceId +
-    "/stream?output_format=" + fmt;
-  return fetch(url, {
-    method: "POST",
-    headers: { "xi-api-key": EL_KEY, "content-type": "application/json" },
-    body: JSON.stringify({ text, model_id: EL_MODEL }),
-  });
+  const vs = voiceSettings();
+  const body = { text, model_id: EL_MODEL };
+  if (vs) body.voice_settings = vs;
+  return fetch(
+    "https://api.elevenlabs.io/v1/text-to-speech/" + voiceId + "/stream?output_format=" + fmt,
+    {
+      method: "POST",
+      headers: { "xi-api-key": EL_KEY, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
 }
 
 export default async function handler(req) {
@@ -71,7 +85,10 @@ export default async function handler(req) {
   const sampleRate = msg.sampleRate || 24000;
   const fmt = RATE_FMT[sampleRate] || "pcm_24000";
 
-  const segments = parseSegments(text);
+  const segments = parseSegments(text)
+    .map((s) => ({ speaker: s.speaker, text: stripStage(s.text) }))
+    .filter((s) => s.text);
+  if (!segments.length) return err(400, "empty after strip");
   const t0 = Date.now();
 
   // FAST PATH: one speaker for the whole chunk — stream straight through.

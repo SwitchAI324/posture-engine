@@ -1,81 +1,107 @@
-// SpamViking — Posture Engine: PRE-SNAP endpoint  (Node runtime)
+// SpamViking — Posture Engine: SMOKE-TEST (real Web-SDK path).
 // ----------------------------------------------------------------------
-// Called ONCE when the Director locks a call in the Mead Hall (posture +
-// armed bench + bits chosen). It assembles the frozen prefix and stores it
-// keyed by call_id. The per-turn proxy then just reads that prefix.
+// Mirrors what the real zoom-like meeting page does: reads the token's
+// archetype from /api/join, starts a Vapi WEB call in the browser with
+// metadata { archetype, slug } stamped on it, lets you talk into your mic,
+// and records the call id back. This exercises the genuine carrier path —
+// metadata set client-side at vapi.start — so you can watch the `arch:` flip
+// in the proxy logs as you speak.
 //
-// Runs on the NODE runtime (not Edge) because the compiler/assembler are
-// CommonJS with require()'d JSON — happy in Node, impossible in Edge. The
-// two endpoints share only the store.
-//
-//   POST /api/presnap
-//   { "call_id": "vapi-call-id", "posture": "skald",
-//     "armedBench": ["conrad","bonnie"], "bits": ["echo"],
-//     "target": "Marcus @ vendor", "tactic": "b2b_saas" }
+// Needs VAPI_PUBLIC_KEY (browser-safe Vapi public key) in Vercel env, and the
+// assistant's model.metadataSendMode NOT set to "off".
+// Test artifact — delete api/smoke.js when done.
 // ----------------------------------------------------------------------
 
-import * as assembleMod from "../compiler/assemble.js";
-import { setCall, isConfigured } from "./_store.js";
+export const config = { runtime: "edge" };
 
-const assemblePrefix =
-  assembleMod.assemblePrefix ?? assembleMod.default?.assemblePrefix;
+const PUBLIC_KEY = process.env.VAPI_PUBLIC_KEY || "";
+const ASSISTANT_ID =
+  process.env.VAPI_ASSISTANT_ID || "c8917a9c-dee6-4044-bf20-39212d63937d";
 
-// The call opens in the ALIVE doubt-gear. The posture engine overwrites
-// this line per turn later (Phase 3); pre-snap just seeds the entry value.
-const ENTRY_POSTURE_LINE =
-  "ALIVE — the opportunity is real and moving; warm, forward, generous " +
-  "with next steps.";
-
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    res.status(405).json({ error: "POST only" });
-    return;
-  }
-  if (!isConfigured()) {
-    res.status(500).json({ error: "store not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)" });
-    return;
-  }
-
-  const body = req.body || {};
-  const callId = body.call_id || body.callId;
-  if (!callId || !body.posture) {
-    res.status(400).json({ error: "need call_id and posture" });
-    return;
-  }
-
-  let assembled;
-  try {
-    assembled = assemblePrefix({
-      posture: body.posture,
-      armedBench: body.armedBench || body.armed_bench || [],
-      bits: body.bits || [],
-      target: body.target,
-      tactic: body.tactic,
-      secondCall: body.secondCall ?? body.second_call,
-    });
-  } catch (e) {
-    res.status(400).json({ error: e.message });
-    return;
-  }
-
-  try {
-    await setCall(callId, {
-      prefix: assembled.stablePrefix,
-      gear: "alive", // call opens in the ALIVE doubt-gear
-      postureLine: body.postureLine || ENTRY_POSTURE_LINE,
-    });
-  } catch (e) {
-    res.status(502).json({ error: e.message });
-    return;
-  }
-
-  res.status(200).json({
-    ok: true,
-    call_id: callId,
-    posture: assembled.posture,
-    bench_armed: assembled.benchArmed,
-    excluded: assembled.excluded,
-    prefix_tokens: assembled.approxTokens,
-    prefix_hash: assembled.hash,
+export default async function handler() {
+  return new Response(PAGE(PUBLIC_KEY, ASSISTANT_ID), {
+    headers: { "content-type": "text/html; charset=utf-8" },
   });
+}
+
+function PAGE(pub, asst) {
+  return `<!doctype html><meta charset="utf-8">
+<title>Carrier smoke-test (web call)</title>
+<style>
+  body{background:#14110d;color:#efe7da;font:15px/1.55 ui-sans-serif,system-ui,sans-serif;max-width:760px;margin:34px auto;padding:0 18px}
+  h1{font:600 23px/1 ui-serif,Georgia,serif}
+  .meta{color:#a99b85;font-size:13px}
+  label{display:block;color:#a99b85;font-size:12px;letter-spacing:.5px;text-transform:uppercase;margin:18px 0 6px}
+  input{width:100%;font:15px ui-monospace,monospace;color:#efe7da;background:#1d1812;border:1px solid #3a3026;border-radius:8px;padding:11px 13px;box-sizing:border-box}
+  button{margin:16px 8px 0 0;font:600 15px ui-sans-serif,system-ui;color:#1a140a;background:#d9a441;border:0;border-radius:9px;padding:12px 20px;cursor:pointer}
+  button.ghost{background:#241d15;color:#efe7da;border:1px solid #3a3026}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  #log{margin-top:22px;background:#1d1812;border:1px solid #3a3026;border-radius:8px;padding:12px;font:13px ui-monospace,monospace;color:#cfc4b0;height:300px;overflow:auto;white-space:pre-wrap}
+  .warn{color:#e0a060}
+</style>
+<h1>Carrier smoke-test &middot; web call</h1>
+<p class="meta">Starts a real browser voice call to the assistant with <code>metadata{archetype,slug}</code>
+stamped on it — the same way the real meeting page will. Allow mic access when asked, then speak.
+Watch the proxy logs for <code>"arch":"crypto_investment"</code>.</p>
+
+<label for="slug">Token slug</label>
+<input id="slug" value="smoke-test-001">
+<button id="start">Start web call</button>
+<button id="stop" class="ghost" disabled>End call</button>
+
+<div id="log"></div>
+
+<script type="module">
+import Vapi from "https://esm.sh/@vapi-ai/web";
+var PUB = ${JSON.stringify(pub)};
+var ASST = ${JSON.stringify(asst)};
+
+var slugInput = document.getElementById("slug");
+var startBtn = document.getElementById("start");
+var stopBtn = document.getElementById("stop");
+var logEl = document.getElementById("log");
+var vapi = null, currentSlug = null;
+
+function line(s){ var d = document.createElement("div"); d.textContent = s; logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight; }
+
+if(!PUB){ line("[!] VAPI_PUBLIC_KEY not set on the server — add it in Vercel env and redeploy."); startBtn.disabled = true; }
+
+try { vapi = new Vapi(PUB); line("SDK ready."); } catch(e){ line("SDK init failed: " + e); }
+
+if(vapi){
+  vapi.on("call-start", function(){ line("> call-start"); });
+  vapi.on("call-end", function(){ line("> call-end"); stopBtn.disabled = true; startBtn.disabled = false; });
+  vapi.on("speech-start", function(){ line("  (assistant speaking)"); });
+  vapi.on("message", function(m){ if(m && m.type === "transcript" && m.transcriptType === "final"){ line("  " + m.role + ": " + m.transcript); } });
+  vapi.on("error", function(e){ line("ERROR: " + (e && e.message ? e.message : JSON.stringify(e))); });
+}
+
+startBtn.addEventListener("click", function(){
+  currentSlug = slugInput.value.trim();
+  startBtn.disabled = true;
+  line("reading archetype for slug=" + currentSlug + " ...");
+  fetch("/api/join?slug=" + encodeURIComponent(currentSlug))
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if(j.error){ line("token read error: " + JSON.stringify(j)); startBtn.disabled = false; return; }
+      var arch = j.archetype || "universal";
+      line("archetype = " + arch + " -- starting web call with metadata ...");
+      return vapi.start(ASST, { metadata: { archetype: arch, slug: currentSlug } })
+        .then(function(call){
+          stopBtn.disabled = false;
+          var id = call && (call.id || call.callId);
+          line("call started" + (id ? " id=" + id : " (no id returned by SDK)"));
+          line(">>> SPEAK now: say 'are you a real person?'");
+          if(id){
+            fetch("/api/join?slug=" + encodeURIComponent(currentSlug) + "&call_id=" + encodeURIComponent(id), { method: "POST" })
+              .then(function(r){ return r.json(); })
+              .then(function(w){ line("recorded id back to token: " + JSON.stringify(w)); });
+          }
+        });
+    })
+    .catch(function(e){ line("start failed: " + e); startBtn.disabled = false; });
+});
+
+stopBtn.addEventListener("click", function(){ if(vapi){ vapi.stop(); } });
+</script>`;
 }

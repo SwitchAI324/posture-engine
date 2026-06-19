@@ -62,10 +62,13 @@ export default async function handler(req) {
 
   // GET: hand the archetype to the meeting page, which starts the web call with
   // it via vapi.start(assistant, { metadata: { archetype, slug } }).
+  // meeting_url is the usable drop-in: the join CLIENT page (not a call URL —
+  // Vapi web calls have none). Send the spammer's browser there (redirect).
   if (req.method === "GET") {
     return jsonRes({
       slug,
       archetype,
+      meeting_url: u.origin + "/api/meeting?slug=" + encodeURIComponent(slug),
       booked_slot: token.booked_slot || null,
       joined_at: token.joined_at || null,
       joined: !!token.joined_at,
