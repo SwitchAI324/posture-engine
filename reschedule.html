@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Reschedule your call with Andrew Mercer</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1c2430; background: #f3f5f8; line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 32px 20px 64px; }
+  .card { background: #fff; border: 1px solid #e4e8ee; border-radius: 14px; overflow: hidden; }
+  .head { display: flex; align-items: center; gap: 14px; padding: 24px 28px; border-bottom: 1px solid #eef1f5; }
+  .avatar { width: 48px; height: 48px; border-radius: 50%; background: #2f5fd6; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 17px; flex: 0 0 auto; }
+  .head h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  .head .meta { color: #6b7685; font-size: 14px; margin-top: 2px; }
+  .body { padding: 24px 28px 28px; }
+  .lead { color: #6b7685; font-size: 14px; margin: 0 0 20px; }
+  .day { margin-bottom: 18px; }
+  .day h2 { font-size: 13px; font-weight: 600; color: #404a59; margin: 0 0 8px; }
+  .times { display: flex; flex-wrap: wrap; gap: 8px; }
+  .slot { appearance: none; border: 1px solid #d4dae3; background: #fff; color: #25405f;
+    font-size: 14px; font-weight: 500; padding: 9px 14px; border-radius: 8px; cursor: pointer; font-family: inherit; }
+  .slot:hover { border-color: #2f5fd6; }
+  .slot:focus-visible { outline: 2px solid #2f5fd6; outline-offset: 2px; }
+  .slot[aria-pressed="true"] { background: #2f5fd6; border-color: #2f5fd6; color: #fff; }
+  .confirm { margin-top: 18px; width: 100%; padding: 12px; font-size: 15px; font-weight: 600;
+    color: #fff; background: #2f5fd6; border: none; border-radius: 9px; cursor: pointer; font-family: inherit; display: none; }
+  .confirm.show { display: block; }
+  .confirm:disabled { background: #9fb2dd; cursor: default; }
+  .note { font-size: 13px; color: #8a93a1; margin-top: 12px; }
+  .state { padding: 8px 0; color: #6b7685; font-size: 14px; }
+  .done { text-align: center; padding: 16px 0 4px; }
+  .done .tick { width: 44px; height: 44px; border-radius: 50%; background: #e7f2ec; color: #1c7a4a;
+    display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; font-size: 22px; }
+  .done h2 { margin: 0 0 6px; font-size: 17px; }
+  .done p { margin: 4px 0; color: #6b7685; font-size: 14px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="head">
+        <div class="avatar">AM</div>
+        <div>
+          <h1>Reschedule your call with Andrew Mercer</h1>
+          <div class="meta">30 min · video call</div>
+        </div>
+      </div>
+      <div class="body">
+        <p class="lead">Pick a new time and we'll move your call.</p>
+        <div id="slots"><div class="state">Loading times…</div></div>
+        <button class="confirm" id="confirm">Move my call to this time</button>
+        <p class="note" id="note"></p>
+      </div>
+    </div>
+  </div>
+
+<script>
+  var slug = location.pathname.split('/').filter(Boolean).pop() || '';
+  var selected = null;
+
+  function fmtDay(iso) {
+    return new Date(iso + 'T00:00:00').toLocaleDateString(undefined,
+      { weekday: 'long', month: 'long', day: 'numeric' });
+  }
+  function fmtTime(iso) {
+    return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  }
+
+  function render(data) {
+    var box = document.getElementById('slots');
+    box.innerHTML = '';
+    if (!data.days || !data.days.length) {
+      box.innerHTML = '<div class="state">No times are open right now.</div>';
+      return;
+    }
+    data.days.forEach(function (day) {
+      var wrap = document.createElement('div');
+      wrap.className = 'day';
+      var h = document.createElement('h2'); h.textContent = fmtDay(day.date); wrap.appendChild(h);
+      var times = document.createElement('div'); times.className = 'times';
+      day.slots.forEach(function (iso) {
+        var b = document.createElement('button');
+        b.className = 'slot'; b.type = 'button'; b.textContent = fmtTime(iso);
+        b.setAttribute('aria-pressed', 'false');
+        b.onclick = function () { select(iso, b); };
+        times.appendChild(b);
+      });
+      wrap.appendChild(times); box.appendChild(wrap);
+    });
+  }
+
+  function select(iso, btn) {
+    selected = iso;
+    document.querySelectorAll('.slot').forEach(function (s) { s.setAttribute('aria-pressed', 'false'); });
+    btn.setAttribute('aria-pressed', 'true');
+    document.getElementById('confirm').classList.add('show');
+  }
+
+  document.getElementById('confirm').onclick = async function () {
+    if (!selected) return;
+    this.disabled = true;
+    document.getElementById('note').textContent = '';
+    try {
+      // Reschedule = same slug, new slot. /api/book forwards {source:"sv_page",
+      // slug, slot} to /exec; the email layer recognizes the existing booking
+      // and moves it in place (same ICS UID, SEQUENCE+1). No new name/email
+      // needed — the booker is already on the token.
+      var r = await fetch('/api/book', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: slug, slot: selected }),
+      });
+      if (!r.ok) throw new Error('reschedule');
+      var card = document.querySelector('.body');
+      card.innerHTML =
+        '<div class="done"><div class="tick">&#10003;</div>' +
+        '<h2>Your call has been moved</h2>' +
+        '<p>An updated calendar invite is on its way.</p></div>';
+    } catch (e) {
+      this.disabled = false;
+      document.getElementById('note').textContent = 'Something went wrong. Please try another time.';
+    }
+  };
+
+  fetch('/api/render?slug=' + encodeURIComponent(slug))
+    .then(function (r) { if (!r.ok) throw new Error('render'); return r.json(); })
+    .then(render)
+    .catch(function () {
+      document.getElementById('slots').innerHTML =
+        '<div class="state">This reschedule link isn\u2019t valid. Please check your latest invite.</div>';
+    });
+</script>
+</body>
+</html>
