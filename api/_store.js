@@ -30,7 +30,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-    `&select=prefix,posture_line,gear,pressure,engagement,slip,last_bit_id,last_bit_turn,archetype`;
+    `&select=prefix,posture_line,gear,pressure,engagement,slip,last_bit_id,last_bit_turn,archetype,pending_rung_id,pending_rung_name,pending_final_line,pending_idem,pending_status,armed`;
   const r = await fetch(url, {
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
@@ -47,6 +47,14 @@ export async function getCall(callId) {
     lastBitId: rows[0].last_bit_id || null,
     lastBitTurn: rows[0].last_bit_turn ?? null,
     archetype: rows[0].archetype || null,
+    // Death Blow pending (Trigger A) — folded into this same read.
+    pendingRungId: rows[0].pending_rung_id || null,
+    pendingRungName: rows[0].pending_rung_name || null,
+    pendingFinalLine: rows[0].pending_final_line || null,
+    pendingIdem: rows[0].pending_idem || null,
+    pendingStatus: rows[0].pending_status || null,
+    // Director-armed setlist (learning phase): up to 3 {bit_id?, hook_id?, armed_turn, idem}.
+    armed: Array.isArray(rows[0].armed) ? rows[0].armed : [],
   };
 }
 
@@ -85,6 +93,77 @@ export async function setCall(
   if (!r.ok) {
     throw new Error(`store write failed: ${r.status} ${await r.text()}`);
   }
+  return true;
+}
+
+// DEATH BLOW (Trigger A) — set / clear the pending control on the call row.
+// setDeathBlow upserts the pending kill; clearDeathBlow stamps it fired/cleared
+// after the turn loop delivers the rung. Same call_prefix row, so the turn's
+// getCall read already returns it (no extra hot-path hop).
+export async function setDeathBlow(callId, { rungId, rungName, finalLine, idem, director }) {
+  if (!isConfigured() || !callId) throw new Error("store not configured");
+  const row = {
+    call_id: callId,
+    pending_rung_id: rungId,
+    pending_rung_name: rungName ?? null,
+    pending_final_line: finalLine ?? null,
+    pending_idem: idem ?? null,
+    pending_director: director ?? null,
+    pending_status: "pending",
+    updated_at: new Date().toISOString(),
+  };
+  const r = await fetch(`${URL}/rest/v1/${TABLE}`, {
+    method: "POST",
+    headers: {
+      apikey: KEY,
+      authorization: `Bearer ${KEY}`,
+      "content-type": "application/json",
+      prefer: "resolution=merge-duplicates,return=minimal",
+    },
+    body: JSON.stringify(row),
+  });
+  if (!r.ok) throw new Error(`death-blow set failed: ${r.status} ${await r.text()}`);
+  return true;
+}
+
+export async function clearDeathBlow(callId, status = "fired") {
+  if (!isConfigured() || !callId) return false;
+  const r = await fetch(
+    `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        apikey: KEY,
+        authorization: `Bearer ${KEY}`,
+        "content-type": "application/json",
+        prefer: "return=minimal",
+      },
+      body: JSON.stringify({ pending_status: status }),
+    }
+  );
+  return r.ok;
+}
+
+// ARM (learning phase) — overwrite the armed setlist (jsonb array, max 3) on the
+// call row. Read back by getCall in the same per-turn lookup (no extra hop).
+export async function setArmed(callId, armed) {
+  if (!isConfigured() || !callId) throw new Error("store not configured");
+  const row = {
+    call_id: callId,
+    armed: Array.isArray(armed) ? armed.slice(0, 3) : [],
+    updated_at: new Date().toISOString(),
+  };
+  const r = await fetch(`${URL}/rest/v1/${TABLE}`, {
+    method: "POST",
+    headers: {
+      apikey: KEY,
+      authorization: `Bearer ${KEY}`,
+      "content-type": "application/json",
+      prefer: "resolution=merge-duplicates,return=minimal",
+    },
+    body: JSON.stringify(row),
+  });
+  if (!r.ok) throw new Error(`arm set failed: ${r.status} ${await r.text()}`);
   return true;
 }
 

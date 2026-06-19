@@ -122,6 +122,12 @@ function recencyPenalty(bit, state) {
 // Score one bit -> full auditable breakdown. Death blows add their intensity
 // as a mild ranking term (gear vitality still dominates soft-vs-scorched).
 export function scoreBit(bit, state) {
+  if (bit.status === "parked") {
+    return {
+      id: bit.id, name: bit.name, score: -Infinity,
+      excluded: `parked: ${bit.park_reason || "inactive"}`, breakdown: {},
+    };
+  }
   const fuel = fuelFit(bit, state);
   if (!fuel.available) {
     return {
@@ -159,7 +165,14 @@ export function scoreBit(bit, state) {
   }
 
   const fitTotal = f.score + fuel.boost;
-  const score = fitTotal + g.bias - r.pen + intent + seq;
+  // ARM (learning phase): a Director-armed bit gets an escalating boost — it
+  // rises and crosses the bar sooner the longer it has waited, so even an
+  // "unreasonable" bit eventually lands at a tolerable spot instead of never
+  // firing. Spacing (MIN_GAP) still applies, so it waits for a reasonable spot.
+  const ARM_BASE = 3, ARM_STEP = 2;
+  const armWaited = state.armed ? state.armed[bit.id] : undefined;
+  const armBoost = armWaited != null ? ARM_BASE + ARM_STEP * armWaited : 0;
+  const score = fitTotal + g.bias - r.pen + intent + seq + armBoost;
   return {
     id: bit.id, name: bit.name, score, excluded: false,
     breakdown: {
@@ -167,10 +180,12 @@ export function scoreBit(bit, state) {
       fuelBoost: fuel.boost || undefined,
       sequence: seq || undefined,
       intensity: intent || undefined,
+      armed: armBoost || undefined,
       why: [...f.why,
             ...(fuel.boost ? [`fuel x${fuel.count} +${fuel.boost}`] : []),
             ...g.why, ...r.why, ...seqWhy,
-            ...(intent ? [`intensity +${intent}`] : [])],
+            ...(intent ? [`intensity +${intent}`] : []),
+            ...(armBoost ? [`armed (waited ${armWaited}) +${armBoost}`] : [])],
     },
   };
 }
@@ -203,6 +218,7 @@ function hasPull(bit, state) {
 
 export function loadout(state, { pool = BITS } = {}) {
   return pool.filter((b) => {
+    if (b.status === "parked") return false; // no producer for its fuel yet
     if (isDeathBlow(b)) return false;
     if (!fuelFit(b, state).available) return false; // missing ammo
     return hasPull(b, state).ok;

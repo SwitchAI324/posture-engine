@@ -1,7 +1,7 @@
 // AUTO-GENERATED — compiled bit registry (Bits Library handoff).
-// Source: SpamViking_BitsRegistry.json (v10.9, from SpamViking_Bits.md).
+// Source: SpamViking_BitsRegistry.json (75 bits; count+parked+themed tags).
 // Do NOT hand-edit. Regenerate when the Bits Library recompiles.
-// 73 bits.
+// 75 bits.
 
 export const BITS = [
   {
@@ -19,7 +19,9 @@ export const BITS = [
       }
     },
     "id": "BIT-101",
-    "name": "The Echo"
+    "name": "The Echo",
+    "bit_type": "count",
+    "count_label": "phrases adopted"
   },
   {
     "archetypes": "universal",
@@ -58,7 +60,9 @@ export const BITS = [
       }
     },
     "id": "BIT-104",
-    "name": "Malaprops"
+    "name": "Malaprops",
+    "bit_type": "count",
+    "count_label": "substitutions"
   },
   {
     "archetypes": "universal",
@@ -71,7 +75,9 @@ export const BITS = [
       }
     },
     "id": "BIT-105",
-    "name": "The Eggcorn Bit"
+    "name": "The Eggcorn Bit",
+    "bit_type": "count",
+    "count_label": "eggcorns"
   },
   {
     "archetypes": "universal",
@@ -386,7 +392,9 @@ export const BITS = [
       }
     },
     "id": "BIT-207",
-    "name": "The Tom Echo"
+    "name": "The Tom Echo",
+    "bit_type": "count",
+    "count_label": "check-ins"
   },
   {
     "archetypes": "universal",
@@ -437,7 +445,9 @@ export const BITS = [
       }
     },
     "id": "BIT-211",
-    "name": "The Silence / The Pile-Up"
+    "name": "The Silence / The Pile-Up",
+    "bit_type": "count",
+    "count_label": "silences"
   },
   {
     "archetypes": "universal",
@@ -499,7 +509,9 @@ export const BITS = [
       }
     },
     "id": "BIT-215",
-    "name": "No You Go"
+    "name": "No You Go",
+    "bit_type": "count",
+    "count_label": "deferrals"
   },
   {
     "archetypes": [
@@ -553,6 +565,23 @@ export const BITS = [
     },
     "id": "BIT-218",
     "name": "The Introduction"
+  },
+  {
+    "id": "BIT-218",
+    "name": "The Introduction",
+    "archetypes": "universal",
+    "gear": {
+      "engagement": {
+        "bored": 1.0,
+        "hooked": 2.0,
+        "stunned": 1.0
+      },
+      "pressure": {
+        "calm": 1.0,
+        "pushing": 1.0
+      }
+    },
+    "cooldown": 4
   },
   {
     "archetypes": "universal",
@@ -693,6 +722,24 @@ export const BITS = [
     },
     "id": "BIT-310",
     "name": "The Scapegoat"
+  },
+  {
+    "id": "BIT-310",
+    "name": "The Scapegoat",
+    "archetypes": "universal",
+    "gear": {
+      "pressure": {
+        "pushing": 1.0,
+        "extracting": 2.0
+      },
+      "suspicion": {
+        "slipping": 1.0
+      },
+      "engagement": {
+        "bored": 1.0
+      }
+    },
+    "cooldown": 3
   },
   {
     "id": "BIT-401",
@@ -870,7 +917,10 @@ export const BITS = [
       }
     },
     "id": "BIT-601",
-    "name": "The Networker"
+    "name": "The Networker",
+    "status": "parked",
+    "park_reason": "no_producer",
+    "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026."
   },
   {
     "archetypes": "universal",
@@ -888,7 +938,10 @@ export const BITS = [
       }
     },
     "id": "BIT-602",
-    "name": "Condolences"
+    "name": "Condolences",
+    "status": "parked",
+    "park_reason": "no_producer",
+    "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026."
   },
   {
     "archetypes": "universal",
@@ -903,7 +956,10 @@ export const BITS = [
       }
     },
     "id": "BIT-603",
-    "name": "Tenure Math"
+    "name": "Tenure Math",
+    "status": "parked",
+    "park_reason": "no_producer",
+    "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026."
   },
   {
     "archetypes": "universal",
@@ -921,7 +977,10 @@ export const BITS = [
       }
     },
     "id": "BIT-604",
-    "name": "Glassdoor"
+    "name": "Glassdoor",
+    "status": "parked",
+    "park_reason": "no_producer",
+    "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026."
   },
   {
     "archetypes": "universal",
@@ -936,12 +995,15 @@ export const BITS = [
       }
     },
     "id": "BIT-605",
-    "name": "The Alumni"
+    "name": "The Alumni",
+    "status": "parked",
+    "park_reason": "no_producer",
+    "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026."
   },
   {
     "archetypes": "universal",
     "fuel_hooks": [
-      "city_trail"
+      "relocation_trail"
     ],
     "cooldown": 4,
     "gear": {
@@ -951,7 +1013,10 @@ export const BITS = [
       }
     },
     "id": "BIT-606",
-    "name": "The Relocator"
+    "name": "The Relocator",
+    "status": "parked",
+    "park_reason": "no_producer",
+    "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026."
   },
   {
     "archetypes": "universal",
@@ -969,7 +1034,10 @@ export const BITS = [
       }
     },
     "id": "BIT-607",
-    "name": "Open To Work"
+    "name": "Open To Work",
+    "status": "parked",
+    "park_reason": "no_producer",
+    "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026."
   },
   {
     "archetypes": "universal",
@@ -984,7 +1052,10 @@ export const BITS = [
       }
     },
     "id": "BIT-608",
-    "name": "The Headline"
+    "name": "The Headline",
+    "status": "parked",
+    "park_reason": "no_producer",
+    "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026."
   },
   {
     "archetypes": "universal",

@@ -150,7 +150,7 @@ var PUB = ${JSON.stringify(pub)};
 var ASST = ${JSON.stringify(asst)};
 
 var slug = new URLSearchParams(location.search).get("slug");
-var vapi = null, started = null, tick = null, muted = false;
+var vapi = null, started = null, tick = null, muted = false, callId = null;
 
 var $ = function(id){ return document.getElementById(id); };
 function toast(s){ var t = $("toast"); t.textContent = s; t.classList.add("show"); setTimeout(function(){ t.classList.remove("show"); }, 4200); }
@@ -183,6 +183,11 @@ if(vapi){
     $("timer").textContent = "Call ended";
     $("hostTile").classList.remove("speaking");
     toast("The meeting has ended. You can close this window.");
+    if(callId){
+      var dur = started ? Math.round((Date.now()-started)/1000) : null;
+      fetch("/api/control?action=callend", { method:"POST", headers:{"content-type":"application/json"},
+        body: JSON.stringify({ call_id: callId, ending_type: "hung_up", duration_seconds: dur }) }).catch(function(){});
+    }
   });
   vapi.on("message", function(m){
     if(m && m.type === "transcript" && m.transcriptType === "final" && m.transcript){
@@ -203,6 +208,7 @@ $("join").addEventListener("click", function(){
       return vapi.start(ASST, { metadata: { archetype: arch, slug: slug } })
         .then(function(call){
           var id = call && (call.id || call.callId);
+          callId = id || null;
           if(id){ fetch("/api/join?slug=" + encodeURIComponent(slug) + "&call_id=" + encodeURIComponent(id), { method:"POST" }).catch(function(){}); }
         });
     })

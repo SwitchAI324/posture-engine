@@ -16,12 +16,16 @@
 
 export const config = { runtime: "edge" };
 
-import { getCall, setCall, isConfigured, appendGearEvent, appendBitEvent } from "../_store.js";
+import { getCall, setCall, isConfigured, appendGearEvent, appendBitEvent, clearDeathBlow, setArmed } from "../_store.js";
 import { applyForceAll, postureBlock, defaultState, detectAccusation } from "../_gears.js";
-import { selectBit } from "../_bits.js";
+import { selectBit, rankBits } from "../_bits.js";
 import { archetypeFromBody } from "../_archetype.js";
-import { benchInject } from "../_bench.js";
+import { readAmmunition } from "../_read.js";
+import { benchInject, BENCH } from "../_bench.js";
+import { makeTrace, blowLandedTotal, bitFireCount } from "../_trace.js";
+import { BITS } from "../_bits_registry.js";
 import { waitUntil } from "@vercel/functions";
+const HOST_NAME = process.env.HOST_NAME || "Andrew";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -136,10 +140,24 @@ export default async function handler(req) {
   // stored prefix, fall back to Vapi's raw system prompt (Phase 1 behavior),
   // so nothing breaks before pre-snap is wired into the Mead Hall.
   const callId = body.call?.id ?? body.metadata?.callId ?? body.call_id;
+  if (bench && callId) {
+    makeTrace(callId, benchTurn, waitUntil).emit(
+      "bench_joined",
+      { character_id: bench.tag, name: bench.tag, role: bench.note, joined_at: new Date().toISOString() },
+      "bench"
+    );
+  }
 
+  const slug = body.call?.metadata?.slug ?? body.metadata?.slug ?? null;
   let stored = null;
+  let ammo = { ammunition: [], byHook: {} };
   try {
-    stored = await getCall(callId);
+    const [s, a] = await Promise.all([
+      getCall(callId).catch(() => null),
+      readAmmunition(slug).catch(() => ({ ammunition: [], byHook: {} })),
+    ]);
+    stored = s;
+    if (a) ammo = a;
   } catch {
     stored = null;
   }
@@ -149,7 +167,7 @@ export default async function handler(req) {
   // The doubt-gears layer on top of whichever base is in play.
   const baseSystem = stored && stored.prefix ? stored.prefix : vapiSystem;
   const systemBlocks = baseSystem
-    ? buildSystemBlocks(baseSystem, stored, messages, callId, body)
+    ? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo)
     : null;
 
   const anthropicReq = {
@@ -181,6 +199,8 @@ export default async function handler(req) {
     id: "chatcmpl-" + crypto.randomUUID(),
     created: Math.floor(Date.now() / 1000),
     model: MODEL(),
+    callId,
+    turn: countUserTurns(messages),
   };
 
   return new Response(anthropicToOpenAISSE(upstream.body, meta, benchAppend), {
@@ -206,7 +226,26 @@ export default async function handler(req) {
 // the three dials for THIS turn, and persists the new state for NEXT turn off
 // the hot path (waitUntil) so the voice never waits on the write. The row is
 // created lazily on the first turn — no pre-snap call needed for gears.
-function buildSystemBlocks(baseSystem, stored, messages, callId, body) {
+// factHint: turn the scouted payload(s) for a firing fueled bit into a short,
+// speakable fact string, so the host can quote the REAL detail. Skips keys that
+// aren't meant to be said aloud (urls, ids, scores, provenance/basis).
+const NON_SPEAKABLE = /(^url$|_url$|ref$|source$|^basis$|slug$|_id$|^id$|score$)/i;
+function factHint(bit, byHook) {
+  const facts = [];
+  for (const h of bit.fuel_hooks || []) {
+    const p = byHook && byHook[h];
+    if (!p || typeof p !== "object") continue;
+    const pairs = Object.entries(p)
+      .filter(([k, v]) => v != null && v !== "" && !NON_SPEAKABLE.test(k))
+      .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`)
+      .join("; ");
+    if (pairs) facts.push(pairs);
+  }
+  return facts.join(" | ");
+}
+
+function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo) {
+  ammo = ammo || { ammunition: [], byHook: {} };
   const blocks = [
     { type: "text", text: baseSystem, cache_control: { type: "ephemeral" } },
   ];
@@ -227,6 +266,43 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body) {
     const accusation = detectAccusation(lastUserText(messages));
     const turn = countUserTurns(messages);
 
+    // --- MEAD HALL TRACE (dark unless TRACE_ENABLED=1) ---------------------
+    const trace = makeTrace(callId, turn, waitUntil);
+    // Death Blow (Trigger A) pending, read in the SAME call_prefix lookup.
+    const deathBlow =
+      stored && stored.pendingStatus === "pending" && stored.pendingRungId
+        ? {
+            rung_id: stored.pendingRungId,
+            name: stored.pendingRungName || stored.pendingRungId,
+            line: stored.pendingFinalLine || "",
+          }
+        : null;
+    if (!stored) {
+      trace.emit(
+        "call_started",
+        {
+          host_name: HOST_NAME,
+          character_id: "host",
+          universe: null,
+          archetype: archetypeFromBody(body) || "universal",
+          slot_time: null,
+          started_at: new Date().toISOString(),
+          loadout: BITS.filter((b) => b.status !== "parked").map((b) => ({ bit_id: b.id, name: b.name, bit_type: b.bit_type || b.type || null })),
+          ammunition: ammo.ammunition || [], // scout_hooks rack (empty = safe default)
+          bench_available: Object.keys(BENCH).map((k) => ({
+            character_id: BENCH[k].tag, name: BENCH[k].tag, role: BENCH[k].note,
+          })),
+        },
+        "engine"
+      );
+    }
+    trace.emit(
+      "utterance",
+      { speaker_role: "spammer", speaker_name: null, character_id: null, text: lastUserText(messages), turn_index: turn },
+      "spammer"
+    );
+    if (accusation) trace.emit("spammer_reaction", { reaction_type: "suspicious", turn_index: turn }, "spammer");
+
     // --- FIT: rank the bits for THIS moment (pure in-memory math) ----------
     // archetype is "universal" until the Archetype layer wires real types, so
     // fit currently discriminates on accusation + gear_bias. recency comes from
@@ -241,15 +317,34 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body) {
     const archetypeNew =
       archetype !== "universal" && (!stored || stored.archetype !== archetype);
 
+    // fuel: hooks Scouting populated for this call -> "populated" status so
+    // fueled bits become available; byHook carries the fact a firing bit pulls.
+    const fuel_hooks_status = {};
+    for (const h of Object.keys(ammo.byHook || {})) fuel_hooks_status[h] = "populated";
+
+    // ARM (learning phase): the Director's setlist, read in the same getCall.
+    // Stamp armed_turn on first sight (escalation clock), and build the bit boost
+    // map (bit_id -> turns waited) the scorer uses to raise armed bits.
+    const armedList = stored && Array.isArray(stored.armed) ? stored.armed.map((a) => ({ ...a })) : [];
+    let armedTouched = false;
+    const armedBits = {};
+    for (const a of armedList) {
+      if (a.armed_turn == null) { a.armed_turn = turn; armedTouched = true; }
+      if (a.bit_id) armedBits[a.bit_id] = Math.max(0, turn - a.armed_turn);
+    }
+
     const scorerState = {
       archetype,
       accusation,
+      armed: armedBits,
       gears: {
         suspicion: state.suspicion,
         pressure: state.pressure,
         engagement: state.engagement,
       },
       recency,
+      fuel_hooks_status,
+      byHook: ammo.byHook || {},
       // sequencing anchor — without this, chain + category spacing never fire.
       lastBitId: stored ? stored.lastBitId || null : null,
     };
@@ -264,14 +359,91 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body) {
     const bar = effectiveBar(turn);
     const fire = !!(top && top.score >= bar && gap >= MIN_GAP);
 
+    // ARM resolution: reconcile the setlist with this turn's outcome.
+    //  - bare fact-arm (hook only): inject its real fact this turn, then drop.
+    //  - bit-arm that fired this turn: mark trigger "armed", pull its fact, drop.
+    //  - everything else: keep waiting (no drop except at call end). Escalation
+    //    (in the scorer) guarantees an armed bit eventually wins a reasonable spot.
+    let firedArmedBit = false;
+    let armedHookFact = null;
+    const armedKeep = [];
+    let armedChanged = armedTouched;
+    for (const a of armedList) {
+      const hookFact = (a.hook_id && ammo.byHook && ammo.byHook[a.hook_id])
+        ? factHint({ fuel_hooks: [a.hook_id] }, ammo.byHook) : null;
+      if (a.hook_id && !a.bit_id) {
+        if (hookFact) { armedHookFact = armedHookFact ? armedHookFact + " | " + hookFact : hookFact; armedChanged = true; continue; }
+        armedKeep.push(a); continue; // no scout data yet — keep, don't drop
+      }
+      if (a.bit_id && fire && top && top.id === a.bit_id) {
+        firedArmedBit = true; armedChanged = true;
+        if (hookFact) armedHookFact = armedHookFact ? armedHookFact + " | " + hookFact : hookFact;
+        continue; // fired — drop
+      }
+      armedKeep.push(a); // still waiting
+    }
+    if (armedChanged) waitUntil(setArmed(callId, armedKeep).catch(() => {}));
+
     // MUTABLE block: posture lines + (on fire) a gentle in-character bit cue.
     // Goes AFTER the cached base, so injecting never busts the prompt cache.
     let mutable = postureBlock(state);
-    if (fire) {
+    if (deathBlow) {
+      mutable +=
+        "\n\nDEATH BLOW — this is your final line. Deliver it, then end the call:\n" +
+        (deathBlow.line || "End the call now — firm, final, done.");
+      const nowIso = new Date().toISOString();
+      trace.emit("blow_armed", { rung_id: deathBlow.rung_id, name: deathBlow.name, armed_at: nowIso }, "director");
+      trace.emit("blow_fired", { rung_id: deathBlow.rung_id, name: deathBlow.name, fired_at: nowIso, final_line: deathBlow.line || null }, "host");
+      trace.emit(
+        "call_ended",
+        { ended_at: nowIso, ending_type: "death_blow", finishing_rung_id: deathBlow.rung_id, duration_seconds: null, blows_landed: null, heads_mustered: null, peak_their_side: null, peak_our_side: null },
+        "engine"
+      );
+      waitUntil(clearDeathBlow(callId, "fired").catch(() => {}));
+    } else if (fire) {
       mutable +=
         '\n\nIMPROV BEAT — work the bit "' + top.name +
         '" into your next line ONLY if it lands naturally. ' +
         "Never name it; never break character.";
+      // If this bit is fueled, hand the host the REAL scouted fact to weave in.
+      const fact = factHint(top, scorerState.byHook);
+      if (fact) {
+        mutable +=
+          "\n\nYou happen to know this about them: " + fact +
+          ". Weave that specific detail in naturally if you use the bit — " +
+          "quote the real fact, never invent one.";
+      }
+      const bitBase = {
+        bit_id: top.id,
+        name: top.name,
+        bit_type: top.bit_type || top.type || null,
+        trigger: firedArmedBit ? "armed" : "auto",
+        turn_index: turn,
+      };
+      if (top.bit_type === "count") {
+        // count bit: PE owns the running tally. count_label is static on the bit;
+        // running_total = prior fires (off the event log) + this one.
+        waitUntil(
+          (async () => {
+            const prior = await bitFireCount(callId, top.id);
+            trace.emit(
+              "bit_deployed",
+              { ...bitBase, count_label: top.count_label || null, running_total: prior == null ? null : prior + 1 },
+              "engine"
+            );
+          })()
+        );
+      } else {
+        trace.emit("bit_deployed", bitBase, "engine");
+      }
+    }
+
+    // Director-armed fact (forced via the setlist): weave the real detail in even
+    // if no bit pulled it this turn. Soft cue — host uses it if it fits.
+    if (armedHookFact) {
+      mutable +=
+        "\n\nALSO — if it fits naturally, work in this real detail about them: " +
+        armedHookFact + ". Quote the real fact, never invent one.";
     }
 
     blocks.push({ type: "text", text: mutable });
@@ -282,6 +454,45 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body) {
         ? "  <- " + changes.map((c) => `${c.axis}:${c.from}->${c.to}`).join(", ")
         : "") + (accusation ? "  accuse:" + accusation : "");
     console.log("gears " + JSON.stringify(state) + trail);
+    const suspicionChanges = changes.filter((c) => c.axis === "suspicion");
+    if (suspicionChanges.length) {
+      // rung_fit: fit-ranked death-blow rungs for THIS moment, so Mead Hall
+      // never re-derives the ranking (same scorer, deathBlow pool).
+      const rungFit = rankBits(scorerState, { deathBlow: true }).map((r) => ({
+        rung_id: r.id, name: r.name, fit: +Number(r.score).toFixed(2),
+      }));
+      suspicionChanges.forEach((c) => {
+        trace.emit(
+          "gear_transition",
+          { from_state: String(c.from).toUpperCase(), to_state: String(c.to).toUpperCase(), rung_fit: rungFit },
+          "engine"
+        );
+      });
+    }
+
+    // blow_landed (clean hit): the bit thrown LAST turn made them MORE engaged
+    // THIS turn — it connected. One event per landing (count ticks live on
+    // bit_deployed, not here). total_blows is read off the event log, so no new
+    // column is needed. Emitted on the shared trace (correct seq lane), off the
+    // hot path.
+    const ENG_RANK = { bored: 0, hooked: 1, stunned: 2 };
+    const firedLastTurn =
+      stored && stored.lastBitTurn != null && stored.lastBitTurn === turn - 1;
+    const engagementRose = changes.some(
+      (c) => c.axis === "engagement" && ENG_RANK[c.to] > ENG_RANK[c.from]
+    );
+    if (firedLastTurn && engagementRose) {
+      waitUntil(
+        (async () => {
+          const prior = await blowLandedTotal(callId);
+          trace.emit(
+            "blow_landed",
+            { turn_index: turn, total_blows: prior == null ? null : prior + 1 },
+            "engine"
+          );
+        })()
+      );
+    }
     if (top) {
       console.log(
         "fit " +
@@ -427,6 +638,11 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
       let roleSent = false;
       let finished = false;
       let appendSent = false;
+      let hostText = "";
+      // utterance emitter: turn+0.5 so the host line sorts after this turn's
+      // analysis events but before the next turn — no seq collision.
+      const utterTrace =
+        meta.callId != null ? makeTrace(meta.callId, (Number(meta.turn) || 0) + 0.5, null) : null;
 
       const send = (delta, finish_reason = null) =>
         controller.enqueue(encoder.encode(chunkStr(delta, finish_reason)));
@@ -438,13 +654,34 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
       // tagged content delta, THEN finish. Guarantees the [[NAME]] marker
       // reaches Vapi/TTS regardless of what the model wrote.
       const finishUp = async () => {
+        let benchTxt = null;
         if (appendText && !appendSent) {
           appendSent = true;
-          let txt = null;
-          try { txt = await appendText; } catch { txt = null; }
-          if (txt) {
+          try { benchTxt = await appendText; } catch { benchTxt = null; }
+          if (benchTxt) {
             if (!roleSent) { send({ role: "assistant" }); roleSent = true; }
-            send({ content: txt });
+            send({ content: benchTxt });
+          }
+        }
+        // utterances, in spoken order: host first, then any bench interjection.
+        if (utterTrace) {
+          const clean = hostText.replace(/\[\[[^\]]*\]\]/g, "").trim();
+          if (clean) {
+            utterTrace.emit(
+              "utterance",
+              { speaker_role: "host", speaker_name: HOST_NAME, character_id: "host", text: clean, turn_index: meta.turn },
+              "host"
+            );
+          }
+          if (benchTxt) {
+            const mm = String(benchTxt).match(/\[\[([^\]]+)\]\]\s*([\s\S]*)/);
+            if (mm && mm[2].trim()) {
+              utterTrace.emit(
+                "utterance",
+                { speaker_role: "bench", speaker_name: mm[1], character_id: mm[1], text: mm[2].trim(), turn_index: meta.turn },
+                "bench"
+              );
+            }
           }
         }
         send({}, "stop");
@@ -500,7 +737,7 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
               p.type === "content_block_delta" &&
               p.delta?.type === "text_delta"
             ) {
-              if (p.delta.text) send({ content: p.delta.text });
+              if (p.delta.text) { hostText += p.delta.text; send({ content: p.delta.text }); }
             } else if (p.type === "message_stop" || p.type === "error") {
               await finishUp();
               finished = true;
