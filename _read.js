@@ -124,26 +124,36 @@ export async function gatherRaw(t) {
   };
 }
 
-// Provider-agnostic search seam. Until SCOUT_SEARCH_URL + SCOUT_SEARCH_KEY
-// are set, the web lane stays dark and returns [] — the designed safe
-// default (the deterministic lane still produces hooks).
+// Web search via Tavily (https://tavily.com), the news lane's source. Set
+// TAVILY_API_KEY to light it up; without the key this returns [] and the
+// lane stays dark — the deterministic lane still produces hooks. News topic
+// + last-month window is tuned for the company_news / dossier_negation hooks.
 async function searchWeb(company) {
   if (!company) return [];
-  const key = process.env.SCOUT_SEARCH_KEY;
-  const endpoint = process.env.SCOUT_SEARCH_URL;
-  if (!key || !endpoint) return [];
+  const key = process.env.TAVILY_API_KEY;
+  if (!key) return [];
   try {
-    const r = await fetch(
-      `${endpoint}?q=${encodeURIComponent(company + ' news')}`,
-      { headers: { Authorization: `Bearer ${key}` } });
+    const r = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query: `${company} news`,
+        topic: 'news',
+        time_range: 'month',
+        max_results: 6,
+        include_answer: false,
+      }),
+    });
     if (!r.ok) return [];
     const data = await r.json();
-    const items = data.results || (data.web && data.web.results) || [];
-    return items.slice(0, 6).map((x) => ({
+    return (data.results || []).slice(0, 6).map((x) => ({
       title: x.title,
-      snippet: x.description || x.snippet || '',
+      snippet: x.content || '',
       url: x.url,
-      date: x.age || x.date || null,
+      date: x.published_date || null,
     }));
   } catch {
     return [];
