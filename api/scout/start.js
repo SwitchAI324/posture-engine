@@ -14,8 +14,8 @@ import {
   gatherRaw,
 } from './_collectors.js';
 import { judge } from './_judge.js';
-import { gate, writeHooks, emitTrace } from './_hooks.js';
-import { sbSelect } from './_sb.js';
+import { gate, writeHooks, emitTrace, registerStatus } from './_hooks.js';
+import { sbSelect, ilikeEq } from './_sb.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
@@ -71,6 +71,11 @@ export default async function handler(req, res) {
     }
 
     written = await writeHooks(slug, live);
+
+    // Advertise the live hooks in targets.fuel_hooks_status AFTER the data
+    // is written — data before advertisement, so readers never see a hook
+    // marked live whose row isn't there yet.
+    await registerStatus(slug, resolveTargetRef(target), live);
   } catch (e) {
     await emitTrace('scout_error', { slug, message: String((e && e.message) || e) });
   }
@@ -110,6 +115,14 @@ async function loadTarget(slug) {
 function domainFromEmail(e) {
   if (!e || !e.includes('@')) return null;
   return e.split('@')[1].toLowerCase();
+}
+
+// SCHEMA SEAM #2 — CONFIRMED: targets keys on email, matched to
+// booking_tokens.target_email. Case-insensitive per the universal rule for
+// user-entered data.
+function resolveTargetRef(target) {
+  if (target.scammer_email) return ilikeEq('email', target.scammer_email);
+  return null;
 }
 
 // Rough company guess from the domain (second-level label, title-cased).
