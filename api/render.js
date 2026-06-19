@@ -52,13 +52,10 @@ function generateSlots(slug) {
 }
 
 async function readToken(slug) {
-  // Read only columns guaranteed to exist in the base migration. Later-added
-  // columns (narrative, slot_pool, ...) are read opportunistically below once
-  // Data adds them; until then the page renders from generated slots.
   const url =
     `${SUPABASE_URL}/rest/v1/booking_tokens` +
     `?slug=eq.${encodeURIComponent(slug)}` +
-    `&select=slug,booked_slot`;
+    `&select=slug,narrative,slot_pool,round,booked_slot`;
   const res = await fetch(url, {
     headers: {
       apikey: SERVICE_KEY,
@@ -95,7 +92,8 @@ module.exports = async (req, res) => {
     const token = await readToken(slug);
     if (!token) return res.status(404).json({ error: 'not found', slug });
 
-    // narrative / slot_pool may not exist on the table yet -> read defensively.
+    // slot_pool authored at first load; until pools are built it's null, so
+    // fall back to the stable generated set per slug.
     const days =
       token.slot_pool && Array.isArray(token.slot_pool.days)
         ? token.slot_pool.days
