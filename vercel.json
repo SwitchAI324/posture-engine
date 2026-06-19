@@ -1,5 +1,7 @@
 {
   "rewrites": [
-    { "source": "/chat/completions", "destination": "/api/chat/completions" }
+    { "source": "/chat/completions", "destination": "/api/chat/completions" },
+    { "source": "/book/:slug", "destination": "/book.html" },
+    { "source": "/join/:slug", "destination": "/join.html" }
   ]
 }
