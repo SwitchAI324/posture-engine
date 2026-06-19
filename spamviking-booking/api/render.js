@@ -63,18 +63,34 @@ async function readToken(slug) {
       Accept: 'application/json',
     },
   });
-  if (!res.ok) throw new Error(`supabase ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`supabase ${res.status}: ${body.slice(0, 300)}`);
+  }
   const rows = await res.json();
   return rows[0] || null;
 }
 
 module.exports = async (req, res) => {
   try {
+    // Diagnostic: confirm the env vars are actually present (without leaking
+    // the key). Load /api/render?slug=test123 directly to read this.
+    if (!SUPABASE_URL || !SERVICE_KEY) {
+      return res.status(500).json({
+        error: 'config',
+        detail: {
+          SUPABASE_URL_set: !!SUPABASE_URL,
+          SUPABASE_SERVICE_ROLE_KEY_set: !!SERVICE_KEY,
+          key_len: SERVICE_KEY ? SERVICE_KEY.length : 0,
+        },
+      });
+    }
+
     const slug = (req.query && req.query.slug) || '';
     if (!slug) return res.status(400).json({ error: 'missing slug' });
 
     const token = await readToken(slug);
-    if (!token) return res.status(404).json({ error: 'not found' });
+    if (!token) return res.status(404).json({ error: 'not found', slug });
 
     // slot_pool authoring isn't built yet -> stable generated set per slug.
     const days =
@@ -90,6 +106,6 @@ module.exports = async (req, res) => {
       booked_slot: token.booked_slot || null,
     });
   } catch (e) {
-    res.status(500).json({ error: 'render failed' });
+    res.status(500).json({ error: 'render failed', detail: String(e.message || e) });
   }
 };
