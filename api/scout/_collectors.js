@@ -23,18 +23,21 @@ export async function fetchRdap(domain) {
 }
 
 // ---- domain_age ---------------------------------------------------------
+// Emits whenever RDAP returns a registration date. No age cutoff — the
+// registration date is the fact; "young vs old" is not a signal.
 export function collectDomainAge(t, rdap) {
   if (!rdap) return null;
   const reg = (rdap.events || []).find((e) => e.eventAction === 'registration');
   if (!reg || !reg.eventDate) return null;
   const ageDays = Math.floor((Date.now() - new Date(reg.eventDate)) / 86400000);
-  if (!Number.isFinite(ageDays) || ageDays < 0) return null;
-  // Only weaponizable when the domain is young. Older than ~4 months = noise.
-  if (ageDays > 120) return null;
   return {
     hook_id: 'domain_age',
-    label: `Domain registered ${ageDays}d ago`,
-    payload: { domain: t.domain, registered_date: reg.eventDate, age_days: ageDays },
+    label: `Registered ${String(reg.eventDate).slice(0, 10)}`,
+    payload: {
+      domain: t.domain,
+      registered_date: reg.eventDate,
+      age_days: Number.isFinite(ageDays) && ageDays >= 0 ? ageDays : null,
+    },
     confidence: 0.95, // RDAP registration date is an authoritative record
     source: 'rdap',
   };
