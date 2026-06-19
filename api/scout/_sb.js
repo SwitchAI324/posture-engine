@@ -3,11 +3,13 @@
 // the _store.js pattern: direct sb_secret_ key, never exposed to a browser.
 // RLS on scout_hooks is deny-by-default; the secret key bypasses RLS.
 //
-// Align these two env names with whatever _store.js / completions.js already
-// use, so Scouting shares one credential source instead of a second copy.
-const SB_URL = process.env.SV_SUPABASE_URL || process.env.SUPABASE_URL;
+// Reads the env vars already present in this project, with the original
+// SV_* names kept as fallbacks so nothing breaks if they're added later.
+const SB_URL = process.env.SUPABASE_URL || process.env.SV_SUPABASE_URL;
 const SB_SECRET =
-  process.env.SV_SUPABASE_SECRET || process.env.SUPABASE_SECRET_KEY;
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SV_SUPABASE_SECRET ||
+  process.env.SUPABASE_SECRET_KEY;
 
 function headers(extra = {}) {
   return {
