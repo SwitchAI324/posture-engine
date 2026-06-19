@@ -83,24 +83,24 @@ export default async function handler(req, res) {
   return res.status(200).json({ slug, hooks_written: written });
 }
 
-// SCHEMA SEAM — the one place Scouting touches your schema. Map your
-// booking_tokens / targets columns into the shape the engine needs. Adjust
-// the select and the field names; everything downstream depends only on the
-// returned object. If target facts live on a related row, fetch and merge
-// it here.
+// SCHEMA SEAM — mapped to the real booking_tokens columns. The table has no
+// domain/company columns, so both are derived from target_email. Swap in
+// dedicated columns here if you add them later.
 async function loadTarget(slug) {
   try {
     const rows = await sbSelect(
       `booking_tokens?slug=eq.${encodeURIComponent(slug)}&select=*&limit=1`);
     const b = rows && rows[0];
     if (!b) return null;
+    const email = b.target_email || null;
+    const domain = domainFromEmail(email);
     return {
       slug,
-      scammer_email: b.scammer_email || b.email || null,
-      domain: b.domain || domainFromEmail(b.scammer_email || b.email) || null,
-      claimed_company: b.claimed_company || b.company || null,
-      claimed_geo: b.claimed_geo || b.geo || null,
-      pitch_text: b.pitch_text || b.pitch || '',
+      scammer_email: email,
+      domain,
+      claimed_company: companyFromDomain(domain),
+      claimed_geo: null, // no geo column yet → geo_mismatch stays inert
+      pitch_text: b.narrative || '',
     };
   } catch {
     return null;
@@ -110,4 +110,13 @@ async function loadTarget(slug) {
 function domainFromEmail(e) {
   if (!e || !e.includes('@')) return null;
   return e.split('@')[1].toLowerCase();
+}
+
+// Rough company guess from the domain (second-level label, title-cased).
+// switchyardai.com → "Switchyardai". Replace with a real column when you have one.
+function companyFromDomain(domain) {
+  if (!domain) return null;
+  const label = domain.split('.')[0];
+  if (!label) return null;
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
