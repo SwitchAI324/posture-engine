@@ -37,3 +37,23 @@ export async function sbUpsert(table, rows, onConflict) {
   if (!r.ok) throw new Error(`sbUpsert ${r.status}: ${await r.text()}`);
   return true;
 }
+
+export async function sbPatch(table, filter, body) {
+  // filter is a PostgREST query string, e.g. "email=eq.a%40b.com"
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?${filter}`, {
+    method: 'PATCH',
+    headers: headers({ Prefer: 'return=minimal' }),
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`sbPatch ${r.status}: ${await r.text()}`);
+  return true;
+}
+
+// Case-insensitive exact match for PostgREST. User-entered data (emails,
+// names) is matched indifferent to case — never use this for system ids or
+// passwords. Escapes LIKE metachars so the value matches literally (no
+// wildcards introduced), differing only by case.
+export function ilikeEq(column, value) {
+  const esc = String(value).replace(/([\\%_])/g, '\\$1');
+  return `${column}=ilike.${encodeURIComponent(esc)}`;
+}

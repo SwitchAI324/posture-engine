@@ -1,5 +1,5 @@
 // api/scout/_hooks.js
-import { sbUpsert } from './_sb.js';
+import { sbSelect, sbUpsert, sbPatch } from './_sb.js';
 
 // Per-hook confidence gates (from SCOUTING_ENGINE.md). Precision over recall:
 // a fact (registration date, corpus match) gates low; an inference (news,
@@ -36,8 +36,31 @@ export async function writeHooks(slug, hooks) {
   return rows.length;
 }
 
-// Trace seam — point SV_TRACE_URL at your existing trace.js sink. Always
-// logs; the POST is best-effort and never throws.
+// Registers live hooks in targets.fuel_hooks_status — the field everyone
+// reads to know a hook is live. A hook present in scout_hooks but missing
+// here reads as dormant, so this is NOT silent on failure: it emits a
+// status_register_failed trace. It still never throws (the call isn't
+// blocked), but the failure is visible.
+//
+// Merge, don't overwrite: preserve keys from prior runs and other producers.
+// Dormant hooks are simply absent keys, per Data's model.
+export async function registerStatus(slug, targetRef, hooks) {
+  if (!targetRef || !hooks.length) return;
+  try {
+    const rows = await sbSelect(`targets?${targetRef}&select=fuel_hooks_status`);
+    const current = (rows && rows[0] && rows[0].fuel_hooks_status) || {};
+    const merged = { ...current };
+    for (const h of hooks) {
+      merged[h.hook_id] = { present: true, confidence: h.confidence };
+    }
+    await sbPatch('targets', targetRef, { fuel_hooks_status: merged });
+  } catch (e) {
+    await emitTrace('status_register_failed', {
+      slug,
+      message: String((e && e.message) || e),
+    });
+  }
+}
 export async function emitTrace(event, data) {
   const payload = { event, ts: new Date().toISOString(), ...data };
   try { console.log('[scout]', JSON.stringify(payload)); } catch {}
