@@ -1,86 +1,76 @@
-// api/scout/_judge.js
-// The single judgment pass. One Claude call turns gathered raw material into
-// the two web-derived hooks. Precision over recall: a wrong "fact" makes the
-// host sound deranged, so the model is told to return [] unless it's sure.
-// Output is strict JSON, parsed defensively.
-//
-// Model resolution: a judge-specific override wins, then this project's
-// existing ANTHROPIC_MODEL, then a safe default. To tune the judge alone
-// without touching the rest of the stack, set SCOUT_JUDGE_MODEL. If
-// dossier_negation precision disappoints, set it to claude-sonnet-4-6.
-const MODEL =
-  process.env.SCOUT_JUDGE_MODEL ||
-  process.env.ANTHROPIC_MODEL ||
-  'claude-haiku-4-5-20251001';
+// api/scout/_hooks.js
+import { sbSelect, sbUpsert, sbPatch } from './_sb.js';
 
-const SYSTEM = `You score scouted material about a scam operation and emit \
-"hooks" — real facts a caller can reference to sound specifically informed \
-about this operation. Precision over recall: only emit a hook you are \
-confident is true and about THIS company. A wrong fact is worse than none.
+// Per-hook confidence gates (from SCOUTING_ENGINE.md). Precision over recall:
+// a fact (registration date, corpus match) gates low; an inference (news,
+// negation) gates high. Anything below its gate is dropped silently.
+export const GATES = {
+  prior_contact: 0.60,
+  domain_age: 0.60,
+  template_match: 0.70,
+  geo_mismatch: 0.70,
+  company_news: 0.85,
+  dossier_negation: 0.85,
+  stock_photo: 0.95,
+};
 
-Emit only these hook ids:
-- company_news: a real, recent, attributable news item about the claimed \
-company. payload: {headline, date, url}.
-- dossier_negation: a public fact that flatly contradicts a specific claim \
-in their pitch. payload: {claim, contradicting_fact, basis}.
-
-Return ONLY a JSON array of objects {hook_id, label, payload, confidence} \
-where confidence is 0..1 and label is at most 40 characters. No prose, no \
-code fences. If nothing qualifies, return [].`;
-
-export async function judge(raw) {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return [];
-  if (!raw.claimed_company && !(raw.news || []).length) return [];
-
-  const user = JSON.stringify({
-    claimed_company: raw.claimed_company,
-    pitch_text: (raw.pitch_text || '').slice(0, 4000),
-    news: raw.news,
-  });
-
-  try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 600,
-        system: SYSTEM,
-        messages: [{ role: 'user', content: user }],
-      }),
-    });
-    if (!r.ok) return [];
-    const data = await r.json();
-    const text = (data.content || [])
-      .filter((b) => b.type === 'text')
-      .map((b) => b.text)
-      .join('');
-    return parseHooks(text);
-  } catch {
-    return [];
-  }
+export function gate(hooks) {
+  return hooks.filter(
+    (h) =>
+      h &&
+      typeof h.confidence === 'number' &&
+      h.confidence >= (GATES[h.hook_id] ?? 1));
 }
 
-function parseHooks(text) {
-  if (!text) return [];
-  const s = text.trim().replace(/^```(json)?/i, '').replace(/```$/, '').trim();
+export async function writeHooks(slug, hooks) {
+  if (!hooks.length) return 0;
+  const rows = hooks.map((h) => ({
+    slug,
+    hook_id: h.hook_id,
+    label: String(h.label).slice(0, 40),
+    payload: h.payload || {},
+    confidence: Math.round(h.confidence * 100) / 100,
+    source: h.source || 'scout',
+  }));
+  await sbUpsert('scout_hooks', rows, 'slug,hook_id');
+  return rows.length;
+}
+
+// Registers live hooks in targets.fuel_hooks_status — the field everyone
+// reads to know a hook is live. A hook present in scout_hooks but missing
+// here reads as dormant, so this is NOT silent on failure: it emits a
+// status_register_failed trace. It still never throws (the call isn't
+// blocked), but the failure is visible.
+//
+// Merge, don't overwrite: preserve keys from prior runs and other producers.
+// Dormant hooks are simply absent keys, per Data's model.
+export async function registerStatus(slug, targetRef, hooks) {
+  if (!targetRef || !hooks.length) return;
   try {
-    const arr = JSON.parse(s);
-    if (!Array.isArray(arr)) return [];
-    return arr
-      .filter(
-        (h) =>
-          h &&
-          (h.hook_id === 'company_news' || h.hook_id === 'dossier_negation') &&
-          typeof h.confidence === 'number' &&
-          h.label)
-      .map((h) => ({ ...h, source: 'web+judge', payload: h.payload || {} }));
-  } catch {
-    return [];
+    const rows = await sbSelect(`targets?${targetRef}&select=fuel_hooks_status`);
+    const current = (rows && rows[0] && rows[0].fuel_hooks_status) || {};
+    const merged = { ...current };
+    for (const h of hooks) {
+      merged[h.hook_id] = { present: true, confidence: h.confidence };
+    }
+    await sbPatch('targets', targetRef, { fuel_hooks_status: merged });
+  } catch (e) {
+    await emitTrace('status_register_failed', {
+      slug,
+      message: String((e && e.message) || e),
+    });
   }
+}
+export async function emitTrace(event, data) {
+  const payload = { event, ts: new Date().toISOString(), ...data };
+  try { console.log('[scout]', JSON.stringify(payload)); } catch {}
+  const url = process.env.SV_TRACE_URL;
+  if (!url) return;
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch {}
 }

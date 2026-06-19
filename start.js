@@ -1,59 +1,26 @@
-// api/scout/_sb.js
-// Minimal Supabase REST client for server-side (secret-key) use. Matches
-// the _store.js pattern: direct sb_secret_ key, never exposed to a browser.
-// RLS on scout_hooks is deny-by-default; the secret key bypasses RLS.
+// api/scout/_read.js
+// The call-start read path. PE imports readAmmunition(slug) and calls it when
+// it builds call_started, to populate ammunition. Scouting owns this because
+// it owns the scout_hooks table shape; PE just calls it.
 //
-// Reads the env vars already present in this project, with the original
-// SV_* names kept as fallbacks so nothing breaks if they're added later.
-const SB_URL = process.env.SUPABASE_URL || process.env.SV_SUPABASE_URL;
-const SB_SECRET =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.SV_SUPABASE_SECRET ||
-  process.env.SUPABASE_SECRET_KEY;
+// Only gate-passing hooks are ever written, so there is no confidence filter
+// here. On any error or empty result it returns an empty rack — the call runs
+// clean, never blocked.
 
-function headers(extra = {}) {
-  return {
-    apikey: SB_SECRET,
-    Authorization: `Bearer ${SB_SECRET}`,
-    'Content-Type': 'application/json',
-    ...extra,
-  };
-}
+import { sbSelect } from './_sb.js';
 
-export async function sbSelect(path) {
-  // path e.g. "booking_tokens?slug=eq.abc&select=*"
-  const r = await fetch(`${SB_URL}/rest/v1/${path}`, { headers: headers() });
-  if (!r.ok) throw new Error(`sbSelect ${r.status}: ${await r.text()}`);
-  return r.json();
-}
-
-export async function sbUpsert(table, rows, onConflict) {
-  const qs = onConflict ? `?on_conflict=${onConflict}` : '';
-  const r = await fetch(`${SB_URL}/rest/v1/${table}${qs}`, {
-    method: 'POST',
-    headers: headers({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
-    body: JSON.stringify(rows),
-  });
-  if (!r.ok) throw new Error(`sbUpsert ${r.status}: ${await r.text()}`);
-  return true;
-}
-
-export async function sbPatch(table, filter, body) {
-  // filter is a PostgREST query string, e.g. "email=eq.a%40b.com"
-  const r = await fetch(`${SB_URL}/rest/v1/${table}?${filter}`, {
-    method: 'PATCH',
-    headers: headers({ Prefer: 'return=minimal' }),
-    body: JSON.stringify(body),
-  });
-  if (!r.ok) throw new Error(`sbPatch ${r.status}: ${await r.text()}`);
-  return true;
-}
-
-// Case-insensitive exact match for PostgREST. User-entered data (emails,
-// names) is matched indifferent to case — never use this for system ids or
-// passwords. Escapes LIKE metachars so the value matches literally (no
-// wildcards introduced), differing only by case.
-export function ilikeEq(column, value) {
-  const esc = String(value).replace(/([\\%_])/g, '\\$1');
-  return `${column}=ilike.${encodeURIComponent(esc)}`;
+export async function readAmmunition(slug) {
+  if (!slug) return { ammunition: [], byHook: {} };
+  try {
+    const rows = await sbSelect(
+      `scout_hooks?slug=eq.${encodeURIComponent(slug)}` +
+      `&select=hook_id,label,payload`);
+    // The rack the host sees: just {hook_id, label}.
+    const ammunition = (rows || []).map((r) => ({ hook_id: r.hook_id, label: r.label }));
+    // The payloads a bit pulls by hook_id when it actually fires.
+    const byHook = Object.fromEntries((rows || []).map((r) => [r.hook_id, r.payload]));
+    return { ammunition, byHook };
+  } catch {
+    return { ammunition: [], byHook: {} };
+  }
 }
