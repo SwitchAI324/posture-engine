@@ -169,15 +169,20 @@ export default async function handler(req) {
   // Vapi's own prompt (Stage 1/2 — keeps Andrew sounding exactly as he is).
   // The doubt-gears layer on top of whichever base is in play.
   const baseSystem = stored && stored.prefix ? stored.prefix : vapiSystem;
-  const systemBlocks = baseSystem
+  const built = baseSystem
     ? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls)
     : null;
+  const systemBlocks = built ? built.blocks : null;
+  const deathBlowFiring = built ? built.deathBlowFiring : false;
 
   const anthropicReq = {
     model: MODEL(),
     max_tokens: MAX_TOKENS(),
     stream: true,
     messages,
+    // Spike creativity on the Death Blow turn only — the comedy is in the
+    // surprise. Every other turn stays at the model's default for consistency.
+    ...(deathBlowFiring ? { temperature: 1 } : {}),
     ...(systemBlocks ? { system: systemBlocks } : {}),
   };
 
@@ -204,6 +209,7 @@ export default async function handler(req) {
     model: MODEL(),
     callId,
     turn: countUserTurns(messages),
+    deathBlowFiring, // finishUp emits blow_fired + call_ended with the real line
   };
 
   return new Response(anthropicToOpenAISSE(upstream.body, meta, benchAppend), {
@@ -249,6 +255,7 @@ function factHint(bit, byHook) {
 
 function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls) {
   ammo = ammo || { ammunition: [], byHook: {} };
+  let deathBlowFiring = false; // set true on the turn a Death Blow lands
   const blocks = [
     { type: "text", text: baseSystem, cache_control: { type: "ephemeral" } },
   ];
@@ -271,17 +278,10 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
 
     // --- MEAD HALL TRACE (dark unless TRACE_ENABLED=1) ---------------------
     const trace = makeTrace(callId, turn, waitUntil);
-    // Death Blow (Trigger A) pending, read from call_controls concurrently with
-    // getCall. Only act on a PENDING row (fired/cleared are history).
+    // Death Blow (Trigger A): rungs are gone. Fire on a PENDING control alone;
+    // PE generates the absurd closing line in persona at fire time (below).
     const dbCtl = controls && controls.deathBlow;
-    const deathBlow =
-      dbCtl && dbCtl.status === "pending" && dbCtl.rung_id
-        ? {
-            rung_id: dbCtl.rung_id,
-            name: dbCtl.rung_name || dbCtl.rung_id,
-            line: dbCtl.final_line || "",
-          }
-        : null;
+    const deathBlow = dbCtl && dbCtl.status === "pending" ? dbCtl : null;
     if (!stored) {
       trace.emit(
         "call_started",
@@ -408,17 +408,25 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // Goes AFTER the cached base, so injecting never busts the prompt cache.
     let mutable = postureBlock(state);
     if (deathBlow) {
+      // Rungs are gone: PE doesn't deliver a canned line. It directs the Host to
+      // IMPROVISE the most absurd-within-reason closer in persona, right now. The
+      // actual line is captured from the stream and emitted as blow_fired in
+      // finishUp (so the trace carries what the Host really said).
       mutable +=
-        "\n\nDEATH BLOW — this is your final line. Deliver it, then end the call:\n" +
-        (deathBlow.line || "End the call now — firm, final, done.");
-      const nowIso = new Date().toISOString();
-      trace.emit("blow_armed", { rung_id: deathBlow.rung_id, name: deathBlow.name, armed_at: nowIso }, "director");
-      trace.emit("blow_fired", { rung_id: deathBlow.rung_id, name: deathBlow.name, fired_at: nowIso, final_line: deathBlow.line || null }, "host");
-      trace.emit(
-        "call_ended",
-        { ended_at: nowIso, ending_type: "death_blow", finishing_rung_id: deathBlow.rung_id, duration_seconds: null, blows_landed: null, heads_mustered: null, peak_their_side: null, peak_our_side: null },
-        "engine"
-      );
+        "\n\nDEATH BLOW — end the call now, on this line. This is the final thing " +
+        "you say, then the call is over.\n" +
+        "Make it your most absurd, fully in-character closing line that:\n" +
+        "- stays in your voice and the reality this call has established;\n" +
+        "- actually ends it — give them a reason to give up or hang up (a funny " +
+        "line that invites another reply does NOT count);\n" +
+        "- pays off something from THIS call: a bench character, a bit that " +
+        "landed, the spammer's own words, or a real fact you know about them.\n" +
+        "Earned absurdity reads as brilliant; absurdity from nowhere reads as " +
+        "nonsense. Deliver that one line, then stop.";
+      deathBlowFiring = true;
+      // blow_armed lands now (Director's intent took effect this turn). blow_fired
+      // (with the real generated line) and call_ended emit after the stream.
+      trace.emit("blow_armed", { armed_at: new Date().toISOString() }, "director");
       waitUntil(clearDeathBlow(callId, "fired").catch(() => {}));
     } else if (fire) {
       mutable +=
@@ -476,15 +484,11 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     console.log("gears " + JSON.stringify(state) + trail);
     const suspicionChanges = changes.filter((c) => c.axis === "suspicion");
     if (suspicionChanges.length) {
-      // rung_fit: fit-ranked death-blow rungs for THIS moment, so Mead Hall
-      // never re-derives the ranking (same scorer, deathBlow pool).
-      const rungFit = rankBits(scorerState, { deathBlow: true }).map((r) => ({
-        rung_id: r.id, name: r.name, fit: +Number(r.score).toFixed(2),
-      }));
+      // rungs are gone — gear_transition is now just the suspicion-axis move.
       suspicionChanges.forEach((c) => {
         trace.emit(
           "gear_transition",
-          { from_state: String(c.from).toUpperCase(), to_state: String(c.to).toUpperCase(), rung_fit: rungFit },
+          { from_state: String(c.from).toUpperCase(), to_state: String(c.to).toUpperCase() },
           "engine"
         );
       });
@@ -571,7 +575,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       );
     }
   }
-  return blocks;
+  return { blocks, deathBlowFiring };
 }
 
 function lastUserText(messages) {
@@ -691,6 +695,17 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
               "utterance",
               { speaker_role: "host", speaker_name: HOST_NAME, character_id: "host", text: clean, turn_index: meta.turn },
               "host"
+            );
+          }
+          // Death Blow: the host just delivered the improvised closer. Now we know
+          // the real line — emit blow_fired with it, then call_ended (death_blow).
+          if (meta.deathBlowFiring) {
+            const nowIso = new Date().toISOString();
+            utterTrace.emit("blow_fired", { fired_at: nowIso, final_line: clean || null }, "host");
+            utterTrace.emit(
+              "call_ended",
+              { ended_at: nowIso, ending_type: "death_blow", duration_seconds: null, blows_landed: null, heads_mustered: null, peak_their_side: null, peak_our_side: null },
+              "engine"
             );
           }
           if (benchTxt) {

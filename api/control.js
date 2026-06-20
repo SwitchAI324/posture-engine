@@ -6,10 +6,9 @@
 // clears it — all within one turn.
 //
 //   POST /api/control?action=deathblow
-//     body: { call_id, rung_id, director_user_id, idempotency_key,
-//             final_line?, rung_name? }
-//     -> idempotent: one pending per call. Re-POST with the SAME
-//        idempotency_key is a no-op (safe retry).
+//     body: { call_id, director_user_id, idempotency_key }
+//     -> instant kill. PE generates the absurd closing line in persona at
+//        fire time (no rung, no canned line). idempotent: one per call.
 //
 //   GET  /api/control?call_id=...   -> current pending status (to confirm)
 //
@@ -61,28 +60,25 @@ export default async function handler(req) {
     let b;
     try { b = await req.json(); } catch { return jsonRes({ error: "bad json" }, 400); }
     const callId = String(b.call_id || "").trim();
-    const rungId = String(b.rung_id || "").trim();
     const idem = String(b.idempotency_key || "").trim();
-    if (!callId || !rungId || !idem) {
-      return jsonRes({ error: "call_id, rung_id, idempotency_key required" }, 400);
+    if (!callId || !idem) {
+      return jsonRes({ error: "call_id, idempotency_key required" }, 400);
     }
     // idempotency: if a pending with this exact key already exists, no-op.
     const cur = await getControls(callId).catch(() => null);
     if (cur && cur.deathBlow && cur.deathBlow.idem === idem) {
       return jsonRes({ ok: true, idempotent: true, status: cur.deathBlow.status || "pending" });
     }
+    // No rung. PE generates the absurd closing line in persona at fire time.
     try {
       await setDeathBlow(callId, {
-        rungId,
-        rungName: b.rung_name ? String(b.rung_name) : null,
-        finalLine: b.final_line ? String(b.final_line) : null,
         idem,
         director: b.director_user_id ? String(b.director_user_id) : null,
       });
     } catch (e) {
       return jsonRes({ error: "set failed", detail: String(e).slice(0, 200) }, 502);
     }
-    return jsonRes({ ok: true, call_id: callId, rung_id: rungId, status: "pending" });
+    return jsonRes({ ok: true, call_id: callId, status: "pending" });
   }
 
   if (req.method === "POST" && u.searchParams.get("action") === "callend") {
@@ -105,7 +101,6 @@ export default async function handler(req) {
       {
         ended_at: new Date().toISOString(),
         ending_type,
-        finishing_rung_id: null,
         duration_seconds: duration,
         blows_landed: null,
         heads_mustered: null,

@@ -132,12 +132,12 @@ export async function getControls(callId) {
 // index keeps it to one per call_id; a duplicate (same call or same idem) comes
 // back 409, which we treat as already-armed (idempotent). rung_id is a column;
 // rung_name + final_line ride in payload.
-export async function setDeathBlow(callId, { rungId, rungName, finalLine, idem, director }) {
+export async function setDeathBlow(callId, { rungId, rungName, finalLine, idem, director } = {}) {
   if (!isConfigured() || !callId) throw new Error("store not configured");
   const row = {
     call_id: callId,
     control_type: "death_blow",
-    rung_id: rungId,
+    rung_id: rungId ?? null, // rungs are gone; column kept nullable for the row
     director_user_id: director ?? null,
     idempotency_key: idem ?? null,
     status: "pending",
