@@ -19,6 +19,10 @@ export const GATES = {
   sender_social: 0.50,
   office_location: 0.55,
   attachment_facts: 0.70,
+  // post-call lane (transcript callbacks — ASR can mangle, gate moderate)
+  call_callback: 0.55,
+  call_claim: 0.60,
+  call_commitment: 0.60,
 };
 
 export function gate(hooks) {
