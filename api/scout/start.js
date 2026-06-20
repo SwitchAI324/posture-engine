@@ -8,21 +8,20 @@
 import {
   fetchRdap,
   collectDomainAge,
-  collectGeoMismatch,
   collectPriorContact,
   collectTemplateMatch,
   gatherRaw,
 } from './_collectors.js';
 import { judge } from './_judge.js';
-import { gate, writeHooks, emitTrace, registerStatus } from './_hooks.js';
-import { sbSelect, ilikeEq } from './_sb.js';
+import { gate, dedupeHooks, writeHooks, emitTrace, registerStatus } from './_hooks.js';
+import { sbSelect, ilikeEq, activeSecret, scoutToken } from './_sb.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
   // Shared-secret guard so only the booking layer can trigger scouting.
-  const expected = process.env.SV_SCOUT_TOKEN;
-  if (expected && req.headers['x-sv-scout-token'] !== expected)
+  const expected = activeSecret(process.env.SV_SCOUT_TOKEN);
+  if (expected && scoutToken(req) !== expected)
     return res.status(401).json({ error: 'bad token' });
 
   const slug = (req.body && req.body.slug) || (req.query && req.query.slug);
@@ -45,7 +44,6 @@ export default async function handler(req, res) {
     const [det, raw] = await Promise.all([
       Promise.allSettled([
         Promise.resolve(collectDomainAge(target, rdap)),
-        Promise.resolve(collectGeoMismatch(target, rdap)),
         collectPriorContact(target),
         collectTemplateMatch(target),
       ]),
@@ -59,7 +57,7 @@ export default async function handler(req, res) {
     // One judgment pass over the gathered material → web-derived hooks.
     const webHooks = await judge(raw);
 
-    const live = gate([...detHooks, ...webHooks]);
+    const live = dedupeHooks(gate([...detHooks, ...webHooks]));
     for (const h of live) {
       await emitTrace('hook_enriched', {
         slug,
@@ -104,7 +102,6 @@ async function loadTarget(slug) {
       scammer_email: email,
       domain,
       claimed_company: companyFromDomain(domain),
-      claimed_geo: null, // no geo column yet → geo_mismatch stays inert
       pitch_text: b.narrative || '',
     };
   } catch {

@@ -6,7 +6,7 @@
 
 import { sbSelect } from './_sb.js';
 
-// ---- RDAP (shared by domain_age + geo_mismatch) -------------------------
+// ---- RDAP (feeds domain_age) --------------------------------------------
 // Public, keyless. rdap.org redirects to the authoritative registry server
 // and returns JSON with an "events" array.
 export async function fetchRdap(domain) {
@@ -39,22 +39,6 @@ export function collectDomainAge(t, rdap) {
       age_days: Number.isFinite(ageDays) && ageDays >= 0 ? ageDays : null,
     },
     confidence: 0.95, // RDAP registration date is an authoritative record
-    source: 'rdap',
-  };
-}
-
-// ---- geo_mismatch -------------------------------------------------------
-export function collectGeoMismatch(t, rdap) {
-  if (!t.claimed_geo) return null;
-  const signal = rdapCountry(rdap) || ccTldCountry(t.domain);
-  const claimed = normCountry(t.claimed_geo);
-  // Precision over recall: only fire when both sides resolve and differ.
-  if (!signal || !claimed || claimed === signal) return null;
-  return {
-    hook_id: 'geo_mismatch',
-    label: `Claims ${claimed}, registered ${signal}`,
-    payload: { claimed_geo: t.claimed_geo, signal_geo: signal, basis: 'rdap/cctld' },
-    confidence: 0.75,
     source: 'rdap',
   };
 }
@@ -161,40 +145,6 @@ async function searchWeb(company) {
 }
 
 // ---- small deterministic helpers ----------------------------------------
-function rdapCountry(rdap) {
-  if (!rdap) return null;
-  try {
-    for (const ent of rdap.entities || []) {
-      const v = ent.vcardArray && ent.vcardArray[1];
-      const adr = v && v.find((f) => f[0] === 'adr');
-      if (adr && adr[3] && adr[3][6]) return normCountry(adr[3][6]);
-    }
-  } catch {}
-  return null;
-}
-
-const CCTLD = { uk: 'GB', ru: 'RU', ng: 'NG', cn: 'CN', in: 'IN', de: 'DE',
-  fr: 'FR', au: 'AU', ca: 'CA', us: 'US' };
-function ccTldCountry(domain) {
-  if (!domain) return null;
-  const tld = domain.split('.').pop().toLowerCase();
-  return CCTLD[tld] || null;
-}
-
-const COUNTRY = { 'united states': 'US', usa: 'US', us: 'US', america: 'US',
-  'united kingdom': 'GB', uk: 'GB', england: 'GB', britain: 'GB', gb: 'GB',
-  russia: 'RU', ru: 'RU', nigeria: 'NG', ng: 'NG', china: 'CN', cn: 'CN',
-  india: 'IN', germany: 'DE', france: 'FR', australia: 'AU', canada: 'CA' };
-function normCountry(s) {
-  if (!s) return null;
-  const k = String(s).trim().toLowerCase();
-  if (COUNTRY[k]) return COUNTRY[k];
-  // pull a trailing 2-letter code, e.g. "London, UK"
-  const m = k.match(/\b([a-z]{2})\b\s*$/);
-  if (m && COUNTRY[m[1]]) return COUNTRY[m[1]];
-  return null;
-}
-
 function shingles(text) {
   const norm = String(text).toLowerCase().replace(/\s+/g, ' ').trim();
   const toks = norm.split(' ');

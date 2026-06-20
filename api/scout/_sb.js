@@ -57,3 +57,33 @@ export function ilikeEq(column, value) {
   const esc = String(value).replace(/([\\%_])/g, '\\$1');
   return `${column}=ilike.${encodeURIComponent(esc)}`;
 }
+
+// Plain append insert (no upsert). Used for scout_facts, where extracted_at
+// is a retention clock and each run appends fresh rows.
+export async function sbInsert(table, rows) {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: headers({ Prefer: 'return=minimal' }),
+    body: JSON.stringify(rows),
+  });
+  if (!r.ok) throw new Error(`sbInsert ${r.status}: ${await r.text()}`);
+  return true;
+}
+
+// Reads the shared-secret header, tolerant of either name in use across
+// callers (booking sends x-sv-scout-token; Email sends x-sv-token).
+export function scoutToken(req) {
+  const h = (req && req.headers) || {};
+  return h['x-sv-scout-token'] || h['x-sv-token'] || null;
+}
+
+// SV_SCOUT_TOKEN doubles as a credential AND an on/off switch. Empty, "0", or
+// "false" (any casing) means OFF — no guard. Any other value is the active
+// secret. House-rule tolerance so setting it to 0/false to disable can't
+// silently leave the guard armed with "0" as the password.
+export function activeSecret(v) {
+  if (!v) return null;
+  const s = String(v).trim();
+  if (s === '' || s === '0' || s.toLowerCase() === 'false') return null;
+  return s;
+}

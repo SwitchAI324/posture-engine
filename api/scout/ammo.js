@@ -8,11 +8,12 @@
 // delete once PE is wired.
 
 import { readAmmunition } from './_read.js';
+import { activeSecret, scoutToken } from './_sb.js';
 
 export default async function handler(req, res) {
-  // Same optional guard as start.js. If SV_SCOUT_TOKEN is unset, open.
-  const expected = process.env.SV_SCOUT_TOKEN;
-  if (expected && req.headers['x-sv-scout-token'] !== expected)
+  // Same optional guard as start.js. If SV_SCOUT_TOKEN is unset/0/false, open.
+  const expected = activeSecret(process.env.SV_SCOUT_TOKEN);
+  if (expected && scoutToken(req) !== expected)
     return res.status(401).json({ error: 'bad token' });
 
   const slug = req.query && req.query.slug;

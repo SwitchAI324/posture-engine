@@ -5,13 +5,20 @@ import { sbSelect, sbUpsert, sbPatch } from './_sb.js';
 // a fact (registration date, corpus match) gates low; an inference (news,
 // negation) gates high. Anything below its gate is dropped silently.
 export const GATES = {
+  // research lanes
   prior_contact: 0.60,
   domain_age: 0.60,
   template_match: 0.70,
-  geo_mismatch: 0.70,
   company_news: 0.85,
   dossier_negation: 0.85,
   stock_photo: 0.95,
+  // dissection lane (volunteered data — gates low, they said it themselves)
+  pitch_claims: 0.50,
+  sender_identity: 0.55,
+  sender_linkedin: 0.50,
+  sender_social: 0.50,
+  office_location: 0.55,
+  attachment_facts: 0.70,
 };
 
 export function gate(hooks) {
@@ -20,6 +27,35 @@ export function gate(hooks) {
       h &&
       typeof h.confidence === 'number' &&
       h.confidence >= (GATES[h.hook_id] ?? 1));
+}
+
+// Collapse multiple hooks sharing a hook_id into one. scout_hooks is keyed
+// (slug, hook_id), so a lane that returns several of the same hook — e.g. the
+// web lane returning several company_news items — must become a single row,
+// or the batch upsert errors and NOTHING lands. Keep the highest-confidence
+// entry; fold up to 3 of the payloads into payload.items for the host to pick.
+export function dedupeHooks(hooks) {
+  const groups = new Map();
+  for (const h of hooks || []) {
+    if (!h || !h.hook_id) continue;
+    const g = groups.get(h.hook_id) || [];
+    g.push(h);
+    groups.set(h.hook_id, g);
+  }
+  const out = [];
+  for (const g of groups.values()) {
+    g.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+    const top = g[0];
+    if (g.length === 1) {
+      out.push(top);
+      continue;
+    }
+    out.push({
+      ...top,
+      payload: { ...(top.payload || {}), items: g.slice(0, 3).map((x) => x.payload) },
+    });
+  }
+  return out;
 }
 
 export async function writeHooks(slug, hooks) {
