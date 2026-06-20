@@ -292,7 +292,17 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           archetype: archetypeFromBody(body) || "universal",
           slot_time: null,
           started_at: new Date().toISOString(),
-          loadout: BITS.filter((b) => b.status !== "parked").map((b) => ({ bit_id: b.id, name: b.name, bit_type: b.bit_type || b.type || null })),
+          // every bit, with the two fields Mead Hall's arm gray-out needs:
+          // fuel_hooks (gray if a required hook isn't in the rack) and status
+          // (gray if parked). Parked bits are INCLUDED now so the UI can show
+          // them grayed rather than silently absent.
+          loadout: BITS.map((b) => ({
+            bit_id: b.id,
+            name: b.name,
+            bit_type: b.bit_type || b.type || null,
+            fuel_hooks: b.fuel_hooks || [],
+            status: b.status || "active",
+          })),
           ammunition: ammo.ammunition || [], // scout_hooks rack (empty = safe default)
           bench_available: Object.keys(BENCH).map((k) => ({
             character_id: BENCH[k].tag, name: BENCH[k].tag, role: BENCH[k].note,
