@@ -16,7 +16,7 @@
 
 export const config = { runtime: "edge" };
 
-import { getCall, setCall, isConfigured, appendGearEvent, appendBitEvent, clearDeathBlow, setArmed } from "../_store.js";
+import { getCall, setCall, isConfigured, appendGearEvent, appendBitEvent, clearDeathBlow, getControls, stampArm, fireArm } from "../_store.js";
 import { applyForceAll, postureBlock, defaultState, detectAccusation } from "../_gears.js";
 import { selectBit, rankBits } from "../_bits.js";
 import { archetypeFromBody } from "../_archetype.js";
@@ -151,13 +151,16 @@ export default async function handler(req) {
   const slug = body.call?.metadata?.slug ?? body.metadata?.slug ?? null;
   let stored = null;
   let ammo = { ammunition: [], byHook: {} };
+  let controls = { deathBlow: null, armed: [] };
   try {
-    const [s, a] = await Promise.all([
+    const [s, a, ctl] = await Promise.all([
       getCall(callId).catch(() => null),
       readAmmunition(slug).catch(() => ({ ammunition: [], byHook: {} })),
+      getControls(callId).catch(() => ({ deathBlow: null, armed: [] })),
     ]);
     stored = s;
     if (a) ammo = a;
+    if (ctl) controls = ctl;
   } catch {
     stored = null;
   }
@@ -167,7 +170,7 @@ export default async function handler(req) {
   // The doubt-gears layer on top of whichever base is in play.
   const baseSystem = stored && stored.prefix ? stored.prefix : vapiSystem;
   const systemBlocks = baseSystem
-    ? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo)
+    ? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls)
     : null;
 
   const anthropicReq = {
@@ -244,7 +247,7 @@ function factHint(bit, byHook) {
   return facts.join(" | ");
 }
 
-function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo) {
+function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls) {
   ammo = ammo || { ammunition: [], byHook: {} };
   const blocks = [
     { type: "text", text: baseSystem, cache_control: { type: "ephemeral" } },
@@ -268,13 +271,15 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo) {
 
     // --- MEAD HALL TRACE (dark unless TRACE_ENABLED=1) ---------------------
     const trace = makeTrace(callId, turn, waitUntil);
-    // Death Blow (Trigger A) pending, read in the SAME call_prefix lookup.
+    // Death Blow (Trigger A) pending, read from call_controls concurrently with
+    // getCall. Only act on a PENDING row (fired/cleared are history).
+    const dbCtl = controls && controls.deathBlow;
     const deathBlow =
-      stored && stored.pendingStatus === "pending" && stored.pendingRungId
+      dbCtl && dbCtl.status === "pending" && dbCtl.rung_id
         ? {
-            rung_id: stored.pendingRungId,
-            name: stored.pendingRungName || stored.pendingRungId,
-            line: stored.pendingFinalLine || "",
+            rung_id: dbCtl.rung_id,
+            name: dbCtl.rung_name || dbCtl.rung_id,
+            line: dbCtl.final_line || "",
           }
         : null;
     if (!stored) {
@@ -322,14 +327,17 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo) {
     const fuel_hooks_status = {};
     for (const h of Object.keys(ammo.byHook || {})) fuel_hooks_status[h] = "populated";
 
-    // ARM (learning phase): the Director's setlist, read in the same getCall.
-    // Stamp armed_turn on first sight (escalation clock), and build the bit boost
-    // map (bit_id -> turns waited) the scorer uses to raise armed bits.
-    const armedList = stored && Array.isArray(stored.armed) ? stored.armed.map((a) => ({ ...a })) : [];
-    let armedTouched = false;
+    // ARM (learning phase): the Director's setlist, read from call_controls
+    // concurrently with getCall. Stamp armed_turn on first sight (escalation
+    // clock) by patching the control row; build the bit boost map (bit_id ->
+    // turns waited) the scorer uses to raise armed bits.
+    const armedList = controls && Array.isArray(controls.armed) ? controls.armed.map((a) => ({ ...a })) : [];
     const armedBits = {};
     for (const a of armedList) {
-      if (a.armed_turn == null) { a.armed_turn = turn; armedTouched = true; }
+      if (a.armed_turn == null) {
+        a.armed_turn = turn;
+        waitUntil(stampArm(a.id, { bit_id: a.bit_id, hook_id: a.hook_id, armed_turn: turn }).catch(() => {}));
+      }
       if (a.bit_id) armedBits[a.bit_id] = Math.max(0, turn - a.armed_turn);
     }
 
@@ -359,30 +367,32 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo) {
     const bar = effectiveBar(turn);
     const fire = !!(top && top.score >= bar && gap >= MIN_GAP);
 
-    // ARM resolution: reconcile the setlist with this turn's outcome.
-    //  - bare fact-arm (hook only): inject its real fact this turn, then drop.
-    //  - bit-arm that fired this turn: mark trigger "armed", pull its fact, drop.
-    //  - everything else: keep waiting (no drop except at call end). Escalation
-    //    (in the scorer) guarantees an armed bit eventually wins a reasonable spot.
+    // ARM resolution: reconcile the setlist with this turn's outcome. Each arm is
+    // its own call_controls row, so closing one = fireArm(id) (status -> fired).
+    //  - bare fact-arm (hook only): inject its real fact this turn, then close.
+    //  - bit-arm that fired this turn: mark trigger "armed", pull its fact, close.
+    //  - everything else: leave the row pending (no drop except at call end).
+    //    Escalation (in the scorer) guarantees an armed bit eventually wins a spot.
     let firedArmedBit = false;
     let armedHookFact = null;
-    const armedKeep = [];
-    let armedChanged = armedTouched;
     for (const a of armedList) {
       const hookFact = (a.hook_id && ammo.byHook && ammo.byHook[a.hook_id])
         ? factHint({ fuel_hooks: [a.hook_id] }, ammo.byHook) : null;
       if (a.hook_id && !a.bit_id) {
-        if (hookFact) { armedHookFact = armedHookFact ? armedHookFact + " | " + hookFact : hookFact; armedChanged = true; continue; }
-        armedKeep.push(a); continue; // no scout data yet — keep, don't drop
+        if (hookFact) {
+          armedHookFact = armedHookFact ? armedHookFact + " | " + hookFact : hookFact;
+          waitUntil(fireArm(a.id).catch(() => {}));
+        }
+        continue; // no scout data yet -> leave pending, don't close
       }
       if (a.bit_id && fire && top && top.id === a.bit_id) {
-        firedArmedBit = true; armedChanged = true;
+        firedArmedBit = true;
         if (hookFact) armedHookFact = armedHookFact ? armedHookFact + " | " + hookFact : hookFact;
-        continue; // fired — drop
+        waitUntil(fireArm(a.id).catch(() => {}));
+        continue; // fired -> close
       }
-      armedKeep.push(a); // still waiting
+      // else: still waiting -> leave the row pending.
     }
-    if (armedChanged) waitUntil(setArmed(callId, armedKeep).catch(() => {}));
 
     // MUTABLE block: posture lines + (on fire) a gentle in-character bit cue.
     // Goes AFTER the cached base, so injecting never busts the prompt cache.

@@ -21,7 +21,7 @@
 // endpoint is ONLY the Director's manual Trigger A.
 // ----------------------------------------------------------------------
 
-import { getCall, setDeathBlow, setArmed } from "./_store.js";
+import { getControls, setDeathBlow, addArm } from "./_store.js";
 import { makeTrace } from "./_trace.js";
 import { BITS } from "./_bits_registry.js";
 
@@ -45,14 +45,15 @@ export default async function handler(req) {
   if (req.method === "GET") {
     const callId = u.searchParams.get("call_id");
     if (!callId) return jsonRes({ error: "missing call_id" }, 400);
-    const c = await getCall(callId).catch(() => null);
-    if (!c) return jsonRes({ call_id: callId, pending: false });
+    const c = await getControls(callId).catch(() => null);
+    const db = c && c.deathBlow ? c.deathBlow : null;
+    if (!db) return jsonRes({ call_id: callId, pending: false });
     return jsonRes({
       call_id: callId,
-      pending: c.pendingStatus === "pending",
-      status: c.pendingStatus || null,
-      rung_id: c.pendingRungId || null,
-      idempotency_key: c.pendingIdem || null,
+      pending: db.status === "pending",
+      status: db.status || null,
+      rung_id: db.rung_id || null,
+      idempotency_key: db.idem || null,
     });
   }
 
@@ -66,9 +67,9 @@ export default async function handler(req) {
       return jsonRes({ error: "call_id, rung_id, idempotency_key required" }, 400);
     }
     // idempotency: if a pending with this exact key already exists, no-op.
-    const cur = await getCall(callId).catch(() => null);
-    if (cur && cur.pendingIdem === idem) {
-      return jsonRes({ ok: true, idempotent: true, status: cur.pendingStatus || "pending" });
+    const cur = await getControls(callId).catch(() => null);
+    if (cur && cur.deathBlow && cur.deathBlow.idem === idem) {
+      return jsonRes({ ok: true, idempotent: true, status: cur.deathBlow.status || "pending" });
     }
     try {
       await setDeathBlow(callId, {
@@ -91,8 +92,8 @@ export default async function handler(req) {
     if (!callId) return jsonRes({ error: "call_id required" }, 400);
     // If the Director's death blow already fired, the turn loop already emitted
     // call_ended(death_blow) — don't double-emit a natural ending.
-    const cur = await getCall(callId).catch(() => null);
-    if (cur && cur.pendingStatus === "fired") {
+    const cur = await getControls(callId).catch(() => null);
+    if (cur && cur.deathBlow && cur.deathBlow.status === "fired") {
       return jsonRes({ ok: true, skipped: "death_blow already ended this call" });
     }
     const ending_type = String(b.ending_type || "hung_up");
@@ -136,7 +137,7 @@ export default async function handler(req) {
       return jsonRes({ error: `unknown hook ${hookId} — not one of the canonical seven` }, 404);
     }
 
-    const cur = await getCall(callId).catch(() => null);
+    const cur = await getControls(callId).catch(() => null);
     const armed = (cur && Array.isArray(cur.armed) ? cur.armed : []).slice();
     const idem = b.idempotency_key ? String(b.idempotency_key) : null;
     if (idem && armed.some((a) => a.idem === idem)) {
@@ -144,12 +145,9 @@ export default async function handler(req) {
     }
     if (armed.length >= 3) return jsonRes({ error: "setlist full (max 3) — wait for one to fire" }, 409);
 
-    armed.push({
-      bit_id: bitId, hook_id: hookId, armed_turn: null,
-      idem, director: b.director_user_id || null,
-    });
-    try { await setArmed(callId, armed); } catch (e) { return jsonRes({ error: "arm write failed", detail: String(e).slice(0, 200) }, 502); }
-    return jsonRes({ ok: true, armed });
+    try { await addArm(callId, { bitId, hookId, idem, director: b.director_user_id || null }); }
+    catch (e) { return jsonRes({ error: "arm write failed", detail: String(e).slice(0, 200) }, 502); }
+    return jsonRes({ ok: true, armed: [...armed, { bit_id: bitId, hook_id: hookId, idem }] });
   }
 
   return jsonRes({ error: "method not allowed" }, 405);

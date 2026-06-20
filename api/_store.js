@@ -18,6 +18,7 @@
 const URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const TABLE = "call_prefix";
+const CONTROLS = "call_controls"; // canonical home for death_blow + arm controls
 const EVENTS = "gear_events";
 
 export function isConfigured() {
@@ -30,7 +31,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-    `&select=prefix,posture_line,gear,pressure,engagement,slip,last_bit_id,last_bit_turn,archetype,pending_rung_id,pending_rung_name,pending_final_line,pending_idem,pending_status,armed`;
+    `&select=prefix,posture_line,gear,pressure,engagement,slip,last_bit_id,last_bit_turn,archetype`;
   const r = await fetch(url, {
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
@@ -47,14 +48,6 @@ export async function getCall(callId) {
     lastBitId: rows[0].last_bit_id || null,
     lastBitTurn: rows[0].last_bit_turn ?? null,
     archetype: rows[0].archetype || null,
-    // Death Blow pending (Trigger A) — folded into this same read.
-    pendingRungId: rows[0].pending_rung_id || null,
-    pendingRungName: rows[0].pending_rung_name || null,
-    pendingFinalLine: rows[0].pending_final_line || null,
-    pendingIdem: rows[0].pending_idem || null,
-    pendingStatus: rows[0].pending_status || null,
-    // Director-armed setlist (learning phase): up to 3 {bit_id?, hook_id?, armed_turn, idem}.
-    armed: Array.isArray(rows[0].armed) ? rows[0].armed : [],
   };
 }
 
@@ -96,32 +89,69 @@ export async function setCall(
   return true;
 }
 
-// DEATH BLOW (Trigger A) — set / clear the pending control on the call row.
-// setDeathBlow upserts the pending kill; clearDeathBlow stamps it fired/cleared
-// after the turn loop delivers the rung. Same call_prefix row, so the turn's
-// getCall read already returns it (no extra hot-path hop).
+// CONTROLS — Director's live commands (death_blow + arms) live in call_controls,
+// one row each, distinguished by control_type. PE owns the row shape: control-
+// specific fields ride in payload; rung_id is the only death-blow-specific column.
+// getControls reads them all in one query (run concurrently with getCall, so no
+// added hot-path latency). Only pending/armed rows are "live"; fired/cleared drop.
+export async function getControls(callId) {
+  const empty = { deathBlow: null, armed: [] };
+  if (!isConfigured() || !callId) return empty;
+  const r = await fetch(
+    `${URL}/rest/v1/${CONTROLS}?call_id=eq.${encodeURIComponent(callId)}` +
+      `&select=id,control_type,rung_id,status,idempotency_key,payload`,
+    { headers: { apikey: KEY, authorization: `Bearer ${KEY}` } }
+  );
+  if (!r.ok) return empty;
+  const rows = await r.json();
+  if (!Array.isArray(rows)) return empty;
+  const live = (s) => s === "pending" || s === "armed";
+  let deathBlow = null;
+  const armed = [];
+  for (const row of rows) {
+    const p = row.payload || {};
+    if (row.control_type === "death_blow") {
+      // return regardless of status (turn loop guards on pending; callend needs
+      // to see "fired" to avoid double-emitting a natural ending).
+      deathBlow = {
+        id: row.id, rung_id: row.rung_id, rung_name: p.rung_name ?? null,
+        final_line: p.final_line ?? null, idem: row.idempotency_key || null,
+        status: row.status,
+      };
+    } else if (row.control_type === "arm" && live(row.status)) {
+      armed.push({
+        id: row.id, bit_id: p.bit_id ?? null, hook_id: p.hook_id ?? null,
+        armed_turn: p.armed_turn ?? null, idem: row.idempotency_key || null,
+      });
+    }
+  }
+  return { deathBlow, armed };
+}
+
+// DEATH BLOW (Trigger A) — insert one pending death_blow row. The partial unique
+// index keeps it to one per call_id; a duplicate (same call or same idem) comes
+// back 409, which we treat as already-armed (idempotent). rung_id is a column;
+// rung_name + final_line ride in payload.
 export async function setDeathBlow(callId, { rungId, rungName, finalLine, idem, director }) {
   if (!isConfigured() || !callId) throw new Error("store not configured");
   const row = {
     call_id: callId,
-    pending_rung_id: rungId,
-    pending_rung_name: rungName ?? null,
-    pending_final_line: finalLine ?? null,
-    pending_idem: idem ?? null,
-    pending_director: director ?? null,
-    pending_status: "pending",
-    updated_at: new Date().toISOString(),
+    control_type: "death_blow",
+    rung_id: rungId,
+    director_user_id: director ?? null,
+    idempotency_key: idem ?? null,
+    status: "pending",
+    payload: { rung_name: rungName ?? null, final_line: finalLine ?? null },
   };
-  const r = await fetch(`${URL}/rest/v1/${TABLE}`, {
+  const r = await fetch(`${URL}/rest/v1/${CONTROLS}`, {
     method: "POST",
     headers: {
-      apikey: KEY,
-      authorization: `Bearer ${KEY}`,
-      "content-type": "application/json",
-      prefer: "resolution=merge-duplicates,return=minimal",
+      apikey: KEY, authorization: `Bearer ${KEY}`,
+      "content-type": "application/json", prefer: "return=minimal",
     },
     body: JSON.stringify(row),
   });
+  if (r.status === 409) return true; // already armed for this call — idempotent
   if (!r.ok) throw new Error(`death-blow set failed: ${r.status} ${await r.text()}`);
   return true;
 }
@@ -129,42 +159,71 @@ export async function setDeathBlow(callId, { rungId, rungName, finalLine, idem, 
 export async function clearDeathBlow(callId, status = "fired") {
   if (!isConfigured() || !callId) return false;
   const r = await fetch(
-    `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}`,
+    `${URL}/rest/v1/${CONTROLS}?call_id=eq.${encodeURIComponent(callId)}` +
+      `&control_type=eq.death_blow`,
     {
       method: "PATCH",
       headers: {
-        apikey: KEY,
-        authorization: `Bearer ${KEY}`,
-        "content-type": "application/json",
-        prefer: "return=minimal",
+        apikey: KEY, authorization: `Bearer ${KEY}`,
+        "content-type": "application/json", prefer: "return=minimal",
       },
-      body: JSON.stringify({ pending_status: status }),
+      body: JSON.stringify({ status }),
     }
   );
   return r.ok;
 }
 
-// ARM (learning phase) — overwrite the armed setlist (jsonb array, max 3) on the
-// call row. Read back by getCall in the same per-turn lookup (no extra hop).
-export async function setArmed(callId, armed) {
+// ARM — one row per armed item. addArm inserts (idempotency_key collapses double
+// clicks via 409). stampArm writes armed_turn into payload on first sight (the
+// escalation clock). fireArm marks a row fired when its bit lands. Setlist max-3
+// is enforced in the arm endpoint (product rule), not here.
+export async function addArm(callId, { bitId, hookId, idem, director }) {
   if (!isConfigured() || !callId) throw new Error("store not configured");
   const row = {
     call_id: callId,
-    armed: Array.isArray(armed) ? armed.slice(0, 3) : [],
-    updated_at: new Date().toISOString(),
+    control_type: "arm",
+    director_user_id: director ?? null,
+    idempotency_key: idem ?? null,
+    status: "pending",
+    payload: { bit_id: bitId ?? null, hook_id: hookId ?? null, armed_turn: null },
   };
-  const r = await fetch(`${URL}/rest/v1/${TABLE}`, {
+  const r = await fetch(`${URL}/rest/v1/${CONTROLS}`, {
     method: "POST",
     headers: {
-      apikey: KEY,
-      authorization: `Bearer ${KEY}`,
-      "content-type": "application/json",
-      prefer: "resolution=merge-duplicates,return=minimal",
+      apikey: KEY, authorization: `Bearer ${KEY}`,
+      "content-type": "application/json", prefer: "return=minimal",
     },
     body: JSON.stringify(row),
   });
+  if (r.status === 409) return true; // duplicate idem — idempotent
   if (!r.ok) throw new Error(`arm set failed: ${r.status} ${await r.text()}`);
   return true;
+}
+
+export async function stampArm(id, payload) {
+  if (!isConfigured() || !id) return false;
+  const r = await fetch(`${URL}/rest/v1/${CONTROLS}?id=eq.${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: {
+      apikey: KEY, authorization: `Bearer ${KEY}`,
+      "content-type": "application/json", prefer: "return=minimal",
+    },
+    body: JSON.stringify({ payload }),
+  });
+  return r.ok;
+}
+
+export async function fireArm(id) {
+  if (!isConfigured() || !id) return false;
+  const r = await fetch(`${URL}/rest/v1/${CONTROLS}?id=eq.${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: {
+      apikey: KEY, authorization: `Bearer ${KEY}`,
+      "content-type": "application/json", prefer: "return=minimal",
+    },
+    body: JSON.stringify({ status: "fired" }),
+  });
+  return r.ok;
 }
 
 // APPEND a per-turn breadcrumb to gear_events — the history that powers the

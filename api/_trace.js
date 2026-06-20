@@ -52,11 +52,11 @@ export async function blowLandedTotal(callId) {
 }
 
 // makeTrace(callId, turn, waitUntil) -> { emit(type, payload, actor) }
-// seq is monotonic per call: turn*1000 + an intra-turn counter, so events keep
-// strict order both within a turn and across turns.
+// seq is NOT written here: engagement_events.seq is a top-level bigserial the DB
+// auto-assigns on insert (monotonic across the table). Mead Hall orders by that
+// top-level column, not by anything in payload. (turn is kept in the signature
+// for call-site clarity but no longer drives ordering.)
 export function makeTrace(callId, turn, waitUntil) {
-  let local = 0;
-  const base = (Number(turn) || 0) * 1000;
   function emit(type, payload, actor) {
     if (!ON || !URL || !KEY || !callId) return;
     const row = {
@@ -64,7 +64,7 @@ export function makeTrace(callId, turn, waitUntil) {
       event_type: type,
       actor: actor || "engine",
       ts: new Date().toISOString(),
-      payload: Object.assign({ seq: base + local++ }, payload || {}),
+      payload: payload || {},
     };
     const p = fetch(`${URL}/rest/v1/${TABLE}`, {
       method: "POST",
