@@ -72,6 +72,11 @@ export default async function handler(req) {
       booked_slot: token.booked_slot || null,
       joined_at: token.joined_at || null,
       joined: !!token.joined_at,
+      // Target identifier for the post-call scout lane. Read from whatever the
+      // booking_tokens row carries (select=* above); meeting.js stamps these into
+      // the call metadata so the end-of-call-report can route to the right target.
+      target_id: token.target_id || null,
+      target_email: token.target_email || null,
     });
   }
   if (req.method !== "POST") return jsonRes({ error: "method not allowed" }, 405);

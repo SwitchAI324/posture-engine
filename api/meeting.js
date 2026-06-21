@@ -205,7 +205,12 @@ $("join").addEventListener("click", function(){
     .then(function(j){
       if(j.error){ note("Could not start: " + j.error, true); $("join").disabled = false; return; }
       var arch = j.archetype || "universal";
-      return vapi.start(ASST, { metadata: { archetype: arch, slug: slug } })
+      // Carry the target identifier into call metadata so the end-of-call-report
+      // (api/vapi-eoc) can route the transcript to the right target in Scouting.
+      var md = { archetype: arch, slug: slug };
+      if(j.target_id){ md.target_id = j.target_id; }
+      if(j.target_email){ md.target_email = j.target_email; }
+      return vapi.start(ASST, { metadata: md })
         .then(function(call){
           var id = call && (call.id || call.callId);
           callId = id || null;

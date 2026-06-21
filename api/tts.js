@@ -18,6 +18,7 @@
 // ----------------------------------------------------------------------
 
 import { parseSegments, voiceFor, stripStage } from "./_voices.js";
+import { envBool, envPresent } from "./_env.js";
 
 export const config = { runtime: "edge" };
 
@@ -46,7 +47,9 @@ function voiceSettings() {
   if (process.env.VOICE_STABILITY) s.stability = parseFloat(process.env.VOICE_STABILITY);
   if (process.env.VOICE_SIMILARITY) s.similarity_boost = parseFloat(process.env.VOICE_SIMILARITY);
   if (process.env.VOICE_STYLE) s.style = parseFloat(process.env.VOICE_STYLE);
-  if (process.env.VOICE_SPEAKER_BOOST) s.use_speaker_boost = process.env.VOICE_SPEAKER_BOOST === "true";
+  // Tolerant boolean: accepts 1/true/yes/on (any casing). Only overrides when
+  // explicitly set, so the default sound is untouched when the var is absent.
+  if (envPresent("VOICE_SPEAKER_BOOST")) s.use_speaker_boost = envBool("VOICE_SPEAKER_BOOST");
   return Object.keys(s).length ? s : null;
 }
 

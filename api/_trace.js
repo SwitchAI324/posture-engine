@@ -17,9 +17,13 @@
 // waitUntil so writes run after the voice already has its turn.
 // ----------------------------------------------------------------------
 
+import { envBool } from "./_env.js";
+
 const URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const ON = process.env.TRACE_ENABLED === "1";
+// Tolerant: "1" is the convention, but TRUE/true/yes/on also read as on, so a
+// stray value can't silently leave trace dark.
+const ON = envBool("TRACE_ENABLED", false);
 const TABLE = "engagement_events";
 
 // bitFireCount: how many times this bit has fired (bit_deployed) this call,
