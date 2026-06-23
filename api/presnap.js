@@ -9,9 +9,11 @@
 // two endpoints share only the store.
 //
 //   POST /api/presnap
-//   { "call_id": "vapi-call-id", "posture": "skald",
+//   { "call_id": "vapi-call-id", "character_id": "skald",
 //     "armedBench": ["conrad","bonnie"], "bits": ["echo"],
-//     "target": "Marcus @ vendor", "tactic": "b2b_saas" }
+//     "target": "Marcus @ vendor", "target_id": "<targets.id>" }
+//   character_id is authoritative (AI pick or Director override). target_id
+//   feeds call memory. No tactic field — mechanism comes from the character.
 // ----------------------------------------------------------------------
 
 import * as assembleMod from "../compiler/assemble.js";
@@ -27,6 +29,17 @@ const assemblePrefix =
 const ENTRY_POSTURE_LINE =
   "ALIVE — the opportunity is real and moving; warm, forward, generous " +
   "with next steps.";
+
+// Normalize a character_id to the postures.json key: lowercase + strip
+// diacritics, so "Völva"/"VOLVA"/"völva" all resolve to "volva" and a stray
+// casing from Mead Hall can't throw "unknown posture".
+function normChar(s) {
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -48,11 +61,15 @@ export default async function handler(req, res) {
   let assembled;
   try {
     assembled = assemblePrefix({
-      posture: body.posture,
+      // Mead Hall sends character_id (a posture IS a host character). Accept the
+      // old `posture` field too for safety. Normalized so casing/diacritics never
+      // break the postures.json lookup.
+      posture: normChar(body.character_id || body.characterId || body.posture),
       armedBench: body.armedBench || body.armed_bench || [],
       bits: body.bits || [],
       target: body.target,
-      tactic: body.tactic,
+      // tactic dropped: it was never read by the assembler, and each character
+      // already embodies its mechanism via its posture definition.
       secondCall: body.secondCall ?? body.second_call,
     });
   } catch (e) {
@@ -70,9 +87,19 @@ export default async function handler(req, res) {
     const brief = await summarizeEmails(body.target_id || body.targetId).catch(() => null);
     if (brief) {
       prefix +=
-        "\n\n## EMAIL HISTORY — you have already been corresponding with this " +
-        "person by email before this call. Open already aware of it and reference " +
-        "it naturally where it fits; do not pretend you have never heard of them.\n" +
+        "\n\n## EMAIL HISTORY & YOUR STANDING WITH THIS PERSON\n" +
+        "Ground truth for this call — hold it firmly, it never changes:\n" +
+        "- THEY came to YOU. This person cold-pitched you first; you are the " +
+        "interested recipient who bit on their pitch.\n" +
+        "- You are NOT a seller, broker, recruiter, or gatekeeper. You never " +
+        "found, sourced, referred, or recruited them, and you are NOT offering " +
+        "them an opportunity, allocation, deal, or access. THEY are pitching YOU.\n" +
+        "- This call is happening because you replied with interest and they " +
+        "wanted to talk. Your job on it is to HEAR MORE — curious, receptive, a " +
+        "little eager — never to pitch, qualify, or grant them anything.\n" +
+        "You already know the following from the email thread (reference it " +
+        "naturally where it fits; do not recite it, and do not pretend you have " +
+        "never heard of them):\n" +
         brief;
     }
   }
@@ -82,6 +109,7 @@ export default async function handler(req, res) {
       prefix,
       gear: "alive", // call opens in the ALIVE doubt-gear
       postureLine: body.postureLine || ENTRY_POSTURE_LINE,
+      characterId: normChar(body.character_id || body.characterId || body.posture),
     });
   } catch (e) {
     res.status(502).json({ error: e.message });

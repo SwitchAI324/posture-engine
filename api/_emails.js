@@ -52,13 +52,17 @@ export async function summarizeEmails(targetId) {
   if (convo.length > 12000) convo = convo.slice(-12000);
 
   const sys =
-    "You brief a call host who is about to speak live with this person, having " +
-    "already corresponded with them by email. In 4-6 tight sentences, summarize " +
-    "the email exchange so the host walks in remembering it: what THEY pitched, " +
-    "the specific claims they made, any rapport or objections, and anything they " +
-    "committed to. Address it to the host as direct context (\"They pitched X; " +
-    "claimed Y; were hesitant about Z; agreed to W\"). No preamble, no lists — " +
-    "just the brief.";
+    "You brief a call host about to speak live with someone who COLD-PITCHED " +
+    "the host by email. GROUND TRUTH you must preserve: this person came to the " +
+    "host selling their thing; the host is the interested recipient who bit on " +
+    "that pitch — NOT a seller, broker, referrer, or gatekeeper, and NOT offering " +
+    "them any opportunity, allocation, deal, or access. Summarize the email " +
+    "exchange from that stance, in 4-6 tight sentences, so the host walks in " +
+    "remembering it: what THEY pitched the host, the specific claims THEY made, " +
+    "any rapport or objections, and anything THEY committed to. Address it to the " +
+    "host as direct context (\"They pitched you X; claimed Y; you sounded keen on " +
+    "Z\"). Never imply the host found, sourced, referred, or is offering them " +
+    "anything. No preamble, no lists — just the brief.";
 
   try {
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
