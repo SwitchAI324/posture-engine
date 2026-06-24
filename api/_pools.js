@@ -64,10 +64,11 @@ const FUTURE_LORE = [
   { label: 'Sabbatical', host_callback: "the long block later in the year is my sabbatical, HR insisted, don't ask" },
 ];
 
-// difficulty: "just taken" fakes before a real slot. Mostly 1, some 0, some 2.
+// difficulty: how many "just taken" fakes before the real slot sticks. Always
+// 1 or 2 (50/50) — every target hits the gag once or twice, never zero. Seeded
+// by slug, so it's frozen and consistent for a given target across reloads.
 function pickDifficulty(rand) {
-  const r = rand();
-  return r < 0.25 ? 0 : r < 0.8 ? 1 : 2;
+  return rand() < 0.5 ? 1 : 2;
 }
 
 // open-slot time menus (incl. deliberately odd hours — busy-exec character)
