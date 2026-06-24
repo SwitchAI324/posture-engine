@@ -125,8 +125,9 @@
   .trap-bubble p { margin: 0 0 10px; }
   .trap-bubble p:last-child { margin-bottom: 0; }
   .trap-confirm { margin-top: 12px; display: block; width: fit-content; padding: 10px 20px; font-size: 14px; font-weight: 600;
-    color: #fff; background: #2f5fd6; border: none; border-radius: 9px; cursor: pointer; font-family: inherit; }
-  .trap-confirm:disabled { background: #9fb2dd; cursor: default; }
+    color: #7a5c12; background: #fbe09a; border: 1px solid #e6c75f; border-radius: 9px; cursor: pointer; font-family: inherit; }
+  .trap-confirm:hover { background: #f8d57f; }
+  .trap-confirm:disabled { background: #f3e6c0; color: #b09a5e; cursor: default; }
   .trap-thinking { display: flex; align-items: center; gap: 10px; padding: 14px 2px; color: #6b7685; font-size: 14px; }
   .spinner { width: 18px; height: 18px; flex: 0 0 auto; border-radius: 50%;
     border: 2.5px solid #d9e0ea; border-top-color: #2f5fd6; animation: spin .8s linear infinite; }
@@ -530,11 +531,26 @@
     result.style.display = 'none';
     panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
+    // Fetch a fresh LLM line during the 5s spin (latency hides under the spinner).
+    // Server returns a scripted fallback on any failure, so this can't break.
+    var linePromise = fetch('/api/trapline', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ host: HOST }),
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      return (j && j.line) ? j.line : null;
+    }).catch(function () { return null; });
+
     setTimeout(function () {
-      thinking.style.display = 'none';
-      document.getElementById('trapBubble').innerHTML = trapBubbleHTML(HOST);
-      result.style.display = 'block';
-      result.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      linePromise.then(function (line) {
+        thinking.style.display = 'none';
+        var html = line
+          ? '<p>' + line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</p>'
+          : trapBubbleHTML(HOST);
+        document.getElementById('trapBubble').innerHTML = html;
+        result.style.display = 'block';
+        result.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
     }, 5000);
   };
 
