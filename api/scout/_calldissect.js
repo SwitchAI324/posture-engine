@@ -45,7 +45,7 @@ export async function dissectCall({ transcript = '', call_id = null } = {}) {
     claims: llm.claims || [],
     commitments: llm.commitments || [],
   };
-  if (call_id) facts.call_id = call_id;
+  // call_id is a real scout_facts column now — carried on the row, not the blob.
 
   const factRows = [];
   if (
@@ -53,7 +53,7 @@ export async function dissectCall({ transcript = '', call_id = null } = {}) {
     (facts.claims && facts.claims.length) ||
     (facts.commitments && facts.commitments.length)
   ) {
-    factRows.push({ lane: 'call', facts });
+    factRows.push({ lane: 'call', facts, call_id });
   }
 
   const hooks = [];

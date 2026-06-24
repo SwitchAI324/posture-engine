@@ -10,13 +10,15 @@
 //   extracted_at timestamptz (retention clock)
 import { sbInsert } from './_sb.js';
 
-export async function writeFacts(targetId, factRows) {
+// Writes extracted facts. Accepts a shared `now` so the caller can stamp
+// related derived state (last_call_scouted_at) with the identical timestamp.
+export async function writeFacts(targetId, factRows, now = new Date().toISOString()) {
   if (!targetId || !factRows.length) return 0;
-  const now = new Date().toISOString();
   const rows = factRows.map((r) => ({
     target_id: targetId,
     source_lane: r.lane,
     facts: r.facts,
+    call_id: r.call_id || null, // real column, consistent with engagement_events.call_id
     extracted_at: now,
   }));
   await sbInsert('scout_facts', rows);

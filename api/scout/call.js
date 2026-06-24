@@ -16,7 +16,7 @@
 import { dissectCall } from './_calldissect.js';
 import { writeFacts } from './_facts.js';
 import { gate, dedupeHooks, registerStatus, emitTrace } from './_hooks.js';
-import { sbSelect, ilikeEq, activeSecret, scoutToken } from './_sb.js';
+import { sbSelect, ilikeEq, activeSecret, scoutToken, sbPatch } from './_sb.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
@@ -36,9 +36,27 @@ export default async function handler(req, res) {
 
   let written = 0;
   try {
+    const now = new Date().toISOString();
     const { factRows, hooks } = await dissectCall({ transcript, call_id: b.call_id || null });
 
-    await writeFacts(targetId, factRows);
+    await writeFacts(targetId, factRows, now);
+
+    // Derived guard state: the lane RAN, so stamp regardless of yield. The
+    // field means "last time the lane processed this target" — the dedupe
+    // guard reads it, and a zero-yield call must still advance it or it gets
+    // re-mined forever. Shares the same timestamp as the facts write; no
+    // separate recompute. (Only on a successful run — an errored extraction
+    // skips the stamp so it stays retryable.)
+    try {
+      await sbPatch('targets', `id=eq.${encodeURIComponent(targetId)}`, {
+        last_call_scouted_at: now,
+      });
+    } catch (e) {
+      await emitTrace('call_stamp_failed', {
+        target_id: targetId,
+        message: String((e && e.message) || e),
+      });
+    }
 
     const live = dedupeHooks(gate(hooks));
     for (const h of live)

@@ -12,6 +12,7 @@ export const GATES = {
   company_news: 0.85,
   dossier_negation: 0.85,
   stock_photo: 0.95,
+  browsed_tmi: 0.50, // behavioral: scammer paged to a blackout on the calendar
   // dissection lane (volunteered data — gates low, they said it themselves)
   pitch_claims: 0.50,
   sender_identity: 0.55,
