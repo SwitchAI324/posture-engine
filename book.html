@@ -82,7 +82,7 @@
   input { width: 100%; padding: 10px 12px; font-size: 15px; font-family: inherit;
     border: 1px solid #d4dae3; border-radius: 8px; color: #1c2430; background: #fff; }
   input:focus { outline: 2px solid #2f5fd6; outline-offset: 1px; border-color: #2f5fd6; }
-  .confirm { margin-top: 18px; width: 100%; padding: 12px; font-size: 15px; font-weight: 600;
+  .confirm { margin-top: 16px; display: block; width: fit-content; padding: 10px 22px; font-size: 14px; font-weight: 600;
     color: #fff; background: #2f5fd6; border: none; border-radius: 9px; cursor: pointer; font-family: inherit; }
   .confirm:disabled { background: #9fb2dd; cursor: default; }
   .note { font-size: 13px; color: #8a93a1; margin-top: 12px; }
@@ -112,17 +112,17 @@
   .taken-banner .x { width: 18px; height: 18px; border-radius: 50%; background: #e7b9b9; color: #fff;
     display: inline-flex; align-items: center; justify-content: center; font-size: 12px; flex: 0 0 auto; font-weight: 700; }
 
-  /* trapdoor: the always-there "none of these work" escape */
-  .trap { margin-top: 16px; padding-top: 14px; border-top: 1px solid #eef1f5; }
-  .trap-link { appearance: none; background: none; border: none; color: #6b7685; font-size: 13px;
-    font-family: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; padding: 0; }
-  .trap-link:hover { color: #2f5fd6; }
+  /* trapdoor: the always-there "none of these work" escape, as a stacked button */
+  .trap { margin-top: 10px; }
+  .trap-btn { display: block; width: fit-content; padding: 9px 18px; font-size: 13px; font-weight: 500;
+    color: #41506a; background: #fff; border: 1px solid #cdd5e0; border-radius: 9px; cursor: pointer; font-family: inherit; }
+  .trap-btn:hover { border-color: #2f5fd6; color: #2f5fd6; }
   .trap-panel { margin-top: 12px; }
   .trap-bubble { background: #f6f7f9; border: 1px solid #e9edf2; border-radius: 12px; padding: 14px 16px;
     font-size: 14px; color: #3a4350; }
   .trap-bubble p { margin: 0 0 10px; }
   .trap-bubble p:last-child { margin-bottom: 0; }
-  .trap-confirm { margin-top: 12px; width: 100%; padding: 11px; font-size: 14px; font-weight: 600;
+  .trap-confirm { margin-top: 12px; display: block; width: fit-content; padding: 10px 20px; font-size: 14px; font-weight: 600;
     color: #fff; background: #2f5fd6; border: none; border-radius: 9px; cursor: pointer; font-family: inherit; }
   .trap-confirm:disabled { background: #9fb2dd; cursor: default; }
   .trap-thinking { display: flex; align-items: center; gap: 10px; padding: 14px 2px; color: #6b7685; font-size: 14px; }
@@ -175,7 +175,7 @@
         </div>
 
         <div class="trap" id="trap" style="display:none;">
-          <button class="trap-link" id="trapLink">None of these times work for me</button>
+          <button class="trap-btn" id="trapLink">None of these times work for me</button>
           <div class="trap-panel" id="trapPanel">
             <div class="trap-thinking" id="trapThinking" style="display:none;">
               <span class="spinner"></span><span id="trapThinkingText">Checking the calendar…</span>
