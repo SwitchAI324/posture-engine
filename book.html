@@ -9,77 +9,87 @@
   body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    color: #1c2430;
-    background: #f3f5f8;
-    line-height: 1.5;
+    color: #1c2430; background: #f3f5f8; line-height: 1.5;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 720px; margin: 0 auto; padding: 32px 20px 64px; }
-  .card {
-    background: #fff;
-    border: 1px solid #e4e8ee;
-    border-radius: 14px;
-    overflow: hidden;
-  }
-  .head {
-    display: flex; align-items: center; gap: 14px;
-    padding: 24px 28px;
-    border-bottom: 1px solid #eef1f5;
-  }
-  .avatar {
-    width: 48px; height: 48px; border-radius: 50%;
-    background: #2f5fd6; color: #fff;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 600; font-size: 17px; letter-spacing: .5px; flex: 0 0 auto;
-  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 32px 20px 64px; }
+  .card { background: #fff; border: 1px solid #e4e8ee; border-radius: 14px; overflow: hidden; }
+  .head { display: flex; align-items: center; gap: 14px; padding: 24px 28px; border-bottom: 1px solid #eef1f5; }
+  .avatar { width: 48px; height: 48px; border-radius: 50%; background: #2f5fd6; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 17px; letter-spacing: .5px; flex: 0 0 auto; }
   .head h1 { margin: 0; font-size: 18px; font-weight: 600; }
   .head .meta { color: #6b7685; font-size: 14px; margin-top: 2px; }
   .body { padding: 24px 28px 28px; }
-  .lead { color: #6b7685; font-size: 14px; margin: 0 0 20px; }
-  .day { margin-bottom: 18px; }
-  .day h2 {
-    font-size: 13px; font-weight: 600; color: #404a59;
-    text-transform: none; margin: 0 0 8px;
-  }
+  .lead { color: #6b7685; font-size: 14px; margin: 0 0 18px; }
+
+  /* calendar */
+  .cal { border: 1px solid #e9edf2; border-radius: 12px; padding: 16px 16px 18px; }
+  .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .cal-title { font-size: 15px; font-weight: 600; color: #25405f; }
+  .cal-nav { display: flex; gap: 6px; }
+  .cal-nav button { appearance: none; border: 1px solid #d4dae3; background: #fff; color: #25405f;
+    width: 30px; height: 30px; border-radius: 7px; cursor: pointer; font-size: 15px; line-height: 1; font-family: inherit; }
+  .cal-nav button:hover:not(:disabled) { border-color: #2f5fd6; }
+  .cal-nav button:disabled { opacity: .35; cursor: default; }
+  .dow { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 4px; }
+  .dow span { text-align: center; font-size: 11px; font-weight: 600; color: #9aa4b2; padding: 4px 0; }
+  .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cell { position: relative; aspect-ratio: 1 / 1; border-radius: 8px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; font-size: 14px; }
+  .cell.empty { background: transparent; }
+  .cell.past { color: #c4ccd6; }
+  .cell.neutral { color: #aab3bf; background: #fafbfc; }
+  /* blackout: greyed + struck, with a tiny label on the run's first day */
+  .cell.blackout { background: #f4f1ec; color: #b9aa92; }
+  .cell.blackout.amber { background: #faf3e8; color: #c79a55; }
+  .cell.blackout .bk-num { text-decoration: line-through; opacity: .8; }
+  .cell.blackout .bk-label { position: absolute; bottom: 3px; left: 0; right: 0; text-align: center;
+    font-size: 8.5px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; line-height: 1;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 2px; }
+  .cell.amber .bk-label { color: #c79a55; }
+  /* open: clickable, inviting */
+  .cell.open { background: #fff; border: 1px solid #cdd9f0; color: #25405f; cursor: pointer; font-weight: 600; }
+  .cell.open:hover { border-color: #2f5fd6; background: #f5f8ff; }
+  .cell.open .dot { width: 5px; height: 5px; border-radius: 50%; background: #2f5fd6; margin-top: 3px; }
+  .cell.open[aria-pressed="true"] { background: #2f5fd6; border-color: #2f5fd6; color: #fff; }
+  .cell.open[aria-pressed="true"] .dot { background: #fff; }
+  .cell:focus-visible { outline: 2px solid #2f5fd6; outline-offset: 1px; }
+
+  .legend { margin-top: 12px; font-size: 12px; color: #9aa4b2; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+  .legend .k { display: inline-flex; align-items: center; gap: 5px; }
+  .legend .sw { width: 10px; height: 10px; border-radius: 3px; }
+  .legend .sw.open { background: #fff; border: 1px solid #cdd9f0; }
+  .legend .sw.bk { background: #faf3e8; }
+
+  /* times for the chosen day */
+  .times-wrap { margin-top: 18px; }
+  .times-day { font-size: 13px; font-weight: 600; color: #404a59; margin: 0 0 8px; }
   .times { display: flex; flex-wrap: wrap; gap: 8px; }
-  .slot {
-    appearance: none; border: 1px solid #d4dae3; background: #fff;
-    color: #25405f; font-size: 14px; font-weight: 500;
-    padding: 9px 14px; border-radius: 8px; cursor: pointer;
-    font-family: inherit;
-  }
+  .slot { appearance: none; border: 1px solid #d4dae3; background: #fff; color: #25405f; font-size: 14px;
+    font-weight: 500; padding: 9px 14px; border-radius: 8px; cursor: pointer; font-family: inherit; }
   .slot:hover { border-color: #2f5fd6; }
   .slot:focus-visible { outline: 2px solid #2f5fd6; outline-offset: 2px; }
-  .slot[aria-pressed="true"] {
-    background: #2f5fd6; border-color: #2f5fd6; color: #fff;
-  }
+  .slot[aria-pressed="true"] { background: #2f5fd6; border-color: #2f5fd6; color: #fff; }
+
   .form { margin-top: 20px; display: none; }
   .form.show { display: block; }
   .form .row { display: flex; gap: 12px; }
   .form .row > div { flex: 1; }
   label { display: block; font-size: 13px; color: #404a59; margin: 12px 0 5px; font-weight: 500; }
-  input {
-    width: 100%; padding: 10px 12px; font-size: 15px; font-family: inherit;
-    border: 1px solid #d4dae3; border-radius: 8px; color: #1c2430; background: #fff;
-  }
+  input { width: 100%; padding: 10px 12px; font-size: 15px; font-family: inherit;
+    border: 1px solid #d4dae3; border-radius: 8px; color: #1c2430; background: #fff; }
   input:focus { outline: 2px solid #2f5fd6; outline-offset: 1px; border-color: #2f5fd6; }
-  .confirm {
-    margin-top: 18px; width: 100%; padding: 12px; font-size: 15px; font-weight: 600;
-    color: #fff; background: #2f5fd6; border: none; border-radius: 9px; cursor: pointer;
-    font-family: inherit;
-  }
+  .confirm { margin-top: 18px; width: 100%; padding: 12px; font-size: 15px; font-weight: 600;
+    color: #fff; background: #2f5fd6; border: none; border-radius: 9px; cursor: pointer; font-family: inherit; }
   .confirm:disabled { background: #9fb2dd; cursor: default; }
   .note { font-size: 13px; color: #8a93a1; margin-top: 12px; }
   .state { padding: 8px 0; color: #6b7685; font-size: 14px; }
   .done { text-align: center; padding: 16px 0 4px; }
-  .done .tick {
-    width: 44px; height: 44px; border-radius: 50%; background: #e7f2ec;
-    color: #1c7a4a; display: flex; align-items: center; justify-content: center;
-    margin: 0 auto 14px; font-size: 22px;
-  }
+  .done .tick { width: 44px; height: 44px; border-radius: 50%; background: #e7f2ec; color: #1c7a4a;
+    display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; font-size: 22px; }
   .done h2 { margin: 0 0 6px; font-size: 17px; }
   .done p { margin: 4px 0; color: #6b7685; font-size: 14px; }
-  @media (max-width: 480px) { .form .row { flex-direction: column; gap: 0; } }
+  @media (max-width: 480px) { .form .row { flex-direction: column; gap: 0; } .cell { font-size: 13px; } }
 </style>
 </head>
 <body>
@@ -94,7 +104,12 @@
       </div>
       <div class="body">
         <p class="lead" id="lead">Pick a time that works for you.</p>
-        <div id="slots"><div class="state">Loading times…</div></div>
+        <div id="calmount"><div class="state">Loading availability…</div></div>
+
+        <div class="times-wrap" id="timeswrap" style="display:none;">
+          <p class="times-day" id="timesday"></p>
+          <div class="times" id="times"></div>
+        </div>
 
         <div class="form" id="form">
           <div class="row">
@@ -118,55 +133,147 @@
 
 <script>
   var slug = location.pathname.split('/').filter(Boolean).pop() || '';
-  var selected = null;
+  var selected = null;          // selected slot ISO
+  var DATA = null;              // render payload
+  var OPEN = {};                // 'YYYY-MM-DD' -> [slot ISO,...]
+  var BLACK = {};               // 'YYYY-MM-DD' -> { label, tint, first:bool }
+  var viewMonth = null;         // Date pinned to the 1st of the shown month
 
-  function fmtDay(iso) {
-    var d = new Date(iso + 'T00:00:00');
-    return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  function ymd(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
-  function fmtTime(iso) {
-    return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  function parseYMD(s) { return new Date(s + 'T00:00:00'); }
+  function fmtTime(iso) { return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+  function fmtDayLong(s) { return parseYMD(s).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }); }
+
+  // Build the open/blackout lookups from the render payload.
+  function index(data) {
+    OPEN = {}; BLACK = {};
+    (data.days || []).forEach(function (day) { OPEN[day.date] = day.slots; });
+    (data.blackouts || []).forEach(function (b) {
+      var cur = parseYMD(b.from), end = parseYMD(b.to), first = true;
+      while (cur <= end) {
+        var key = ymd(cur);
+        if (!OPEN[key]) BLACK[key] = { label: b.label || '', tint: b.tint || 'grey', first: first };
+        cur.setDate(cur.getDate() + 1); first = false;
+      }
+    });
+  }
+
+  // Earliest month with any open day (so the first view lands on real availability).
+  function firstOpenMonth() {
+    var keys = Object.keys(OPEN).sort();
+    var base = keys.length ? parseYMD(keys[0]) : new Date();
+    return new Date(base.getFullYear(), base.getMonth(), 1);
+  }
+  // Is there any open day strictly after the shown month? (drives the > arrow)
+  function hasOpenAfter(monthStart) {
+    var nextM = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
+    return Object.keys(OPEN).some(function (k) { return parseYMD(k) >= nextM; });
+  }
+  function hasOpenBefore(monthStart) {
+    return Object.keys(OPEN).some(function (k) { return parseYMD(k) < monthStart; });
+  }
+
+  function renderCalendar() {
+    var mount = document.getElementById('calmount');
+    var y = viewMonth.getFullYear(), m = viewMonth.getMonth();
+    var monthName = viewMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    var firstDow = new Date(y, m, 1).getDay();
+    var daysInMonth = new Date(y, m + 1, 0).getDate();
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+
+    var html = '<div class="cal">';
+    html += '<div class="cal-head"><div class="cal-title">' + monthName + '</div>' +
+      '<div class="cal-nav">' +
+      '<button id="prevM"' + (hasOpenBefore(viewMonth) ? '' : ' disabled') + ' aria-label="Previous month">\u2039</button>' +
+      '<button id="nextM"' + (hasOpenAfter(viewMonth) ? '' : ' disabled') + ' aria-label="Next month">\u203A</button>' +
+      '</div></div>';
+    html += '<div class="dow"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>';
+    html += '<div class="grid">';
+
+    for (var i = 0; i < firstDow; i++) html += '<div class="cell empty"></div>';
+
+    for (var d = 1; d <= daysInMonth; d++) {
+      var cellDate = new Date(y, m, d);
+      var key = ymd(cellDate);
+      if (cellDate < today) {
+        html += '<div class="cell past"><span>' + d + '</span></div>';
+      } else if (OPEN[key]) {
+        html += '<div class="cell open" role="button" tabindex="0" aria-pressed="false" data-date="' + key + '">' +
+          '<span>' + d + '</span><span class="dot"></span></div>';
+      } else if (BLACK[key]) {
+        var b = BLACK[key];
+        var amber = b.tint === 'amber' ? ' amber' : '';
+        html += '<div class="cell blackout' + amber + '"><span class="bk-num">' + d + '</span>' +
+          (b.first && b.label ? '<span class="bk-label">' + b.label + '</span>' : '') + '</div>';
+      } else {
+        html += '<div class="cell neutral"><span>' + d + '</span></div>';
+      }
+    }
+    html += '</div>';
+
+    // legend (only mention blackout if this month shows one)
+    var showsBlack = false;
+    for (var dd = 1; dd <= daysInMonth; dd++) { if (BLACK[ymd(new Date(y, m, dd))]) { showsBlack = true; break; } }
+    html += '<div class="legend"><span class="k"><span class="sw open"></span>Available</span>';
+    if (showsBlack) html += '<span class="k"><span class="sw bk"></span>Andrew unavailable</span>';
+    html += '</div>';
+
+    html += '</div>';
+    mount.innerHTML = html;
+
+    Array.prototype.forEach.call(mount.querySelectorAll('.cell.open'), function (c) {
+      c.onclick = function () { pickDay(c.getAttribute('data-date'), c); };
+      c.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickDay(c.getAttribute('data-date'), c); } };
+    });
+    var pm = document.getElementById('prevM'), nm = document.getElementById('nextM');
+    if (pm) pm.onclick = function () { viewMonth = new Date(y, m - 1, 1); renderCalendar(); };
+    if (nm) nm.onclick = function () { viewMonth = new Date(y, m + 1, 1); renderCalendar(); };
+  }
+
+  function pickDay(dateKey, cell) {
+    Array.prototype.forEach.call(document.querySelectorAll('.cell.open'), function (c) { c.setAttribute('aria-pressed', 'false'); });
+    cell.setAttribute('aria-pressed', 'true');
+    selected = null;
+    document.getElementById('form').classList.remove('show');
+
+    var wrap = document.getElementById('timeswrap');
+    document.getElementById('timesday').textContent = fmtDayLong(dateKey);
+    var box = document.getElementById('times');
+    box.innerHTML = '';
+    (OPEN[dateKey] || []).forEach(function (iso) {
+      var b = document.createElement('button');
+      b.className = 'slot'; b.type = 'button'; b.textContent = fmtTime(iso);
+      b.setAttribute('aria-pressed', 'false');
+      b.onclick = function () { pickSlot(iso, b); };
+      box.appendChild(b);
+    });
+    wrap.style.display = 'block';
+    wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function pickSlot(iso, btn) {
+    selected = iso;
+    document.querySelectorAll('#times .slot').forEach(function (s) { s.setAttribute('aria-pressed', 'false'); });
+    btn.setAttribute('aria-pressed', 'true');
+    document.getElementById('form').classList.add('show');
+    document.getElementById('first').focus();
   }
 
   function render(data) {
+    DATA = data;
     var lead = document.getElementById('lead');
     if (data.reschedule) lead.textContent = 'Pick a new time for your call.';
     else if (data.narrative) lead.textContent = data.narrative;
 
-    var box = document.getElementById('slots');
-    box.innerHTML = '';
     if (!data.days || !data.days.length) {
-      box.innerHTML = '<div class="state">No times are open right now.</div>';
+      document.getElementById('calmount').innerHTML = '<div class="state">No times are open right now.</div>';
       return;
     }
-    data.days.forEach(function (day) {
-      var wrap = document.createElement('div');
-      wrap.className = 'day';
-      var h = document.createElement('h2');
-      h.textContent = fmtDay(day.date);
-      wrap.appendChild(h);
-      var times = document.createElement('div');
-      times.className = 'times';
-      day.slots.forEach(function (iso) {
-        var b = document.createElement('button');
-        b.className = 'slot';
-        b.type = 'button';
-        b.textContent = fmtTime(iso);
-        b.setAttribute('aria-pressed', 'false');
-        b.onclick = function () { select(iso, b); };
-        times.appendChild(b);
-      });
-      wrap.appendChild(times);
-      box.appendChild(wrap);
-    });
-  }
-
-  function select(iso, btn) {
-    selected = iso;
-    document.querySelectorAll('.slot').forEach(function (s) { s.setAttribute('aria-pressed', 'false'); });
-    btn.setAttribute('aria-pressed', 'true');
-    document.getElementById('form').classList.add('show');
-    document.getElementById('first').focus();
+    index(data);
+    viewMonth = firstOpenMonth();
+    renderCalendar();
   }
 
   document.getElementById('confirm').onclick = async function () {
@@ -209,7 +316,7 @@
     .then(function (r) { if (!r.ok) throw new Error('render'); return r.json(); })
     .then(render)
     .catch(function () {
-      document.getElementById('slots').innerHTML =
+      document.getElementById('calmount').innerHTML =
         '<div class="state">This booking link isn\u2019t valid. Please check your email for the latest link.</div>';
     });
 </script>
