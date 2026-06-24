@@ -1,532 +1,213 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Book a call with Andrew Mercer</title>
 <style>
+  :root {
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --ink: #1c2330;
+    --muted: #6b7480;
+    --line: #e4e7ec;
+    --accent: #2f6df0;
+    --accent-ink: #ffffff;
+    --ok: #137a4b;
+    --radius: 12px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
   * { box-sizing: border-box; }
   body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    color: #1c2430; background: #f3f5f8; line-height: 1.5;
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--font); line-height: 1.5;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 760px; margin: 0 auto; padding: 32px 20px 64px; }
-  .card { background: #fff; border: 1px solid #e4e8ee; border-radius: 14px; overflow: hidden; }
-  .head { display: flex; align-items: center; gap: 14px; padding: 24px 28px; border-bottom: 1px solid #eef1f5; }
-  .avatar { width: 48px; height: 48px; border-radius: 50%; background: #2f5fd6; color: #fff;
-    display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 17px; letter-spacing: .5px; flex: 0 0 auto; }
-  .head h1 { margin: 0; font-size: 18px; font-weight: 600; }
-  .head .meta { color: #6b7685; font-size: 14px; margin-top: 2px; }
-  .body { padding: 24px 28px 28px; }
-  .lead { color: #6b7685; font-size: 14px; margin: 0 0 18px; }
-  .tz { color: #9aa4b2; font-size: 12.5px; margin: -10px 0 16px; display: flex; align-items: center; gap: 6px; }
-  .tz::before { content: ""; width: 13px; height: 13px; flex: 0 0 auto;
-    background: no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa4b2' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3 2'/%3E%3C/svg%3E"); }
-
-  /* calendar */
-  .cal { border: 1px solid #e9edf2; border-radius: 12px; padding: 16px 16px 18px; }
-  .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-  .cal-title { font-size: 15px; font-weight: 600; color: #25405f; }
-  .cal-nav { display: flex; gap: 6px; }
-  .cal-nav button { appearance: none; border: 1px solid #d4dae3; background: #fff; color: #25405f;
-    width: 30px; height: 30px; border-radius: 7px; cursor: pointer; font-size: 15px; line-height: 1; font-family: inherit; }
-  .cal-nav button:hover:not(:disabled) { border-color: #2f5fd6; }
-  .cal-nav button:disabled { opacity: .35; cursor: default; }
-  .dow { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 4px; }
-  .dow span { text-align: center; font-size: 11px; font-weight: 600; color: #9aa4b2; padding: 4px 0; }
-  .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-  .cell { position: relative; aspect-ratio: 1 / 1; border-radius: 8px; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; font-size: 14px; }
-  .cell.empty { background: transparent; }
-  .cell.past { color: #c4ccd6; }
-  .cell.neutral { color: #aab3bf; background: #fafbfc; }
-  /* blackout: greyed + struck, with a tiny label on the run's first day */
-  .cell.blackout { background: #f4f1ec; color: #b9aa92; }
-  .cell.blackout.amber { background: #faf3e8; color: #c79a55; }
-  .cell.blackout .bk-num { text-decoration: line-through; opacity: .8; }
-  .cell.blackout .bk-label { position: absolute; bottom: 3px; left: 0; right: 0; text-align: center;
-    font-size: 8.5px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; line-height: 1;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 2px; }
-  .cell.amber .bk-label { color: #c79a55; }
-  /* open: clickable, inviting */
-  .cell.open { background: #fff; border: 1px solid #cdd9f0; color: #25405f; cursor: pointer; font-weight: 600; }
-  .cell.open:hover { border-color: #2f5fd6; background: #f5f8ff; }
-  .cell.open .dot { width: 5px; height: 5px; border-radius: 50%; background: #2f5fd6; margin-top: 3px; }
-  .cell.open[aria-pressed="true"] { background: #2f5fd6; border-color: #2f5fd6; color: #fff; }
-  .cell.open[aria-pressed="true"] .dot { background: #fff; }
-  .cell:focus-visible { outline: 2px solid #2f5fd6; outline-offset: 1px; }
-
-  .legend { margin-top: 12px; font-size: 12px; color: #9aa4b2; display: flex; flex-wrap: wrap; gap: 4px 14px; }
-  .legend .k { display: inline-flex; align-items: center; gap: 5px; }
-  .legend .sw { width: 10px; height: 10px; border-radius: 3px; }
-  .legend .sw.open { background: #fff; border: 1px solid #cdd9f0; }
-  .legend .sw.bk { background: #faf3e8; }
-
-  /* times for the chosen day */
-  .times-wrap { margin-top: 18px; }
-  .times-day { font-size: 13px; font-weight: 600; color: #404a59; margin: 0 0 8px; }
-  .times { display: flex; flex-wrap: wrap; gap: 8px; }
-  .slot { appearance: none; border: 1px solid #d4dae3; background: #fff; color: #25405f; font-size: 14px;
-    font-weight: 500; padding: 9px 14px; border-radius: 8px; cursor: pointer; font-family: inherit; }
-  .slot:hover { border-color: #2f5fd6; }
-  .slot:focus-visible { outline: 2px solid #2f5fd6; outline-offset: 2px; }
-  .slot[aria-pressed="true"] { background: #2f5fd6; border-color: #2f5fd6; color: #fff; }
-
-  .form { margin-top: 20px; display: none; }
-  .form.show { display: block; }
-  .form .row { display: flex; gap: 12px; }
-  .form .row > div { flex: 1; }
-  label { display: block; font-size: 13px; color: #404a59; margin: 12px 0 5px; font-weight: 500; }
-  input { width: 100%; padding: 10px 12px; font-size: 15px; font-family: inherit;
-    border: 1px solid #d4dae3; border-radius: 8px; color: #1c2430; background: #fff; }
-  input:focus { outline: 2px solid #2f5fd6; outline-offset: 1px; border-color: #2f5fd6; }
-  .confirm { margin-top: 16px; display: block; width: fit-content; padding: 10px 22px; font-size: 14px; font-weight: 600;
-    color: #fff; background: #2f5fd6; border: none; border-radius: 9px; cursor: pointer; font-family: inherit; }
-  .confirm:disabled { background: #9fb2dd; cursor: default; }
-  .note { font-size: 13px; color: #8a93a1; margin-top: 12px; }
-  .state { padding: 8px 0; color: #6b7685; font-size: 14px; }
-  .done { text-align: center; padding: 16px 0 4px; }
-  .done .tick { width: 44px; height: 44px; border-radius: 50%; background: #e7f2ec; color: #1c7a4a;
-    display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; font-size: 22px; }
-  .done h2 { margin: 0 0 6px; font-size: 17px; }
-  .done p { margin: 4px 0; color: #6b7685; font-size: 14px; }
-  @media (max-width: 480px) { .form .row { flex-direction: column; gap: 0; } .cell { font-size: 13px; } }
-
-  /* "just taken" — flash the slot red, strike it, then collapse it away */
-  @keyframes takenFlash {
-    0%   { background: #fdecec; border-color: #e6b3b3; color: #b23b3b; transform: scale(1); }
-    35%  { background: #f7d4d4; border-color: #d98a8a; transform: scale(1.04); }
-    100% { background: #fdecec; border-color: #e6b3b3; color: #b23b3b; transform: scale(1); }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 32px 20px 64px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); overflow: hidden;
   }
-  .slot.taken { animation: takenFlash .5s ease both; text-decoration: line-through; cursor: default; pointer-events: none; }
-  .slot.collapsing { transition: opacity .35s ease, max-width .35s ease, padding .35s ease, margin .35s ease;
-    opacity: 0; max-width: 0; padding-left: 0; padding-right: 0; margin: 0; overflow: hidden; border-color: transparent; }
+  .head { display: flex; align-items: center; gap: 14px; padding: 22px 24px; border-bottom: 1px solid var(--line); }
+  .avatar {
+    width: 46px; height: 46px; border-radius: 50%; flex: none;
+    background: #dfe6f6; color: #2f4a86; display: grid; place-items: center;
+    font-weight: 600; font-size: 16px; letter-spacing: .5px;
+  }
+  .head h1 { margin: 0; font-size: 17px; font-weight: 600; }
+  .head .sub { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .body { padding: 20px 24px 24px; }
 
-  .taken-banner { display: none; align-items: center; gap: 9px; margin: 0 0 12px;
-    background: #fdecec; border: 1px solid #f1cccc; color: #a23636; border-radius: 9px;
-    padding: 10px 13px; font-size: 13.5px; font-weight: 500; }
-  .taken-banner.show { display: flex; animation: bannerIn .35s ease both; }
-  @keyframes bannerIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
-  .taken-banner .x { width: 18px; height: 18px; border-radius: 50%; background: #e7b9b9; color: #fff;
-    display: inline-flex; align-items: center; justify-content: center; font-size: 12px; flex: 0 0 auto; font-weight: 700; }
+  .status { color: var(--muted); font-size: 14px; padding: 8px 0 4px; }
+  .err { color: #a3262d; font-size: 14px; }
 
-  /* trapdoor: the always-there "none of these work" escape, as a stacked button */
-  .trap { margin-top: 10px; }
-  .trap-btn { display: block; width: fit-content; padding: 9px 18px; font-size: 13px; font-weight: 500;
-    color: #41506a; background: #fff; border: 1px solid #cdd5e0; border-radius: 9px; cursor: pointer; font-family: inherit; }
-  .trap-btn:hover { border-color: #2f5fd6; color: #2f5fd6; }
-  .trap-panel { margin-top: 12px; }
-  .trap-bubble { background: #f6f7f9; border: 1px solid #e9edf2; border-radius: 12px; padding: 14px 16px;
-    font-size: 14px; color: #3a4350; }
-  .trap-bubble p { margin: 0 0 10px; }
-  .trap-bubble p:last-child { margin-bottom: 0; }
-  .trap-confirm { margin-top: 12px; display: block; width: fit-content; padding: 10px 20px; font-size: 14px; font-weight: 600;
-    color: #fff; background: #2f5fd6; border: none; border-radius: 9px; cursor: pointer; font-family: inherit; }
-  .trap-confirm:disabled { background: #9fb2dd; cursor: default; }
-  .trap-thinking { display: flex; align-items: center; gap: 10px; padding: 14px 2px; color: #6b7685; font-size: 14px; }
-  .spinner { width: 18px; height: 18px; flex: 0 0 auto; border-radius: 50%;
-    border: 2.5px solid #d9e0ea; border-top-color: #2f5fd6; animation: spin .8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  .daygroup { margin-top: 14px; }
+  .dayhead { font-size: 13px; font-weight: 600; color: var(--muted); margin: 14px 0 8px; text-transform: none; }
+  .slot {
+    display: block; width: 100%; text-align: left; cursor: pointer;
+    background: #fff; border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 8px; font: inherit; color: var(--ink);
+    transition: border-color .12s, background .12s;
+  }
+  .slot:hover { border-color: var(--accent); background: #f5f8ff; }
+  .slot[aria-disabled="true"] { color: var(--muted); cursor: default; text-decoration: line-through; background: #fafafa; }
+  .slot[aria-disabled="true"]:hover { border-color: var(--line); background: #fafafa; }
+
+  .form { margin-top: 6px; }
+  .pickline { font-size: 14px; color: var(--muted); margin-bottom: 14px; }
+  .pickline b { color: var(--ink); font-weight: 600; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 5px; }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  input {
+    width: 100%; padding: 11px 12px; border: 1px solid var(--line);
+    border-radius: 10px; font: inherit; color: var(--ink); background: #fff;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+  .actions { margin-top: 20px; display: flex; gap: 10px; align-items: center; }
+  .btn {
+    background: var(--accent); color: var(--accent-ink); border: none;
+    border-radius: 10px; padding: 12px 18px; font: inherit; font-weight: 600;
+    cursor: pointer;
+  }
+  .btn:disabled { opacity: .55; cursor: default; }
+  .btn.ghost { background: transparent; color: var(--accent); padding: 12px 6px; }
+
+  .done { text-align: center; padding: 18px 4px 8px; }
+  .done .tick { width: 48px; height: 48px; border-radius: 50%; background: #e7f4ec; color: var(--ok); display: grid; place-items: center; margin: 0 auto 14px; font-size: 24px; }
+  .done h2 { font-size: 18px; margin: 0 0 6px; }
+  .done p { color: var(--muted); font-size: 14px; margin: 4px 0; }
+
+  .foot { text-align: center; color: var(--muted); font-size: 12px; margin-top: 18px; }
 </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
       <div class="head">
-        <div class="avatar" id="avatar">AM</div>
+        <div class="avatar">AM</div>
         <div>
-          <h1 id="title">Book a call with Andrew Mercer</h1>
-          <div class="meta">30 min · video call</div>
+          <h1>Book a call with Andrew Mercer</h1>
+          <p class="sub">30 min · video</p>
         </div>
       </div>
-      <div class="body">
-        <p class="lead" id="lead">Pick a time that works for you.</p>
-        <p class="tz" id="tz" style="display:none;"></p>
-
-        <div class="taken-banner" id="takenBanner">
-          <span class="x">&times;</span>
-          <span id="takenText">That time was just taken — someone grabbed it. Please pick another.</span>
-        </div>
-
-        <div id="calmount"><div class="state">Loading availability…</div></div>
-
-        <div class="times-wrap" id="timeswrap" style="display:none;">
-          <p class="times-day" id="timesday"></p>
-          <div class="times" id="times"></div>
-        </div>
-
-        <div class="form" id="form">
-          <div class="row">
-            <div>
-              <label for="first">First name</label>
-              <input id="first" autocomplete="given-name" />
-            </div>
-            <div>
-              <label for="last">Last name</label>
-              <input id="last" autocomplete="family-name" />
-            </div>
-          </div>
-          <label for="email">Email</label>
-          <input id="email" type="email" autocomplete="email" />
-          <button class="confirm" id="confirm">Confirm booking</button>
-          <p class="note" id="formnote"></p>
-        </div>
-
-        <div class="trap" id="trap" style="display:none;">
-          <button class="trap-btn" id="trapLink">None of these times work for me</button>
-          <div class="trap-panel" id="trapPanel">
-            <div class="trap-thinking" id="trapThinking" style="display:none;">
-              <span class="spinner"></span><span id="trapThinkingText">Checking the calendar…</span>
-            </div>
-            <div id="trapResult" style="display:none;">
-              <div class="trap-bubble" id="trapBubble"></div>
-              <button class="trap-confirm" id="trapConfirm">Yes, please check with them</button>
-              <p class="note" id="trapNote"></p>
-            </div>
-          </div>
-        </div>
+      <div class="body" id="body">
+        <div class="status" id="status">Loading available times…</div>
       </div>
     </div>
+    <div class="foot">Powered by SpamViking scheduling</div>
   </div>
 
 <script>
-  var slug = location.pathname.split('/').filter(Boolean).pop() || '';
-  var selected = null;          // selected slot ISO
-  var DATA = null;              // render payload
-  var HOST = 'Andrew Mercer';   // overwritten from render
-  var OPEN = {};                // 'YYYY-MM-DD' -> [slot ISO,...]
-  var BLACK = {};               // 'YYYY-MM-DD' -> { label, tint, first:bool }
-  var viewMonth = null;         // Date pinned to the 1st of the shown month
-
-  function ymd(d) {
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+(function () {
+  // slug comes from the path /book/<slug> (or ?slug= as a fallback)
+  function getSlug() {
+    var m = location.pathname.match(/\/book\/([^\/?#]+)/);
+    if (m) return decodeURIComponent(m[1]);
+    return new URLSearchParams(location.search).get("slug") || "";
   }
-  function parseYMD(s) { return new Date(s + 'T00:00:00'); }
-  function fmtTime(iso) { return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
-  function fmtDayLong(s) { return parseYMD(s).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }); }
+  var slug = getSlug();
+  var body = document.getElementById("body");
+  var state = { slots: [], reschedule: false, picked: null };
 
-  // Build the open/blackout lookups from the render payload.
-  function index(data) {
-    OPEN = {}; BLACK = {};
-    (data.days || []).forEach(function (day) { OPEN[day.date] = day.slots; });
-    (data.blackouts || []).forEach(function (b) {
-      var cur = parseYMD(b.from), end = parseYMD(b.to), first = true;
-      while (cur <= end) {
-        var key = ymd(cur);
-        if (!OPEN[key]) BLACK[key] = { label: b.label || '', tint: b.tint || 'grey', first: first };
-        cur.setDate(cur.getDate() + 1); first = false;
-      }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  if (!slug) { body.innerHTML = '<div class="err">This booking link looks incomplete. Please use the link from your email.</div>'; return; }
+
+  // 1. Load the render-safe view of the token (server computes visible slots)
+  fetch("/api/render?slug=" + encodeURIComponent(slug))
+    .then(function (r) { if (!r.ok) throw new Error("render"); return r.json(); })
+    .then(function (data) {
+      state.slots = data.slots || [];
+      state.reschedule = !!data.reschedule;
+      renderSlots();
+    })
+    .catch(function () {
+      body.innerHTML = '<div class="err">We couldn\u2019t load times right now. Please try the link again in a moment.</div>';
     });
-  }
 
-  // Earliest month with any open day (so the first view lands on real availability).
-  function firstOpenMonth() {
-    var keys = Object.keys(OPEN).sort();
-    var base = keys.length ? parseYMD(keys[0]) : new Date();
-    return new Date(base.getFullYear(), base.getMonth(), 1);
-  }
-  // Is there any open day strictly after the shown month? (drives the > arrow)
-  function hasOpenAfter(monthStart) {
-    var nextM = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
-    return Object.keys(OPEN).some(function (k) { return parseYMD(k) >= nextM; });
-  }
-  function hasOpenBefore(monthStart) {
-    return Object.keys(OPEN).some(function (k) { return parseYMD(k) < monthStart; });
-  }
-
-  function renderCalendar() {
-    var mount = document.getElementById('calmount');
-    var y = viewMonth.getFullYear(), m = viewMonth.getMonth();
-    var monthName = viewMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-    var firstDow = new Date(y, m, 1).getDay();
-    var daysInMonth = new Date(y, m + 1, 0).getDate();
-    var today = new Date(); today.setHours(0, 0, 0, 0);
-
-    var html = '<div class="cal">';
-    html += '<div class="cal-head"><div class="cal-title">' + monthName + '</div>' +
-      '<div class="cal-nav">' +
-      '<button id="prevM"' + (hasOpenBefore(viewMonth) ? '' : ' disabled') + ' aria-label="Previous month">\u2039</button>' +
-      '<button id="nextM"' + (hasOpenAfter(viewMonth) ? '' : ' disabled') + ' aria-label="Next month">\u203A</button>' +
-      '</div></div>';
-    html += '<div class="dow"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>';
-    html += '<div class="grid">';
-
-    for (var i = 0; i < firstDow; i++) html += '<div class="cell empty"></div>';
-
-    for (var d = 1; d <= daysInMonth; d++) {
-      var cellDate = new Date(y, m, d);
-      var key = ymd(cellDate);
-      if (cellDate < today) {
-        html += '<div class="cell past"><span>' + d + '</span></div>';
-      } else if (OPEN[key]) {
-        html += '<div class="cell open" role="button" tabindex="0" aria-pressed="false" data-date="' + key + '">' +
-          '<span>' + d + '</span><span class="dot"></span></div>';
-      } else if (BLACK[key]) {
-        var b = BLACK[key];
-        var amber = b.tint === 'amber' ? ' amber' : '';
-        html += '<div class="cell blackout' + amber + '"><span class="bk-num">' + d + '</span>' +
-          (b.first && b.label ? '<span class="bk-label">' + b.label + '</span>' : '') + '</div>';
-      } else {
-        html += '<div class="cell neutral"><span>' + d + '</span></div>';
-      }
-    }
-    html += '</div>';
-
-    // legend (only mention blackout if this month shows one)
-    var showsBlack = false;
-    for (var dd = 1; dd <= daysInMonth; dd++) { if (BLACK[ymd(new Date(y, m, dd))]) { showsBlack = true; break; } }
-    html += '<div class="legend"><span class="k"><span class="sw open"></span>Available</span>';
-    if (showsBlack) html += '<span class="k"><span class="sw bk"></span>Andrew unavailable</span>';
-    html += '</div>';
-
-    html += '</div>';
-    mount.innerHTML = html;
-
-    Array.prototype.forEach.call(mount.querySelectorAll('.cell.open'), function (c) {
-      c.onclick = function () { pickDay(c.getAttribute('data-date'), c); };
-      c.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickDay(c.getAttribute('data-date'), c); } };
-    });
-    var pm = document.getElementById('prevM'), nm = document.getElementById('nextM');
-    if (pm) pm.onclick = function () { viewMonth = new Date(y, m - 1, 1); renderCalendar(); };
-    if (nm) nm.onclick = function () { viewMonth = new Date(y, m + 1, 1); renderCalendar(); };
-  }
-
-  function pickDay(dateKey, cell) {
-    Array.prototype.forEach.call(document.querySelectorAll('.cell.open'), function (c) { c.setAttribute('aria-pressed', 'false'); });
-    cell.setAttribute('aria-pressed', 'true');
-    selected = null;
-    document.getElementById('form').classList.remove('show');
-
-    var wrap = document.getElementById('timeswrap');
-    document.getElementById('timesday').textContent = fmtDayLong(dateKey);
-    var box = document.getElementById('times');
-    box.innerHTML = '';
-    (OPEN[dateKey] || []).forEach(function (iso) {
-      var b = document.createElement('button');
-      b.className = 'slot'; b.type = 'button'; b.textContent = fmtTime(iso);
-      b.setAttribute('aria-pressed', 'false');
-      b.onclick = function () { pickSlot(iso, b); };
-      box.appendChild(b);
-    });
-    wrap.style.display = 'block';
-    wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
-
-  function pickSlot(iso, btn) {
-    selected = iso;
-    document.querySelectorAll('#times .slot').forEach(function (s) { s.setAttribute('aria-pressed', 'false'); });
-    btn.setAttribute('aria-pressed', 'true');
-    document.getElementById('form').classList.add('show');
-    document.getElementById('first').focus();
-  }
-
-  function localZoneLabel() {
-    var tz = '';
-    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
-    var off = -new Date().getTimezoneOffset();   // minutes east of UTC
-    var sign = off >= 0 ? '+' : '-';
-    var ab = Math.abs(off), h = Math.floor(ab / 60), m = ab % 60;
-    var gmt = 'GMT' + sign + h + (m ? ':' + String(m).padStart(2, '0') : '');
-    return tz ? (tz.replace(/_/g, ' ') + ' (' + gmt + ')') : ('your local time (' + gmt + ')');
-  }
-
-  // Barbara's flustered in-browser overshare for the trapdoor. Scripted (no live
-  // AI), light TMI in her own voice — the page register, not the composed email.
-  // ALWAYS references checking back with the host to see about opening up the
-  // schedule. Host-neutral pronoun ("them/they") so it works for any host name.
-  function trapBubbleHTML(host) {
-    return '<p>Oh no &mdash; I&rsquo;m so sorry none of those worked. Honestly it&rsquo;s ' +
-      'been a <em>week</em> over here, ' + host + '&rsquo;s calendar is a bit of a jigsaw ' +
-      'right now.</p>' +
-      '<p>Let me check back with ' + host + ' directly and see if they can shuffle a few ' +
-      'things and open up some more time &mdash; then I&rsquo;ll email a fresh set of ' +
-      'options straight over. Sound okay?</p>';
-  }
-
-  function render(data) {
-    DATA = data;
-    HOST = data.host || HOST;
-    document.getElementById('title').textContent =
-      (data.reschedule ? 'Reschedule your call with ' : 'Book a call with ') + HOST;
-    document.getElementById('avatar').textContent = initials(HOST);
-
-    var lead = document.getElementById('lead');
-    if (data.reschedule) lead.textContent = 'Pick a new time for your call.';
-    else if (data.narrative) lead.textContent = data.narrative;
-
-    if (!data.days || !data.days.length) {
-      document.getElementById('calmount').innerHTML = '<div class="state">No times are open right now.</div>';
-      // still offer the trapdoor when nothing's open — that's exactly when they need it
-      showTrap(data);
+  function renderSlots() {
+    if (!state.slots.length) {
+      body.innerHTML = '<div class="status">No times are open at the moment \u2014 Andrew\u2019s assistant will email you with new options shortly.</div>';
       return;
     }
-    var tz = document.getElementById('tz');
-    tz.textContent = 'All times shown in ' + localZoneLabel();
-    tz.style.display = 'flex';
-    index(data);
-    viewMonth = firstOpenMonth();
-    renderCalendar();
-    showTrap(data);
-  }
-
-  function initials(name) {
-    var parts = String(name).trim().split(/\s+/);
-    return ((parts[0] || '').charAt(0) + (parts[1] || '').charAt(0)).toUpperCase() || 'A';
-  }
-
-  function showTrap(data) {
-    document.getElementById('trap').style.display = 'block';
-  }
-
-  document.getElementById('confirm').onclick = async function () {
-    var first = document.getElementById('first').value.trim();
-    var last = document.getElementById('last').value.trim();
-    var email = document.getElementById('email').value.trim();
-    var note = document.getElementById('formnote');
-    if (!first || !last || !email || !/.+@.+\..+/.test(email)) {
-      note.textContent = 'Please add your name and a valid email.';
-      return;
-    }
-    this.disabled = true;
-    note.textContent = '';
-    var claimedSlot = selected;
-    try {
-      // "Just taken" rig (server-decided). On a fake, drop this slot and make
-      // them pick another; name/email stay filled. Only a real claim proceeds
-      // to the actual booking — so no invite ever fires on a fake.
-      var cr = await fetch('/api/claim', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug: slug, slot: claimedSlot }),
-      });
-      var cj = await cr.json().catch(function () { return {}; });
-      if (cj && cj.taken) {
-        this.disabled = false;
-        document.getElementById('form').classList.remove('show');
-        note.textContent = '';
-        flashTaken(claimedSlot);
-        return;
-      }
-
-      var r = await fetch('/api/book', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug: slug, first: first, last: last, email: email, slot: claimedSlot }),
-      });
-      if (!r.ok) throw new Error('book');
-      showDone();
-    } catch (e) {
-      this.disabled = false;
-      note.textContent = 'Something went wrong. Please try another time.';
-    }
-  };
-
-  // Flashy "just taken": flash the slot red + strike it, pop the banner, then
-  // collapse the slot out. Drops it from the pool so it can't be re-picked.
-  function flashTaken(iso) {
-    var banner = document.getElementById('takenBanner');
-    document.getElementById('takenText').textContent =
-      'That time was just taken — someone grabbed it. Please pick another.';
-    banner.classList.add('show');
-    banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-    var box = document.getElementById('times');
-    var target = null;
-    Array.prototype.forEach.call(box.querySelectorAll('.slot'), function (b) {
-      if (b.textContent === fmtTime(iso)) target = b;
+    var intro = state.reschedule
+      ? '<div class="status">Pick a new time for your call.</div>'
+      : '<div class="status">Pick a time that works for you.</div>';
+    // group slots by day label
+    var groups = {};
+    var order = [];
+    state.slots.forEach(function (s) {
+      if (!groups[s.day]) { groups[s.day] = []; order.push(s.day); }
+      groups[s.day].push(s);
     });
-    if (target) {
-      target.classList.add('taken');
-      target.setAttribute('aria-pressed', 'false');
-      setTimeout(function () { target.classList.add('collapsing'); }, 520);
-      setTimeout(function () { dropSlot(iso); }, 880);
-    } else {
-      dropSlot(iso);
-    }
-    // auto-dismiss the banner after a beat
-    setTimeout(function () { banner.classList.remove('show'); }, 4200);
-  }
-
-  // Remove a "just taken" slot from the in-memory pool and the open day's UI.
-  // If that empties the day, the scammer falls back to the calendar to pick
-  // another open day (the counter persists, so the next pick will stick).
-  function dropSlot(iso) {
-    Object.keys(OPEN).forEach(function (k) {
-      OPEN[k] = (OPEN[k] || []).filter(function (s) { return s !== iso; });
-    });
-    var box = document.getElementById('times');
-    Array.prototype.forEach.call(box.querySelectorAll('.slot'), function (b) {
-      if (b.textContent === fmtTime(iso)) b.remove();
-    });
-    selected = null;
-    if (!box.querySelector('.slot')) {
-      document.getElementById('times').innerHTML =
-        '<div class="state">No more times that day. Pick another from the calendar.</div>';
-    }
-  }
-
-  // ── trapdoor: "none of these work" → 5s "checking with host" spin →
-  // Barbara's overshare (always references checking back with the host) →
-  // confirm → wider-calendar email.
-  document.getElementById('trapLink').onclick = function () {
-    this.style.display = 'none';
-    var panel = document.getElementById('trapPanel');
-    var thinking = document.getElementById('trapThinking');
-    var result = document.getElementById('trapResult');
-    document.getElementById('trapThinkingText').textContent =
-      'Checking with ' + HOST + ' about the calendar…';
-    thinking.style.display = 'flex';
-    result.style.display = 'none';
-    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-    setTimeout(function () {
-      thinking.style.display = 'none';
-      document.getElementById('trapBubble').innerHTML = trapBubbleHTML(HOST);
-      result.style.display = 'block';
-      result.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 5000);
-  };
-
-  document.getElementById('trapConfirm').onclick = async function () {
-    this.disabled = true;
-    document.getElementById('trapNote').textContent = '';
-    var done =
-      '<p>Perfect &mdash; leave it with me. I&rsquo;ll check with ' + HOST + ' and get a ' +
-      'few fresh options to your inbox shortly. Thanks for your patience!</p>';
-    try {
-      // Ask the email layer for the wider-calendar follow-up. Reuses /api/book
-      // with a help flag; the email side runs helpWiderCalendarEmail_ and widens
-      // the slug's revealed availability.
-      await fetch('/api/book', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug: slug, help: true }),
+    var html = intro;
+    order.forEach(function (day) {
+      html += '<div class="daygroup"><div class="dayhead">' + esc(day) + '</div>';
+      groups[day].forEach(function (s) {
+        html += '<button class="slot" data-iso="' + esc(s.iso) + '" data-label="' + esc(s.day + ' at ' + s.time) + '">' + esc(s.time) + '</button>';
       });
-    } catch (e) { /* keep the promise regardless — never expose a failure */ }
-    document.getElementById('trapBubble').innerHTML = done;
-    this.style.display = 'none';
-  };
+      html += '</div>';
+    });
+    body.innerHTML = html;
+    Array.prototype.forEach.call(body.querySelectorAll(".slot"), function (b) {
+      b.addEventListener("click", function () {
+        state.picked = { iso: b.getAttribute("data-iso"), label: b.getAttribute("data-label") };
+        renderForm();
+      });
+    });
+  }
 
-  function showDone() {
-    var card = document.querySelector('.body');
-    card.innerHTML =
+  function renderForm() {
+    body.innerHTML =
+      '<div class="form">' +
+        '<div class="pickline">' + (state.reschedule ? "New time: " : "Selected: ") + '<b>' + esc(state.picked.label) + '</b> \u00b7 <button class="btn ghost" id="back" type="button">change</button></div>' +
+        '<div class="row">' +
+          '<div><label for="fn">First name</label><input id="fn" autocomplete="given-name"></div>' +
+          '<div><label for="ln">Last name</label><input id="ln" autocomplete="family-name"></div>' +
+        '</div>' +
+        '<label for="em">Email</label><input id="em" type="email" autocomplete="email" placeholder="you@company.com">' +
+        '<div class="actions"><button class="btn" id="confirm" type="button">' + (state.reschedule ? "Reschedule call" : "Confirm booking") + '</button><span class="err" id="ferr"></span></div>' +
+      '</div>';
+    document.getElementById("back").addEventListener("click", renderSlots);
+    document.getElementById("confirm").addEventListener("click", submit);
+  }
+
+  function submit() {
+    var fn = document.getElementById("fn").value.trim();
+    var ln = document.getElementById("ln").value.trim();
+    var em = document.getElementById("em").value.trim();
+    var ferr = document.getElementById("ferr");
+    ferr.textContent = "";
+    if (!fn || !ln) { ferr.textContent = "Please enter your name."; return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { ferr.textContent = "Please enter a valid email."; return; }
+    var btn = document.getElementById("confirm");
+    btn.disabled = true; btn.textContent = "Booking\u2026";
+
+    fetch("/api/book", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: slug, name: fn + " " + ln, email: em, slot: state.picked.iso })
+    })
+      .then(function (r) { if (!r.ok) throw new Error("book"); return r.json().catch(function(){ return {}; }); })
+      .then(function () { renderDone(); })
+      .catch(function () {
+        btn.disabled = false; btn.textContent = state.reschedule ? "Reschedule call" : "Confirm booking";
+        ferr.textContent = "Something went wrong saving that. Please try again.";
+      });
+  }
+
+  function renderDone() {
+    body.innerHTML =
       '<div class="done">' +
-      '<div class="tick">&#10003;</div>' +
-      '<h2>You\u2019re booked</h2>' +
-      '<p>' + HOST + ' will see you then.</p>' +
-      '<p>A calendar invite is on its way to your inbox.</p>' +
+        '<div class="tick">\u2713</div>' +
+        '<h2>' + (state.reschedule ? "Your call is rescheduled" : "You\u2019re booked") + '</h2>' +
+        '<p><b>' + esc(state.picked.label) + '</b></p>' +
+        '<p>A calendar invite is on its way to your inbox. Andrew will see you then.</p>' +
       '</div>';
   }
-
-  fetch('/api/render?slug=' + encodeURIComponent(slug))
-    .then(function (r) { if (!r.ok) throw new Error('render'); return r.json(); })
-    .then(render)
-    .catch(function () {
-      document.getElementById('calmount').innerHTML =
-        '<div class="state">This booking link isn\u2019t valid. Please check your email for the latest link.</div>';
-    });
+})();
 </script>
 </body>
 </html>
