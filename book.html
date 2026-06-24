@@ -82,7 +82,7 @@
   input { width: 100%; padding: 10px 12px; font-size: 15px; font-family: inherit;
     border: 1px solid #d4dae3; border-radius: 8px; color: #1c2430; background: #fff; }
   input:focus { outline: 2px solid #2f5fd6; outline-offset: 1px; border-color: #2f5fd6; }
-  .confirm { margin-top: 16px; display: block; width: fit-content; padding: 10px 22px; font-size: 14px; font-weight: 600;
+  .confirm { margin-top: 18px; width: 100%; padding: 12px; font-size: 15px; font-weight: 600;
     color: #fff; background: #2f5fd6; border: none; border-radius: 9px; cursor: pointer; font-family: inherit; }
   .confirm:disabled { background: #9fb2dd; cursor: default; }
   .note { font-size: 13px; color: #8a93a1; margin-top: 12px; }
@@ -104,8 +104,7 @@
   .slot.collapsing { transition: opacity .35s ease, max-width .35s ease, padding .35s ease, margin .35s ease;
     opacity: 0; max-width: 0; padding-left: 0; padding-right: 0; margin: 0; overflow: hidden; border-color: transparent; }
 
-  .taken-area { margin-top: 12px; }
-  .taken-banner { display: none; align-items: center; gap: 9px; margin: 0;
+  .taken-banner { display: none; align-items: center; gap: 9px; margin: 0 0 12px;
     background: #fdecec; border: 1px solid #f1cccc; color: #a23636; border-radius: 9px;
     padding: 10px 13px; font-size: 13.5px; font-weight: 500; }
   .taken-banner.show { display: flex; animation: bannerIn .35s ease both; }
@@ -113,17 +112,17 @@
   .taken-banner .x { width: 18px; height: 18px; border-radius: 50%; background: #e7b9b9; color: #fff;
     display: inline-flex; align-items: center; justify-content: center; font-size: 12px; flex: 0 0 auto; font-weight: 700; }
 
-  /* trapdoor: the always-there "none of these work" escape, as a stacked button */
-  .trap { margin-top: 10px; }
-  .trap-btn { display: block; width: fit-content; padding: 9px 18px; font-size: 13px; font-weight: 600;
-    color: #7a5c12; background: #fdf3d4; border: 1px solid #f0d98a; border-radius: 9px; cursor: pointer; font-family: inherit; }
-  .trap-btn:hover { background: #fbe9b3; border-color: #e6c75f; }
+  /* trapdoor: the always-there "none of these work" escape */
+  .trap { margin-top: 16px; padding-top: 14px; border-top: 1px solid #eef1f5; }
+  .trap-link { appearance: none; background: none; border: none; color: #6b7685; font-size: 13px;
+    font-family: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; padding: 0; }
+  .trap-link:hover { color: #2f5fd6; }
   .trap-panel { margin-top: 12px; }
   .trap-bubble { background: #f6f7f9; border: 1px solid #e9edf2; border-radius: 12px; padding: 14px 16px;
     font-size: 14px; color: #3a4350; }
   .trap-bubble p { margin: 0 0 10px; }
   .trap-bubble p:last-child { margin-bottom: 0; }
-  .trap-confirm { margin-top: 12px; display: block; width: fit-content; padding: 10px 20px; font-size: 14px; font-weight: 600;
+  .trap-confirm { margin-top: 12px; width: 100%; padding: 11px; font-size: 14px; font-weight: 600;
     color: #fff; background: #2f5fd6; border: none; border-radius: 9px; cursor: pointer; font-family: inherit; }
   .trap-confirm:disabled { background: #9fb2dd; cursor: default; }
   .trap-thinking { display: flex; align-items: center; gap: 10px; padding: 14px 2px; color: #6b7685; font-size: 14px; }
@@ -145,6 +144,11 @@
       <div class="body">
         <p class="lead" id="lead">Pick a time that works for you.</p>
         <p class="tz" id="tz" style="display:none;"></p>
+
+        <div class="taken-banner" id="takenBanner">
+          <span class="x">&times;</span>
+          <span id="takenText">That time was just taken — someone grabbed it. Please pick another.</span>
+        </div>
 
         <div id="calmount"><div class="state">Loading availability…</div></div>
 
@@ -168,27 +172,17 @@
           <input id="email" type="email" autocomplete="email" />
           <button class="confirm" id="confirm">Confirm booking</button>
           <p class="note" id="formnote"></p>
-
-          <div class="taken-area" id="takenArea" style="display:none;">
-            <div class="trap-thinking" id="takenThinking" style="display:none;">
-              <span class="spinner"></span><span>Confirming that time…</span>
-            </div>
-            <div class="taken-banner" id="takenBanner">
-              <span class="x">&times;</span>
-              <span id="takenText">That time was just taken — please pick another.</span>
-            </div>
-          </div>
         </div>
 
         <div class="trap" id="trap" style="display:none;">
-          <button class="trap-btn" id="trapLink">None of these times work for me</button>
+          <button class="trap-link" id="trapLink">None of these times work for me</button>
           <div class="trap-panel" id="trapPanel">
             <div class="trap-thinking" id="trapThinking" style="display:none;">
               <span class="spinner"></span><span id="trapThinkingText">Checking the calendar…</span>
             </div>
             <div id="trapResult" style="display:none;">
               <div class="trap-bubble" id="trapBubble"></div>
-              <button class="trap-confirm" id="trapConfirm">Please send additional calendar options</button>
+              <button class="trap-confirm" id="trapConfirm">Yes, please check with them</button>
               <p class="note" id="trapNote"></p>
             </div>
           </div>
@@ -343,9 +337,12 @@
   // ALWAYS references checking back with the host to see about opening up the
   // schedule. Host-neutral pronoun ("them/they") so it works for any host name.
   function trapBubbleHTML(host) {
-    return '<p>So sorry &mdash; none of those worked. It&rsquo;s been a <em>week</em>; ' +
-      host + '&rsquo;s calendar is a jigsaw right now.</p>' +
-      '<p>Let me check with ' + host + ' about opening up more time, then email you fresh options.</p>';
+    return '<p>Oh no &mdash; I&rsquo;m so sorry none of those worked. Honestly it&rsquo;s ' +
+      'been a <em>week</em> over here, ' + host + '&rsquo;s calendar is a bit of a jigsaw ' +
+      'right now.</p>' +
+      '<p>Let me check back with ' + host + ' directly and see if they can shuffle a few ' +
+      'things and open up some more time &mdash; then I&rsquo;ll email a fresh set of ' +
+      'options straight over. Sound okay?</p>';
   }
 
   function render(data) {
@@ -406,9 +403,9 @@
       });
       var cj = await cr.json().catch(function () { return {}; });
       if (cj && cj.taken) {
+        this.disabled = false;
+        document.getElementById('form').classList.remove('show');
         note.textContent = '';
-        // Keep the form + times visible (name/email stay filled); the taken beat
-        // runs under the confirm button and re-enables it when done.
         flashTaken(claimedSlot);
         return;
       }
@@ -426,38 +423,30 @@
     }
   };
 
-  // "Just taken": a 5s "confirming…" spin (same beat as the trapdoor), then the
-  // banner appears UNDER the confirm button — no page jump, no scroll. The slot
-  // flashes red, strikes, and collapses; it's dropped so it can't be re-picked.
+  // Flashy "just taken": flash the slot red + strike it, pop the banner, then
+  // collapse the slot out. Drops it from the pool so it can't be re-picked.
   function flashTaken(iso) {
-    var area = document.getElementById('takenArea');
-    var thinking = document.getElementById('takenThinking');
     var banner = document.getElementById('takenBanner');
-    area.style.display = 'block';
-    banner.classList.remove('show');
-    thinking.style.display = 'flex';
+    document.getElementById('takenText').textContent =
+      'That time was just taken — someone grabbed it. Please pick another.';
+    banner.classList.add('show');
+    banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-    setTimeout(function () {
-      thinking.style.display = 'none';
-      banner.classList.add('show');
-      document.getElementById('confirm').disabled = false;   // allow re-pick + retry
-
-      var box = document.getElementById('times');
-      var target = null;
-      Array.prototype.forEach.call(box.querySelectorAll('.slot'), function (b) {
-        if (b.textContent === fmtTime(iso)) target = b;
-      });
-      if (target) {
-        target.classList.add('taken');
-        target.setAttribute('aria-pressed', 'false');
-        setTimeout(function () { target.classList.add('collapsing'); }, 520);
-        setTimeout(function () { dropSlot(iso); }, 880);
-      } else {
-        dropSlot(iso);
-      }
-      // tidy the banner away after a beat
-      setTimeout(function () { banner.classList.remove('show'); area.style.display = 'none'; }, 5000);
-    }, 5000);
+    var box = document.getElementById('times');
+    var target = null;
+    Array.prototype.forEach.call(box.querySelectorAll('.slot'), function (b) {
+      if (b.textContent === fmtTime(iso)) target = b;
+    });
+    if (target) {
+      target.classList.add('taken');
+      target.setAttribute('aria-pressed', 'false');
+      setTimeout(function () { target.classList.add('collapsing'); }, 520);
+      setTimeout(function () { dropSlot(iso); }, 880);
+    } else {
+      dropSlot(iso);
+    }
+    // auto-dismiss the banner after a beat
+    setTimeout(function () { banner.classList.remove('show'); }, 4200);
   }
 
   // Remove a "just taken" slot from the in-memory pool and the open day's UI.
