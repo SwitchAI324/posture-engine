@@ -45,10 +45,11 @@
   /* blackout: greyed + struck, with a tiny label on the run's first day */
   .cell.blackout { background: #f4f1ec; color: #b9aa92; }
   .cell.blackout.amber { background: #faf3e8; color: #c79a55; }
+  .cell.blackout { flex-direction: column; justify-content: center; gap: 1px; padding: 2px; }
   .cell.blackout .bk-num { text-decoration: line-through; opacity: .8; }
-  .cell.blackout .bk-label { position: absolute; bottom: 3px; left: 0; right: 0; text-align: center;
-    font-size: 8.5px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; line-height: 1;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 2px; }
+  .cell.blackout .bk-label { order: -1; text-align: center; font-size: 8px; font-weight: 700;
+    letter-spacing: .2px; line-height: 1.05; max-width: 100%; overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .cell.amber .bk-label { color: #c79a55; }
   /* open: clickable, inviting */
   .cell.open { background: #fff; border: 1px solid #cdd9f0; color: #25405f; cursor: pointer; font-weight: 600; }
@@ -203,7 +204,24 @@
   var DATA = null;              // render payload
   var HOST = 'Andrew';          // overwritten from render
   var OPEN = {};                // 'YYYY-MM-DD' -> [slot ISO,...]
-  var BLACK = {};               // 'YYYY-MM-DD' -> { label, tint, first:bool }
+  var BLACK = {};               // 'YYYY-MM-DD' -> { label, tint, first:bool, tmi_id }
+  var BROWSED = {};             // tmi_id -> true (dedupe browse-capture fires)
+
+  // Browse-capture: when the scammer pages to / clicks a blackout, tell the
+  // server (which resolves the host's callback and relays to Scouting). Fire
+  // once per blackout, fire-and-forget — never blocks, never surfaces anything.
+  function captureBrowse(tmiId, label) {
+    if (!tmiId || BROWSED[tmiId]) return;
+    BROWSED[tmiId] = true;
+    try {
+      fetch('/api/browse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: slug, tmi_id: tmiId, tmi_label: label || null }),
+        keepalive: true,
+      }).catch(function () {});
+    } catch (e) {}
+  }
   var viewMonth = null;         // Date pinned to the 1st of the shown month
 
   function ymd(d) {
@@ -221,7 +239,7 @@
       var cur = parseYMD(b.from), end = parseYMD(b.to), first = true;
       while (cur <= end) {
         var key = ymd(cur);
-        if (!OPEN[key]) BLACK[key] = { label: b.label || '', tint: b.tint || 'grey', first: first };
+        if (!OPEN[key]) BLACK[key] = { label: b.label || '', tint: b.tint || 'grey', first: first, tmi_id: b.tmi_id || null };
         cur.setDate(cur.getDate() + 1); first = false;
       }
     });
@@ -272,8 +290,10 @@
       } else if (BLACK[key]) {
         var b = BLACK[key];
         var amber = b.tint === 'amber' ? ' amber' : '';
-        html += '<div class="cell blackout' + amber + '"><span class="bk-num">' + d + '</span>' +
-          (b.first && b.label ? '<span class="bk-label">' + b.label + '</span>' : '') + '</div>';
+        html += '<div class="cell blackout' + amber + '"' +
+          (b.tmi_id ? ' data-tmi="' + b.tmi_id + '" data-label="' + (b.label || '').replace(/"/g, '&quot;') + '"' : '') + '>' +
+          (b.first && b.label ? '<span class="bk-label">' + b.label + '</span>' : '') +
+          '<span class="bk-num">' + d + '</span></div>';
       } else {
         html += '<div class="cell neutral"><span>' + d + '</span></div>';
       }
@@ -294,9 +314,22 @@
       c.onclick = function () { pickDay(c.getAttribute('data-date'), c); };
       c.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickDay(c.getAttribute('data-date'), c); } };
     });
+    // clicking a blackout day also captures it (explicit interest)
+    Array.prototype.forEach.call(mount.querySelectorAll('.cell.blackout'), function (c) {
+      var tid = c.getAttribute('data-tmi'), lbl = c.getAttribute('data-label');
+      if (tid) c.onclick = function () { captureBrowse(tid, lbl); };
+    });
     var pm = document.getElementById('prevM'), nm = document.getElementById('nextM');
     if (pm) pm.onclick = function () { viewMonth = new Date(y, m - 1, 1); renderCalendar(); };
     if (nm) nm.onclick = function () { viewMonth = new Date(y, m + 1, 1); renderCalendar(); };
+
+    // capture every blackout VISIBLE in this month (paging to a month = browsing
+    // those reasons). Deduped per tmi_id inside captureBrowse.
+    var seen = {};
+    for (var cd = 1; cd <= daysInMonth; cd++) {
+      var bk = BLACK[ymd(new Date(y, m, cd))];
+      if (bk && bk.tmi_id && !seen[bk.tmi_id]) { seen[bk.tmi_id] = true; captureBrowse(bk.tmi_id, bk.label); }
+    }
   }
 
   function pickDay(dateKey, cell) {
@@ -356,8 +389,9 @@
     document.getElementById('avatar').textContent = initials(HOST);
 
     var lead = document.getElementById('lead');
-    if (data.reschedule) lead.textContent = 'Pick a new time for your call.';
-    else if (data.narrative) lead.textContent = data.narrative;
+    // no narrative line on the page — just show the calendar (the blackout
+    // labels carry the story). Keep a neutral prompt only for reschedule.
+    lead.textContent = data.reschedule ? 'Pick a new time for your call.' : 'Pick a time that works for you.';
 
     if (!data.days || !data.days.length) {
       document.getElementById('calmount').innerHTML = '<div class="state">No times are open right now.</div>';
@@ -384,10 +418,14 @@
   }
 
   document.getElementById('confirm').onclick = async function () {
+    var note = document.getElementById('formnote');
+    if (!selected) {
+      note.textContent = 'Please pick a time first.';
+      return;
+    }
     var first = document.getElementById('first').value.trim();
     var last = document.getElementById('last').value.trim();
     var email = document.getElementById('email').value.trim();
-    var note = document.getElementById('formnote');
     if (!first || !last || !email || !/.+@.+\..+/.test(email)) {
       note.textContent = 'Please add your name and a valid email.';
       return;
@@ -422,7 +460,7 @@
       showDone();
     } catch (e) {
       this.disabled = false;
-      note.textContent = 'Something went wrong. Please try another time.';
+      note.textContent = 'That didn\u2019t go through — please pick a time and try again.';
     }
   };
 
