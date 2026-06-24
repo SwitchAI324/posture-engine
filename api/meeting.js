@@ -248,6 +248,13 @@ $("join").addEventListener("click", function(){
       var md = { archetype: arch, slug: slug };
       if(j.target_id){ md.target_id = j.target_id; }
       if(j.target_email){ md.target_email = j.target_email; }
+      // Belt-and-suspenders: also pass the same ids as variableValues. For web
+      // calls, assistantOverrides.metadata does NOT reliably surface as
+      // call.metadata in the end-of-call report, but variableValues DO (under
+      // call.assistantOverrides.variableValues). vapi-eoc reads either.
+      var vv = { sv_archetype: arch, sv_slug: slug || "" };
+      if(j.target_id){ vv.sv_target_id = j.target_id; }
+      if(j.target_email){ vv.sv_target_email = j.target_email; }
 
       // GATE 2 — host joins ~1 min late by design. Never speak before
       // booked_slot+60s; a late joiner waits only ~5s (so they're not met by a
@@ -263,7 +270,7 @@ $("join").addEventListener("click", function(){
       if(wait > 0){ note("Waiting for Andrew to join\\u2026"); }
 
       setTimeout(function(){
-        vapi.start(ASST, { metadata: md })
+        vapi.start(ASST, { metadata: md, variableValues: vv })
           .then(function(call){
             var id = call && (call.id || call.callId);
             callId = id || null;

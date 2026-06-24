@@ -179,8 +179,12 @@ export default async function handler(req) {
     return ok({ ok: true, ignored: type });
   }
 
-  const callId = (m.call && m.call.id) || m.callId || null;
-  const meta = (m.call && m.call.metadata) || m.metadata || {};
+  const callObj = m.call || {};
+  const callId = callObj.id || m.callId || null;
+  const ao = callObj.assistantOverrides || m.assistantOverrides || {};
+  const callMeta = callObj.metadata || m.metadata || ao.metadata || {};
+  const vv = ao.variableValues || {};
+  const meta = callMeta; // archetype lookup below still uses meta.archetype
   const artifact = m.artifact || {};
 
   // Transcript can live in a few places depending on transport — try them all,
@@ -206,8 +210,8 @@ export default async function handler(req) {
   const endedReason = m.endedReason || m.ended_reason || "";
   const attended = isAttended(transcript, messages);
   const outcome = callOutcome(attended, endedReason, messages.length);
-  const targetId = meta.target_id || null;
-  const targetEmail = meta.target_email || null;
+  const targetId = callMeta.target_id || vv.sv_target_id || null;
+  const targetEmail = callMeta.target_email || vv.sv_target_email || null;
 
   // The line the booking chat is watching for — proves target_id rode through.
   console.log(
@@ -221,8 +225,10 @@ export default async function handler(req) {
   );
   if (!targetId) {
     console.log(
-      "vapi-eoc: no target_id — metadata keys=" +
-        (Object.keys(meta).join(",") || "(none)")
+      "vapi-eoc: no target_id — call.metadata keys=" +
+        (Object.keys(callMeta).join(",") || "(none)") +
+        " | variableValues keys=" +
+        (Object.keys(vv).join(",") || "(none)")
     );
   }
 
@@ -275,7 +281,7 @@ export default async function handler(req) {
         host_posture: callRow ? callRow.characterId : null,
         duration_seconds: durationSeconds,
         transcript: transcript || null,
-        archetype: meta.archetype || (callRow ? callRow.archetype : null) || null,
+        archetype: meta.archetype || vv.sv_archetype || (callRow ? callRow.archetype : null) || null,
         started_at: startedAt,
         ended_at: endedAt,
         gear_suspicion_end: callRow ? callRow.gear : null,
