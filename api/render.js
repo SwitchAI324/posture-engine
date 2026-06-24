@@ -66,11 +66,23 @@ function ymdStr(c) {
   return c.y + '-' + String(c.m).padStart(2, '0') + '-' + String(c.d).padStart(2, '0');
 }
 
+// Display name for the host, mirroring Barbara.gs hostDisplay_ so the page and
+// the invite name the host identically. Known shorthands get canonical casing;
+// a custom/SV-user host is title-cased; empty falls back to the launch default.
+function hostDisplay(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return 'Andrew';
+  const low = s.toLowerCase();
+  if (low === 'andrew') return 'Andrew';
+  if (low === 'andrea') return 'Andrea';
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 async function readToken(slug) {
   const url =
     `${SUPABASE_URL}/rest/v1/booking_tokens` +
     `?slug=eq.${encodeURIComponent(slug)}` +
-    `&select=slug,narrative,slot_pool,difficulty,round,booked_slot`;
+    `&select=slug,narrative,slot_pool,difficulty,round,booked_slot,host_name`;
   const res = await fetch(url, { headers: { ...sbHeaders, Accept: 'application/json' } });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
@@ -151,10 +163,10 @@ module.exports = async (req, res) => {
     }
 
     res.status(200).json({
-      host: 'Andrew Mercer',
+      host: hostDisplay(token.host_name),
       // page-safe lead line; host_callback stays out of the browser.
       narrative: narrative && narrative.discreet
-        ? `Andrew's ${narrative.discreet} this week — here's when he's free.`
+        ? `${hostDisplay(token.host_name)}'s ${narrative.discreet} this week — here's when ${hostDisplay(token.host_name)} is free.`
         : null,
       days: openDays(slot_pool, token.round),
       blackouts: blackoutRuns(slot_pool),
