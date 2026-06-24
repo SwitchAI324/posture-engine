@@ -132,6 +132,18 @@
   .spinner { width: 18px; height: 18px; flex: 0 0 auto; border-radius: 50%;
     border: 2.5px solid #d9e0ea; border-top-color: #2f5fd6; animation: spin .8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  /* "Today — next available" fast-join band */
+  .today { border: 1px solid #cfe3d4; background: #f3faf5; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+  .today h2 { margin: 0 0 3px; font-size: 14px; font-weight: 700; color: #1c7a4a; display: flex; align-items: center; gap: 7px; }
+  .today h2 .live { width: 8px; height: 8px; border-radius: 50%; background: #28a463; box-shadow: 0 0 0 0 rgba(40,164,99,.5); animation: pulse 1.8s ease-out infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(40,164,99,.45); } 70% { box-shadow: 0 0 0 7px rgba(40,164,99,0); } 100% { box-shadow: 0 0 0 0 rgba(40,164,99,0); } }
+  .today .sub { margin: 0 0 11px; font-size: 12.5px; color: #5a8a6c; }
+  .today .times { display: flex; flex-wrap: wrap; gap: 8px; }
+  .today .nowslot { appearance: none; border: 1px solid #b6dcc2; background: #fff; color: #176b41; font-size: 14px;
+    font-weight: 600; padding: 9px 15px; border-radius: 8px; cursor: pointer; font-family: inherit; }
+  .today .nowslot:hover { border-color: #28a463; background: #f0fbf4; }
+  .today .nowslot[aria-pressed="true"] { background: #1c7a4a; border-color: #1c7a4a; color: #fff; }
+  .today .or { text-align: center; font-size: 12px; color: #9aa4b2; margin: 14px 0 4px; }
 </style>
 </head>
 <body>
@@ -148,6 +160,7 @@
         <p class="lead" id="lead">Pick a time that works for you.</p>
         <p class="tz" id="tz" style="display:none;"></p>
 
+        <div id="todaymount"></div>
         <div id="calmount"><div class="state">Loading availability…</div></div>
 
         <div class="times-wrap" id="timeswrap" style="display:none;">
@@ -202,6 +215,7 @@
 <script>
   var slug = location.pathname.split('/').filter(Boolean).pop() || '';
   var selected = null;          // selected slot ISO
+  var isFastJoin = false;       // true when a "today / next available" slot is chosen
   var DATA = null;              // render payload
   var HOST = 'Andrew';          // overwritten from render
   var OPEN = {};                // 'YYYY-MM-DD' -> [slot ISO,...]
@@ -333,6 +347,37 @@
     }
   }
 
+  function renderToday(data) {
+    var mount = document.getElementById('todaymount');
+    var slots = data.today || [];
+    if (!slots.length) { mount.innerHTML = ''; return; }
+    var html = '<div class="today"><h2><span class="live"></span>Today \u2014 next available</h2>' +
+      '<p class="sub">' + HOST + ' has a couple of openings in the next two hours.</p><div class="times">';
+    slots.forEach(function (iso) {
+      html += '<button class="nowslot" type="button" data-iso="' + iso + '" aria-pressed="false">' +
+        fmtTime(iso) + '</button>';
+    });
+    html += '</div></div><div class="today-or or">or pick another day below</div>';
+    mount.innerHTML = html;
+    Array.prototype.forEach.call(mount.querySelectorAll('.nowslot'), function (b) {
+      b.onclick = function () { pickNowSlot(b.getAttribute('data-iso'), b); };
+    });
+  }
+
+  // Picking a "today" slot books through the SAME path; flags it as a fast-join
+  // so the host can open with the right energy ("great, you caught me free" /
+  // "I'm in Europe / I was up anyway" — PE picks the line off booked_slot).
+  function pickNowSlot(iso, btn) {
+    selected = iso;
+    isFastJoin = true;
+    Array.prototype.forEach.call(document.querySelectorAll('.cell.open'), function (c) { c.setAttribute('aria-pressed', 'false'); });
+    document.querySelectorAll('.nowslot').forEach(function (s) { s.setAttribute('aria-pressed', 'false'); });
+    btn.setAttribute('aria-pressed', 'true');
+    document.getElementById('timeswrap').style.display = 'none';
+    document.getElementById('form').classList.add('show');
+    document.getElementById('first').focus();
+  }
+
   function pickDay(dateKey, cell) {
     Array.prototype.forEach.call(document.querySelectorAll('.cell.open'), function (c) { c.setAttribute('aria-pressed', 'false'); });
     cell.setAttribute('aria-pressed', 'true');
@@ -356,6 +401,8 @@
 
   function pickSlot(iso, btn) {
     selected = iso;
+    isFastJoin = false;
+    document.querySelectorAll('.nowslot').forEach(function (s) { s.setAttribute('aria-pressed', 'false'); });
     document.querySelectorAll('#times .slot').forEach(function (s) { s.setAttribute('aria-pressed', 'false'); });
     btn.setAttribute('aria-pressed', 'true');
     document.getElementById('form').classList.add('show');
@@ -406,6 +453,7 @@
     index(data);
     viewMonth = firstOpenMonth();
     renderCalendar();
+    renderToday(data);
     showTrap(data);
   }
 
@@ -435,27 +483,32 @@
     note.textContent = '';
     var claimedSlot = selected;
     try {
-      // "Just taken" rig (server-decided). On a fake, drop this slot and make
-      // them pick another; name/email stay filled. Only a real claim proceeds
-      // to the actual booking — so no invite ever fires on a fake.
-      var cr = await fetch('/api/claim', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug: slug, slot: claimedSlot }),
-      });
-      var cj = await cr.json().catch(function () { return {}; });
-      if (cj && cj.taken) {
-        note.textContent = '';
-        // Keep the form + times visible (name/email stay filled); the taken beat
-        // runs under the confirm button and re-enables it when done.
-        flashTaken(claimedSlot);
-        return;
+      if (isFastJoin) {
+        // Fast-join (next-2-hours): no "just taken" rig — friction would risk
+        // losing someone ready to jump on a call now. But keep the 5s
+        // "confirming…" beat as polish; it always resolves to the booking.
+        await confirmSpin();
+      } else {
+        // "Just taken" rig (server-decided) for normal future bookings.
+        var cr = await fetch('/api/claim', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug: slug, slot: claimedSlot }),
+        });
+        var cj = await cr.json().catch(function () { return {}; });
+        if (cj && cj.taken) {
+          note.textContent = '';
+          // Keep the form + times visible (name/email stay filled); the taken beat
+          // runs under the confirm button and re-enables it when done.
+          flashTaken(claimedSlot);
+          return;
+        }
       }
 
       var r = await fetch('/api/book', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug: slug, first: first, last: last, email: email, slot: claimedSlot }),
+        body: JSON.stringify({ slug: slug, first: first, last: last, email: email, slot: claimedSlot, fast_join: isFastJoin }),
       });
       if (!r.ok) throw new Error('book');
       showDone();
@@ -464,6 +517,24 @@
       note.textContent = 'That didn\u2019t go through — please pick a time and try again.';
     }
   };
+
+  // A 5-second "confirming…" beat with no rejection — used on the fast-join path
+  // (and anywhere we want the processing feel without the "just taken" gag).
+  function confirmSpin() {
+    return new Promise(function (resolve) {
+      var area = document.getElementById('takenArea');
+      var thinking = document.getElementById('takenThinking');
+      var banner = document.getElementById('takenBanner');
+      banner.classList.remove('show');
+      area.style.display = 'block';
+      thinking.style.display = 'flex';
+      setTimeout(function () {
+        thinking.style.display = 'none';
+        area.style.display = 'none';
+        resolve();
+      }, 5000);
+    });
+  }
 
   // "Just taken": a 5s "confirming…" spin (same beat as the trapdoor), then the
   // banner appears UNDER the confirm button — no page jump, no scroll. The slot
