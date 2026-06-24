@@ -1,68 +1,77 @@
 // GET /api/render?slug=...
-// Reads the booking_tokens row server-side with the Supabase service role,
-// and returns ONLY render-safe fields to the browser.
+// Reads the booking_tokens row server-side (service role, bypasses RLS) and
+// returns ONLY render-safe fields. Never returns archetype / difficulty /
+// fakes_served / PII.
 //
-// Never returned to the browser: archetype, difficulty, fakes_served
-// (con-revealing), or any PII. Those stay server-side.
-//
-// Thin-slice note: slot_pool authoring (the "Fiji blackout" pools) isn't built
-// yet, so when slot_pool is empty we generate a stable set of times seeded by
-// the slug — same slug always shows the same times, so it reads as authored
-// without needing a DB write. The real authored pools replace this later.
+// First-load authoring: if narrative/slot_pool are null, draw a frozen story
+// from the pools (seeded by slug), write it back, and render from it. After
+// that the stored story is reused — materialize-if-null.
+
+const { authorToken } = require('./_pools');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-function hashSlug(slug) {
-  let h = 2166136261;
-  for (let i = 0; i < slug.length; i++) {
-    h ^= slug.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return Math.abs(h);
+// The host's real time zone. Authored slot hours (e.g. "10:00") mean 10:00 in
+// THIS zone — the host's actual business hours — and are emitted as true UTC
+// instants. The booker's browser then localizes them to the booker's own zone
+// (what every real scheduler does). Anchoring to a real zone is what keeps an
+// authored "10:00" from localizing into an absurd hour; UTC anchoring was the
+// tell. Override per-deploy with HOST_TZ if the host isn't US Eastern.
+const HOST_TZ = process.env.HOST_TZ || 'America/New_York';
+
+const sbHeaders = {
+  apikey: SERVICE_KEY,
+  Authorization: `Bearer ${SERVICE_KEY}`,
+};
+
+// Offset (ms) between HOST_TZ wall-clock and UTC at a given instant — DST-aware.
+function zoneOffsetMs(date, timeZone) {
+  const p = new Intl.DateTimeFormat('en-US', {
+    timeZone, hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(date).reduce((a, x) => { a[x.type] = x.value; return a; }, {});
+  const asUTC = Date.UTC(p.year, p.month - 1, p.day, p.hour === '24' ? 0 : p.hour, p.minute, p.second);
+  return asUTC - date.getTime();
 }
 
-// Deterministic, stable-per-slug set of open times for the next ~2 weeks.
-function generateSlots(slug) {
-  const seed = hashSlug(slug);
-  const timesByDay = [
-    ['10:00', '13:30', '16:00'],
-    ['09:30', '15:00'],
-    ['11:00', '14:00', '16:30'],
-  ];
-  const out = [];
-  const now = new Date();
-  let added = 0;
-  for (let d = 1; d <= 16 && added < 6; d++) {
-    const day = new Date(now);
-    day.setDate(now.getDate() + d);
-    const dow = day.getDay();
-    if (dow === 0 || dow === 6) continue; // weekdays only in the thin slice
-    const times = timesByDay[(seed + d) % timesByDay.length];
-    const slots = times.map((t) => {
-      const [hh, mm] = t.split(':').map(Number);
-      const slot = new Date(day);
-      slot.setHours(hh, mm, 0, 0);
-      return slot.toISOString();
-    });
-    out.push({ date: day.toISOString().slice(0, 10), slots });
-    added++;
-  }
-  return out;
+// Build the true UTC instant for a wall-clock time on a calendar date IN HOST_TZ.
+// Two-pass so DST transitions resolve correctly.
+function hostWallToUTC(y, m, d, hh, mm, timeZone) {
+  let ts = Date.UTC(y, m - 1, d, hh, mm, 0);
+  const off1 = zoneOffsetMs(new Date(ts), timeZone);
+  ts = Date.UTC(y, m - 1, d, hh, mm, 0) - off1;
+  const off2 = zoneOffsetMs(new Date(ts), timeZone);
+  if (off2 !== off1) ts = Date.UTC(y, m - 1, d, hh, mm, 0) - off2;
+  return new Date(ts);
+}
+
+// "Today" as a calendar date in HOST_TZ (so day-offsets count host days).
+function hostToday(timeZone) {
+  const p = new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date()).reduce((a, x) => { a[x.type] = x.value; return a; }, {});
+  return { y: +p.year, m: +p.month, d: +p.day };
+}
+
+// Add n days to a calendar date, returning {y,m,d}. Pure UTC date math — no zone
+// drift because only the calendar date matters here.
+function addDays(base, n) {
+  const t = Date.UTC(base.y, base.m - 1, base.d) + n * 86400000;
+  const dt = new Date(t);
+  return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
+}
+function ymdStr(c) {
+  return c.y + '-' + String(c.m).padStart(2, '0') + '-' + String(c.d).padStart(2, '0');
 }
 
 async function readToken(slug) {
   const url =
     `${SUPABASE_URL}/rest/v1/booking_tokens` +
     `?slug=eq.${encodeURIComponent(slug)}` +
-    `&select=slug,narrative,slot_pool,round,booked_slot`;
-  const res = await fetch(url, {
-    headers: {
-      apikey: SERVICE_KEY,
-      Authorization: `Bearer ${SERVICE_KEY}`,
-      Accept: 'application/json',
-    },
-  });
+    `&select=slug,narrative,slot_pool,difficulty,round,booked_slot`;
+  const res = await fetch(url, { headers: { ...sbHeaders, Accept: 'application/json' } });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new Error(`supabase ${res.status}: ${body.slice(0, 300)}`);
@@ -71,10 +80,50 @@ async function readToken(slug) {
   return rows[0] || null;
 }
 
+// Freeze the authored story onto the token (first load only).
+async function materialize(slug) {
+  const authored = authorToken(slug);
+  const url = `${SUPABASE_URL}/rest/v1/booking_tokens?slug=eq.${encodeURIComponent(slug)}`;
+  await fetch(url, {
+    method: 'PATCH',
+    headers: { ...sbHeaders, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify(authored),
+  });
+  return authored;
+}
+
+// Open days: calendar date in HOST_TZ, slots as true UTC instants for the
+// authored wall-clock hour in HOST_TZ. The browser localizes them for display.
+function openDays(slot_pool, round) {
+  const base = hostToday(HOST_TZ);
+  const reveal = 2 + (round || 0); // base 2, +1 per reopened round
+  const picked = [...(slot_pool.open || [])].sort((a, b) => a.offset - b.offset).slice(0, reveal);
+  return picked.map((o) => {
+    const c = addDays(base, o.offset);
+    return {
+      date: ymdStr(c),
+      slots: o.times.map((t) => {
+        const [hh, mm] = t.split(':').map(Number);
+        return hostWallToUTC(c.y, c.m, c.d, hh, mm, HOST_TZ).toISOString();
+      }),
+    };
+  });
+}
+
+// Blackout runs as HOST_TZ calendar dates (labels on the grid). Date-only, so
+// no instant/zone conversion needed — just the host's calendar days.
+function blackoutRuns(slot_pool) {
+  const base = hostToday(HOST_TZ);
+  return (slot_pool.blackouts || []).map((b) => ({
+    label: b.label,
+    from: ymdStr(addDays(base, b.from)),
+    to: ymdStr(addDays(base, b.to)),
+    tint: b.tint || 'grey',
+  }));
+}
+
 module.exports = async (req, res) => {
   try {
-    // Diagnostic: confirm the env vars are actually present (without leaking
-    // the key). Load /api/render?slug=test123 directly to read this.
     if (!SUPABASE_URL || !SERVICE_KEY) {
       return res.status(500).json({
         error: 'config',
@@ -92,17 +141,23 @@ module.exports = async (req, res) => {
     const token = await readToken(slug);
     if (!token) return res.status(404).json({ error: 'not found', slug });
 
-    // slot_pool authored at first load; until pools are built it's null, so
-    // fall back to the stable generated set per slug.
-    const days =
-      token.slot_pool && Array.isArray(token.slot_pool.days)
-        ? token.slot_pool.days
-        : generateSlots(slug);
+    // Materialize-if-null: author + freeze the story on first load.
+    let narrative = token.narrative;
+    let slot_pool = token.slot_pool;
+    if (!narrative || !slot_pool) {
+      const authored = await materialize(slug);
+      narrative = authored.narrative;
+      slot_pool = authored.slot_pool;
+    }
 
     res.status(200).json({
       host: 'Andrew Mercer',
-      narrative: token.narrative || null,
-      days,
+      // page-safe lead line; host_callback stays out of the browser.
+      narrative: narrative && narrative.discreet
+        ? `Andrew's ${narrative.discreet} this week — here's when he's free.`
+        : null,
+      days: openDays(slot_pool, token.round),
+      blackouts: blackoutRuns(slot_pool),
       reschedule: !!token.booked_slot,
       booked_slot: token.booked_slot || null,
     });
