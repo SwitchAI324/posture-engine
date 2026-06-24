@@ -68,6 +68,18 @@ export default async function handler(req) {
     return jsonRes({
       slug,
       archetype,
+      // Host name off the token — this is the name the spammer emailed, so the
+      // meeting page + the call must use it (Andrew OR Andrea per booking),
+      // never a hardcoded default. Null if the column is absent; the page falls
+      // back to a safe default in that case.
+      host_name: token.host_name || null,
+      // Host timezone (SV user picks it at onboarding). Drives the fast-join
+      // opener's hour-of-day read. Null -> proxy falls back to env/US Eastern.
+      host_tz: token.host_tz || null,
+      // Fast-join flag: a "today / next-available" booking minutes out. The
+      // meeting page reads this to apply the fast-join host-arrival timing.
+      // Missing/false column -> treated as a normal future booking (safe).
+      fast_join: token.fast_join === true || token.fast_join === "true" || false,
       meeting_url: u.origin + "/api/meeting?slug=" + encodeURIComponent(slug),
       booked_slot: token.booked_slot || null,
       joined_at: token.joined_at || null,

@@ -15,6 +15,19 @@
 //
 // Needs VAPI_PUBLIC_KEY (browser-safe) in env; assistant model.metadataSendMode
 // must NOT be "off" or the proxy won't see the archetype.
+//
+// HOST NAME: read off the token (the name the spammer emailed) and threaded
+// through every visible "Andrew" on the page + the call carrier, so a booking
+// made as Andrea reads as Andrea end to end. Falls back to "Andrew" only if the
+// token has no host_name.
+//
+// FAST-JOIN: a "today / next-available" booking minutes out (token.fast_join).
+// The host arrives at max(join+30s, slot-5min) — never sooner than 5 min before
+// the slot, never less than 30s after they join, so they're never met
+// mid-sentence and the eager-exec "great timing" opener lands. The page carries
+// fast_join + booked_slot + the measured wait into the call so the proxy can
+// pick the right opener (and the "saw you in the waiting room" callback only
+// when they actually waited).
 // ----------------------------------------------------------------------
 
 export const config = { runtime: "edge" };
@@ -82,9 +95,9 @@ function PAGE(pub, asst, testMode) {
   .toast.show{opacity:1}
 </style>
 
-<!-- CONSENT (entry point after clicking the join link) -->
+<!-- WAITING (early-join hold; host name filled in by JS) -->
 <div id="waiting" style="display:none;height:100vh;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px">
-  <div id="waitHead" style="font-size:18px;margin-bottom:10px">Your call with Andrew</div>
+  <div id="waitHead" style="font-size:18px;margin-bottom:10px">Your call</div>
   <div id="waitWhen" style="color:var(--mut)"></div>
   <div style="color:var(--mut);font-size:13px;margin-top:16px">This window will connect you automatically &mdash; no need to do anything.</div>
 </div>
@@ -165,9 +178,21 @@ var TEST = TEST_MODE || new URLSearchParams(location.search).get("test") === "1"
 var slug = new URLSearchParams(location.search).get("slug");
 var vapi = null, started = null, tick = null, muted = false, callId = null;
 
+// Host name (the name the spammer emailed). Filled from the token in ensureJoin;
+// "Andrew" is only the pre-fetch placeholder. setHostName threads it everywhere
+// the page shows the host: tile name, pfp initial, waiting + late-join copy.
+var hostName = "Andrew";
+
 var $ = function(id){ return document.getElementById(id); };
 function toast(s){ var t = $("toast"); t.textContent = s; t.classList.add("show"); setTimeout(function(){ t.classList.remove("show"); }, 4200); }
 function note(s, err){ var n = $("note"); n.textContent = s; n.className = "note" + (err ? " err" : ""); }
+function setHostName(name){
+  if(!name) return;
+  hostName = String(name).trim();
+  var first = hostName.split(/\\s+/)[0] || hostName;
+  if($("hostName")) $("hostName").textContent = first;
+  if($("hostPfp")) $("hostPfp").textContent = (first[0] || "A").toUpperCase();
+}
 
 // consent gate (entry point) -> reveal lobby
 $("agree").addEventListener("change", function(e){ $("continue").disabled = !e.target.checked; });
@@ -179,26 +204,35 @@ if(!PUB){ $("join").disabled = true; note("Meeting not configured yet.", true); 
 // --- JOIN-TIME GATES (read booked_slot off the token) -----------------------
 // joinData is fetched up front so the early-join gate can run on open, and so
 // the Join click already has archetype/target_id in hand.
-var joinData = null, bookedSlot = null;
+var joinData = null, bookedSlot = null, fastJoin = false;
 function parseSlot(s){ if(!s) return null; var t = Date.parse(s); return isNaN(t) ? null : t; }
 function fmtWhen(ms){ try { return new Date(ms).toLocaleString([], {weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}); } catch(e){ return ""; } }
 function ensureJoin(){
   if(joinData) return Promise.resolve(joinData);
   return fetch("/api/join?slug=" + encodeURIComponent(slug)).then(function(r){ return r.json(); })
-    .then(function(j){ joinData = j || {}; bookedSlot = parseSlot(joinData.booked_slot); return joinData; });
+    .then(function(j){
+      joinData = j || {};
+      bookedSlot = parseSlot(joinData.booked_slot);
+      fastJoin = joinData.fast_join === true;
+      if(joinData.host_name) setHostName(joinData.host_name);
+      return joinData;
+    });
 }
 // GATE 1 — early-join lockout: if opened >5 min before the slot, hold on a
-// waiting screen and auto-advance to consent once inside T-5. Skipped in TEST_MODE.
+// waiting screen and auto-advance to consent once inside T-5. Skipped in
+// TEST_MODE. ALSO skipped for fast-join: those bookings are minutes out and use
+// the fast-join host-arrival timing instead (handled at Join click), so we don't
+// strand an eager "right now" booker behind a multi-minute lockout.
 function earlyGate(){
-  if(TEST || !bookedSlot) return;
+  if(TEST || fastJoin || !bookedSlot) return;
   var lead = 5*60*1000;
   if(Date.now() < bookedSlot - lead){
     $("consent").style.display = "none";
     $("waiting").style.display = "flex";
     var soon = (bookedSlot - Date.now()) <= 60*60*1000; // within the hour
     $("waitHead").textContent = soon
-      ? "Your call with Andrew starts soon"
-      : "Your call with Andrew is scheduled";
+      ? ("Your call with " + hostName + " starts soon")
+      : ("Your call with " + hostName + " is scheduled");
     $("waitWhen").textContent = fmtWhen(bookedSlot);
     var iv = setInterval(function(){
       if(Date.now() >= bookedSlot - lead){
@@ -240,7 +274,7 @@ if(vapi){
   vapi.on("message", function(m){
     if(m && m.type === "transcript" && m.transcriptType === "final" && m.transcript){
       $("caption").style.display = "block";
-      $("captionText").textContent = m.transcript.replace(/\[\[[^\]]*\]\]/g, "").trim();
+      $("captionText").textContent = m.transcript.replace(/\\[\\[[^\\]]*\\]\\]/g, "").trim();
     }
   });
   vapi.on("error", function(e){ toast("Call error: " + (e && e.message ? e.message : "see console")); });
@@ -257,26 +291,49 @@ $("join").addEventListener("click", function(){
       var md = { archetype: arch, slug: slug };
       if(j.target_id){ md.target_id = j.target_id; }
       if(j.target_email){ md.target_email = j.target_email; }
+      if(j.host_name){ md.host_name = j.host_name; }
+      if(j.host_tz){ md.host_tz = j.host_tz; }
       // Belt-and-suspenders: also pass the same ids as variableValues. For web
       // calls, assistantOverrides.metadata does NOT reliably surface as
       // call.metadata in the end-of-call report, but variableValues DO (under
-      // call.assistantOverrides.variableValues). vapi-eoc reads either.
+      // call.assistantOverrides.variableValues). vapi-eoc + the proxy read these.
       var vv = { sv_archetype: arch, sv_slug: slug || "" };
       if(j.target_id){ vv.sv_target_id = j.target_id; }
       if(j.target_email){ vv.sv_target_email = j.target_email; }
+      // Host name into the call so the proxy makes the VOICE use it (it's who
+      // they emailed). booked_slot rides along so the opener can read the
+      // host-local hour; sv_fast_join flags the eager "great timing" opener.
+      if(j.host_name){ vv.sv_host_name = j.host_name; }
+      if(j.host_tz){ vv.sv_host_tz = j.host_tz; }
+      if(j.booked_slot){ vv.sv_booked_slot = j.booked_slot; }
+      if(fastJoin){ vv.sv_fast_join = "1"; }
 
-      // GATE 2 — host joins ~1 min late by design. Never speak before
-      // booked_slot+60s; a late joiner waits only ~5s (so they're not met by a
-      // host mid-sentence). TEST_MODE -> immediate. The wait is "Andrew running
-      // late" — free time-waste while they sit in the room.
-      var hostStart = Date.now();
+      // GATE 2 — host arrival timing.
+      //  - Normal booking: host joins ~1 min late by design (booked_slot+60s),
+      //    a late joiner only waits ~5s so they're not met mid-sentence. The
+      //    wait is "Andrew running late" — free time-waste in the room.
+      //  - Fast-join: host arrives at max(join+30s, slot-5min) — never sooner
+      //    than 5 min before the slot, never less than 30s after they join.
+      //  - TEST_MODE -> immediate.
+      var joinClick = Date.now();
+      var hostStart = joinClick;
       if(!TEST){
-        var floor = Date.now() + 5000;
-        var slotPlus = bookedSlot ? bookedSlot + 60000 : 0;
-        hostStart = Math.max(slotPlus, floor);
+        if(fastJoin){
+          var floorFJ = joinClick + 30000;                 // >= 30s after join
+          var ceilFJ  = bookedSlot ? bookedSlot - 5*60000 : 0; // not earlier than T-5
+          hostStart = Math.max(floorFJ, ceilFJ);
+        } else {
+          var floor = joinClick + 5000;
+          var slotPlus = bookedSlot ? bookedSlot + 60000 : 0;
+          hostStart = Math.max(slotPlus, floor);
+        }
       }
-      var wait = Math.max(0, hostStart - Date.now());
-      if(wait > 0){ note("Waiting for Andrew to join\\u2026"); }
+      var wait = Math.max(0, hostStart - joinClick);
+      // waited_secs = how long they actually sat before the host arrived. Lets
+      // the opener honestly do the "saw you in the waiting room" callback only
+      // when there was a real wait.
+      vv.sv_waited_secs = String(Math.round(wait / 1000));
+      if(wait > 0){ note("Waiting for " + hostName + " to join\\u2026"); }
 
       setTimeout(function(){
         vapi.start(ASST, { metadata: md, variableValues: vv })

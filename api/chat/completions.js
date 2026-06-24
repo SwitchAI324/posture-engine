@@ -25,7 +25,124 @@ import { benchInject, BENCH } from "../_bench.js";
 import { makeTrace, blowLandedTotal, bitFireCount } from "../_trace.js";
 import { BITS } from "../_bits_registry.js";
 import { waitUntil } from "@vercel/functions";
-const HOST_NAME = process.env.HOST_NAME || "Andrew";
+
+// HOST NAME is per-call now: it's whoever the spammer emailed, carried on the
+// booking token -> meeting page -> call (variableValues.sv_host_name, also
+// metadata.host_name). The env HOST_NAME is only the last-resort default. Read
+// the same way archetype is read so it survives the web-call metadata quirk.
+const HOST_NAME_DEFAULT = process.env.HOST_NAME || "Andrew";
+function hostNameFromBody(body) {
+  if (!body) return HOST_NAME_DEFAULT;
+  const vv =
+    body.call?.assistantOverrides?.variableValues ||
+    body.assistantOverrides?.variableValues ||
+    {};
+  return (
+    body.call?.metadata?.host_name ||
+    body.metadata?.host_name ||
+    vv.sv_host_name ||
+    body.host_name ||
+    HOST_NAME_DEFAULT
+  );
+}
+
+// Host's timezone, for the fast-join opener's hour-of-day read. The spammer's
+// browser can't tell us the HOST's local hour, so the proxy derives it here.
+// The SV user picks their timezone at onboarding; it rides the booking token
+// into the call as variableValues.sv_host_tz. Env HOST_TZ is the fallback, and
+// US Eastern is the final default if neither is set.
+const HOST_TZ_DEFAULT = process.env.HOST_TZ || "America/New_York";
+function hostTzFromBody(body) {
+  if (!body) return HOST_TZ_DEFAULT;
+  const vv =
+    body.call?.assistantOverrides?.variableValues ||
+    body.assistantOverrides?.variableValues ||
+    {};
+  const tz =
+    body.call?.metadata?.host_tz ||
+    body.metadata?.host_tz ||
+    vv.sv_host_tz ||
+    body.host_tz ||
+    HOST_TZ_DEFAULT;
+  return tz || HOST_TZ_DEFAULT;
+}
+function hostLocalHour(iso, tz) {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  try {
+    const h = new Intl.DateTimeFormat("en-US", {
+      hour: "numeric", hour12: false, timeZone: tz || HOST_TZ_DEFAULT,
+    }).format(new Date(t));
+    const n = parseInt(h, 10);
+    return Number.isFinite(n) ? n % 24 : null;
+  } catch {
+    // Bad/unknown tz string -> retry with the safe default rather than going dark.
+    try {
+      const h2 = new Intl.DateTimeFormat("en-US", {
+        hour: "numeric", hour12: false, timeZone: HOST_TZ_DEFAULT,
+      }).format(new Date(t));
+      const n2 = parseInt(h2, 10);
+      return Number.isFinite(n2) ? n2 % 24 : null;
+    } catch {
+      return null;
+    }
+  }
+}
+
+// The fast-join opener instruction. Only built on the host's FIRST line of a
+// fast-join call. Branches on the host-local hour (so a 1 AM booking never gets
+// "great afternoon"), and only does the "saw you in the waiting room" callback
+// when they actually sat there (waited seconds past a real threshold). Returns
+// "" when this isn't a fast-join opener moment, so normal calls are untouched.
+function fastJoinOpener(body, turn) {
+  if (turn > 0) return ""; // opener is the host's first line only
+  const vv =
+    body?.call?.assistantOverrides?.variableValues ||
+    body?.assistantOverrides?.variableValues ||
+    {};
+  const isFast = /^(1|true|yes|on)$/i.test(String(vv.sv_fast_join || ""));
+  if (!isFast) return "";
+
+  const hour = hostLocalHour(vv.sv_booked_slot, hostTzFromBody(body));
+  const waited = parseInt(vv.sv_waited_secs || "0", 10) || 0;
+  const name = hostNameFromBody(body);
+
+  // Time-of-day flavor, in the host's own frame.
+  let timeCue;
+  if (hour == null) {
+    timeCue = "Greet them warmly without naming a time of day.";
+  } else if (hour >= 8 && hour < 18) {
+    timeCue =
+      "It's the middle of your working day — sound like a busy exec who " +
+      "happened to have a window open: \"perfect, I had a gap\".";
+  } else if (hour >= 18 && hour < 22) {
+    timeCue =
+      "It's your evening — sound like someone wrapping up the day who's " +
+      "happy to squeeze this in.";
+  } else {
+    timeCue =
+      "It's late night / very early morning in your time zone — lean into " +
+      "that as a small joke (\"I was up anyway\", or \"caught me burning the " +
+      "midnight oil\"). NEVER greet them with \"good afternoon\" or similar.";
+  }
+
+  const waitCue =
+    waited >= 45
+      ? "They were already sitting in the waiting room when you joined — open " +
+        "by acknowledging it warmly: \"saw you were already in there waiting — " +
+        "appreciate you hopping on at short notice.\""
+      : "Open by appreciating that they jumped on at such short notice.";
+
+  return (
+    "\n\nOPENER — this is your FIRST line of the call, and it's a fast-turnaround " +
+    "booking they grabbed just now. You are " + name + ", an eager, slightly " +
+    "self-important host who likes to keep the calendar full. " + timeCue + " " +
+    waitCue + " Keep it to one or two warm sentences, fully in character, then " +
+    "hand it to them. Do not mention scheduling software, slots, or the word " +
+    "\"fast-join\"."
+  );
+}
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -209,6 +326,7 @@ export default async function handler(req) {
     model: MODEL(),
     callId,
     turn: countUserTurns(messages),
+    hostName: hostNameFromBody(body), // per-call host name for the utterance trace
     deathBlowFiring, // finishUp emits blow_fired + call_ended with the real line
   };
 
@@ -286,7 +404,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       trace.emit(
         "call_started",
         {
-          host_name: HOST_NAME,
+          host_name: hostNameFromBody(body),
           character_id: "host",
           universe: null,
           archetype: archetypeFromBody(body) || "universal",
@@ -407,6 +525,11 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // MUTABLE block: posture lines + (on fire) a gentle in-character bit cue.
     // Goes AFTER the cached base, so injecting never busts the prompt cache.
     let mutable = postureBlock(state);
+    // FAST-JOIN OPENER: on the host's first line of a fast-turnaround booking,
+    // prepend a time-aware, in-character opener (and the "saw you waiting"
+    // callback when they actually sat). Empty string for every normal call/turn.
+    const opener = fastJoinOpener(body, turn);
+    if (opener) mutable += opener;
     if (deathBlow) {
       // Rungs are gone: PE doesn't deliver a canned line. It directs the Host to
       // IMPROVISE the most absurd-within-reason closer in persona, right now. The
@@ -693,7 +816,7 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
           if (clean) {
             utterTrace.emit(
               "utterance",
-              { speaker_role: "host", speaker_name: HOST_NAME, character_id: "host", text: clean, turn_index: meta.turn },
+              { speaker_role: "host", speaker_name: meta.hostName || HOST_NAME_DEFAULT, character_id: "host", text: clean, turn_index: meta.turn },
               "host"
             );
           }

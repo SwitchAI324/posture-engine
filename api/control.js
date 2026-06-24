@@ -24,9 +24,23 @@ import { getControls, setDeathBlow, addArm } from "./_store.js";
 import { makeTrace } from "./_trace.js";
 import { BITS } from "./_bits_registry.js";
 
+// Hooks a Director may arm. Kept in sync with what the Scouting lanes actually
+// produce + register today (see api/scout/_hooks.js GATES and _dissect.js /
+// _calldissect.js outputs). The old "canonical seven" was stale — it still
+// listed the retired geo_mismatch and omitted every dissection/call/browsed
+// hook, so arming a real live hook 404'd. Add new hook_ids here as Scouting
+// ships them.
 const CANON_HOOKS = new Set([
-  "company_news", "dossier_negation", "domain_age", "geo_mismatch",
+  // research / corpus lanes
+  "company_news", "dossier_negation", "domain_age",
   "prior_contact", "template_match", "stock_photo",
+  // inbound dissection lane
+  "pitch_claims", "sender_identity", "sender_linkedin",
+  "sender_social", "office_location", "attachment_facts",
+  // post-call transcript lane
+  "call_callback", "call_claim", "call_commitment",
+  // booking-side browsed-calendar TMI (Fiji week) callback
+  "browsed_tmi",
 ]);
 
 export const config = { runtime: "edge" };
@@ -129,7 +143,7 @@ export default async function handler(req) {
       if (bit.status === "parked") return jsonRes({ error: `can't arm ${bitId} — parked (${bit.park_reason || "inactive"})` }, 409);
     }
     if (hookId && !CANON_HOOKS.has(hookId)) {
-      return jsonRes({ error: `unknown hook ${hookId} — not one of the canonical seven` }, 404);
+      return jsonRes({ error: `unknown hook ${hookId} — not a known scout hook` }, 404);
     }
 
     const cur = await getControls(callId).catch(() => null);
