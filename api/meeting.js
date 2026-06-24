@@ -84,7 +84,7 @@ function PAGE(pub, asst, testMode) {
 
 <!-- CONSENT (entry point after clicking the join link) -->
 <div id="waiting" style="display:none;height:100vh;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px">
-  <div style="font-size:18px;margin-bottom:10px">Your call with Andrew starts soon</div>
+  <div id="waitHead" style="font-size:18px;margin-bottom:10px">Your call with Andrew</div>
   <div id="waitWhen" style="color:var(--mut)"></div>
   <div style="color:var(--mut);font-size:13px;margin-top:16px">This window will connect you automatically &mdash; no need to do anything.</div>
 </div>
@@ -156,6 +156,11 @@ import Vapi from "https://esm.sh/@vapi-ai/web";
 var PUB = ${JSON.stringify(pub)};
 var ASST = ${JSON.stringify(asst)};
 var TEST_MODE = ${testMode ? "true" : "false"};
+// Effective test flag: server env TEST_MODE OR ?test=1 on the URL. The URL form
+// lets testers always reach a days-out proving call without depending on the
+// env var being set + redeployed. Production links carry neither, so both gates
+// enforce normally.
+var TEST = TEST_MODE || new URLSearchParams(location.search).get("test") === "1";
 
 var slug = new URLSearchParams(location.search).get("slug");
 var vapi = null, started = null, tick = null, muted = false, callId = null;
@@ -176,7 +181,7 @@ if(!PUB){ $("join").disabled = true; note("Meeting not configured yet.", true); 
 // the Join click already has archetype/target_id in hand.
 var joinData = null, bookedSlot = null;
 function parseSlot(s){ if(!s) return null; var t = Date.parse(s); return isNaN(t) ? null : t; }
-function fmtWhen(ms){ try { return new Date(ms).toLocaleString([], {weekday:"short", hour:"numeric", minute:"2-digit"}); } catch(e){ return ""; } }
+function fmtWhen(ms){ try { return new Date(ms).toLocaleString([], {weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}); } catch(e){ return ""; } }
 function ensureJoin(){
   if(joinData) return Promise.resolve(joinData);
   return fetch("/api/join?slug=" + encodeURIComponent(slug)).then(function(r){ return r.json(); })
@@ -185,12 +190,16 @@ function ensureJoin(){
 // GATE 1 — early-join lockout: if opened >5 min before the slot, hold on a
 // waiting screen and auto-advance to consent once inside T-5. Skipped in TEST_MODE.
 function earlyGate(){
-  if(TEST_MODE || !bookedSlot) return;
+  if(TEST || !bookedSlot) return;
   var lead = 5*60*1000;
   if(Date.now() < bookedSlot - lead){
     $("consent").style.display = "none";
     $("waiting").style.display = "flex";
-    $("waitWhen").textContent = "Scheduled for " + fmtWhen(bookedSlot);
+    var soon = (bookedSlot - Date.now()) <= 60*60*1000; // within the hour
+    $("waitHead").textContent = soon
+      ? "Your call with Andrew starts soon"
+      : "Your call with Andrew is scheduled";
+    $("waitWhen").textContent = fmtWhen(bookedSlot);
     var iv = setInterval(function(){
       if(Date.now() >= bookedSlot - lead){
         clearInterval(iv);
@@ -261,7 +270,7 @@ $("join").addEventListener("click", function(){
       // host mid-sentence). TEST_MODE -> immediate. The wait is "Andrew running
       // late" — free time-waste while they sit in the room.
       var hostStart = Date.now();
-      if(!TEST_MODE){
+      if(!TEST){
         var floor = Date.now() + 5000;
         var slotPlus = bookedSlot ? bookedSlot + 60000 : 0;
         hostStart = Math.max(slotPlus, floor);
