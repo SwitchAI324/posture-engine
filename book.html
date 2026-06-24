@@ -93,21 +93,63 @@
   .done h2 { margin: 0 0 6px; font-size: 17px; }
   .done p { margin: 4px 0; color: #6b7685; font-size: 14px; }
   @media (max-width: 480px) { .form .row { flex-direction: column; gap: 0; } .cell { font-size: 13px; } }
+
+  /* "just taken" — flash the slot red, strike it, then collapse it away */
+  @keyframes takenFlash {
+    0%   { background: #fdecec; border-color: #e6b3b3; color: #b23b3b; transform: scale(1); }
+    35%  { background: #f7d4d4; border-color: #d98a8a; transform: scale(1.04); }
+    100% { background: #fdecec; border-color: #e6b3b3; color: #b23b3b; transform: scale(1); }
+  }
+  .slot.taken { animation: takenFlash .5s ease both; text-decoration: line-through; cursor: default; pointer-events: none; }
+  .slot.collapsing { transition: opacity .35s ease, max-width .35s ease, padding .35s ease, margin .35s ease;
+    opacity: 0; max-width: 0; padding-left: 0; padding-right: 0; margin: 0; overflow: hidden; border-color: transparent; }
+
+  .taken-banner { display: none; align-items: center; gap: 9px; margin: 0 0 12px;
+    background: #fdecec; border: 1px solid #f1cccc; color: #a23636; border-radius: 9px;
+    padding: 10px 13px; font-size: 13.5px; font-weight: 500; }
+  .taken-banner.show { display: flex; animation: bannerIn .35s ease both; }
+  @keyframes bannerIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+  .taken-banner .x { width: 18px; height: 18px; border-radius: 50%; background: #e7b9b9; color: #fff;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 12px; flex: 0 0 auto; font-weight: 700; }
+
+  /* trapdoor: the always-there "none of these work" escape */
+  .trap { margin-top: 16px; padding-top: 14px; border-top: 1px solid #eef1f5; }
+  .trap-link { appearance: none; background: none; border: none; color: #6b7685; font-size: 13px;
+    font-family: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; padding: 0; }
+  .trap-link:hover { color: #2f5fd6; }
+  .trap-panel { margin-top: 12px; }
+  .trap-bubble { background: #f6f7f9; border: 1px solid #e9edf2; border-radius: 12px; padding: 14px 16px;
+    font-size: 14px; color: #3a4350; }
+  .trap-bubble p { margin: 0 0 10px; }
+  .trap-bubble p:last-child { margin-bottom: 0; }
+  .trap-confirm { margin-top: 12px; width: 100%; padding: 11px; font-size: 14px; font-weight: 600;
+    color: #fff; background: #2f5fd6; border: none; border-radius: 9px; cursor: pointer; font-family: inherit; }
+  .trap-confirm:disabled { background: #9fb2dd; cursor: default; }
+  .trap-thinking { display: flex; align-items: center; gap: 10px; padding: 14px 2px; color: #6b7685; font-size: 14px; }
+  .spinner { width: 18px; height: 18px; flex: 0 0 auto; border-radius: 50%;
+    border: 2.5px solid #d9e0ea; border-top-color: #2f5fd6; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
       <div class="head">
-        <div class="avatar">AM</div>
+        <div class="avatar" id="avatar">AM</div>
         <div>
-          <h1>Book a call with Andrew Mercer</h1>
+          <h1 id="title">Book a call with Andrew Mercer</h1>
           <div class="meta">30 min · video call</div>
         </div>
       </div>
       <div class="body">
         <p class="lead" id="lead">Pick a time that works for you.</p>
         <p class="tz" id="tz" style="display:none;"></p>
+
+        <div class="taken-banner" id="takenBanner">
+          <span class="x">&times;</span>
+          <span id="takenText">That time was just taken — someone grabbed it. Please pick another.</span>
+        </div>
+
         <div id="calmount"><div class="state">Loading availability…</div></div>
 
         <div class="times-wrap" id="timeswrap" style="display:none;">
@@ -131,6 +173,20 @@
           <button class="confirm" id="confirm">Confirm booking</button>
           <p class="note" id="formnote"></p>
         </div>
+
+        <div class="trap" id="trap" style="display:none;">
+          <button class="trap-link" id="trapLink">None of these times work for me</button>
+          <div class="trap-panel" id="trapPanel">
+            <div class="trap-thinking" id="trapThinking" style="display:none;">
+              <span class="spinner"></span><span id="trapThinkingText">Checking the calendar…</span>
+            </div>
+            <div id="trapResult" style="display:none;">
+              <div class="trap-bubble" id="trapBubble"></div>
+              <button class="trap-confirm" id="trapConfirm">Yes, please check with them</button>
+              <p class="note" id="trapNote"></p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -139,6 +195,7 @@
   var slug = location.pathname.split('/').filter(Boolean).pop() || '';
   var selected = null;          // selected slot ISO
   var DATA = null;              // render payload
+  var HOST = 'Andrew Mercer';   // overwritten from render
   var OPEN = {};                // 'YYYY-MM-DD' -> [slot ISO,...]
   var BLACK = {};               // 'YYYY-MM-DD' -> { label, tint, first:bool }
   var viewMonth = null;         // Date pinned to the 1st of the shown month
@@ -275,14 +332,34 @@
     return tz ? (tz.replace(/_/g, ' ') + ' (' + gmt + ')') : ('your local time (' + gmt + ')');
   }
 
+  // Barbara's flustered in-browser overshare for the trapdoor. Scripted (no live
+  // AI), light TMI in her own voice — the page register, not the composed email.
+  // ALWAYS references checking back with the host to see about opening up the
+  // schedule. Host-neutral pronoun ("them/they") so it works for any host name.
+  function trapBubbleHTML(host) {
+    return '<p>Oh no &mdash; I&rsquo;m so sorry none of those worked. Honestly it&rsquo;s ' +
+      'been a <em>week</em> over here, ' + host + '&rsquo;s calendar is a bit of a jigsaw ' +
+      'right now.</p>' +
+      '<p>Let me check back with ' + host + ' directly and see if they can shuffle a few ' +
+      'things and open up some more time &mdash; then I&rsquo;ll email a fresh set of ' +
+      'options straight over. Sound okay?</p>';
+  }
+
   function render(data) {
     DATA = data;
+    HOST = data.host || HOST;
+    document.getElementById('title').textContent =
+      (data.reschedule ? 'Reschedule your call with ' : 'Book a call with ') + HOST;
+    document.getElementById('avatar').textContent = initials(HOST);
+
     var lead = document.getElementById('lead');
     if (data.reschedule) lead.textContent = 'Pick a new time for your call.';
     else if (data.narrative) lead.textContent = data.narrative;
 
     if (!data.days || !data.days.length) {
       document.getElementById('calmount').innerHTML = '<div class="state">No times are open right now.</div>';
+      // still offer the trapdoor when nothing's open — that's exactly when they need it
+      showTrap(data);
       return;
     }
     var tz = document.getElementById('tz');
@@ -291,6 +368,16 @@
     index(data);
     viewMonth = firstOpenMonth();
     renderCalendar();
+    showTrap(data);
+  }
+
+  function initials(name) {
+    var parts = String(name).trim().split(/\s+/);
+    return ((parts[0] || '').charAt(0) + (parts[1] || '').charAt(0)).toUpperCase() || 'A';
+  }
+
+  function showTrap(data) {
+    document.getElementById('trap').style.display = 'block';
   }
 
   document.getElementById('confirm').onclick = async function () {
@@ -316,13 +403,10 @@
       });
       var cj = await cr.json().catch(function () { return {}; });
       if (cj && cj.taken) {
-        dropSlot(claimedSlot);
         this.disabled = false;
         document.getElementById('form').classList.remove('show');
         note.textContent = '';
-        var td = document.getElementById('timesday');
-        td.textContent = 'That time was just taken — please pick another.';
-        td.style.color = '#b4642a';
+        flashTaken(claimedSlot);
         return;
       }
 
@@ -339,6 +423,32 @@
     }
   };
 
+  // Flashy "just taken": flash the slot red + strike it, pop the banner, then
+  // collapse the slot out. Drops it from the pool so it can't be re-picked.
+  function flashTaken(iso) {
+    var banner = document.getElementById('takenBanner');
+    document.getElementById('takenText').textContent =
+      'That time was just taken — someone grabbed it. Please pick another.';
+    banner.classList.add('show');
+    banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    var box = document.getElementById('times');
+    var target = null;
+    Array.prototype.forEach.call(box.querySelectorAll('.slot'), function (b) {
+      if (b.textContent === fmtTime(iso)) target = b;
+    });
+    if (target) {
+      target.classList.add('taken');
+      target.setAttribute('aria-pressed', 'false');
+      setTimeout(function () { target.classList.add('collapsing'); }, 520);
+      setTimeout(function () { dropSlot(iso); }, 880);
+    } else {
+      dropSlot(iso);
+    }
+    // auto-dismiss the banner after a beat
+    setTimeout(function () { banner.classList.remove('show'); }, 4200);
+  }
+
   // Remove a "just taken" slot from the in-memory pool and the open day's UI.
   // If that empties the day, the scammer falls back to the calendar to pick
   // another open day (the counter persists, so the next pick will stick).
@@ -352,11 +462,52 @@
     });
     selected = null;
     if (!box.querySelector('.slot')) {
-      // day emptied — nudge them back to the calendar
       document.getElementById('times').innerHTML =
         '<div class="state">No more times that day. Pick another from the calendar.</div>';
     }
   }
+
+  // ── trapdoor: "none of these work" → 5s "checking with host" spin →
+  // Barbara's overshare (always references checking back with the host) →
+  // confirm → wider-calendar email.
+  document.getElementById('trapLink').onclick = function () {
+    this.style.display = 'none';
+    var panel = document.getElementById('trapPanel');
+    var thinking = document.getElementById('trapThinking');
+    var result = document.getElementById('trapResult');
+    document.getElementById('trapThinkingText').textContent =
+      'Checking with ' + HOST + ' about the calendar…';
+    thinking.style.display = 'flex';
+    result.style.display = 'none';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    setTimeout(function () {
+      thinking.style.display = 'none';
+      document.getElementById('trapBubble').innerHTML = trapBubbleHTML(HOST);
+      result.style.display = 'block';
+      result.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 5000);
+  };
+
+  document.getElementById('trapConfirm').onclick = async function () {
+    this.disabled = true;
+    document.getElementById('trapNote').textContent = '';
+    var done =
+      '<p>Perfect &mdash; leave it with me. I&rsquo;ll check with ' + HOST + ' and get a ' +
+      'few fresh options to your inbox shortly. Thanks for your patience!</p>';
+    try {
+      // Ask the email layer for the wider-calendar follow-up. Reuses /api/book
+      // with a help flag; the email side runs helpWiderCalendarEmail_ and widens
+      // the slug's revealed availability.
+      await fetch('/api/book', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: slug, help: true }),
+      });
+    } catch (e) { /* keep the promise regardless — never expose a failure */ }
+    document.getElementById('trapBubble').innerHTML = done;
+    this.style.display = 'none';
+  };
 
   function showDone() {
     var card = document.querySelector('.body');
@@ -364,7 +515,7 @@
       '<div class="done">' +
       '<div class="tick">&#10003;</div>' +
       '<h2>You\u2019re booked</h2>' +
-      '<p>Andrew will see you then.</p>' +
+      '<p>' + HOST + ' will see you then.</p>' +
       '<p>A calendar invite is on its way to your inbox.</p>' +
       '</div>';
   }
