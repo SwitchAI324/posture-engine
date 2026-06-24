@@ -19,17 +19,19 @@
 
 export const config = { runtime: "edge" };
 
+import { envBool } from "./_env.js";
+
 const PUBLIC_KEY = process.env.VAPI_PUBLIC_KEY || "";
 const ASSISTANT_ID =
   process.env.VAPI_ASSISTANT_ID || "c8917a9c-dee6-4044-bf20-39212d63937d";
 
 export default async function handler() {
-  return new Response(PAGE(PUBLIC_KEY, ASSISTANT_ID), {
+  return new Response(PAGE(PUBLIC_KEY, ASSISTANT_ID, envBool("TEST_MODE", false)), {
     headers: { "content-type": "text/html; charset=utf-8" },
   });
 }
 
-function PAGE(pub, asst) {
+function PAGE(pub, asst, testMode) {
   return `<!doctype html><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SpamViking Meeting</title>
@@ -81,6 +83,11 @@ function PAGE(pub, asst) {
 </style>
 
 <!-- CONSENT (entry point after clicking the join link) -->
+<div id="waiting" style="display:none;height:100vh;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px">
+  <div style="font-size:18px;margin-bottom:10px">Your call with Andrew starts soon</div>
+  <div id="waitWhen" style="color:var(--mut)"></div>
+  <div style="color:var(--mut);font-size:13px;margin-top:16px">This window will connect you automatically &mdash; no need to do anything.</div>
+</div>
 <div id="consent">
   <div class="lobby-card" style="max-width:520px">
     <h1>Before you join</h1>
@@ -148,6 +155,7 @@ function PAGE(pub, asst) {
 import Vapi from "https://esm.sh/@vapi-ai/web";
 var PUB = ${JSON.stringify(pub)};
 var ASST = ${JSON.stringify(asst)};
+var TEST_MODE = ${testMode ? "true" : "false"};
 
 var slug = new URLSearchParams(location.search).get("slug");
 var vapi = null, started = null, tick = null, muted = false, callId = null;
@@ -162,6 +170,37 @@ $("continue").addEventListener("click", function(){ $("consent").style.display =
 
 if(!slug){ $("join").disabled = true; note("This meeting link looks invalid.", true); }
 if(!PUB){ $("join").disabled = true; note("Meeting not configured yet.", true); }
+
+// --- JOIN-TIME GATES (read booked_slot off the token) -----------------------
+// joinData is fetched up front so the early-join gate can run on open, and so
+// the Join click already has archetype/target_id in hand.
+var joinData = null, bookedSlot = null;
+function parseSlot(s){ if(!s) return null; var t = Date.parse(s); return isNaN(t) ? null : t; }
+function fmtWhen(ms){ try { return new Date(ms).toLocaleString([], {weekday:"short", hour:"numeric", minute:"2-digit"}); } catch(e){ return ""; } }
+function ensureJoin(){
+  if(joinData) return Promise.resolve(joinData);
+  return fetch("/api/join?slug=" + encodeURIComponent(slug)).then(function(r){ return r.json(); })
+    .then(function(j){ joinData = j || {}; bookedSlot = parseSlot(joinData.booked_slot); return joinData; });
+}
+// GATE 1 — early-join lockout: if opened >5 min before the slot, hold on a
+// waiting screen and auto-advance to consent once inside T-5. Skipped in TEST_MODE.
+function earlyGate(){
+  if(TEST_MODE || !bookedSlot) return;
+  var lead = 5*60*1000;
+  if(Date.now() < bookedSlot - lead){
+    $("consent").style.display = "none";
+    $("waiting").style.display = "flex";
+    $("waitWhen").textContent = "Scheduled for " + fmtWhen(bookedSlot);
+    var iv = setInterval(function(){
+      if(Date.now() >= bookedSlot - lead){
+        clearInterval(iv);
+        $("waiting").style.display = "none";
+        $("consent").style.display = "flex";
+      }
+    }, 5000);
+  }
+}
+if(slug){ ensureJoin().then(earlyGate).catch(function(){}); }
 
 try { vapi = new Vapi(PUB); } catch(e){ note("Could not load the meeting: " + e, true); }
 
@@ -200,8 +239,7 @@ if(vapi){
 
 $("join").addEventListener("click", function(){
   $("join").disabled = true; note("Connecting\\u2026");
-  fetch("/api/join?slug=" + encodeURIComponent(slug))
-    .then(function(r){ return r.json(); })
+  ensureJoin()
     .then(function(j){
       if(j.error){ note("Could not start: " + j.error, true); $("join").disabled = false; return; }
       var arch = j.archetype || "universal";
@@ -210,12 +248,29 @@ $("join").addEventListener("click", function(){
       var md = { archetype: arch, slug: slug };
       if(j.target_id){ md.target_id = j.target_id; }
       if(j.target_email){ md.target_email = j.target_email; }
-      return vapi.start(ASST, { metadata: md })
-        .then(function(call){
-          var id = call && (call.id || call.callId);
-          callId = id || null;
-          if(id){ fetch("/api/join?slug=" + encodeURIComponent(slug) + "&call_id=" + encodeURIComponent(id), { method:"POST" }).catch(function(){}); }
-        });
+
+      // GATE 2 — host joins ~1 min late by design. Never speak before
+      // booked_slot+60s; a late joiner waits only ~5s (so they're not met by a
+      // host mid-sentence). TEST_MODE -> immediate. The wait is "Andrew running
+      // late" — free time-waste while they sit in the room.
+      var hostStart = Date.now();
+      if(!TEST_MODE){
+        var floor = Date.now() + 5000;
+        var slotPlus = bookedSlot ? bookedSlot + 60000 : 0;
+        hostStart = Math.max(slotPlus, floor);
+      }
+      var wait = Math.max(0, hostStart - Date.now());
+      if(wait > 0){ note("Waiting for Andrew to join\\u2026"); }
+
+      setTimeout(function(){
+        vapi.start(ASST, { metadata: md })
+          .then(function(call){
+            var id = call && (call.id || call.callId);
+            callId = id || null;
+            if(id){ fetch("/api/join?slug=" + encodeURIComponent(slug) + "&call_id=" + encodeURIComponent(id), { method:"POST" }).catch(function(){}); }
+          })
+          .catch(function(e){ note("Could not connect: " + e, true); $("join").disabled = false; });
+      }, wait);
     })
     .catch(function(e){ note("Could not connect: " + e, true); $("join").disabled = false; });
 });

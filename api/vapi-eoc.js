@@ -165,29 +165,68 @@ export default async function handler(req) {
   try {
     body = await req.json();
   } catch {
+    console.log("vapi-eoc: bad json body");
     return ok({ ok: true, ignored: "bad json" });
   }
 
   const m = (body && body.message) || {};
-  if (m.type !== "end-of-call-report") {
-    return ok({ ok: true, ignored: m.type || "unknown" });
+  const type = m.type || "unknown";
+  // Vapi POSTs SEVERAL message types to this one URL (status-update,
+  // conversation-update, speech-update, end-of-call-report, ...). Log every
+  // arrival so we can see what's coming, then act only on the end-of-call report.
+  console.log("vapi-eoc: received type=" + type);
+  if (type !== "end-of-call-report") {
+    return ok({ ok: true, ignored: type });
   }
 
-  const callId = m.call && m.call.id ? m.call.id : null;
-  const meta = (m.call && m.call.metadata) || {};
+  const callId = (m.call && m.call.id) || m.callId || null;
+  const meta = (m.call && m.call.metadata) || m.metadata || {};
   const artifact = m.artifact || {};
-  const transcript =
-    typeof artifact.transcript === "string" ? artifact.transcript : "";
-  const messages = Array.isArray(artifact.messages) ? artifact.messages : [];
-  const endedReason = m.endedReason || m.ended_reason || "";
 
+  // Transcript can live in a few places depending on transport — try them all,
+  // and as a last resort rebuild it from the messages array.
+  let transcript = "";
+  if (typeof artifact.transcript === "string") transcript = artifact.transcript;
+  else if (typeof m.transcript === "string") transcript = m.transcript;
+  const messages =
+    (Array.isArray(artifact.messages) && artifact.messages) ||
+    (Array.isArray(m.messages) && m.messages) ||
+    [];
+  if (!transcript.trim() && messages.length) {
+    transcript = messages
+      .map((x) =>
+        x && (x.role || x.message)
+          ? (x.role || "?") + ": " + (x.message || x.content || "")
+          : ""
+      )
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  const endedReason = m.endedReason || m.ended_reason || "";
   const attended = isAttended(transcript, messages);
   const outcome = callOutcome(attended, endedReason, messages.length);
-
   const targetId = meta.target_id || null;
   const targetEmail = meta.target_email || null;
 
-  // Timing from the report: prefer durationSeconds, else derive from timestamps.
+  // The line the booking chat is watching for — proves target_id rode through.
+  console.log(
+    "vapi-eoc: EOC call_id=" + (callId || "none") +
+      " transcriptLen=" + transcript.length +
+      " msgs=" + messages.length +
+      " attended=" + attended +
+      " outcome=" + outcome +
+      " has_target=" + !!targetId +
+      (targetEmail ? " has_email=true" : "")
+  );
+  if (!targetId) {
+    console.log(
+      "vapi-eoc: no target_id — metadata keys=" +
+        (Object.keys(meta).join(",") || "(none)")
+    );
+  }
+
+  // Timing: prefer durationSeconds, else derive from timestamps.
   const startedAt = m.startedAt || (m.call && m.call.startedAt) || null;
   const endedAt = m.endedAt || null;
   let durationSeconds = null;
@@ -198,57 +237,73 @@ export default async function handler(req) {
   }
 
   // Background work: scout lane + authoritative calls row + liveness event.
-  // Returns 200 to Vapi now.
   const bg = (async () => {
-    // Read the call row once for gear-end states + host_posture (set at pre-snap).
-    const callRow = callId ? await getCall(callId).catch(() => null) : null;
+    try {
+      const callRow = callId ? await getCall(callId).catch(() => null) : null;
 
-    // 1) SCOUT LANE — needs a real transcript to mine.
-    if (callId && transcript.trim()) {
-      const scoutBody = { call_id: callId, transcript };
-      if (targetId) scoutBody.target_id = targetId;
-      if (targetEmail) scoutBody.target_email = targetEmail;
-      await fetch(SCOUT_URL, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-sv-scout-token": SCOUT_TOKEN,
-        },
-        body: JSON.stringify(scoutBody),
-      }).catch(() => {});
+      // 1) SCOUT LANE — needs a real transcript to mine.
+      if (callId && transcript.trim()) {
+        const scoutBody = { call_id: callId, transcript };
+        if (targetId) scoutBody.target_id = targetId;
+        if (targetEmail) scoutBody.target_email = targetEmail;
+        const sr = await fetch(SCOUT_URL, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-sv-scout-token": SCOUT_TOKEN,
+          },
+          body: JSON.stringify(scoutBody),
+        }).catch((e) => {
+          console.log("vapi-eoc: scout fetch threw " + e);
+          return null;
+        });
+        console.log("vapi-eoc: scout POST -> " + (sr ? sr.status : "no-response"));
+      } else {
+        console.log("vapi-eoc: scout skipped (no transcript)");
+      }
+
+      // 2) FORWARD-ONLY next steps.
+      const nextSteps = attended ? await generateNextSteps(transcript) : [];
+      console.log("vapi-eoc: next_steps count=" + nextSteps.length);
+
+      // 3) AUTHORITATIVE calls row.
+      const wrote = await writeCallsRow({
+        target_id: targetId,
+        vapi_call_id: callId,
+        call_outcome: outcome,
+        next_steps: nextSteps,
+        host_posture: callRow ? callRow.characterId : null,
+        duration_seconds: durationSeconds,
+        transcript: transcript || null,
+        archetype: meta.archetype || (callRow ? callRow.archetype : null) || null,
+        started_at: startedAt,
+        ended_at: endedAt,
+        gear_suspicion_end: callRow ? callRow.gear : null,
+        gear_pressure_end: callRow ? callRow.pressure : null,
+        gear_engagement_end: callRow ? callRow.engagement : null,
+      });
+      console.log(
+        "vapi-eoc: calls row written=" + wrote +
+          " (target_id=" + (targetId || "null") + ")"
+      );
+
+      // 4) LIVENESS event (notification only — not the source of truth).
+      const emitted = await emitCallOutcome(targetId, callId, {
+        attended,
+        call_outcome: outcome,
+        next_steps: nextSteps,
+      });
+      console.log("vapi-eoc: liveness event emitted=" + emitted);
+    } catch (e) {
+      console.log("vapi-eoc: bg error " + (e && e.message ? e.message : e));
     }
-
-    // 2) FORWARD-ONLY next steps.
-    const nextSteps = attended ? await generateNextSteps(transcript) : [];
-
-    // 3) AUTHORITATIVE calls row (attended calls only — we never fire otherwise).
-    await writeCallsRow({
-      target_id: targetId,
-      vapi_call_id: callId,
-      call_outcome: outcome,
-      next_steps: nextSteps,
-      host_posture: callRow ? callRow.characterId : null,
-      duration_seconds: durationSeconds,
-      transcript: transcript || null,
-      archetype: meta.archetype || (callRow ? callRow.archetype : null) || null,
-      started_at: startedAt,
-      ended_at: endedAt,
-      gear_suspicion_end: callRow ? callRow.gear : null,
-      gear_pressure_end: callRow ? callRow.pressure : null,
-      gear_engagement_end: callRow ? callRow.engagement : null,
-    });
-
-    // 4) LIVENESS event (notification only — not the source of truth).
-    await emitCallOutcome(targetId, callId, {
-      attended,
-      call_outcome: outcome,
-      next_steps: nextSteps,
-    });
   })();
+  // Run after the 200 if possible; if waitUntil is unavailable, run inline so
+  // the work still happens (and is still logged).
   try {
     waitUntil(bg);
   } catch {
-    /* best effort */
+    await bg;
   }
 
   return ok({
