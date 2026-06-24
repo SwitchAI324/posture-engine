@@ -108,8 +108,17 @@ async function materialize(slug) {
 // authored wall-clock hour in HOST_TZ. The browser localizes them for display.
 function openDays(slot_pool, round) {
   const base = hostToday(HOST_TZ);
-  const reveal = 2 + (round || 0); // base 2, +1 per reopened round
-  const picked = [...(slot_pool.open || [])].sort((a, b) => a.offset - b.offset).slice(0, reveal);
+  const all = [...(slot_pool.open || [])].sort((a, b) => a.offset - b.offset);
+  const NEAR = 16;                       // near-term window (days)
+  const nearLimit = 2 + (round || 0);    // near-term stays scarce; widens on help
+  let nearShown = 0;
+  const picked = all.filter((o) => {
+    if (o.offset <= NEAR) {
+      if (nearShown < nearLimit) { nearShown++; return true; }
+      return false;                      // hold back extra near-term days
+    }
+    return true;                         // later months always show their options
+  });
   return picked.map((o) => {
     const c = addDays(base, o.offset);
     return {
@@ -128,6 +137,7 @@ function blackoutRuns(slot_pool) {
   const base = hostToday(HOST_TZ);
   return (slot_pool.blackouts || []).map((b) => ({
     label: b.label,
+    tmi_id: b.tmi_id || null,   // page sends this on browse; host_callback stays server-side
     from: ymdStr(addDays(base, b.from)),
     to: ymdStr(addDays(base, b.to)),
     tint: b.tint || 'grey',
