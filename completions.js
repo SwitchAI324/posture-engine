@@ -1,59 +1,113 @@
-// SpamViking — speaker -> ElevenLabs voice id (the casting table).
+// SpamViking — Posture Engine: JOIN BRIDGE (record-only; web calls are
+// client-started). ----------------------------------------------------------
+// Real-world calls are zoom-like WEB meetings, started in the browser by the
+// Vapi Web SDK — NOT server-minted (server /call is the phone path). So the
+// metadata is stamped client-side at vapi.start(assistant, { metadata }). This
+// endpoint's job is the two halves the server owns:
+//
+//   GET  /api/join?slug=...            -> serve the token's archetype to the
+//                                         meeting page (it starts the call with it)
+//   POST /api/join?slug=...&call_id=.. -> record the vapi_call_id the page got
+//                                         back from vapi.start(), onto the token
+//
+// The proxy still reads body.call.metadata.archetype and hydrates call_prefix —
+// PROVIDED the assistant's model.metadataSendMode is NOT "off".
+//
+// Create-at-join still holds: nothing is written until the scammer actually
+// joins and the page starts the call. Reschedule strands nothing.
 // ----------------------------------------------------------------------
-// The engine tags a line with [[SPEAKER]]; the TTS proxy looks the speaker up
-// here and renders the line in that voice. Placeholders are public ElevenLabs
-// voices so the test page works out of the box — replace each id with your real
-// cast (accent-driven), or override per-speaker with env vars VOICE_<NAME>.
-// ----------------------------------------------------------------------
 
-export const VOICES = {
-  HOST:   process.env.VOICE_HOST   || "21m00Tcm4TlvDq8ikWAM", // placeholder: Rachel
-  ANDREA: process.env.VOICE_ANDREA || "EXAVITQu4vr4xnSDxMaL", // placeholder: Bella
-  CONRAD: process.env.VOICE_CONRAD || "pNInz6obpgDQGcFmaJgB", // placeholder: Adam
-  BONNIE: process.env.VOICE_BONNIE || "AZnzlk1XvdvUeBnXmlld", // placeholder: Domi
-};
+export const config = { runtime: "edge" };
 
-export const DEFAULT_SPEAKER = "HOST";
+const SB_URL = process.env.SUPABASE_URL;
+const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// leading [[NAME]] marker -> { speaker, line }. No marker -> the host speaks.
-export function parseSpeaker(text) {
-  const m = String(text).match(/^\s*\[\[\s*([A-Za-z0-9_\- ]+?)\s*\]\]\s*([\s\S]*)$/);
-  if (m) return { speaker: m[1].trim().toUpperCase(), line: m[2] };
-  return { speaker: DEFAULT_SPEAKER, line: String(text) };
+function jsonRes(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8" },
+  });
+}
+async function sb(path, init = {}) {
+  return fetch(SB_URL + "/rest/v1/" + path, {
+    ...init,
+    headers: {
+      apikey: SB_KEY,
+      authorization: "Bearer " + SB_KEY,
+      "content-type": "application/json",
+      ...(init.headers || {}),
+    },
+  });
 }
 
-export function voiceFor(speaker) {
-  return VOICES[speaker] || VOICES[DEFAULT_SPEAKER];
-}
+export default async function handler(req) {
+  const u = new URL(req.url);
+  const slug = u.searchParams.get("slug");
+  if (!slug) return jsonRes({ error: "missing slug" }, 400);
+  if (!SB_URL || !SB_KEY) return jsonRes({ error: "store not configured" }, 500);
 
-// Remove stage directions the model sometimes writes (*pauses*, [sighs]) so the
-// voice never reads them aloud. Keeps parentheses (a real spoken aside). MUST be
-// called AFTER [[NAME]] markers are split out, so it never eats a speaker tag.
-export function stripStage(text) {
-  return String(text)
-    .replace(/\*[^*]*\*/g, "")
-    .replace(/\[[^\]]*\]/g, "")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-}
-
-// Split a turn into ordered segments by [[NAME]] markers, so a single chunk
-// that spans a speaker change still gets each part in the right voice. Text
-// before the first marker is the default speaker (host).
-export function parseSegments(text) {
-  const s = String(text);
-  const re = /\[\[\s*([A-Za-z0-9_\- ]+?)\s*\]\]/g;
-  const segs = [];
-  let lastIdx = 0;
-  let speaker = DEFAULT_SPEAKER;
-  let m;
-  while ((m = re.exec(s)) !== null) {
-    const before = s.slice(lastIdx, m.index).trim();
-    if (before) segs.push({ speaker, text: before });
-    speaker = m[1].trim().toUpperCase();
-    lastIdx = re.lastIndex;
+  // read token (select=* so a canon column-name diff can't 400 the read)
+  const tRes = await sb(
+    `booking_tokens?slug=eq.${encodeURIComponent(slug)}&select=*&limit=1`
+  );
+  if (!tRes.ok) {
+    const raw = await tRes.text();
+    let detail;
+    try { detail = JSON.parse(raw); } catch { detail = raw; }
+    return jsonRes({ error: "token read failed", status: tRes.status, detail }, 502);
   }
-  const tail = s.slice(lastIdx).trim();
-  if (tail) segs.push({ speaker, text: tail });
-  return segs.length ? segs : [{ speaker: DEFAULT_SPEAKER, text: s.trim() }];
+  const token = (await tRes.json())[0];
+  if (!token) return jsonRes({ error: "unknown slug" }, 404);
+  const archetype = token.archetype || "universal";
+
+  // GET: hand the archetype to the meeting page, which starts the web call with
+  // it via vapi.start(assistant, { metadata: { archetype, slug } }).
+  // meeting_url is the usable drop-in: the join CLIENT page (not a call URL —
+  // Vapi web calls have none). Send the spammer's browser there (redirect).
+  if (req.method === "GET") {
+    return jsonRes({
+      slug,
+      archetype,
+      // Host name off the token — this is the name the spammer emailed, so the
+      // meeting page + the call must use it (Andrew OR Andrea per booking),
+      // never a hardcoded default. Null if the column is absent; the page falls
+      // back to a safe default in that case.
+      host_name: token.host_name || null,
+      // Host timezone (SV user picks it at onboarding). Drives the fast-join
+      // opener's hour-of-day read. Null -> proxy falls back to env/US Eastern.
+      host_tz: token.host_tz || null,
+      // Fast-join flag: a "today / next-available" booking minutes out. The
+      // meeting page reads this to apply the fast-join host-arrival timing.
+      // Missing/false column -> treated as a normal future booking (safe).
+      fast_join: token.fast_join === true || token.fast_join === "true" || false,
+      meeting_url: u.origin + "/api/meeting?slug=" + encodeURIComponent(slug),
+      booked_slot: token.booked_slot || null,
+      joined_at: token.joined_at || null,
+      joined: !!token.joined_at,
+      // Target identifier for the post-call scout lane. Read from whatever the
+      // booking_tokens row carries (select=* above); meeting.js stamps these into
+      // the call metadata so the end-of-call-report can route to the right target.
+      target_id: token.target_id || null,
+      target_email: token.target_email || null,
+    });
+  }
+  if (req.method !== "POST") return jsonRes({ error: "method not allowed" }, 405);
+
+  // POST: mark the token joined. The call carries `slug` in its metadata, so
+  // call<->token correlation is by slug — no vapi_call_id column needed (and
+  // Data's canon doesn't have one). We just stamp joined_at, and log the call
+  // id for easy log correlation.
+  const callId = u.searchParams.get("call_id") || u.searchParams.get("vapi_call_id") || null;
+  const wRes = await sb(`booking_tokens?slug=eq.${encodeURIComponent(slug)}`, {
+    method: "PATCH",
+    headers: { prefer: "return=minimal" },
+    body: JSON.stringify({ joined_at: new Date().toISOString() }),
+  }).catch(() => null);
+  if (!wRes || !wRes.ok) {
+    const d = wRes ? await wRes.text().catch(() => "") : "network error";
+    console.log("join writeback failed " + (wRes ? wRes.status : "") + " " + d);
+    return jsonRes({ error: "writeback failed", detail: d }, 502);
+  }
+  console.log("join slug=" + slug + " archetype=" + archetype + " call_id=" + (callId || "none"));
+  return jsonRes({ ok: true, slug, archetype, vapi_call_id: callId });
 }
