@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Mead Hall — Feed Probe</title>
+<style>
+  body{font-family:ui-monospace,Menlo,Consolas,monospace;background:#131210;color:#e7e0d2;
+    margin:0;padding:20px;font-size:13px;line-height:1.5}
+  h1{font-size:15px;color:#e3a93f;margin:0 0 4px}
+  .sub{color:#8a8275;margin-bottom:16px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+  input{font-family:inherit;font-size:12px;background:#201c18;border:1px solid #34302a;color:#e7e0d2;
+    border-radius:6px;padding:7px 9px;min-width:340px}
+  label{color:#8a8275;font-size:11px}
+  button{font-family:inherit;font-weight:700;font-size:12px;background:#a4161a;color:#fff;border:none;
+    border-radius:6px;padding:8px 14px;cursor:pointer}
+  button.alt{background:#201c18;border:1px solid #34302a;color:#e7e0d2}
+  #verdict{margin:14px 0;padding:12px 14px;border-radius:8px;border:1px solid #34302a;background:#201c18;white-space:pre-wrap}
+  #verdict.ok{border-color:#3f7d4f;color:#9ed6ab}
+  #verdict.bad{border-color:#a4161a;color:#e0a3a3}
+  .ev{border-left:2px solid #34302a;padding:6px 0 6px 10px;margin:6px 0}
+  .ev b{color:#e3a93f}
+  .meta{color:#8a8275;font-size:11px}
+  pre{background:#0d0b09;border:1px solid #34302a;border-radius:6px;padding:10px;overflow:auto;max-height:340px}
+  .hint{color:#6f685b;font-size:11px;margin-top:4px}
+</style>
+</head>
+<body>
+  <h1>Mead Hall — Feed Probe</h1>
+  <div class="sub">One job: prove ONE real event reads off the bus through call-feed.js. No UI, no rendering — raw truth.</div>
+
+  <div class="row">
+    <label>endpoint</label>
+    <input id="endpoint" value="/api/call-feed"/>
+  </div>
+  <div class="row">
+    <label>target_id</label>
+    <input id="targetId" value="b6310c91-17c4-4484-b2c0-6fa02445c093"/>
+  </div>
+  <div class="row">
+    <label>or call_id</label>
+    <input id="callId" placeholder="(optional — leave blank to use target_id)"/>
+    <button id="go">PROBE</button>
+    <button id="goCall" class="alt">probe by call_id</button>
+  </div>
+  <div class="hint">Defaults to the test-andy target. Reads <code>?target_id=&after_seq=0</code> — the whole arc so far.</div>
+
+  <div id="verdict">Idle. Press PROBE.</div>
+
+  <div id="summary"></div>
+  <pre id="raw" style="display:none"></pre>
+
+<script>
+  const $=s=>document.querySelector(s);
+  function verdict(state,msg){ const v=$('#verdict'); v.className=state; v.textContent=msg; }
+
+  async function probe(useCall){
+    const endpoint=$('#endpoint').value.trim();
+    const tid=$('#targetId').value.trim();
+    const cid=$('#callId').value.trim();
+    const key = useCall ? (cid?('call_id='+encodeURIComponent(cid)):null)
+                        : (tid?('target_id='+encodeURIComponent(tid)):null);
+    if(!key){ verdict('bad','Need a '+(useCall?'call_id':'target_id')+' to probe.'); return; }
+    const url=endpoint+'?'+key+'&after_seq=0';
+    verdict('', 'GET '+url+'\n…');
+    $('#summary').innerHTML=''; $('#raw').style.display='none';
+    let res, body, json;
+    try{ res=await fetch(url,{headers:{Accept:'application/json'},cache:'no-store'}); }
+    catch(e){ verdict('bad','NETWORK FAIL — could not reach the endpoint.\n'+e.message+
+      '\n\nLikely: call-feed.js not deployed at this path, or wrong endpoint.'); return; }
+    body=await res.text();
+    try{ json=JSON.parse(body); }catch(_){ json=null; }
+    if(!res.ok){ verdict('bad','HTTP '+res.status+' from the endpoint.\n'+body.slice(0,400)+
+      '\n\nIf 500: check SUPABASE_URL / SERVICE_ROLE env. If 400: missing id param.'); return; }
+    const events = json && Array.isArray(json.events) ? json.events : (Array.isArray(json)?json:null);
+    if(!events){ verdict('bad','Reached the endpoint, but no {events:[...]} array came back.\nRaw:\n'+body.slice(0,400)); showRaw(body); return; }
+    if(events.length===0){ verdict('bad','Endpoint works, but ZERO events for that id.\n\nThe read path is fine — either the id is wrong, or nothing was written for it. (Bus reachable, just empty.)'); showRaw(body); return; }
+
+    // success — one or more real events came off the bus
+    const types={}; events.forEach(e=>{ const t=e.event_type||'?'; types[t]=(types[t]||0)+1; });
+    const first=events[0];
+    verdict('ok','✓ READ PROVEN — '+events.length+' event(s) off the bus.\n'+
+      'types: '+Object.entries(types).map(([k,v])=>k+'×'+v).join(', ')+'\n'+
+      'layer on first row: '+(first.layer||'(none)')+'   seq: '+(first.seq)+'   call_id: '+(first.call_id||'(none)'));
+    renderList(events); showRaw(JSON.stringify(json,null,2));
+  }
+
+  function renderList(events){
+    $('#summary').innerHTML='<div class="meta">First 12 events (newest reads bottom-up by seq):</div>'+
+      events.slice(0,12).map(e=>'<div class="ev"><b>'+(e.event_type||'?')+'</b> '+
+        '<span class="meta">seq '+e.seq+' · layer '+(e.layer||'?')+' · actor '+(e.actor||'?')+'</span>'+
+        (e.payload?('<div class="meta">'+escapeHtml(JSON.stringify(e.payload).slice(0,160))+'</div>'):'')+
+        '</div>').join('');
+  }
+  function showRaw(t){ const r=$('#raw'); r.style.display='block'; r.textContent=t; }
+  function escapeHtml(s){ return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+  $('#go').onclick=()=>probe(false);
+  $('#goCall').onclick=()=>probe(true);
+</script>
+</body>
+</html>
