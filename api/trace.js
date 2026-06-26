@@ -62,7 +62,20 @@ export async function blowLandedTotal(callId) {
 // for call-site clarity but no longer drives ordering.)
 export function makeTrace(callId, turn, waitUntil) {
   function emit(type, payload, actor) {
-    if (!ON || !URL || !KEY || !callId) return;
+    if (!ON || !URL || !KEY || !callId) {
+      // DIAGNOSTIC: say WHY an emit was skipped instead of silently returning,
+      // so a dark live-event stream is debuggable. Remove once tracing confirmed.
+      try {
+        console.log(
+          "trace skip type=" + type +
+            " ON=" + ON +
+            " hasURL=" + !!URL +
+            " hasKEY=" + !!KEY +
+            " callId=" + (callId || "MISSING")
+        );
+      } catch {}
+      return;
+    }
     const row = {
       call_id: callId,
       event_type: type,
@@ -80,7 +93,21 @@ export function makeTrace(callId, turn, waitUntil) {
         prefer: "return=minimal",
       },
       body: JSON.stringify(row),
-    }).catch(() => {});
+    })
+      .then((r) => {
+        // DIAGNOSTIC: log non-OK writes (silent failure is what bit us before).
+        if (!r.ok) {
+          r.text()
+            .then((t) =>
+              console.log("trace write FAIL type=" + type + " status=" + r.status + " " + String(t).slice(0, 200))
+            )
+            .catch(() => {});
+        }
+        return r;
+      })
+      .catch((e) => {
+        try { console.log("trace write THREW type=" + type + " " + (e && e.message ? e.message : e)); } catch {}
+      });
     if (waitUntil) { try { waitUntil(p); } catch { /* ignore */ } }
     return p;
   }
