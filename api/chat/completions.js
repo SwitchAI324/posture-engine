@@ -287,7 +287,7 @@ export default async function handler(req) {
   // The doubt-gears layer on top of whichever base is in play.
   const baseSystem = stored && stored.prefix ? stored.prefix : vapiSystem;
   const built = baseSystem
-    ? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls)
+? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil)
     : null;
   const systemBlocks = built ? built.blocks : null;
   const deathBlowFiring = built ? built.deathBlowFiring : false;
@@ -371,7 +371,7 @@ function factHint(bit, byHook) {
   return facts.join(" | ");
 }
 
-function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls) {
+function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil) {
   ammo = ammo || { ammunition: [], byHook: {} };
   let deathBlowFiring = false; // set true on the turn a Death Blow lands
   const blocks = [
