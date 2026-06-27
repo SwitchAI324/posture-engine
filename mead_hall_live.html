@@ -168,6 +168,10 @@
     padding:6px 10px;margin-top:5px;font-size:11px;gap:8px}
   .brow .st{margin-left:auto;font-family:var(--mono);font-size:9px;font-weight:700}
   .st.armed{color:var(--green)} .st.fired{color:#a59c8c} .st.firing{color:var(--gold)}
+  /* keep long lists from stretching the board/stage — scroll them instead */
+  #armPanel{max-height:300px;overflow-y:auto;overflow-x:hidden}
+  #boardBench{max-height:190px;overflow-y:auto;overflow-x:hidden}
+  #ammoRack{max-height:200px;overflow-y:auto;overflow-x:hidden}
   .st.oncall{color:var(--green)} .st.wait{color:#a59c8c} .st.used{color:#a59c8c}
   .brow.firing{background:#fff7ec;border-color:var(--gold)}
   .brow.muted{background:#faf8f3;color:var(--muted)}
@@ -185,8 +189,9 @@
 
   /* overlays */
   .ov{position:fixed;inset:0;background:#0d0b09ee;display:none;align-items:center;justify-content:center;
-    z-index:30;padding:24px}
+    z-index:30;padding:24px;overflow-y:auto}
   .ov.on{display:flex}
+  .scard{margin:auto}
   .rungwrap{max-width:1000px;width:100%}
   .runghead{color:#fff;font-family:var(--mono);display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap}
   .runghead .big{font-size:18px;font-weight:700;color:#fff}
@@ -1161,31 +1166,42 @@
 
   /* ---- inlined poller (mirror of feed.js) ---- */
   function createFeed(o){
-    let cursor=0, run=false, timer=null, busy=false, first=true; const seen=new Set();
+    let cursor=0, run=false, timer=null, busy=false, first=true, pacing=false; const seen=new Set();
     // Operational binding: prefer target_id streaming — every row carries target_id
     // (NOT NULL), so one cursor streams the whole arc (email -> booking -> call) and
     // picks up the call the moment it starts, with no need to know the call_id ahead.
     // Fall back to call_id polling when that's the only id we were given.
     const mode = o.targetId ? 'target' : (o.callId ? 'call' : null);
-    function dispatch(evs){ for(const ev of evs){ if(!ev)continue;
-      if(ev.id!=null){ if(seen.has(ev.id))continue; seen.add(ev.id); }
+    function one(ev){ if(!ev)return false;
+      if(ev.id!=null){ if(seen.has(ev.id))return false; seen.add(ev.id); }
       o.onEvent(ev);
       if(typeof ev.seq==='number'&&ev.seq>cursor)cursor=ev.seq;
-      if(ev.event_type==='call_ended'){ stop('call_ended'); return; } } }
+      return ev.event_type==='call_ended'; }
+    function dispatch(evs){ for(const ev of evs){ if(one(ev)){ stop('call_ended'); return; } } }
+    // Finished call: replay the batch at readable speed so the transcript scrolls and
+    // the board fills, ending on the scorecard — instead of snapping straight to the end.
+    function pacePlay(evs){ pacing=true; let i=0;
+      (function step(){ if(!run){ pacing=false; return; }
+        if(i>=evs.length){ pacing=false; return; }
+        const ev=evs[i++]; const ended=one(ev);
+        if(ended){ pacing=false; stop('call_ended'); return; }
+        const d = ev.event_type==='utterance' ? 950 : (ev.event_type==='call_started' ? 150 : 350);
+        timer=setTimeout(step, d); })(); }
     async function getJSON(u){ const r=await fetch(u,{headers:{Accept:'application/json'},cache:'no-store'});
       if(!r.ok){ const b=await r.text().catch(()=> ''); throw new Error('HTTP '+r.status+': '+b.slice(0,160)); } return r.json(); }
     function url(){ const key = mode==='target'
         ? 'target_id='+encodeURIComponent(o.targetId)
         : 'call_id='+encodeURIComponent(o.callId);
       return o.endpoint+'?'+key+'&after_seq='+encodeURIComponent(cursor); }
-    async function pollOnce(){ if(busy||!mode)return; busy=true;
+    async function pollOnce(){ if(busy||pacing||!mode)return; busy=true;
       try{ const {events=[]}=await getJSON(url());
-        if(run&&events.length)dispatch(events);
-        if(first){ first=false; o.onArcLoaded&&o.onArcLoaded(events); } }
+        const finished = first && events.some(e=>e&&e.event_type==='call_ended');
+        if(first){ first=false; o.onArcLoaded&&o.onArcLoaded(events, finished); }
+        if(run&&events.length){ if(finished) pacePlay(events); else dispatch(events); } }
       catch(e){ o.onError&&o.onError(e); } finally{ busy=false; } }
-    function loop(){ if(!run)return; pollOnce().finally(()=>{ if(run)timer=setTimeout(loop,o.intervalMs||1500); }); }
+    function loop(){ if(!run)return; pollOnce().finally(()=>{ if(run&&!pacing)timer=setTimeout(loop,o.intervalMs||1500); }); }
     function start(){ if(run||!mode)return; run=true; loop(); }
-    function stop(why){ if(!run)return; run=false; if(timer){clearTimeout(timer);timer=null;} o.onStop&&o.onStop(why||'stopped'); }
+    function stop(why){ if(!run)return; run=false; pacing=false; if(timer){clearTimeout(timer);timer=null;} o.onStop&&o.onStop(why||'stopped'); }
     return { start, stop, get cursor(){return cursor;}, get running(){return run;}, get mode(){return mode;} };
   }
 
@@ -1200,7 +1216,7 @@
     thread_reset_to_live:'Thread reset to live', thread_dead:'Thread went cold',
     booking_created:'\uD83D\uDCC5 Booked the call', invite_confirm_sent:'Invite confirmed',
     invite_reschedule_sent:'Rescheduled', invite_reminder_sent:'Invite reminder',
-    gary_email_sent:'Gary\u2019s post-mortem', call_outcome:'\uD83C\uDFC1 Call outcome'
+    gary_email_sent:'Gary\u2019s post-mortem'
   };
   function arcLine(ev){ const log=$('#tlog'); if(!log)return;
     const label = ARC_LABEL[ev.event_type] || ev.event_type;
@@ -1312,18 +1328,29 @@
   /* ---- THE DISPATCHER: one engagement_events row -> the render ---- */
   function applyEvent(ev){ const p=ev.payload||{};
     switch(ev.event_type){
-      case 'call_started':
-        callHasStarted=true; clearForLive(); hidePresnap();
-        rack = Array.isArray(p.ammunition)?p.ammunition:[];
-        loadout = Array.isArray(p.loadout)?p.loadout:[];
-        benchRoster = Array.isArray(p.bench_available)?p.bench_available:[];
-        setlist=[]; liveHeads=0; ourSide=1; theirSide=1; peakOur=1; peakTheir=1;
-        renderAmmoRack(); renderArmPanel();
-        dossier = Array.isArray(p.scout)?p.scout:[]; renderDossier();
-        if(typeof p.started_at==='string'){ const t=Date.parse(p.started_at); if(!isNaN(t)) secs=Math.max(0,Math.floor((Date.now()-t)/1000)); }
-        live=true; $('#tw').textContent=fmt(secs);
-        bj=0; if($('#bj'))$('#bj').textContent='\u00D70';
-        toast('Live call started'); break;
+      case 'call_started': {
+        const firstStart = !callHasStarted;   // the proxy can emit call_started per turn — only the
+        callHasStarted=true; hidePresnap();    // first initializes; the rest must not clobber the call.
+        if(firstStart){
+          clearForLive();
+          rack = Array.isArray(p.ammunition)?p.ammunition:[];
+          loadout = Array.isArray(p.loadout)?p.loadout:[];
+          benchRoster = Array.isArray(p.bench_available)?p.bench_available:[];
+          setlist=[]; liveHeads=0; ourSide=1; theirSide=1; peakOur=1; peakTheir=1;
+          renderAmmoRack(); renderArmPanel();
+          dossier = Array.isArray(p.scout)?p.scout:[]; renderDossier();
+          if(typeof p.started_at==='string'){ const t=Date.parse(p.started_at); if(!isNaN(t)) secs=Math.max(0,Math.floor((Date.now()-t)/1000)); }
+          live=true; $('#tw').textContent=fmt(secs);
+          bj=0; if($('#bj'))$('#bj').textContent='\u00D70';
+          toast('Live call started');
+        } else {
+          // subsequent call_started on the same call: backfill only what we don't yet have, never wipe.
+          if(!rack.length && Array.isArray(p.ammunition)){ rack=p.ammunition; renderAmmoRack(); }
+          if(!loadout.length && Array.isArray(p.loadout)){ loadout=p.loadout; renderArmPanel(); }
+          if(!dossier.length && Array.isArray(p.scout)){ dossier=p.scout; renderDossier(); }
+          live=true;
+        }
+        break; }
       case 'utterance': {
         const role=p.speaker_role||ev.actor; const txt=p.text||''; const nm=p.speaker_name||ev.actor;
         if(role==='host'){ showJarl(txt); tline('j', txt); }
@@ -1353,13 +1380,11 @@
         toast('Death Blow armed'); break; }
       case 'blow_fired': { const line=p.final_line||''; if(line){ showJarl(line); tline('j', line, 'JARL'); if(!muted)speak('JARL',line);} break; }
       case 'call_ended': live=false; showScoreFromEvent(p); break;
-      case 'call_outcome': {  // end-of-call summary from the engine (vapi-eoc). Surfaced, not
-        // assumed to be the scorecard trigger — call_ended owns that until PE confirms which is canonical.
-        const out=p.call_outcome||'(outcome)'; const att=(p.attended===true)?'attended':(p.attended===false?'no-show':'');
-        lastOutcome={ outcome:out, attended:p.attended, next_steps:p.next_steps||[] };
-        arcLine(ev); toast('Call outcome: '+out+(att?' \u00B7 '+att:'')); break; }
+      case 'call_outcome':  // vapi-eoc: the EMAIL engine's post-call signal, NOT a display beat.
+        // Consume as metadata only; call_ended (control.js) remains the scorecard trigger.
+        lastOutcome={ outcome:p.call_outcome, attended:p.attended, next_steps:p.next_steps||[] }; break;
       default:
-        if(ev.layer==='email' || /(_sent|_received|_created|_classified|_selected|_handoff|_outcome)$|^thread_/.test(ev.event_type)) arcLine(ev);
+        if(ev.layer==='email' || /(_sent|_received|_created|_classified|_selected|_handoff)$|^thread_/.test(ev.event_type)) arcLine(ev);
     } }
 
   function showScoreFromEvent(p){
@@ -1408,7 +1433,8 @@
     dbSent=false;
     feed=createFeed({ endpoint:FEED_ENDPOINT, callId, targetId, intervalMs:1500,
       onEvent:applyEvent,
-      onArcLoaded:()=>{ if(callHasStarted){ toast('Call already in progress \u2014 joined live'); }
+      onArcLoaded:(events, finished)=>{ if(finished){ toast('Replaying the raid \u2014 watch it unfold'); }
+        else if(callHasStarted){ toast('Call already in progress \u2014 joined live'); }
         else { toast('Arc loaded \u2014 the story so far'); if(source==='live') showPresnap(); } },
       onError:(e)=>callFail('feed', e, false), onStop:()=>{ feedRunning=false; setLiveRunUI(false); } });
     feed.start(); feedRunning=true; setLiveRunUI(true); }
