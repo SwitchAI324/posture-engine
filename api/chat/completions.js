@@ -429,9 +429,16 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         "engine"
       );
     }
+    // Spammer name from Scouting's email dissection (sender_identity hook),
+    // already in the rack loaded at call start — no per-turn DB read. Best-
+    // effort: real name when dissection found one, null otherwise (Mead Hall
+    // renders "Caller" on null — never a placeholder name).
+    const spammerName =
+      (ammo && ammo.byHook && ammo.byHook.sender_identity &&
+        ammo.byHook.sender_identity.name) || null;
     trace.emit(
       "utterance",
-      { speaker_role: "spammer", speaker_name: null, character_id: null, text: lastUserText(messages), turn_index: turn },
+      { speaker_role: "spammer", speaker_name: spammerName, character_id: null, text: lastUserText(messages), turn_index: turn },
       "spammer"
     );
     if (accusation) trace.emit("spammer_reaction", { reaction_type: "suspicious", turn_index: turn }, "spammer");
@@ -530,6 +537,28 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // callback when they actually sat). Empty string for every normal call/turn.
     const opener = fastJoinOpener(body, turn);
     if (opener) mutable += opener;
+    // NAME HANDLING (host's first line only): if Scouting's email dissection
+    // gave us a name (sender_identity), the host says it confidently — it's the
+    // name they presented professionally in their email. If we have NO trusted
+    // email name, the host opens by ASKING who they're speaking with — never
+    // guessing or speaking a booking-form name (which is often scribbled junk).
+    if (turn === 0) {
+      const emailName =
+        (ammo && ammo.byHook && ammo.byHook.sender_identity &&
+          ammo.byHook.sender_identity.name) || null;
+      if (emailName) {
+        mutable +=
+          "\n\nTHEIR NAME: you know from their email that you're speaking with " +
+          emailName + ". Use their name naturally and confidently early on — do " +
+          "NOT ask them to confirm it; you already know it.";
+      } else {
+        mutable +=
+          "\n\nTHEIR NAME: you do NOT have a reliable name for this person. Do " +
+          "NOT invent one or address them by any name. Early in the call, ask " +
+          "naturally who you're speaking with (e.g. \"sorry, remind me who I'm " +
+          "speaking with?\") so you can use it from then on.";
+      }
+    }
     if (deathBlow) {
       // Rungs are gone: PE doesn't deliver a canned line. It directs the Host to
       // IMPROVISE the most absurd-within-reason closer in persona, right now. The
