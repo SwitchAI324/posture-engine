@@ -67,7 +67,7 @@ module.exports = async (req, res) => {
     const upstream = await fetch(EXEC_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source: 'sv_page', slug, email, slot, name }),
+      body: JSON.stringify({ source: 'sv_page', slug, email, slot, name, fast_join: body.fast_join === true }),
     });
 
     const text = await upstream.text();

@@ -80,11 +80,11 @@ function hostDisplay(raw) {
 
 async function readToken(slug) {
   const base = `${SUPABASE_URL}/rest/v1/booking_tokens?slug=eq.${encodeURIComponent(slug)}`;
-  const full = `${base}&select=slug,narrative,slot_pool,difficulty,round,booked_slot,host_name,host_tz,fast_join`;
+  const full = `${base}&select=slug,narrative,slot_pool,difficulty,round,booked_slot,host_name,fast_join`;
   let res = await fetch(full, { headers: { ...sbHeaders, Accept: 'application/json' } });
   if (!res.ok) {
-    // host_tz / fast_join may not exist yet — retry with the columns that always
-    // exist so render keeps working until Data adds them (no ordering dependency).
+    // fast_join may not exist yet — retry with the columns that always exist so
+    // render keeps working until Data adds it (no ordering dependency).
     const safe = `${base}&select=slug,narrative,slot_pool,difficulty,round,booked_slot,host_name`;
     res = await fetch(safe, { headers: { ...sbHeaders, Accept: 'application/json' } });
     if (!res.ok) {
@@ -94,6 +94,23 @@ async function readToken(slug) {
   }
   const rows = await res.json();
   return rows[0] || null;
+}
+
+// Host timezone is a per-HOST setting on host_config (NOT per-booking on the
+// token — that would re-stamp every booking and drift if the host moves zones).
+// Resolve it by host_name; fall back to the deploy default. Best-effort: if
+// host_config isn't reachable or has no row, the env default is fine for display.
+async function readHostTz(hostName) {
+  if (!hostName) return HOST_TZ;
+  try {
+    const url =
+      `${SUPABASE_URL}/rest/v1/host_config` +
+      `?host_name=eq.${encodeURIComponent(hostName)}&select=host_tz&limit=1`;
+    const res = await fetch(url, { headers: { ...sbHeaders, Accept: 'application/json' } });
+    if (!res.ok) return HOST_TZ;
+    const rows = await res.json();
+    return (rows[0] && rows[0].host_tz) || HOST_TZ;
+  } catch (e) { return HOST_TZ; }
 }
 
 // Freeze the authored story onto the token (first load only).
@@ -205,8 +222,8 @@ module.exports = async (req, res) => {
       slot_pool = authored.slot_pool;
     }
 
-    // per-target host timezone off the token, falling back to the deploy default
-    const tz = token.host_tz || HOST_TZ;
+    // per-host timezone from host_config (NOT the token); env default fallback
+    const tz = await readHostTz(token.host_name);
 
     res.status(200).json({
       host: hostDisplay(token.host_name),

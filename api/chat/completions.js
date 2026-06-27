@@ -287,7 +287,7 @@ export default async function handler(req) {
   // The doubt-gears layer on top of whichever base is in play.
   const baseSystem = stored && stored.prefix ? stored.prefix : vapiSystem;
   const built = baseSystem
-? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil)
+    ? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil)
     : null;
   const systemBlocks = built ? built.blocks : null;
   const deathBlowFiring = built ? built.deathBlowFiring : false;
@@ -394,7 +394,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     const accusation = detectAccusation(lastUserText(messages));
     const turn = countUserTurns(messages);
 
-// --- MEAD HALL TRACE (dark unless TRACE_ENABLED=1) ---------------------
+    // --- MEAD HALL TRACE (dark unless TRACE_ENABLED=1) ---------------------
     const trace = makeTrace(callId, turn, waitUntil);
     // Death Blow (Trigger A): rungs are gone. Fire on a PENDING control alone;
     // PE generates the absurd closing line in persona at fire time (below).
@@ -435,6 +435,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       "spammer"
     );
     if (accusation) trace.emit("spammer_reaction", { reaction_type: "suspicious", turn_index: turn }, "spammer");
+
     // --- FIT: rank the bits for THIS moment (pure in-memory math) ----------
     // archetype is "universal" until the Archetype layer wires real types, so
     // fit currently discriminates on accusation + gear_bias. recency comes from
@@ -810,10 +811,13 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
           }
         }
         // utterances, in spoken order: host first, then any bench interjection.
+        // AWAIT each emit so the SSE stream close (send stop / done) below can't
+        // tear down the pending write before it lands — this is why host
+        // utterances were never reaching the bus while spammer ones did.
         if (utterTrace) {
           const clean = hostText.replace(/\[\[[^\]]*\]\]/g, "").trim();
           if (clean) {
-            utterTrace.emit(
+            await utterTrace.emit(
               "utterance",
               { speaker_role: "host", speaker_name: meta.hostName || HOST_NAME_DEFAULT, character_id: "host", text: clean, turn_index: meta.turn },
               "host"
@@ -823,8 +827,8 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
           // the real line — emit blow_fired with it, then call_ended (death_blow).
           if (meta.deathBlowFiring) {
             const nowIso = new Date().toISOString();
-            utterTrace.emit("blow_fired", { fired_at: nowIso, final_line: clean || null }, "host");
-            utterTrace.emit(
+            await utterTrace.emit("blow_fired", { fired_at: nowIso, final_line: clean || null }, "host");
+            await utterTrace.emit(
               "call_ended",
               { ended_at: nowIso, ending_type: "death_blow", duration_seconds: null, blows_landed: null, heads_mustered: null, peak_their_side: null, peak_our_side: null },
               "engine"
@@ -833,7 +837,7 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
           if (benchTxt) {
             const mm = String(benchTxt).match(/\[\[([^\]]+)\]\]\s*([\s\S]*)/);
             if (mm && mm[2].trim()) {
-              utterTrace.emit(
+              await utterTrace.emit(
                 "utterance",
                 { speaker_role: "bench", speaker_name: mm[1], character_id: mm[1], text: mm[2].trim(), turn_index: meta.turn },
                 "bench"
