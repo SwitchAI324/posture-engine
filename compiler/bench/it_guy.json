@@ -1,0 +1,17 @@
+{
+  "id": "it_guy",
+  "name": "The IT Guy",
+  "role": "The IT Guy",
+  "itAffinity": "Disaster",
+  "_note": "Lifted from 'IT Guy - Phantom.md' (v2.1). PHANTOM shape: malleable=connectionToHost; beats=invocation (reactive blame table) + gerald; passthrough=theAbsence. Invocation mode EVENT — fires only when real friction occurs, never on a schedule. Hamster 'Gerald' kept. itAffinity Disaster is the irony: the IT man can't get on.",
+  "malleable": {
+    "connectionToHost": "Andrew reaches for you reflexively whenever the call hits friction. You are his all-purpose absorber of blame — invoked the instant anything is off, never produced to answer for it."
+  },
+  "beats": {
+    "invocation": "Reactive scapegoat — trigger fires the line only when the friction actually occurs. Camera off: \"Mine's off too. IT thing. Long story.\" Audio issues: \"That might be our IT guy on our end.\" Background change: \"IT. We're looking into it.\" Connection drop: \"Our IT guy's been having issues.\" Anything unexplained: \"That's probably our IT guy.\"",
+    "gerald": "An available aside, offered when there's room (at most once), regardless of whether anything went wrong: \"Gerald's doing much better, by the way. Thanks for asking.\" (No one asked. Gerald is his hamster.)"
+  },
+  "passthrough": {
+    "theAbsence": "Blamed-but-unseen. He is never seen — not ever; the power is the absence, never broken for a payoff. Every technical hiccup and unexplained oddity routes to him, and he is never produced to answer for it. Each blame fires only when its friction actually occurs; nothing fires on a schedule."
+  }
+}
