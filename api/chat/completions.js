@@ -394,10 +394,8 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     const accusation = detectAccusation(lastUserText(messages));
     const turn = countUserTurns(messages);
 
-   // --- MEAD HALL TRACE (dark unless TRACE_ENABLED=1) ---------------------
-    console.log("PROBE-A before makeTrace callId=" + (callId || "MISSING") + " turn=" + turn);
+// --- MEAD HALL TRACE (dark unless TRACE_ENABLED=1) ---------------------
     const trace = makeTrace(callId, turn, waitUntil);
-    console.log("PROBE-B trace created, type=" + typeof trace + " emit=" + typeof (trace && trace.emit));
     // Death Blow (Trigger A): rungs are gone. Fire on a PENDING control alone;
     // PE generates the absurd closing line in persona at fire time (below).
     const dbCtl = controls && controls.deathBlow;
@@ -437,7 +435,6 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       "spammer"
     );
     if (accusation) trace.emit("spammer_reaction", { reaction_type: "suspicious", turn_index: turn }, "spammer");
-    console.log("PROBE-C after utterance emit, turn=" + turn);
     // --- FIT: rank the bits for THIS moment (pure in-memory math) ----------
     // archetype is "universal" until the Archetype layer wires real types, so
     // fit currently discriminates on accusation + gear_bias. recency comes from
