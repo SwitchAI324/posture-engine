@@ -474,7 +474,7 @@
       <div class="sidelab"><span class="who" id="themlab">THEM (1)</span></div>
       <div class="grid one" id="themgrid">
         <div class="tile spk" id="spammerTile">
-          <span class="namep">DEREK · AI spammer</span>
+          <span class="namep" id="spammerName">Caller</span>
           <span class="rec"><i></i>REC</span>
           <div class="av">
             <div class="orb hum">🧔</div>
@@ -754,7 +754,7 @@
     $('#scRung').textContent='Death Blow';
     $('#scBj').textContent=bj;
     $('#scLine').textContent='The Host landed the blow and he fled. A clean kill.';
-    $('#scOv').classList.add('on');
+    if(SCORECARD_ENABLED) $('#scOv').classList.add('on');
   }
   $('#scClose').onclick=()=>$('#scOv').classList.remove('on');
 
@@ -1155,6 +1155,9 @@
                  ?endpoint=/api/call-feed  ?db_endpoint=/api/death-blow
      =================================================================== */
   const qp = new URLSearchParams(location.search);
+  // Scorecard auto-pop is DISCONNECTED for now — the summary will be redesigned to
+  // flow from the main screen. Re-enable by flipping this to true (or ?scorecard=1).
+  const SCORECARD_ENABLED = (qp.get('scorecard')==='1');
   let source = (qp.get('source')==='live' || qp.get('call_id') || qp.get('target_id')) ? 'live'
              : (qp.get('source')==='demo' ? 'demo' : 'replay');
   const FEED_ENDPOINT    = qp.get('endpoint')         || '/api/call-feed';
@@ -1352,11 +1355,14 @@
         }
         break; }
       case 'utterance': {
-        const role=p.speaker_role||ev.actor; const txt=p.text||''; const nm=p.speaker_name||ev.actor;
-        if(role==='host'){ showJarl(txt); tline('j', txt); }
-        else if(role==='spammer'){ const c=$('#capDerek'); if(c){c.textContent='\u201C'+txt+'\u201D';c.classList.add('show');} setSpeak('spam'); $('#capJarl').classList.remove('show'); tline('d', txt); }
-        else { const tile=liveBenchTile(nm,p.role,p.glyph); speakOur(tile); const c=$('#cap-'+slug(nm)); if(c){c.textContent='\u201C'+txt+'\u201D';c.classList.add('show');} tline('j', txt, nm); }
-        if(!muted) speak(role==='spammer'?'DEREK':role==='host'?'JARL':nm, txt);
+        const role=p.speaker_role||ev.actor; const txt=p.text||'';
+        if(role==='host'){ const hn=p.speaker_name||'HOST'; showJarl(txt); tline('j', txt, hn); }
+        else if(role==='spammer'){
+          const sn=p.speaker_name||'Caller';  // honest neutral label when Scouting has no name — NEVER a placeholder
+          const nl=$('#spammerName'); if(nl) nl.textContent=sn;
+          const c=$('#capDerek'); if(c){c.textContent='\u201C'+txt+'\u201D';c.classList.add('show');} setSpeak('spam'); $('#capJarl').classList.remove('show'); tline('d', txt, sn); }
+        else { const nm=p.speaker_name||'Bench'; const tile=liveBenchTile(nm,p.role,p.glyph); speakOur(tile); const c=$('#cap-'+slug(nm)); if(c){c.textContent='\u201C'+txt+'\u201D';c.classList.add('show');} tline('j', txt, nm); }
+        if(!muted) speak(role==='spammer'?'DEREK':role==='host'?'JARL':(p.speaker_name||'JARL'), txt);
         break; }
       case 'bit_deployed': { const n=p.name||p.bit_id||'bit';
         firedLog[n]=(firedLog[n]||0)+1; selectedBit=n; renderBoardBits(n); setTimeout(()=>renderBoardBits(null),2600);
@@ -1402,7 +1408,7 @@
       host_ended:'The Host ended it on its own terms.', error:'The line dropped.' };
     $('#scLine').textContent=(END[p.ending_type]||('Ended: '+(p.ending_type||'unknown')))+
       ' \u00B7 '+heads+' heads, peak '+pkOur+'v'+pkThem;
-    $('#scOv').classList.add('on'); }
+    if(SCORECARD_ENABLED) $('#scOv').classList.add('on'); }
 
   /* ---- Death Blow WRITE — the Director's one live control (live only) ---- */
   let dbSent=false;
