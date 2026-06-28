@@ -599,6 +599,18 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         bit_type: top.bit_type || top.type || null,
         trigger: firedArmedBit ? "armed" : "auto",
         turn_index: turn,
+        // WHY-STAMP: the causal link Mead Hall draws gear->bit from. The fit
+        // score that cleared the bar this turn, the bar it cleared, and the gear
+        // state at fire — so "suspicion=slipping pushed score 7.0 over a 3.0 bar"
+        // is reconstructable from the event alone.
+        fit_score: top.score != null ? +top.score.toFixed(2) : null,
+        deploy_bar: turn <= WARMUP_TURNS ? "warmup" : +bar.toFixed(2),
+        gears_at_fire: {
+          suspicion: state.suspicion,
+          pressure: state.pressure,
+          engagement: state.engagement,
+          slip: state.slip,
+        },
       };
       if (top.bit_type === "count") {
         // count bit: PE owns the running tally. count_label is static on the bit;
@@ -634,6 +646,26 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         ? "  <- " + changes.map((c) => `${c.axis}:${c.from}->${c.to}`).join(", ")
         : "") + (accusation ? "  accuse:" + accusation : "");
     console.log("gears " + JSON.stringify(state) + trail);
+    // GEAR_STATE: the engine's real reasoning, emitted to the bus each turn so
+    // the Director's View can render the axis values + fit-vs-bar live. These are
+    // the AUTHORITATIVE values the engine actually uses — lowercase axis enums,
+    // bar-scale fit numbers (NOT 0-1). Mead Hall renders off this exact shape.
+    trace.emit(
+      "gear_state",
+      {
+        suspicion: state.suspicion,        // alive | slipping | foregone
+        pressure: state.pressure,          // calm | pushing | extracting
+        engagement: state.engagement,      // bored | hooked | stunned
+        slip: state.slip,
+        fit_score: top ? +top.score.toFixed(2) : null,
+        deploy_bar: turn <= WARMUP_TURNS ? "warmup" : +bar.toFixed(2),
+        pool: poolSize,
+        will_fire: fire,                   // did a bit clear the bar this turn
+        top_bit: top ? top.name : null,
+        turn_index: turn,
+      },
+      "engine"
+    );
     const suspicionChanges = changes.filter((c) => c.axis === "suspicion");
     if (suspicionChanges.length) {
       // rungs are gone — gear_transition is now just the suspicion-axis move.
