@@ -1037,6 +1037,7 @@ export async function runHostTurn({ messages, callId, meta }) {
     "you. Stay in character, keep them on the line, never reveal you suspect " +
     "anything. Speak naturally, one short conversational turn at a time.";
 
+  console.log("SIM_HOSTTURN lastUser=" + JSON.stringify((messages && messages.length) ? messages[messages.length-1] : null));
   const built = buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil);
   const systemBlocks = built ? built.blocks : null;
   const deathBlowFiring = built ? built.deathBlowFiring : false;
