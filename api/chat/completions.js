@@ -993,6 +993,105 @@ function json(obj, status = 200) {
   });
 }
 
+// --- SIM HOST TURN (used by /api/sim-call) --------------------------------
+// Runs ONE real host turn for the sim: identical engine to production. Reuses
+// buildSystemBlocks (which computes the real gears/fit/bit decision AND emits
+// gear_state / spammer-utterance / bit_deployed to the bus), then does a
+// NON-STREAMING Anthropic call to get the host's line (the sim doesn't need
+// SSE). Also emits the HOST utterance to the bus (production does this in the
+// SSE finishUp; the sim does its own here).
+//
+//   messages : OpenAI-shape [{role, content}, ...], last is the spammer's line
+//   callId   : the sim's synthetic call id (so events land on the bus)
+//   meta     : { hostName, archetype, slug } — sim-supplied call context
+// Returns { line, deathBlowFiring }.
+export async function runHostTurn({ messages, callId, meta }) {
+  const body = {
+    call: { id: callId, metadata: { host_name: meta.hostName, archetype: meta.archetype, slug: meta.slug || null } },
+  };
+  const slug = meta.slug || null;
+
+  // Same hot-path reads production does: stored prefix, ammo, controls.
+  let stored = null;
+  let ammo = { ammunition: [], byHook: {} };
+  let controls = { deathBlow: null, armed: [] };
+  try {
+    const [s, a, ctl] = await Promise.all([
+      getCall(callId).catch(() => null),
+      readAmmunition(slug).catch(() => ({ ammunition: [], byHook: {} })),
+      getControls(callId).catch(() => ({ deathBlow: null, armed: [] })),
+    ]);
+    stored = s;
+    if (a) ammo = a;
+    if (ctl) controls = ctl;
+  } catch { stored = null; }
+
+  // No pre-snap prefix in sim (Vapi system absent) -> base is a minimal host
+  // frame so the gears/bits layer has something to sit on. buildSystemBlocks
+  // does ALL the real engine work and bus emits internally.
+  const baseSystem =
+    (stored && stored.prefix) ||
+    "You are the Host on a live video call with a spammer who booked time with " +
+    "you. Stay in character, keep them on the line, never reveal you suspect " +
+    "anything. Speak naturally, one short conversational turn at a time.";
+
+  const built = buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil);
+  const systemBlocks = built ? built.blocks : null;
+  const deathBlowFiring = built ? built.deathBlowFiring : false;
+  const turn = countUserTurns(messages);
+
+  // Non-streaming host line.
+  const req = {
+    model: MODEL(),
+    max_tokens: MAX_TOKENS(),
+    messages,
+    ...(deathBlowFiring ? { temperature: 1 } : {}),
+    ...(systemBlocks ? { system: systemBlocks } : {}),
+  };
+  const r = await fetch(ANTHROPIC_URL, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": process.env.ANTHROPIC_API_KEY,
+      "anthropic-version": ANTHROPIC_VERSION,
+    },
+    body: JSON.stringify(req),
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error("host turn upstream " + r.status + " " + t.slice(0, 200));
+  }
+  const data = await r.json();
+  let line = (data.content || [])
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join(" ")
+    .trim();
+  // Strip any bench tag the model might echo (it shouldn't, but be safe).
+  const clean = line.replace(/\[\[[^\]]*\]\]/g, "").trim();
+
+  // Emit the HOST utterance to the bus (sim's equivalent of finishUp).
+  const trace = makeTrace(callId, turn, waitUntil);
+  if (clean) {
+    await trace.emit(
+      "utterance",
+      { speaker_role: "host", speaker_name: meta.hostName || "Host", character_id: "host", text: clean, turn_index: turn },
+      "host"
+    );
+  }
+  if (deathBlowFiring) {
+    const nowIso = new Date().toISOString();
+    await trace.emit("blow_fired", { fired_at: nowIso, final_line: clean || null }, "host");
+    await trace.emit(
+      "call_ended",
+      { ended_at: nowIso, ending_type: "death_blow", duration_seconds: null },
+      "engine"
+    );
+  }
+
+  return { line: clean, deathBlowFiring };
+}
+
 // --- PHASE 4 PREVIEW (not wired yet) --------------------------------------
 // The Governor will run as a background task that NEVER blocks this stream.
 // On Vercel, import { waitUntil } from "@vercel/functions" and wrap the
