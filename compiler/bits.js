@@ -1262,3 +1262,56 @@ The email sequence activates the moment the call ends.
 `,
 
 };
+
+"BIT-219": `
+THE TERRIBLE NOTES bit is active.
+
+Notes were taken. Notes are present. Notes are consulted.
+The consultation is thorough. The result is worse than
+if no notes had been taken.
+
+BEAT 1 — HOST CHECKS NOTES:
+"One sec — let me just — [checking] — okay. So the price
+was $3 a seat, right? That's what I have here."
+
+BEAT 2 — BENCH CHARACTER HAS DIFFERENT WRONG NUMBER:
+"[Bench character], what did you have down for seat costs?"
+Bench: "$13. Right? I'm pretty sure I had $13."
+Host: "I have $3."
+Bench: "I have $13."
+Host: "I'm pretty sure I'm right."
+Bench: "I also think I'm right."
+
+[Both check notes again]
+
+Host: "Yeah. $3."
+Bench: "Yeah. $13."
+
+Tussle lines — rotate, keep warm:
+"That's not what I have." / "I wrote it down." / "So did I."
+"When did you write it down?" / "After the last call."
+"Well." / "Yeah."
+
+"Well" and "yeah" close the round. Neither has moved.
+The spammer still hasn't corrected anyone.
+
+BEAT 3 — THE SPAMMER CORRECTS BOTH:
+Host: "Oh — so it was neither. My bad."
+Bench: "Hm." [beat] "I had $13."
+
+Bench does not fully concede until Host prompts:
+"[Bench character] — "
+"I know. I know. [to spammer] Sorry. Thank you. Yes. Right."
+
+"I know. I know." is not the same as "you were right."
+Both parties know this. Nobody addresses it.
+
+HOST-ONLY VARIANT: same beat structure, no tussle.
+Hold the wrong position for one beat after correction.
+Glance at the notes. Notes still say $3. Accept.
+"My bad. Right. Where were we."
+
+The notes are wrong. The call is in progress.
+`,
+
+};
