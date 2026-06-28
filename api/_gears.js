@@ -19,6 +19,13 @@
 //   * §5.6 slip ACCUMULATOR -> suspicion now needs sustained tells to flip
 //     (hysteresis), with warmth_return cooling it. No more single-word flips.
 //   * §5.8 engagement signal lists -> folded into the engagement tell-set.
+//
+// STICKY SUSPICION (added): an accusation leaves a MARK. Once the caller has
+// explicitly accused (the w:2 strong tell), suspicion can be deflected back
+// down but NOT all the way to pristine — the slip counter floors at 1, so the
+// host stays a notch warier and one more tell re-trips it. Repeated accusations
+// compound: each raises the floor further, and enough of them tip toward
+// FOREGONE. A real wary person doesn't fully forget being called a bot.
 // ----------------------------------------------------------------------
 
 import { TELLS } from "./_gears_tells.js";
@@ -63,6 +70,11 @@ export const AXES = {
       warmth: {
         re: TELLS.suspicion.warmth,
       },
+      // STICKY: the strong tell IS an accusation. When it fires we ratchet the
+      // floor up (accuseFloor) so warmth can't fully clear the slip counter, and
+      // enough accusations push suspicion one-way to FOREGONE.
+      accusationTell: TELLS.suspicion.strong,
+      foregoneAfterAccusations: 3, // 3rd explicit accusation blows the cover
       tells: [
         // explicit accusation -> weight 2 (flips immediately at threshold 2)
         {
@@ -168,13 +180,17 @@ export const AXES = {
   },
 };
 
-// The neutral starting position on all three dials (+ the slip accumulator).
+// The neutral starting position on all three dials (+ the slip accumulator and
+// the accusation ratchet floor).
 export function defaultState() {
   return {
     suspicion: AXES.suspicion.default,
     pressure: AXES.pressure.default,
     engagement: AXES.engagement.default,
     slip: 0,
+    accuseFloor: 0, // STICKY: raised each time the caller explicitly accuses;
+                    // floors how low warmth can pull the slip counter, so
+                    // suspicion never fully forgets an accusation.
   };
 }
 
@@ -185,27 +201,60 @@ function stepAccumulator(def, axis, next, text) {
   const a = def.accumulator;
   let cur = def.states[next[axis]] ? next[axis] : def.default;
   let count = next[a.counter] || 0;
-  const before = cur, beforeCount = count;
+  let accuseFloor = next.accuseFloor || 0;
+  const before = cur, beforeCount = count, beforeFloor = accuseFloor;
 
   if (def.states[cur].transitions.length === 0) {
     return { changed: false, dirty: false }; // terminal, locked
   }
+
+  // Hard exit: explicit "you're an AI / I'm done" -> FOREGONE, one-way.
   if (a.hardExit.re.test(text)) {
     next[axis] = a.hardExit.to;
     next[a.counter] = 0;
     return { changed: true, from: before, to: a.hardExit.to, dirty: true };
   }
-  if (a.warmth && a.warmth.re.test(text)) count = Math.max(0, count - 1);
+
+  // STICKY: did the caller explicitly ACCUSE this turn? (the strong tell)
+  const accusedNow = a.accusationTell ? a.accusationTell.test(text) : false;
+  if (accusedNow) {
+    accuseFloor = Math.min(a.threshold - 1, accuseFloor + 1); // ratchet up, cap below threshold
+    // Enough explicit accusations across the call -> cover blown, one-way.
+    if (a.foregoneAfterAccusations &&
+        accuseFloor + 1 >= a.foregoneAfterAccusations &&
+        cur === a.advance.to) {
+      // already slipping AND accusations have piled up -> foregone
+      next[axis] = a.hardExit.to;
+      next[a.counter] = 0;
+      next.accuseFloor = accuseFloor;
+      return { changed: true, from: before, to: a.hardExit.to, dirty: true };
+    }
+  }
+
+  // Warmth cools the counter — but only down to the accusation floor, never
+  // below it. So a deflected accusation leaves suspicion a notch elevated.
+  if (a.warmth && a.warmth.re.test(text)) {
+    count = Math.max(accuseFloor, count - 1);
+  }
   for (const t of a.tells) {
     if (t.re.test(text)) { count = Math.min(a.threshold, count + t.w); break; }
   }
+
   if (cur === a.advance.from && count >= a.threshold) cur = a.advance.to;
-  else if (cur === a.relax.from && count <= 0) cur = a.relax.to;
+  else if (cur === a.relax.from && count <= accuseFloor) {
+    // Relax only if we're at/under the floor. With accuseFloor>0 the host
+    // stays slipping-adjacent: count can't drop below the floor, so a single
+    // new tell re-trips it fast.
+    if (accuseFloor <= 0) cur = a.relax.to;
+    // else: stay slipping — accusation memory holds the line.
+  }
 
   next[axis] = cur;
   next[a.counter] = count;
+  next.accuseFloor = accuseFloor;
   const changed = cur !== before;
-  return { changed, from: before, to: cur, dirty: changed || count !== beforeCount };
+  const dirty = changed || count !== beforeCount || accuseFloor !== beforeFloor;
+  return { changed, from: before, to: cur, dirty };
 }
 
 // Run FORCE-SET across all three axes for one caller utterance. Each axis is
