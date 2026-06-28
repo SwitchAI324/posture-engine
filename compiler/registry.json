@@ -49,26 +49,6 @@
       "posture": "Jarl",
       "posture_id": "jarl",
       "posture_stance": "Apex — no boss",
-      "bench": "Tom",
-      "bench_id": "tom",
-      "bench_demand": "Host invokes / manages",
-      "verdict": "reframe",
-      "instruction": "Jarl IS the decision-maker; can't await Tom's sign-off. Recast Tom as a peer whose buy-in he wants, not approval."
-    },
-    {
-      "posture": "Jarl",
-      "posture_id": "jarl",
-      "posture_stance": "Apex — no boss",
-      "bench": "Sandra",
-      "bench_id": "sandra",
-      "bench_demand": "Host invokes / manages",
-      "verdict": "reframe",
-      "instruction": "No approver above an apex lord. Recast Sandra as a trusted advisor whose blessing he seeks."
-    },
-    {
-      "posture": "Jarl",
-      "posture_id": "jarl",
-      "posture_stance": "Apex — no boss",
       "bench": "Brent",
       "bench_id": "brent",
       "bench_demand": "Host invokes / manages",
@@ -229,26 +209,6 @@
       "posture": "Bondi",
       "posture_id": "bondi",
       "posture_stance": "Owner — no boss",
-      "bench": "Tom",
-      "bench_id": "tom",
-      "bench_demand": "Host invokes / manages",
-      "verdict": "reframe",
-      "instruction": "Bondi is the final yes; no Tom above him. Recast Tom as a partner / co-owner or key customer."
-    },
-    {
-      "posture": "Bondi",
-      "posture_id": "bondi",
-      "posture_stance": "Owner — no boss",
-      "bench": "Sandra",
-      "bench_id": "sandra",
-      "bench_demand": "Host invokes / manages",
-      "verdict": "reframe",
-      "instruction": "No approver above the owner. Recast Sandra as the employee who really runs the place (fits 'Dave handles intake')."
-    },
-    {
-      "posture": "Bondi",
-      "posture_id": "bondi",
-      "posture_stance": "Owner — no boss",
       "bench": "Brent",
       "bench_id": "brent",
       "bench_demand": "Host invokes / manages",
@@ -314,26 +274,6 @@
       "bench_demand": "Host reveres",
       "verdict": "blocked",
       "instruction": "Two 'knowers' collide — all-seeing vs hard-won wisdom; they compete and cancel.  [structural]"
-    },
-    {
-      "posture": "Völva",
-      "posture_id": "volva",
-      "posture_stance": "Outside hierarchy",
-      "bench": "Tom",
-      "bench_id": "tom",
-      "bench_demand": "Host invokes / manages",
-      "verdict": "reframe",
-      "instruction": "She already knows Tom won't come; the dangle works as foreknowledge, not hope."
-    },
-    {
-      "posture": "Völva",
-      "posture_id": "volva",
-      "posture_stance": "Outside hierarchy",
-      "bench": "Sandra",
-      "bench_id": "sandra",
-      "bench_demand": "Host invokes / manages",
-      "verdict": "reframe",
-      "instruction": "The absent approver, framed as something she foresaw."
     },
     {
       "posture": "Völva",
@@ -464,6 +404,66 @@
       "bench_demand": "Host invokes / manages",
       "verdict": "reframe",
       "instruction": "Two empty talkers — floor fight plus glass jaw. Recast."
+    },
+    {
+      "posture": "Jarl",
+      "posture_id": "jarl",
+      "posture_stance": "Apex — no boss",
+      "bench": "The No-Show",
+      "bench_id": "no_show",
+      "bench_demand": "Host invokes / manages",
+      "verdict": "reframe",
+      "instruction": "Jarl is apex; the No-Show is a summoned peer, not a superior. Dangle becomes lordly expectation, never anxious chasing."
+    },
+    {
+      "posture": "Bondi",
+      "posture_id": "bondi",
+      "posture_stance": "Owner — no boss",
+      "bench": "The No-Show",
+      "bench_id": "no_show",
+      "bench_demand": "Host invokes / manages",
+      "verdict": "reframe",
+      "instruction": "Bondi has no upstairs; repoint the awaited man to a floor guy/supplier (Sal, mid-delivery). Imminent-but-never, earthbound."
+    },
+    {
+      "posture": "Völva",
+      "posture_id": "volva",
+      "posture_stance": "Outside hierarchy",
+      "bench": "The No-Show",
+      "bench_id": "no_show",
+      "bench_demand": "Host invokes / manages",
+      "verdict": "reframe",
+      "instruction": "Volva foresees the non-arrival; dangle by cryptic foreknowledge, not ETAs. Mystique keeps them waiting."
+    },
+    {
+      "posture": "Jarl",
+      "posture_id": "jarl",
+      "posture_stance": "Apex — no boss",
+      "bench": "The Approver",
+      "bench_id": "approver",
+      "bench_demand": "Host invokes / manages",
+      "verdict": "reframe",
+      "instruction": "Jarl answers only to the board; reframe the Approver upward into that grand, unreachable body."
+    },
+    {
+      "posture": "Bondi",
+      "posture_id": "bondi",
+      "posture_stance": "Owner — no boss",
+      "bench": "The Approver",
+      "bench_id": "approver",
+      "bench_demand": "Host invokes / manages",
+      "verdict": "reframe",
+      "instruction": "Bondi's only sign-off is domestic; recast the Approver as the owner's wife who does the books."
+    },
+    {
+      "posture": "Völva",
+      "posture_id": "volva",
+      "posture_stance": "Outside hierarchy",
+      "bench": "The Approver",
+      "bench_id": "approver",
+      "bench_demand": "Host invokes / manages",
+      "verdict": "reframe",
+      "instruction": "Volva needs no approval; suppress the deferral — the verdict is already sealed (withheld, not awaited)."
     }
   ]
 }
