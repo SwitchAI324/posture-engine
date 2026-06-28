@@ -44,7 +44,8 @@ export async function getCall(callId) {
     gear: rows[0].gear || "alive", // gear column = SUSPICION axis
     pressure: rows[0].pressure || "calm",
     engagement: rows[0].engagement || "hooked",
-    slip: rows[0].slip ?? 0, // suspicion slip accumulator (hysteresis)
+ slip: rows[0].slip ?? 0, // suspicion slip accumulator (hysteresis)
+    accuseFloor: rows[0].accuse_floor ?? 0, // STICKY: accusation ratchet floor
     lastBitId: rows[0].last_bit_id || null,
     lastBitTurn: rows[0].last_bit_turn ?? null,
     archetype: rows[0].archetype || null,
@@ -56,7 +57,7 @@ export async function getCall(callId) {
 // posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, gear, pressure, engagement, slip, lastBitId, lastBitTurn, archetype, characterId }
+  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, lastBitId, lastBitTurn, archetype, characterId }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -70,6 +71,7 @@ export async function setCall(
   if (pressure !== undefined) row.pressure = pressure;
   if (engagement !== undefined) row.engagement = engagement;
   if (slip !== undefined) row.slip = slip;
+  if (accuseFloor !== undefined) row.accuse_floor = accuseFloor;
   if (lastBitId !== undefined) row.last_bit_id = lastBitId;
   if (lastBitTurn !== undefined) row.last_bit_turn = lastBitTurn;
   if (archetype !== undefined) row.archetype = archetype;
