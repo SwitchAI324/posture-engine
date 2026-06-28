@@ -1,0 +1,469 @@
+{
+  "_note": "Non-clean cells only. An absent (posture_id,bench_id) pair = CLEAN pass-through. jarl x conrad has fully worked structured ops in posture_bench_compiler.js as the template; the build task is to turn each 'instruction' here into recast/suppress/repoint ops.",
+  "verdicts": {
+    "reframe": "compiler rewrites the block at pre-snap",
+    "blocked": "greyed out, never armable"
+  },
+  "entries": [
+    {
+      "posture": "Jarl",
+      "posture_id": "jarl",
+      "posture_stance": "Apex — no boss",
+      "bench": "Conrad",
+      "bench_id": "conrad",
+      "bench_demand": "Authority OVER host",
+      "verdict": "blocked",
+      "instruction": "Jarl has no boss; Conrad's pressure has no purchase.  [structural]"
+    },
+    {
+      "posture": "Jarl",
+      "posture_id": "jarl",
+      "posture_stance": "Apex — no boss",
+      "bench": "Bonnie",
+      "bench_id": "bonnie",
+      "bench_demand": "Authority OVER host",
+      "verdict": "blocked",
+      "instruction": "Jarl won't be made self-conscious or policed by HR.  [structural]"
+    },
+    {
+      "posture": "Jarl",
+      "posture_id": "jarl",
+      "posture_stance": "Apex — no boss",
+      "bench": "Tyler",
+      "bench_id": "tyler",
+      "bench_demand": "Host is their anchor",
+      "verdict": "reframe",
+      "instruction": "Jarl tolerates the kid distantly — noblesse oblige, not warmth. Works cooler; no real reassurance."
+    },
+    {
+      "posture": "Jarl",
+      "posture_id": "jarl",
+      "posture_stance": "Apex — no boss",
+      "bench": "Bea",
+      "bench_id": "bea",
+      "bench_demand": "Host reveres",
+      "verdict": "reframe",
+      "instruction": "Two apex authorities — Jarl can't be 'the kid.' Recast as mutual-respect peers; loses Bea's reverer dynamic."
+    },
+    {
+      "posture": "Jarl",
+      "posture_id": "jarl",
+      "posture_stance": "Apex — no boss",
+      "bench": "The No-Show",
+      "bench_id": "no_show",
+      "bench_demand": "Host invokes / manages",
+      "verdict": "reframe",
+      "instruction": "Jarl IS the decision-maker; can't await Tom's sign-off. Recast Tom as a peer whose buy-in he wants, not approval."
+    },
+    {
+      "posture": "Jarl",
+      "posture_id": "jarl",
+      "posture_stance": "Apex — no boss",
+      "bench": "The Approver",
+      "bench_id": "approver",
+      "bench_demand": "Host invokes / manages",
+      "verdict": "reframe",
+      "instruction": "No approver above an apex lord. Recast Sandra as a trusted advisor whose blessing he seeks."
+    },
+    {
+      "posture": "Jarl",
+      "posture_id": "jarl",
+      "posture_stance": "Apex — no boss",
+      "bench": "Brent",
+      "bench_id": "brent",
+      "bench_demand": "Host invokes / manages",
+      "verdict": "reframe",
+      "instruction": "Jarl won't coddle the glass jaw; he ignores it. Recast as Brent fishing for the lord's approval."
+    },
+    {
+      "posture": "Skald",
+      "posture_id": "skald",
+      "posture_stance": "Elder / lateral",
+      "bench": "Conrad",
+      "bench_id": "conrad",
+      "bench_demand": "Authority OVER host",
+      "verdict": "reframe",
+      "instruction": "She out-tenures Conrad; he can't pressure the institutional memory. Recast as a younger exec she's watched come and go."
+    },
+    {
+      "posture": "Skald",
+      "posture_id": "skald",
+      "posture_stance": "Elder / lateral",
+      "bench": "Bonnie",
+      "bench_id": "bonnie",
+      "bench_demand": "Authority OVER host",
+      "verdict": "reframe",
+      "instruction": "Skald remembers 'the incident' better than Bonnie hints it. Recast — she absorbs the policing into a story."
+    },
+    {
+      "posture": "Skald",
+      "posture_id": "skald",
+      "posture_stance": "Elder / lateral",
+      "bench": "Bea",
+      "bench_id": "bea",
+      "bench_demand": "Host reveres",
+      "verdict": "blocked",
+      "instruction": "Two long-memory elders blur (institutional memory vs faded legend). Grey out by direction.  [direction]"
+    },
+    {
+      "posture": "Hersir",
+      "posture_id": "hersir",
+      "posture_stance": "Striver — has a boss",
+      "bench": "Bonnie",
+      "bench_id": "bonnie",
+      "bench_demand": "Authority OVER host",
+      "verdict": "reframe",
+      "instruction": "Too pumped to police cleanly; Bonnie works harder to contain his energy."
+    },
+    {
+      "posture": "Hersir",
+      "posture_id": "hersir",
+      "posture_stance": "Striver — has a boss",
+      "bench": "Derek",
+      "bench_id": "derek",
+      "bench_demand": "Host is their anchor",
+      "verdict": "reframe",
+      "instruction": "Hersir HYPES Derek into more chaos instead of anchoring him; the lifeline becomes an accelerant."
+    },
+    {
+      "posture": "Hersir",
+      "posture_id": "hersir",
+      "posture_stance": "Striver — has a boss",
+      "bench": "Chip",
+      "bench_id": "chip",
+      "bench_demand": "Host is their anchor",
+      "verdict": "reframe",
+      "instruction": "Two over-committers egg each other on — escalating chaos, not reining."
+    },
+    {
+      "posture": "Hersir",
+      "posture_id": "hersir",
+      "posture_stance": "Striver — has a boss",
+      "bench": "Tyler",
+      "bench_id": "tyler",
+      "bench_demand": "Host is their anchor",
+      "verdict": "reframe",
+      "instruction": "Over-pumps the terrified kid ('you got this, champ!') and overwhelms him. Keep gentle — dignity."
+    },
+    {
+      "posture": "Hersir",
+      "posture_id": "hersir",
+      "posture_stance": "Striver — has a boss",
+      "bench": "Brent",
+      "bench_id": "brent",
+      "bench_demand": "Host invokes / manages",
+      "verdict": "reframe",
+      "instruction": "Hersir's inflation DIVERGES from Brent and cracks the glass jaw constantly — chaotic deflate loop."
+    },
+    {
+      "posture": "Thrall",
+      "posture_id": "thrall",
+      "posture_stance": "Subordinate",
+      "bench": "Derek",
+      "bench_id": "derek",
+      "bench_demand": "Host is their anchor",
+      "verdict": "blocked",
+      "instruction": "Thrall can't anchor anyone; Derek needs a lifeline, finds a fellow flounderer.  [structural]"
+    },
+    {
+      "posture": "Thrall",
+      "posture_id": "thrall",
+      "posture_stance": "Subordinate",
+      "bench": "Chip",
+      "bench_id": "chip",
+      "bench_demand": "Host is their anchor",
+      "verdict": "blocked",
+      "instruction": "No net for Chip — two anxious people, mutual collapse.  [structural]"
+    },
+    {
+      "posture": "Thrall",
+      "posture_id": "thrall",
+      "posture_stance": "Subordinate",
+      "bench": "Tyler",
+      "bench_id": "tyler",
+      "bench_demand": "Host is their anchor",
+      "verdict": "blocked",
+      "instruction": "The lifeline is as nervous as the kid; mutual drowning, no reassurance left.  [structural]"
+    },
+    {
+      "posture": "Thrall",
+      "posture_id": "thrall",
+      "posture_stance": "Subordinate",
+      "bench": "Brent",
+      "bench_id": "brent",
+      "bench_demand": "Host invokes / manages",
+      "verdict": "reframe",
+      "instruction": "Two fragile egos; Thrall's apologies trigger and soothe the glass jaw endlessly. Works but shifts."
+    },
+    {
+      "posture": "Bondi",
+      "posture_id": "bondi",
+      "posture_stance": "Owner — no boss",
+      "bench": "Conrad",
+      "bench_id": "conrad",
+      "bench_demand": "Authority OVER host",
+      "verdict": "blocked",
+      "instruction": "No boss exists above an owner-operator; Conrad's pressure engine has nowhere to bite.  [structural]"
+    },
+    {
+      "posture": "Bondi",
+      "posture_id": "bondi",
+      "posture_stance": "Owner — no boss",
+      "bench": "Bonnie",
+      "bench_id": "bonnie",
+      "bench_demand": "Authority OVER host",
+      "verdict": "reframe",
+      "instruction": "Plainspoken owner won't self-censor for HR ('Bonnie, what's the problem'). Recast as him unbothered."
+    },
+    {
+      "posture": "Bondi",
+      "posture_id": "bondi",
+      "posture_stance": "Owner — no boss",
+      "bench": "Bea",
+      "bench_id": "bea",
+      "bench_demand": "Host reveres",
+      "verdict": "reframe",
+      "instruction": "Peer self-made owner; respects her but not as 'the kid.' Recast as equals."
+    },
+    {
+      "posture": "Bondi",
+      "posture_id": "bondi",
+      "posture_stance": "Owner — no boss",
+      "bench": "The No-Show",
+      "bench_id": "no_show",
+      "bench_demand": "Host invokes / manages",
+      "verdict": "reframe",
+      "instruction": "Bondi is the final yes; no Tom above him. Recast Tom as a partner / co-owner or key customer."
+    },
+    {
+      "posture": "Bondi",
+      "posture_id": "bondi",
+      "posture_stance": "Owner — no boss",
+      "bench": "The Approver",
+      "bench_id": "approver",
+      "bench_demand": "Host invokes / manages",
+      "verdict": "reframe",
+      "instruction": "No approver above the owner. Recast Sandra as the employee who really runs the place (fits 'Dave handles intake')."
+    },
+    {
+      "posture": "Bondi",
+      "posture_id": "bondi",
+      "posture_stance": "Owner — no boss",
+      "bench": "Brent",
+      "bench_id": "brent",
+      "bench_demand": "Host invokes / manages",
+      "verdict": "reframe",
+      "instruction": "Bondi's 'what's that mean in English' DIVERGES and cracks the glass jaw immediately — keeps deflating Brent."
+    },
+    {
+      "posture": "Völva",
+      "posture_id": "volva",
+      "posture_stance": "Outside hierarchy",
+      "bench": "Conrad",
+      "bench_id": "conrad",
+      "bench_demand": "Authority OVER host",
+      "verdict": "reframe",
+      "instruction": "Pressure bounces off — she's outside hierarchy and already foresaw his arrival. Recast: she unsettles the boss."
+    },
+    {
+      "posture": "Völva",
+      "posture_id": "volva",
+      "posture_stance": "Outside hierarchy",
+      "bench": "Bonnie",
+      "bench_id": "bonnie",
+      "bench_demand": "Authority OVER host",
+      "verdict": "reframe",
+      "instruction": "Bonnie's undefined-incident hinting meets the one who already knows what it was. Recast: Völva out-mysteries HR."
+    },
+    {
+      "posture": "Völva",
+      "posture_id": "volva",
+      "posture_stance": "Outside hierarchy",
+      "bench": "Derek",
+      "bench_id": "derek",
+      "bench_demand": "Host is their anchor",
+      "verdict": "reframe",
+      "instruction": "Völva spooks the anchor-seeker instead of reassuring him."
+    },
+    {
+      "posture": "Völva",
+      "posture_id": "volva",
+      "posture_stance": "Outside hierarchy",
+      "bench": "Chip",
+      "bench_id": "chip",
+      "bench_demand": "Host is their anchor",
+      "verdict": "reframe",
+      "instruction": "Unsettles Chip rather than catching him."
+    },
+    {
+      "posture": "Völva",
+      "posture_id": "volva",
+      "posture_stance": "Outside hierarchy",
+      "bench": "Tyler",
+      "bench_id": "tyler",
+      "bench_demand": "Host is their anchor",
+      "verdict": "blocked",
+      "instruction": "Cryptic knowing aimed at a terrified kid tips into cruelty — Tyler's dignity rule.  [dignity]"
+    },
+    {
+      "posture": "Völva",
+      "posture_id": "volva",
+      "posture_stance": "Outside hierarchy",
+      "bench": "Bea",
+      "bench_id": "bea",
+      "bench_demand": "Host reveres",
+      "verdict": "blocked",
+      "instruction": "Two 'knowers' collide — all-seeing vs hard-won wisdom; they compete and cancel.  [structural]"
+    },
+    {
+      "posture": "Völva",
+      "posture_id": "volva",
+      "posture_stance": "Outside hierarchy",
+      "bench": "The No-Show",
+      "bench_id": "no_show",
+      "bench_demand": "Host invokes / manages",
+      "verdict": "reframe",
+      "instruction": "She already knows Tom won't come; the dangle works as foreknowledge, not hope."
+    },
+    {
+      "posture": "Völva",
+      "posture_id": "volva",
+      "posture_stance": "Outside hierarchy",
+      "bench": "The Approver",
+      "bench_id": "approver",
+      "bench_demand": "Host invokes / manages",
+      "verdict": "reframe",
+      "instruction": "The absent approver, framed as something she foresaw."
+    },
+    {
+      "posture": "Völva",
+      "posture_id": "volva",
+      "posture_stance": "Outside hierarchy",
+      "bench": "Brent",
+      "bench_id": "brent",
+      "bench_demand": "Host invokes / manages",
+      "verdict": "reframe",
+      "instruction": "Völva diverges by knowing; cracks Brent's glass jaw."
+    },
+    {
+      "posture": "Rýnir",
+      "posture_id": "rynir",
+      "posture_stance": "Gatekeeper",
+      "bench": "Derek",
+      "bench_id": "derek",
+      "bench_demand": "Host is their anchor",
+      "verdict": "reframe",
+      "instruction": "Rýnir cross-examines Derek's useless contributions; the anchor interrogates him."
+    },
+    {
+      "posture": "Rýnir",
+      "posture_id": "rynir",
+      "posture_stance": "Gatekeeper",
+      "bench": "Chip",
+      "bench_id": "chip",
+      "bench_demand": "Host is their anchor",
+      "verdict": "reframe",
+      "instruction": "Interrogates Chip's over-promises ('define we'll do everything')."
+    },
+    {
+      "posture": "Rýnir",
+      "posture_id": "rynir",
+      "posture_stance": "Gatekeeper",
+      "bench": "Tyler",
+      "bench_id": "tyler",
+      "bench_demand": "Host is their anchor",
+      "verdict": "blocked",
+      "instruction": "Interrogating the terrified intern tips into bullying — Tyler's dignity rule.  [dignity]"
+    },
+    {
+      "posture": "Rýnir",
+      "posture_id": "rynir",
+      "posture_stance": "Gatekeeper",
+      "bench": "Bea",
+      "bench_id": "bea",
+      "bench_demand": "Host reveres",
+      "verdict": "reframe",
+      "instruction": "Rýnir VETS Bea's war stories ('the Lindqvist terms, specifically?'), undercutting the reverence. Funny, but dents her dignity."
+    },
+    {
+      "posture": "Rýnir",
+      "posture_id": "rynir",
+      "posture_stance": "Gatekeeper",
+      "bench": "Brent",
+      "bench_id": "brent",
+      "bench_demand": "Host invokes / manages",
+      "verdict": "reframe",
+      "instruction": "Interrogates Brent's empty frameworks ('define north-star metric'); glass jaw fires constantly."
+    },
+    {
+      "posture": "Thul",
+      "posture_id": "thul",
+      "posture_stance": "Floor-holder",
+      "bench": "Conrad",
+      "bench_id": "conrad",
+      "bench_demand": "Authority OVER host",
+      "verdict": "reframe",
+      "instruction": "Thul can't yield the floor even to the boss; Conrad's gravity competes with the monologue. Recast: Conrad tries and fails to take the floor."
+    },
+    {
+      "posture": "Thul",
+      "posture_id": "thul",
+      "posture_stance": "Floor-holder",
+      "bench": "Bonnie",
+      "bench_id": "bonnie",
+      "bench_demand": "Authority OVER host",
+      "verdict": "reframe",
+      "instruction": "Talks over Bonnie's clipped interventions; she can't land a line. Recast."
+    },
+    {
+      "posture": "Thul",
+      "posture_id": "thul",
+      "posture_stance": "Floor-holder",
+      "bench": "Derek",
+      "bench_id": "derek",
+      "bench_demand": "Host is their anchor",
+      "verdict": "reframe",
+      "instruction": "Talks over Derek; Derek can't get his riffs in."
+    },
+    {
+      "posture": "Thul",
+      "posture_id": "thul",
+      "posture_stance": "Floor-holder",
+      "bench": "Chip",
+      "bench_id": "chip",
+      "bench_demand": "Host is their anchor",
+      "verdict": "reframe",
+      "instruction": "Talks over Chip's over-promises."
+    },
+    {
+      "posture": "Thul",
+      "posture_id": "thul",
+      "posture_stance": "Floor-holder",
+      "bench": "Tyler",
+      "bench_id": "tyler",
+      "bench_demand": "Host is their anchor",
+      "verdict": "reframe",
+      "instruction": "Talks over the kid, who nervously waits for an opening that never comes."
+    },
+    {
+      "posture": "Thul",
+      "posture_id": "thul",
+      "posture_stance": "Floor-holder",
+      "bench": "Bea",
+      "bench_id": "bea",
+      "bench_demand": "Host reveres",
+      "verdict": "blocked",
+      "instruction": "Two storytellers fight for the floor; Thul monologues over Bea's war stories.  [structural]"
+    },
+    {
+      "posture": "Thul",
+      "posture_id": "thul",
+      "posture_stance": "Floor-holder",
+      "bench": "Brent",
+      "bench_id": "brent",
+      "bench_demand": "Host invokes / manages",
+      "verdict": "reframe",
+      "instruction": "Two empty talkers — floor fight plus glass jaw. Recast."
+    }
+  ]
+}
