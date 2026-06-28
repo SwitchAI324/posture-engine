@@ -384,6 +384,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           pressure: stored.pressure,
           engagement: stored.engagement,
           slip: stored.slip,
+          accuseFloor: stored.accuseFloor, // STICKY: thread the accusation floor
         }
       : defaultState();
     const { state, changes, dirty } = applyForceAll(
@@ -725,6 +726,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           pressure: state.pressure,
           engagement: state.engagement,
           slip: state.slip,
+          accuseFloor: state.accuseFloor, // STICKY: persist the accusation floor
           ...(fire ? { lastBitId: top.id, lastBitTurn: turn } : {}),
           ...(archetypeNew ? { archetype } : {}),
         }).catch(() => {})
