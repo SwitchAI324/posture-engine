@@ -172,6 +172,11 @@
   #armPanel{max-height:300px;overflow-y:auto;overflow-x:hidden}
   #boardBench{max-height:190px;overflow-y:auto;overflow-x:hidden}
   #ammoRack{max-height:200px;overflow-y:auto;overflow-x:hidden}
+  .ibadge{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.04em;padding:2px 6px;border-radius:5px;margin-left:6px;font-style:normal;white-space:nowrap}
+  .ibadge.safety{background:var(--green);color:#fff}
+  .ibadge.win{background:var(--gold2);color:#1b1714}
+  .ibadge.caution{background:#caa23f;color:#1b1714}
+  .ibadge.neutral{background:#cfc8ba;color:#3a352d}
   .st.oncall{color:var(--green)} .st.wait{color:#a59c8c} .st.used{color:#a59c8c}
   .brow.firing{background:#fff7ec;border-color:var(--gold)}
   .brow.muted{background:#faf8f3;color:var(--muted)}
@@ -1219,13 +1224,28 @@
     thread_reset_to_live:'Thread reset to live', thread_dead:'Thread went cold',
     booking_created:'\uD83D\uDCC5 Booked the call', invite_confirm_sent:'Invite confirmed',
     invite_reschedule_sent:'Rescheduled', invite_reminder_sent:'Invite reminder',
-    gary_email_sent:'Gary\u2019s post-mortem'
+    gary_email_sent:'Gary\u2019s post-mortem',
+    reply_classified:'Reply read', optout_escalation_sent:'Clingy escalation',
+    hard_stop_opted_out:'Released \u2014 real person'
   };
+  // Canonical reply-intent enum — authoritative source: Barbara.gs line 848 `allowed`.
+  // Render badges ONLY off these seven; anything else means we're out of sync with the classifier.
+  const REPLY_INTENTS = ['BOOK','SUSPICIOUS','STALL','OPTOUT_CASUAL','OPTOUT_ALARMED','HOSTILE','CONTINUE'];
+  const INTENT_TONE = { BOOK:'win', CONTINUE:'neutral', STALL:'caution', SUSPICIOUS:'caution',
+    OPTOUT_CASUAL:'caution', OPTOUT_ALARMED:'safety', HOSTILE:'safety' };
+  const INTENT_DEFAULT = 'OPTOUT_ALARMED'; // matches the classifier's safe default for unparseable input
+  function intentBadge(raw){ if(raw==null) return '';
+    let it=String(raw).toUpperCase();
+    if(!REPLY_INTENTS.includes(it)){ console.warn('[MeadHall] reply intent "'+raw+'" not in the canonical seven (Barbara.gs line 848) \u2014 out of sync.'); }
+    const tone=INTENT_TONE[it]||'neutral';
+    return ' <span class="ibadge '+tone+'">'+it+'</span>'; }
   function arcLine(ev){ const log=$('#tlog'); if(!log)return;
     const label = ARC_LABEL[ev.event_type] || ev.event_type;
     const p = ev.payload||{}; const extra = p.archetype || p.host_name || p.slot_time || p.label || p.call_outcome || '';
-    const l=document.createElement('div'); l.className='tl j'; l.style.opacity='.7'; l.style.fontStyle='italic';
-    l.innerHTML='<b>'+(PHASE[ev.layer]||'\u00B7')+'</b> '+label+(extra?(' \u2014 '+extra):'');
+    const badge = intentBadge(p.intent);   // null intent -> no badge
+    const l=document.createElement('div'); l.className='tl j';
+    l.style.opacity = badge ? '1' : '.7'; l.style.fontStyle='italic';   // intent lines pop
+    l.innerHTML='<b>'+(PHASE[ev.layer]||'\u00B7')+'</b> '+label+(extra?(' \u2014 '+extra):'')+badge;
     log.appendChild(l); log.scrollTop=log.scrollHeight; }
 
   /* ---- live bench tile (render only; no Claude) ---- */
