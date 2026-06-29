@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SpamViking — Sim Director</title>
+<style>
+  :root{
+    --bone:#f4f1ea; --bone2:#eae4d8; --ink:#1b1714; --muted:#6f685b;
+    --blood:#a4161a; --blood2:#7d0f13; --gold:#c9821a; --gold2:#e3a93f;
+    --line:#d9d2c4; --stage:#131210; --stage2:#201c18; --stageln:#34302a;
+    --green:#3f7d4f; --slate:#52525b;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --serif:Georgia,"Iowan Old Style","Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bone);color:var(--ink);font-family:var(--sans);
+    line-height:1.45;padding:22px;max-width:760px;margin:0 auto}
+  h1{font-family:var(--serif);font-size:22px;font-weight:600;margin-bottom:2px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:18px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
+  .grp{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--slate);margin-bottom:9px}
+  label{display:block;font-size:12px;color:var(--muted);margin:8px 0 3px}
+  select,input[type=text],input[type=number]{font:inherit;font-size:13px;width:100%;padding:7px 9px;
+    border:1px solid var(--line);border-radius:7px;background:#fcfbf8}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row>div{flex:1;min-width:140px}
+  button{font:inherit;font-weight:600;font-size:13px;border:1px solid var(--line);background:#fff;
+    color:var(--ink);border-radius:8px;padding:9px 14px;cursor:pointer}
+  button:hover{border-color:var(--gold);background:#fbf3e2}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.pri{background:var(--ink);color:#fff;border-color:var(--ink)}
+  button.pri:hover{background:#000}
+  button.blood{background:var(--blood);color:#fff;border-color:var(--blood2)}
+  button.blood:hover{background:var(--blood2)}
+  .pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:6px;background:var(--bone2);color:var(--ink)}
+  .pill.on{background:var(--green);color:#fff}
+  .pill.warn{background:var(--gold2);color:#1b1714}
+  a.watch{display:inline-block;font-family:var(--mono);font-size:12px;color:var(--blood);text-decoration:none;border:1px solid var(--blood);border-radius:7px;padding:7px 11px;margin-top:6px}
+  a.watch:hover{background:#fbecec}
+  .ids{font-family:var(--mono);font-size:11px;color:var(--muted);word-break:break-all;margin-top:8px;line-height:1.7}
+  .ids b{color:var(--ink)}
+  .feed{background:var(--stage);color:#e8e1d4;border-radius:9px;padding:12px;max-height:340px;overflow-y:auto;font-size:13px}
+  .ln{padding:6px 0;border-bottom:1px solid var(--stageln)}
+  .ln:last-child{border:0}
+  .ln .who{font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:#b6ad9b}
+  .ln.host .who{color:var(--gold2)} .ln.spam .who{color:#d98d84} .ln.sys .who{color:#8fb39a}
+  .ln .tx{margin-top:2px}
+  .ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .ctl input{flex:1;min-width:120px}
+  .note{font-size:12px;color:var(--muted);margin-top:8px}
+  .err{color:var(--blood);font-size:12px;margin-top:8px;font-family:var(--mono)}
+  .statusbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+  .toggle{display:flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .toggle button{border:0;border-radius:0;background:#fff}
+  .toggle button.sel{background:var(--ink);color:#fff}
+</style>
+</head>
+<body>
+  <h1>Sim Director</h1>
+  <div class="sub">Drives the real engine host vs. a spammer bot. Watch the show in the Mead Hall; conduct it from here.</div>
+
+  <!-- SETUP -->
+  <div class="card" id="setupCard">
+    <div class="grp">Cast the call</div>
+    <div class="row">
+      <div>
+        <label for="arch">Archetype</label>
+        <select id="arch"><option>loading…</option></select>
+      </div>
+      <div>
+        <label for="temp">Temperament</label>
+        <select id="temp"><option>loading…</option></select>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="host">Host name (optional)</label>
+        <input type="text" id="host" placeholder="e.g. Jarl">
+      </div>
+      <div>
+        <label for="beats">Beats (optional)</label>
+        <input type="number" id="beats" placeholder="default" min="1" max="40">
+      </div>
+    </div>
+    <div style="margin-top:14px"><button class="pri" id="startBtn">▶ Start the call</button></div>
+    <div class="err" id="setupErr"></div>
+  </div>
+
+  <!-- RUNNING -->
+  <div class="card" id="runCard" style="display:none">
+    <div class="statusbar">
+      <span class="pill" id="stPill">idle</span>
+      <span class="pill" id="turnPill">turn 0</span>
+      <div class="toggle" style="margin-left:auto">
+        <button id="modeAuto" class="sel">Auto</button>
+        <button id="modeManual">Manual</button>
+      </div>
+    </div>
+    <div id="watchWrap"></div>
+    <div class="ids" id="idBox"></div>
+
+    <div class="grp" style="margin-top:14px">Conduct — between turns</div>
+    <div class="ctl">
+      <input type="text" id="armId" placeholder="bit_id to arm (e.g. BIT-118)">
+      <button id="armBtn">Arm bit</button>
+      <button id="stepBtn">Next turn ▸</button>
+      <button id="pauseBtn">⏸ Pause</button>
+      <button class="blood" id="blowBtn">☠ Death Blow</button>
+    </div>
+    <div class="note" id="armedNote"></div>
+    <div class="err" id="runErr"></div>
+
+    <div class="grp" style="margin-top:14px">Loop log <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(the bus is the source of truth — watch the Mead Hall for the real show)</span></div>
+    <div class="feed" id="feed"></div>
+    <div style="margin-top:12px"><button id="resetBtn">↺ New call</button></div>
+  </div>
+
+<script>
+  const $ = s => document.querySelector(s);
+  const BASE = '/api/sim/sim-call';
+  const CONTROL = '/api/control';
+  const AUTO_MS = 4200;            // pause between auto steps — time to set up an arm/blow
+  let sess = null;                 // {call_id,target_id,cfg,history,host_name,archetype}
+  let mode = 'auto', running = false, busy = false, ended = false, timer = null, turn = 0;
+
+  function origin(){ return location.origin; }
+  async function getJSON(u,opt){ const r = await fetch(u,opt);
+    if(!r.ok){ const b = await r.text().catch(()=> ''); throw new Error('HTTP '+r.status+': '+b.slice(0,180)); }
+    return r.json(); }
+
+  // ---- catalog ----
+  async function loadCatalog(){
+    try{ const c = await getJSON(BASE+'?action=catalog');
+      fill('#arch', c.archetypes||c.archetype||[]);
+      fill('#temp', c.temperaments||c.temperament||[]);
+    }catch(e){ $('#setupErr').textContent = 'Could not load catalog: '+e.message+'  — is /api/sim/sim-call deployed?'; }
+  }
+  function fill(sel, list){ const el=$(sel); el.innerHTML='';
+    (list||[]).forEach(function(o){ const v=(typeof o==='string')?o:(o.id||o.value||o.name);
+      const lab=(typeof o==='string')?o:(o.label||o.name||o.id); const opt=document.createElement('option');
+      opt.value=v; opt.textContent=lab; el.appendChild(opt); });
+    if(!el.options.length){ const opt=document.createElement('option'); opt.textContent='(none returned)'; el.appendChild(opt); }
+  }
+
+  // ---- feed log (local echo; the bus/Mead Hall is canonical) ----
+  function logLine(who, text, cls){ const f=$('#feed'); const d=document.createElement('div');
+    d.className='ln '+(cls||''); d.innerHTML='<div class="who">'+who+'</div><div class="tx"></div>';
+    d.querySelector('.tx').textContent=text; f.appendChild(d); f.scrollTop=f.scrollHeight; }
+
+  function setStatus(){ $('#stPill').textContent = ended?'ended':(running?'running':'paused');
+    $('#stPill').className = 'pill '+(ended?'warn':(running?'on':''));
+    $('#turnPill').textContent = 'turn '+turn;
+    $('#pauseBtn').textContent = running?'⏸ Pause':'▶ Resume';
+    $('#stepBtn').disabled = ended || (running && mode==='auto');
+  }
+
+  // ---- start ----
+  async function start(){
+    $('#setupErr').textContent=''; $('#startBtn').disabled=true; $('#startBtn').textContent='Starting…';
+    const body = { archetype: $('#arch').value, temperament: $('#temp').value };
+    const hn = $('#host').value.trim(); if(hn) body.host_name = hn;
+    const bt = $('#beats').value.trim(); if(bt) body.beats = Number(bt);
+    try{
+      sess = await getJSON(BASE+'?action=start', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      ended=false; turn=0;
+      $('#setupCard').style.display='none'; $('#runCard').style.display='block';
+      const url = origin()+'/mead_hall_live.html?target_id='+encodeURIComponent(sess.target_id);
+      $('#watchWrap').innerHTML = '<a class="watch" href="'+url+'" target="_blank" rel="noopener">▶ open the Mead Hall on this call ↗</a>';
+      $('#idBox').innerHTML = 'host: <b>'+(sess.host_name||'—')+'</b> · archetype: <b>'+(sess.archetype||body.archetype)+'</b><br>'+
+        'target_id: <b>'+sess.target_id+'</b><br>call_id: <b>'+sess.call_id+'</b>';
+      // opening spammer utterance came back in history — echo last spammer line if present
+      const open = lastSpammer(sess.history); if(open) logLine('Spammer (opening)', open, 'spam');
+      mode='auto'; running=true; setStatus();
+      scheduleAuto();
+    }catch(e){ $('#setupErr').textContent='Start failed: '+e.message; $('#startBtn').disabled=false; $('#startBtn').textContent='▶ Start the call'; }
+  }
+  function lastSpammer(history){ if(!Array.isArray(history))return '';
+    for(let i=history.length-1;i>=0;i--){ const h=history[i]; const role=h.role||h.speaker_role||h.speaker;
+      if(role && /spam|user/i.test(role)) return h.content||h.text||h.line||''; } return ''; }
+
+  // ---- step ----
+  async function step(){ if(busy||ended||!sess)return; busy=true; $('#runErr').textContent='';
+    try{
+      const body = { call_id: sess.call_id, history: sess.history, cfg: sess.cfg, host_name: sess.host_name, archetype: sess.archetype };
+      const r = await getJSON(BASE+'?action=step', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      turn++;
+      if(r.host_line) logLine('Host', r.host_line, 'host');
+      if(r.spammer_line) logLine('Spammer', r.spammer_line, 'spam');
+      if(Array.isArray(r.history)) sess.history = r.history;   // CRITICAL: feed history forward
+      if(r.ended){ ended=true; running=false; logLine('System', 'Call ended.', 'sys'); }
+      $('#armedNote').textContent='';   // armed bit consumed by the turn
+    }catch(e){ $('#runErr').textContent='Step failed: '+e.message; running=false; }
+    finally{ busy=false; setStatus(); if(running && mode==='auto' && !ended) scheduleAuto(); }
+  }
+  function scheduleAuto(){ clearTimeout(timer); if(running && mode==='auto' && !ended) timer=setTimeout(step, AUTO_MS); }
+
+  // ---- conduct: arm + death blow via /api/control ----
+  async function arm(){ const id=$('#armId').value.trim(); if(!id){ $('#runErr').textContent='Enter a bit_id to arm.'; return; }
+    try{ await getJSON(CONTROL+'?action=arm', {method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ call_id: sess.call_id, bit_id: id })});
+      $('#armedNote').textContent='Armed '+id+' — it will be read on the next host turn.'; $('#armId').value='';
+    }catch(e){ $('#runErr').textContent='Arm failed: '+e.message; } }
+
+  async function deathBlow(){ if(!sess)return;
+    if(!confirm('Fire the Death Blow — end the call on the next host turn?'))return;
+    try{ await getJSON(CONTROL+'?action=deathblow', {method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ call_id: sess.call_id })});
+      $('#armedNote').textContent='☠ Death Blow armed — the host closes on the next turn.';
+      if(!running || mode==='manual'){ step(); }   // nudge a turn so it lands
+    }catch(e){ $('#runErr').textContent='Death Blow failed: '+e.message; } }
+
+  // ---- wires ----
+  $('#startBtn').addEventListener('click', start);
+  $('#stepBtn').addEventListener('click', ()=>{ if(!busy && !ended) step(); });
+  $('#pauseBtn').addEventListener('click', ()=>{ running=!running; setStatus(); if(running) scheduleAuto(); else clearTimeout(timer); });
+  $('#armBtn').addEventListener('click', arm);
+  $('#blowBtn').addEventListener('click', deathBlow);
+  $('#modeAuto').addEventListener('click', ()=>{ mode='auto'; $('#modeAuto').classList.add('sel'); $('#modeManual').classList.remove('sel'); setStatus(); if(running) scheduleAuto(); });
+  $('#modeManual').addEventListener('click', ()=>{ mode='manual'; $('#modeManual').classList.add('sel'); $('#modeAuto').classList.remove('sel'); clearTimeout(timer); setStatus(); });
+  $('#resetBtn').addEventListener('click', ()=>{ clearTimeout(timer); location.reload(); });
+
+  loadCatalog();
+</script>
+</body>
+</html>

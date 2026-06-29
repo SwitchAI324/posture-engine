@@ -172,6 +172,33 @@
   #armPanel{max-height:300px;overflow-y:auto;overflow-x:hidden}
   #boardBench{max-height:190px;overflow-y:auto;overflow-x:hidden}
   #ammoRack{max-height:200px;overflow-y:auto;overflow-x:hidden}
+  /* gear panel — the engine's live read (gear_state) */
+  .gearpanel{border:1px solid var(--bone2);border-radius:7px;padding:9px 10px;margin:0 0 10px;background:#faf8f3}
+  .gptop{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px}
+  .gplab{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate)}
+  .gpturn{font-family:var(--mono);font-size:10px;color:#9a9a8e}
+  .gaxis{display:flex;align-items:center;gap:7px;margin:4px 0}
+  .gname{font-family:var(--mono);font-size:9.5px;letter-spacing:.04em;color:var(--slate);width:64px;flex:none;text-transform:uppercase}
+  .gvals{display:flex;gap:3px;flex:1}
+  .gval{font-family:var(--mono);font-size:9.5px;padding:2px 6px;border-radius:4px;color:#b3ad9f;background:#efece4}
+  .gval.on{color:#1b1714;font-weight:700}
+  .gval.on[data-v="alive"]{background:#bfe3c6;color:#11401b}
+  .gval.on[data-v="slipping"]{background:#f0d79a;color:#5a4410}
+  .gval.on[data-v="foregone"]{background:#e9b3ab;color:#5a1c14}
+  .gval.on[data-v="calm"],.gval.on[data-v="bored"]{background:#d7d2c6;color:#3a352d}
+  .gval.on[data-v="pushing"],.gval.on[data-v="hooked"]{background:#e3c98f;color:#4a3a12}
+  .gval.on[data-v="extracting"],.gval.on[data-v="stunned"]{background:#caa23f;color:#1b1714}
+  .gslip{font-family:var(--mono);font-size:9px;color:var(--slate);flex:none}
+  .gfit{margin-top:8px;border-top:1px dashed var(--bone2);padding-top:7px}
+  .gfitrow{display:flex;justify-content:space-between;align-items:baseline}
+  .gfitnums{font-family:var(--mono);font-size:9.5px;color:var(--slate)}
+  .gfitnums b{color:#1b1714;font-size:11px}
+  .fitmeter{position:relative;height:9px;background:#efece4;border-radius:5px;margin:5px 0 0;overflow:hidden}
+  .fitfill{position:absolute;left:0;top:0;bottom:0;width:0;background:#caa23f;transition:width .4s}
+  .fitfill.clears{background:var(--green)}
+  .fitbar{position:absolute;top:-2px;bottom:-2px;width:2px;background:#8c3b2b}
+  .gfitnote{font-family:var(--mono);font-size:9px;margin-top:4px;min-height:11px}
+  .gfitnote.clears{color:var(--green)} .gfitnote.warm{color:var(--slate)}
   .ibadge{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.04em;padding:2px 6px;border-radius:5px;margin-left:6px;font-style:normal;white-space:nowrap}
   .ibadge.safety{background:var(--green);color:#fff}
   .ibadge.win{background:var(--gold2);color:#1b1714}
@@ -602,6 +629,21 @@
     <div class="top">ON THE BOARD <span class="ro">read-only</span></div>
     <div class="body">
       <div class="lock">🔒 PERSONALITY · Jarl</div>
+      <div id="gearPanel" class="gearpanel" style="display:none">
+        <div class="gptop"><span class="gplab">The engine's read</span><span class="gpturn" id="gpTurn">turn —</span></div>
+        <div class="gaxis"><span class="gname">suspicion</span><span class="gvals" id="gxSusp">
+          <span class="gval" data-v="alive">alive</span><span class="gval" data-v="slipping">slipping</span><span class="gval" data-v="foregone">foregone</span></span>
+          <span class="gslip" id="gxSlip"></span></div>
+        <div class="gaxis"><span class="gname">pressure</span><span class="gvals" id="gxPress">
+          <span class="gval" data-v="calm">calm</span><span class="gval" data-v="pushing">pushing</span><span class="gval" data-v="extracting">extracting</span></span></div>
+        <div class="gaxis"><span class="gname">engagement</span><span class="gvals" id="gxEng">
+          <span class="gval" data-v="bored">bored</span><span class="gval" data-v="hooked">hooked</span><span class="gval" data-v="stunned">stunned</span></span></div>
+        <div class="gfit">
+          <div class="gfitrow"><span class="gname">bit fit</span><span class="gfitnums"><b id="gfScore">—</b> vs bar <span id="gfBar">—</span> · pool <span id="gfPool">—</span></span></div>
+          <div class="fitmeter" id="fitMeter"><div class="fitfill" id="fitFill"></div><div class="fitbar" id="fitThresh"></div></div>
+          <div class="gfitnote" id="gfNote"></div>
+        </div>
+      </div>
       <div class="scoutbtn" id="scoutBtn">📋 SCOUT THE SPAMMER <span class="cov" id="scoutCov">—</span></div>
       <div class="grp">Bits — the Host's hand</div>
       <div id="boardBits"></div>
@@ -1316,6 +1358,38 @@
     l.innerHTML='<b>'+(PHASE[ev.layer]||'\u00B7')+'</b> '+label+(extra?(' \u2014 '+extra):'')+badge;
     log.appendChild(l); log.scrollTop=log.scrollHeight; }
 
+  // Renders PE's gear_state (the engine's live read). Authoritative shape:
+  // suspicion: alive|slipping|foregone, pressure: calm|pushing|extracting,
+  // engagement: bored|hooked|stunned, slip:int, fit_score (bar-scale, not 0-1),
+  // deploy_bar (number or "warmup"), pool:int, turn:int. Any field may be absent.
+  let lastGear={};
+  function renderGear(p){ const pn=$('#gearPanel'); if(!pn)return; pn.style.display='block';
+    lastGear=Object.assign(lastGear,p);
+    function setAxis(id,val){ if(val==null)return; const wrap=$(id); if(!wrap)return;
+      wrap.querySelectorAll('.gval').forEach(function(el){ el.classList.toggle('on', el.getAttribute('data-v')===String(val).toLowerCase()); }); }
+    setAxis('#gxSusp', lastGear.suspicion); setAxis('#gxPress', lastGear.pressure); setAxis('#gxEng', lastGear.engagement);
+    const turn=(lastGear.turn_index!=null)?lastGear.turn_index:lastGear.turn;
+    if(turn!=null) $('#gpTurn').textContent='turn '+turn;
+    if(lastGear.slip!=null) $('#gxSlip').textContent='slip \u00D7'+lastGear.slip;
+    const score=lastGear.fit_score, bar=lastGear.deploy_bar, pool=lastGear.pool, top=lastGear.top_bit;
+    if(score!=null) $('#gfScore').textContent=(typeof score==='number'?score.toFixed(1):score);
+    const warmup=(typeof bar==='string'); // "warmup" early in a call
+    $('#gfBar').textContent = (bar==null)?'\u2014':(warmup?bar:(typeof bar==='number'?bar.toFixed(1):bar));
+    $('#gfPool').textContent = (pool==null)?'\u2014':pool;
+    const fill=$('#fitFill'), thresh=$('#fitThresh'), note=$('#gfNote');
+    const lead = top?('"'+top+'"'):'top bit';
+    if(typeof score==='number'){
+      const max=Math.max(10, score, (typeof bar==='number'?bar:0))*1.05;
+      fill.style.width=Math.min(100,(score/max)*100)+'%';
+      if(!warmup && typeof bar==='number'){ thresh.style.display='block'; thresh.style.left=Math.min(100,(bar/max)*100)+'%';
+        // will_fire is PE's authoritative "cleared the bar this turn"; fall back to score>=bar
+        const clears=(lastGear.will_fire===true)||(lastGear.will_fire==null && score>=bar);
+        fill.classList.toggle('clears',clears);
+        note.className='gfitnote '+(clears?'clears':''); note.textContent=clears?('\u2714 '+lead+' clears the bar ('+score.toFixed(1)+' \u2265 '+bar.toFixed(1)+')'):(lead+' leading \u2014 below bar, holding'); }
+      else { thresh.style.display='none'; fill.classList.remove('clears'); note.className='gfitnote warm'; note.textContent='warming up \u2014 '+lead+' leading, no bit yet'; }
+    } else { note.className='gfitnote'; note.textContent=''; }
+  }
+
   /* ---- live bench tile (render only; no Claude) ---- */
   function liveBenchTile(name, role, glyph){ const id='bench-'+slug(name);
     if($('#'+id)) return $('#'+id);
@@ -1457,19 +1531,27 @@
         firedLog[n]=(firedLog[n]||0)+1; selectedBit=n; renderBoardBits(n); setTimeout(()=>renderBoardBits(null),2600);
         const tg=p.trigger; const tag=(tg==='armed')?'ARMED \u2192 ':(tg==='injected')?'INJECTED \u2192 ':'DEPLOY \u2192 ';
         if($('#hudDecision'))$('#hudDecision').textContent=tag+n;
+        if(p.gears_at_fire) renderGear(p.gears_at_fire);
+        if(p.fit_score!=null){ const bar=(p.deploy_bar!=null)?p.deploy_bar:lastGear.deploy_bar;
+          const note=$('#gfNote'); if(note){ note.className='gfitnote clears';
+            note.textContent='\u2714 '+n+' fired \u2014 fit '+(typeof p.fit_score==='number'?p.fit_score.toFixed(1):p.fit_score)+(typeof bar==='number'?(' over bar '+bar.toFixed(1)):''); } }
         if(p.running_total!=null && $('#hudPosture'))$('#hudPosture').textContent=(p.count_label||n)+': '+p.running_total;
         if(p.running_total!=null){ bj=p.running_total; const be=$('#bj'); if(be){ be.textContent='\u00D7'+bj; be.style.color='var(--gold)'; setTimeout(()=>be.style.color='',500);} }
         if(tg==='armed'){ setlist=setlist.filter(s=>s.bit_id!==p.bit_id); renderArmPanel(); }
         renderHudBits(); break; }
       case 'ammo_used': { const a=rack.find(x=>x.hook_id===p.hook_id); if(a){ a.used=true; renderAmmoRack(); renderArmPanel(); renderDossier(); } toast('Ammo: '+(p.label||p.hook_id||'hook')); break; }
       case 'scout_snapshot': { dossier = Array.isArray(p.hooks)?p.hooks:(Array.isArray(p.scout)?p.scout:dossier); renderDossier(); toast('Dossier updated'); break; }
-      case 'bench_joined': liveBenchTile(p.name,p.role,p.glyph); ourSide++; peakOur=Math.max(peakOur,ourSide); liveHeads=(liveHeads||0)+1; refreshHud(); toast((p.name||'bench')+' joined'); break;
+      case 'bench_joined': liveBenchTile(p.name,p.role,p.glyph); ourSide++; peakOur=Math.max(peakOur,ourSide); liveHeads=(liveHeads||0)+1; refreshHud();
+        if($('#gfNote')){ const note=$('#gfNote'); note.className='gfitnote'; note.style.color='#8c3b2b'; note.textContent='\u2192 Director sent in '+(p.name||'bench'); setTimeout(()=>{ note.style.color=''; },2600); }
+        toast((p.name||'bench')+' joined'); break;
       case 'party_joined': theirSide++; peakTheir=Math.max(peakTheir,theirSide); toast((p.label||'A colleague')+' joined their side'); break;
       case 'spammer_reaction': { const tile=$('#spammerTile'); if(tile){ tile.style.boxShadow='0 0 0 3px var(--gold)'; setTimeout(()=>tile.style.boxShadow='',700);} if(p.reaction_type) toast('Spammer: '+p.reaction_type); break; }
       case 'blow_landed': if(p.total_blows!=null) blows=p.total_blows; else blows++; refreshHud(); break;
-      case 'gear_transition': { /* INTERNAL — HUD only; never a product meter */
-        const g=$('#hudGear'); if(g&&p.to_state){ g.textContent=p.to_state; g.className='gear '+(p.to_state==='ALIVE'?'a':p.to_state==='SLIPPING'?'s':'f'); }
-        break; }
+      case 'gear_transition': { /* legacy/demo — map to the panel's suspicion axis + HUD chip */
+        if(p.to_state){ const s=String(p.to_state).toLowerCase();
+          const g=$('#hudGear'); if(g){ g.textContent=p.to_state; g.className='gear '+(s==='alive'?'a':s==='slipping'?'s':'f'); }
+          renderGear({suspicion:s}); } break; }
+      case 'gear_state': renderGear(p); break;
       case 'blow_armed': {
         document.body.style.transition='background .15s'; document.body.style.background='var(--blood)'; setTimeout(()=>document.body.style.background='',300);
         toast('Death Blow armed'); break; }
@@ -1518,6 +1600,7 @@
     const cd=$('#capDerek'); if(cd){cd.classList.remove('show'); cd.textContent='';}
     firedLog={}; selectedBit=null; renderBoardBits(null); renderHudBits();
     rack=[]; loadout=[]; setlist=[]; liveHeads=null; dossier=[]; renderAmmoRack(); renderArmPanel(); renderDossier();
+    lastGear={}; if($('#gearPanel')) $('#gearPanel').style.display='none';
     if(source==='live'){ const rn=document.querySelector('.readnote'); if(rn) rn.textContent='The Host plays its own hand. You may arm a setlist (max 3) and call the Death Blow.'; } }
 
   /* ---- feed lifecycle wired to the RUN button ---- */
@@ -1574,9 +1657,11 @@
         text:"Hi, this is Derek from Apex Synergy Partners. We've got an exclusive Q4 partnership opportunity I think your team will love." }}},
     { t:3800, e:{ event_type:'utterance', actor:'host', seq:3, payload:{ speaker_role:'host', speaker_name:'Jarl', turn_index:2,
         text:"A partnership. Wonderful. Before we go further — is this the kind of thing the council would need to bless, or can I authorize it from the longhouse myself?" }}},
-    { t:5200, e:{ event_type:'bit_deployed', actor:'governor', seq:4, payload:{ bit_id:'BIT-201', name:'Pricing Loop', bit_type:'one_shot', trigger:'auto', turn_index:2 }}},
+    { t:300,  e:{ event_type:'gear_state', actor:'system', seq:2, payload:{ suspicion:'alive', pressure:'calm', engagement:'hooked', slip:0, fit_score:1.2, deploy_bar:'warmup', pool:41, will_fire:false, top_bit:'Pricing Loop', turn_index:2 }}},
+    { t:5200, e:{ event_type:'bit_deployed', actor:'governor', seq:4, payload:{ bit_id:'BIT-201', name:'Pricing Loop', bit_type:'one_shot', trigger:'auto', turn_index:2, fit_score:5.1, deploy_bar:3.0, gears_at_fire:{ suspicion:'alive', pressure:'pushing', engagement:'hooked', slip:0 } }}},
     { t:1200, e:{ event_type:'utterance', actor:'spammer', seq:5, payload:{ speaker_role:'spammer', speaker_name:'Derek', turn_index:3,
         text:"Uh — no council needed. So pricing starts at two thousand a month for the growth tier." }}},
+    { t:600,  e:{ event_type:'gear_state', actor:'system', seq:5, payload:{ suspicion:'slipping', pressure:'extracting', engagement:'hooked', slip:1, fit_score:2.4, deploy_bar:3.0, pool:38, will_fire:false, top_bit:'The Questionnaire', turn_index:3 }}},
     { t:3600, e:{ event_type:'utterance', actor:'host', seq:6, payload:{ speaker_role:'host', speaker_name:'Jarl', turn_index:4,
         text:"Two thousand. And that two thousand — is that before or after the other two thousand you mentioned? I want to be sure which two thousand we're agreeing on." }}},
     { t:4200, e:{ event_type:'spammer_reaction', actor:'system', seq:7, payload:{ reaction_type:'confused', turn_index:4 }}},
