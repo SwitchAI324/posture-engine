@@ -450,6 +450,24 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
   const blocks = [
     { type: "text", text: baseSystem, cache_control: { type: "ephemeral" } },
   ];
+  // TEMP (env-gated, CONRAD_RELAY=1): host-ventriloquism probe. If the caller
+  // asks for Conrad / whether anyone else is on, the HOST brings Conrad in
+  // within its own turn (no separate voice/call) — a beat in Conrad's blunt
+  // register, then back to the host. Bounded: a beat, not a sustained two-hander.
+  if (process.env.CONRAD_RELAY === "1") {
+    blocks.push({
+      type: "text",
+      text:
+        "BENCH RELAY (Conrad): If the caller explicitly asks to speak with " +
+        "Conrad, asks if anyone else is on the call, or asks for your boss/" +
+        "manager, you may bring Conrad in WITHIN your own turn. Briefly relay " +
+        "him in his voice — Conrad is Andrew's boss: blunt, impatient, certain " +
+        "this is wasting time, demands a real number. Mark his words plainly " +
+        "(e.g. \"Conrad: ...\") then return to your own voice. Keep it to a " +
+        "beat or two — do NOT sustain a long back-and-forth as both people. " +
+        "If the caller does NOT ask, do not bring Conrad in.",
+    });
+  }
   if (isConfigured() && callId) {
     const current = stored
       ? {
