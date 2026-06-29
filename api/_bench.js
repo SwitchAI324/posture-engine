@@ -16,6 +16,11 @@
 //   BENCH_ARRIVE_TURN  which user-turn the arrival fires on   (default 2)
 //   BENCH_ARRIVE_WHO   CONRAD | BONNIE | ANDREA               (default CONRAD)
 // Names must match the VOICES map in _voices.js.
+//
+// DIRECTOR OVERRIDE (added): benchSelect(benchId) resolves a Director-chosen
+// character to the SAME {tag,note,line} shape as the auto inject, so a manually
+// sent-in bench (via /api/control?action=bench) flows through the identical
+// path. benchIds() lists the valid ids for the control endpoint to validate.
 // ----------------------------------------------------------------------
 export const BENCH = {
   CONRAD: {
@@ -59,4 +64,22 @@ export function benchInject(turn) {
   if (turn !== ARRIVE_TURN) return null;
   const c = BENCH[ARRIVE_WHO] || BENCH.CONRAD;
   return { tag: c.tag, note: c.note, line: pick(c.lines) };
+}
+
+// Director override: resolve a chosen bench id to the SAME shape benchInject
+// returns, so a manually sent-in character flows through the identical inject
+// path. Accepts any casing (BENCH keys are uppercase tags). Returns
+// { tag, note, line } or null if the id isn't a known bench character.
+export function benchSelect(benchId) {
+  if (!benchId) return null;
+  const key = String(benchId).toUpperCase();
+  const c = BENCH[key];
+  if (!c) return null;
+  return { tag: c.tag, note: c.note, line: pick(c.lines) };
+}
+
+// The set of bench ids a Director may send in (uppercase tags). Used by the
+// control endpoint to validate ?action=bench before writing.
+export function benchIds() {
+  return Object.keys(BENCH);
 }

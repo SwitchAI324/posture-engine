@@ -18,7 +18,7 @@
 const URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const TABLE = "call_prefix";
-const CONTROLS = "call_controls"; // canonical home for death_blow + arm controls
+const CONTROLS = "call_controls"; // canonical home for death_blow + arm + bench controls
 const EVENTS = "gear_events";
 
 export function isConfigured() {
@@ -93,13 +93,14 @@ export async function setCall(
   return true;
 }
 
-// CONTROLS — Director's live commands (death_blow + arms) live in call_controls,
-// one row each, distinguished by control_type. PE owns the row shape: control-
-// specific fields ride in payload; rung_id is the only death-blow-specific column.
-// getControls reads them all in one query (run concurrently with getCall, so no
-// added hot-path latency). Only pending/armed rows are "live"; fired/cleared drop.
+// CONTROLS — Director's live commands (death_blow + arms + bench) live in
+// call_controls, one row each, distinguished by control_type. PE owns the row
+// shape: control-specific fields ride in payload; rung_id is the only death-
+// blow-specific column. getControls reads them all in one query (run
+// concurrently with getCall, so no added hot-path latency). Only pending/armed
+// rows are "live"; fired/cleared drop.
 export async function getControls(callId) {
-  const empty = { deathBlow: null, armed: [] };
+  const empty = { deathBlow: null, armed: [], sentBench: null };
   if (!isConfigured() || !callId) return empty;
   const r = await fetch(
     `${URL}/rest/v1/${CONTROLS}?call_id=eq.${encodeURIComponent(callId)}` +
@@ -112,6 +113,7 @@ export async function getControls(callId) {
   const live = (s) => s === "pending" || s === "armed";
   let deathBlow = null;
   const armed = [];
+  let sentBench = null;
   for (const row of rows) {
     const p = row.payload || {};
     if (row.control_type === "death_blow") {
@@ -127,9 +129,15 @@ export async function getControls(callId) {
         id: row.id, bit_id: p.bit_id ?? null, hook_id: p.hook_id ?? null,
         armed_turn: p.armed_turn ?? null, idem: row.idempotency_key || null,
       });
+    } else if (row.control_type === "bench" && live(row.status)) {
+      // Director sent in a specific bench character. Last live one wins.
+      sentBench = {
+        id: row.id, bench_id: p.bench_id ?? null,
+        sent_turn: p.sent_turn ?? null, idem: row.idempotency_key || null,
+      };
     }
   }
-  return { deathBlow, armed };
+  return { deathBlow, armed, sentBench };
 }
 
 // DEATH BLOW (Trigger A) — insert one pending death_blow row. The partial unique
@@ -201,6 +209,33 @@ export async function addArm(callId, { bitId, hookId, idem, director }) {
   });
   if (r.status === 409) return true; // duplicate idem — idempotent
   if (!r.ok) throw new Error(`arm set failed: ${r.status} ${await r.text()}`);
+  return true;
+}
+
+// BENCH — Director sends in a specific bench character mid-call. One row,
+// control_type "bench"; payload carries the chosen bench_id. Mirrors addArm.
+// The next host turn reads it (via getControls.sentBench) and weaves that
+// character in, overriding the automatic arrival schedule.
+export async function setBench(callId, { benchId, idem, director }) {
+  if (!isConfigured() || !callId) throw new Error("store not configured");
+  const row = {
+    call_id: callId,
+    control_type: "bench",
+    director_user_id: director ?? null,
+    idempotency_key: idem ?? null,
+    status: "pending",
+    payload: { bench_id: benchId ?? null, sent_turn: null },
+  };
+  const r = await fetch(`${URL}/rest/v1/${CONTROLS}`, {
+    method: "POST",
+    headers: {
+      apikey: KEY, authorization: `Bearer ${KEY}`,
+      "content-type": "application/json", prefer: "return=minimal",
+    },
+    body: JSON.stringify(row),
+  });
+  if (r.status === 409) return true; // duplicate idem — idempotent
+  if (!r.ok) throw new Error(`bench set failed: ${r.status} ${await r.text()}`);
   return true;
 }
 

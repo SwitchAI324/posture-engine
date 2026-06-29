@@ -21,7 +21,7 @@ import { applyForceAll, postureBlock, defaultState, detectAccusation } from "../
 import { selectBit, rankBits } from "../_bits.js";
 import { archetypeFromBody } from "../_archetype.js";
 import { readAmmunition } from "../_read.js";
-import { benchInject, BENCH } from "../_bench.js";
+import { benchInject, benchSelect, BENCH } from "../_bench.js";
 import { makeTrace, blowLandedTotal, bitFireCount } from "../_trace.js";
 import { BITS } from "../_bits_registry.js";
 import { waitUntil } from "@vercel/functions";
@@ -241,14 +241,41 @@ export default async function handler(req) {
   // guarantee it). The line is generated in character from the live call, in
   // PARALLEL with the host reply, and only awaited when the stream closes — so
   // it costs ~no latency. Falls back to a canned line if generation fails.
+  // callId is needed for both the controls read and the bench decision below.
+  const callId = body.call?.id ?? body.metadata?.callId ?? body.call_id;
   const benchTurn = countUserTurns(messages);
-  const bench = benchInject(benchTurn);
+
+  const slug = body.call?.metadata?.slug ?? body.metadata?.slug ?? null;
+  let stored = null;
+  let ammo = { ammunition: [], byHook: {} };
+  let controls = { deathBlow: null, armed: [], sentBench: null };
+  try {
+    const [s, a, ctl] = await Promise.all([
+      getCall(callId).catch(() => null),
+      readAmmunition(slug).catch(() => ({ ammunition: [], byHook: {} })),
+      getControls(callId).catch(() => ({ deathBlow: null, armed: [], sentBench: null })),
+    ]);
+    stored = s;
+    if (a) ammo = a;
+    if (ctl) controls = ctl;
+  } catch {
+    stored = null;
+  }
+
+  // BENCH DECISION: a Director-sent bench (via /api/control?action=bench) takes
+  // priority over the automatic arrival schedule. benchSelect resolves the
+  // chosen id to the same {tag,note,line} shape benchInject produces, so the
+  // downstream inject path is identical whichever fired it.
+  const directorBench = controls.sentBench && controls.sentBench.bench_id
+    ? benchSelect(controls.sentBench.bench_id)
+    : null;
+  const bench = directorBench || benchInject(benchTurn);
   const benchAppend = bench
     ? generateBenchLine(bench, messages)
         .then((line) => "\n\n[[" + bench.tag + "]] " + (line || bench.line))
         .catch(() => "\n\n[[" + bench.tag + "]] " + bench.line)
     : null;
-  if (bench) console.log("bench inject=" + bench.tag + " turn=" + benchTurn);
+  if (bench) console.log("bench inject=" + bench.tag + " turn=" + benchTurn + (directorBench ? " (director-sent)" : " (auto)"));
 
   // PRE-SNAP PREFIX: if a frozen prefix was assembled for this call at
   // pre-snap (POST /api/presnap) and stored, use it as the cached block and
@@ -256,30 +283,12 @@ export default async function handler(req) {
   // hot-path read (a single indexed row, NOT an LLM call). If there's no
   // stored prefix, fall back to Vapi's raw system prompt (Phase 1 behavior),
   // so nothing breaks before pre-snap is wired into the Mead Hall.
-  const callId = body.call?.id ?? body.metadata?.callId ?? body.call_id;
   if (bench && callId) {
     makeTrace(callId, benchTurn, waitUntil).emit(
       "bench_joined",
-      { character_id: bench.tag, name: bench.tag, role: bench.note, joined_at: new Date().toISOString() },
+      { character_id: bench.tag, name: bench.tag, role: bench.note, joined_at: new Date().toISOString(), source: directorBench ? "director" : "auto" },
       "bench"
     );
-  }
-
-  const slug = body.call?.metadata?.slug ?? body.metadata?.slug ?? null;
-  let stored = null;
-  let ammo = { ammunition: [], byHook: {} };
-  let controls = { deathBlow: null, armed: [] };
-  try {
-    const [s, a, ctl] = await Promise.all([
-      getCall(callId).catch(() => null),
-      readAmmunition(slug).catch(() => ({ ammunition: [], byHook: {} })),
-      getControls(callId).catch(() => ({ deathBlow: null, armed: [] })),
-    ]);
-    stored = s;
-    if (a) ammo = a;
-    if (ctl) controls = ctl;
-  } catch {
-    stored = null;
   }
 
   // Base system: the assembled prefix if one was frozen at pre-snap, else
@@ -1037,7 +1046,6 @@ export async function runHostTurn({ messages, callId, meta }) {
     "you. Stay in character, keep them on the line, never reveal you suspect " +
     "anything. Speak naturally, one short conversational turn at a time.";
 
-  console.log("SIM_HOSTTURN lastUser=" + JSON.stringify((messages && messages.length) ? messages[messages.length-1] : null));
   const built = buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil);
   const systemBlocks = built ? built.blocks : null;
   const deathBlowFiring = built ? built.deathBlowFiring : false;

@@ -10,6 +10,11 @@
 //     -> instant kill. PE generates the absurd closing line in persona at
 //        fire time (no rung, no canned line). idempotent: one per call.
 //
+//   POST /api/control?action=bench
+//     body: { call_id, bench_id, director_user_id?, idempotency_key? }
+//     -> Director sends in a specific bench character; the next host turn
+//        weaves them in (overrides the auto inject schedule). idempotent.
+//
 //   GET  /api/control?call_id=...   -> current pending status (to confirm)
 //
 // final_line is OPTIONAL but recommended: Mead Hall already has the rung's
@@ -20,9 +25,10 @@
 // endpoint is ONLY the Director's manual Trigger A.
 // ----------------------------------------------------------------------
 
-import { getControls, setDeathBlow, addArm } from "./_store.js";
+import { getControls, setDeathBlow, addArm, setBench } from "./_store.js";
 import { makeTrace } from "./_trace.js";
 import { BITS } from "./_bits_registry.js";
+import { benchIds } from "./_bench.js";
 
 // Hooks a Director may arm. Kept in sync with what the Scouting lanes actually
 // produce + register today (see api/scout/_hooks.js GATES and _dissect.js /
@@ -157,6 +163,31 @@ export default async function handler(req) {
     try { await addArm(callId, { bitId, hookId, idem, director: b.director_user_id || null }); }
     catch (e) { return jsonRes({ error: "arm write failed", detail: String(e).slice(0, 200) }, 502); }
     return jsonRes({ ok: true, armed: [...armed, { bit_id: bitId, hook_id: hookId, idem }] });
+  }
+
+  if (req.method === "POST" && u.searchParams.get("action") === "bench") {
+    let b;
+    try { b = await req.json(); } catch { return jsonRes({ error: "bad json" }, 400); }
+    const callId = String(b.call_id || "").trim();
+    if (!callId) return jsonRes({ error: "call_id required" }, 400);
+    const benchId = b.bench_id ? String(b.bench_id).trim().toUpperCase() : null;
+    if (!benchId) return jsonRes({ error: "bench needs bench_id" }, 400);
+
+    // visible-failure validation: bench_id must be a known character.
+    const valid = benchIds(); // uppercase tags, e.g. CONRAD/BONNIE/ANDREA
+    if (!valid.includes(benchId)) {
+      return jsonRes({ error: `unknown bench ${benchId} — valid: ${valid.join(", ")}` }, 404);
+    }
+
+    const cur = await getControls(callId).catch(() => null);
+    const idem = b.idempotency_key ? String(b.idempotency_key) : null;
+    if (cur && cur.sentBench && idem && cur.sentBench.idem === idem) {
+      return jsonRes({ ok: true, idempotent: true, sentBench: cur.sentBench }); // already queued
+    }
+
+    try { await setBench(callId, { benchId, idem, director: b.director_user_id || null }); }
+    catch (e) { return jsonRes({ error: "bench write failed", detail: String(e).slice(0, 200) }, 502); }
+    return jsonRes({ ok: true, call_id: callId, sent_bench: benchId });
   }
 
   return jsonRes({ error: "method not allowed" }, 405);
