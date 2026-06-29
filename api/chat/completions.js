@@ -801,7 +801,6 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           engagement: state.engagement,
           slip: state.slip,
           accuseFloor: state.accuseFloor, // STICKY: persist the accusation floor
-          ...(arrivalDirty ? { arrivalState: arrival, benchLog } : {}), // v2 bench arrival
           ...(fire ? { lastBitId: top.id, lastBitTurn: turn } : {}),
           ...(archetypeNew ? { archetype } : {}),
         }).catch(() => {})
