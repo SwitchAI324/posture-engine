@@ -31,7 +31,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-   `&select=prefix,posture_line,gear,pressure,engagement,slip,accuse_floor,last_bit_id,last_bit_turn,archetype,character_id`;
+   `&select=prefix,posture_line,gear,pressure,engagement,slip,accuse_floor,arrival_state,bench_log,last_bit_id,last_bit_turn,archetype,character_id`;
   const r = await fetch(url, {
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
@@ -46,6 +46,8 @@ export async function getCall(callId) {
     engagement: rows[0].engagement || "hooked",
  slip: rows[0].slip ?? 0, // suspicion slip accumulator (hysteresis)
     accuseFloor: rows[0].accuse_floor ?? 0, // STICKY: accusation ratchet floor
+    arrivalState: rows[0].arrival_state ?? null, // v2 bench: in-progress arrival (jsonb)
+    benchLog: rows[0].bench_log ?? [], // v2 bench: [{bench_id,arrived_turn}] for pacing/cap
     lastBitId: rows[0].last_bit_id || null,
     lastBitTurn: rows[0].last_bit_turn ?? null,
     archetype: rows[0].archetype || null,
@@ -57,7 +59,7 @@ export async function getCall(callId) {
 // posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, lastBitId, lastBitTurn, archetype, characterId }
+  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, arrivalState, benchLog, lastBitId, lastBitTurn, archetype, characterId }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -72,6 +74,8 @@ export async function setCall(
   if (engagement !== undefined) row.engagement = engagement;
   if (slip !== undefined) row.slip = slip;
   if (accuseFloor !== undefined) row.accuse_floor = accuseFloor;
+  if (arrivalState !== undefined) row.arrival_state = arrivalState; // v2 bench (jsonb, nullable)
+  if (benchLog !== undefined) row.bench_log = benchLog; // v2 bench arrival log (jsonb array)
   if (lastBitId !== undefined) row.last_bit_id = lastBitId;
   if (lastBitTurn !== undefined) row.last_bit_turn = lastBitTurn;
   if (archetype !== undefined) row.archetype = archetype;

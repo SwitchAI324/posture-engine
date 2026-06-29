@@ -28,7 +28,7 @@
 import { getControls, setDeathBlow, addArm, setBench } from "./_store.js";
 import { makeTrace } from "./_trace.js";
 import { BITS } from "./_bits_registry.js";
-import { benchIds } from "./_bench.js";
+import { benchIds } from "./_bench_v2.js";
 
 // Hooks a Director may arm. Kept in sync with what the Scouting lanes actually
 // produce + register today (see api/scout/_hooks.js GATES and _dissect.js /
