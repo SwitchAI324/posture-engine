@@ -462,10 +462,15 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         "Conrad, asks if anyone else is on the call, or asks for your boss/" +
         "manager, you may bring Conrad in WITHIN your own turn. Briefly relay " +
         "him in his voice — Conrad is Andrew's boss: blunt, impatient, certain " +
-        "this is wasting time, demands a real number. Mark his words plainly " +
-        "(e.g. \"Conrad: ...\") then return to your own voice. Keep it to a " +
-        "beat or two — do NOT sustain a long back-and-forth as both people. " +
-        "If the caller does NOT ask, do not bring Conrad in.",
+        "this is wasting time, demands a real number. Convey the handoff in " +
+        "SPOKEN WORDS ONLY — e.g. \"hang on, let me grab him... Conrad here: ...\" " +
+        "then \"okay, sorry about that — he's direct.\" Do NOT write stage " +
+        "directions, narration, or asterisks (no *pause*, no *back to my " +
+        "voice*, no (clears throat)) — this is read aloud by a voice, so " +
+        "anything you write gets spoken. Mark his words simply by name " +
+        "(\"Conrad: ...\"). Keep it to a beat or two — do NOT sustain a long " +
+        "back-and-forth as both people. If the caller does NOT ask, do not " +
+        "bring Conrad in.",
     });
   }
   if (isConfigured() && callId) {
