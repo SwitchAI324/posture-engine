@@ -55,8 +55,11 @@ function compile(postureId, benchId) {
   }
 
   // Clone the malleable surface so the source file is never touched (STAR).
+  // manifestation (seen|audio|phantom) rides onto the block so downstream
+  // (PE handoff gating) can read it off the compiled prefix, not just the roster.
   const block = {
     id: base.id, name: base.name, role: base.role, itAffinity: base.itAffinity,
+    manifestation: base.manifestation,
     malleable: { ...base.malleable },
     beats: { ...base.beats },
     passthrough: { ...base.passthrough },
