@@ -73,10 +73,18 @@ export async function fireHandoff(callId, benchId = DEFAULT_BENCH) {
 export default async function handler(req) {
   const u = new URL(req.url);
 
-  // GET — debug: show the stored controlUrl for a call.
+  // GET — two modes:
+  //   ?fire=CALL_ID  -> fire the handoff from the address bar (browser-friendly).
+  //   ?call_id=...   -> debug: show the stored controlUrl for a call.
   if (req.method === "GET") {
+    const fireId = u.searchParams.get("fire");
+    if (fireId) {
+      const benchId = u.searchParams.get("bench_id") || DEFAULT_BENCH;
+      const result = await fireHandoff(fireId.trim(), benchId);
+      return jsonRes(result, result.ok ? 200 : 502);
+    }
     const callId = u.searchParams.get("call_id");
-    if (!callId) return jsonRes({ error: "missing call_id" }, 400);
+    if (!callId) return jsonRes({ error: "missing call_id (or use ?fire=CALL_ID to fire)" }, 400);
     const stored = await getCall(callId).catch(() => null);
     return jsonRes({
       call_id: callId,
