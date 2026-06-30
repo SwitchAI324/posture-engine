@@ -16,10 +16,13 @@
 // ----------------------------------------------------------------------
 
 import { getCall } from "./_store.js";
+import { isPhantom, benchEntry } from "./_bench_v2.js";
 
 export const config = { runtime: "edge" };
 
-// Bench assistant IDs (from the Vapi dashboard). CONRAD is the first/default.
+// Bench assistant IDs (from the Vapi dashboard). These are Vapi EXECUTION detail
+// (the runtime voice), so they live here, not in the content roster. CONRAD is
+// the first/default. Add a character's Vapi assistantId here when it's built.
 const BENCH_ASSISTANTS = {
   CONRAD: "23a3bebb-e8ee-476f-bbfa-82886cd9b665",
 };
@@ -36,8 +39,20 @@ function jsonRes(obj, status = 200) {
 // can call it directly (not just via the endpoint). Returns { ok, status, ... }.
 export async function fireHandoff(callId, benchId = DEFAULT_BENCH) {
   if (!callId) return { ok: false, error: "missing call_id" };
-  const assistantId = BENCH_ASSISTANTS[String(benchId).toUpperCase()];
-  if (!assistantId) return { ok: false, error: `unknown bench ${benchId}` };
+  const key = String(benchId).toUpperCase();
+
+  // MANIFESTATION GATE: only seen/audio characters get a handoff + voice.
+  // Phantoms (no_show/approver/it_guy) are host-prefix invocation only — they
+  // NEVER hold the mic, so a handoff to them is invalid. barbara isn't a bench
+  // character at all. benchEntry/isPhantom read the v2 roster (type field).
+  const entry = benchEntry(key);
+  if (!entry) return { ok: false, error: `unknown bench ${key} — not a handoff-able character` };
+  if (isPhantom(key)) {
+    return { ok: false, error: `${key} is a phantom (manifestation) — phantoms are invoked via the host prefix, never handed off` };
+  }
+
+  const assistantId = BENCH_ASSISTANTS[key];
+  if (!assistantId) return { ok: false, error: `no Vapi assistantId configured for ${key} (built in roster but not wired in BENCH_ASSISTANTS)` };
 
   const stored = await getCall(callId).catch(() => null);
   const controlUrl = stored && stored.controlUrl ? stored.controlUrl : null;
