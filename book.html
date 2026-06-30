@@ -647,12 +647,13 @@
 
   function showDone() {
     var card = document.querySelector('.body');
+    var resched = DATA && DATA.reschedule;
     card.innerHTML =
       '<div class="done">' +
       '<div class="tick">&#10003;</div>' +
-      '<h2>You\u2019re booked</h2>' +
-      '<p>' + HOST + ' will see you then.</p>' +
-      '<p>A calendar invite is on its way to your inbox.</p>' +
+      '<h2>' + (resched ? 'You\u2019re all set' : 'You\u2019re booked') + '</h2>' +
+      '<p>' + HOST + (resched ? ' will see you at the new time.' : ' will see you then.') + '</p>' +
+      '<p>' + (resched ? 'An updated calendar invite' : 'A calendar invite') + ' is on its way to your inbox.</p>' +
       '</div>';
   }
 
