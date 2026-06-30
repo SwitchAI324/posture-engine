@@ -262,6 +262,14 @@ export default async function handler(req) {
     stored = null;
   }
 
+  // CAPTURE the Vapi per-call monitor.controlUrl (handoff target). It rides on
+  // the call object every turn but we only need to store it once. Persist on
+  // first sight (or if it changed). Best-effort, off the hot path.
+  const controlUrl = body.call?.monitor?.controlUrl ?? null;
+  if (controlUrl && callId && isConfigured() && (!stored || stored.controlUrl !== controlUrl)) {
+    waitUntil(setCall(callId, { controlUrl }).catch(() => {}));
+  }
+
   // ===== BENCH v2: STAGED ARRIVAL MACHINE ================================
   // Shared by handler (Vapi) AND runHostTurn (sim) so both paths weave the bench
   // in identically. See runBenchArrival() below.
