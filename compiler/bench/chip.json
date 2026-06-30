@@ -3,6 +3,7 @@
   "name": "Chip",
   "role": "The Enthusiast",
   "itAffinity": "Bumpy",
+  "manifestation": "seen",
   "_note": "Lifted from 'Chip - Enthusiast - Present.md' (v1.2). malleable=connectionToHost; beats=joining/theMute/overCommitLoop; passthrough=voiceAndManner/exit. Lap dog, never alpha — every overstep is eagerness, never arrogance.",
   "malleable": {
     "connectionToHost": "Andrew is your hero and your safety net. You over-commit, then look to him to catch you (\"Andrew — did I do it again? I did it again, didn't I.\"). You crave his approval and his cover in equal measure, and he is the only one who can rein you in — for about ten seconds."

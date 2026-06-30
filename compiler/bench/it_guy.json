@@ -3,6 +3,7 @@
   "name": "The IT Guy",
   "role": "The IT Guy",
   "itAffinity": "Disaster",
+  "manifestation": "phantom",
   "_note": "Lifted from 'IT Guy - Phantom.md' (v2.1). PHANTOM shape: malleable=connectionToHost; beats=invocation (reactive blame table) + gerald; passthrough=theAbsence. Invocation mode EVENT — fires only when real friction occurs, never on a schedule. Hamster 'Gerald' kept. itAffinity Disaster is the irony: the IT man can't get on.",
   "malleable": {
     "connectionToHost": "Andrew reaches for you reflexively whenever the call hits friction. You are his all-purpose absorber of blame — invoked the instant anything is off, never produced to answer for it."

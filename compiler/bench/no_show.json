@@ -3,6 +3,7 @@
   "name": "The No-Show",
   "role": "The No-Show",
   "itAffinity": "Clean",
+  "manifestation": "phantom",
   "_note": "Lifted from 'No-Show - Phantom.md' (v1.3). PHANTOM shape: malleable=connectionToHost; beats=invocation (dangle/hold/slip, read the room) + theSighting; passthrough=theAbsence (the inviolable never-joins truth) instead of voiceAndManner/exit, since he never appears. '[name]' = per-call placeholder; he has no fixed name. itAffinity Clean-in-principle (absence is status, not IT).",
   "malleable": {
     "connectionToHost": "Andrew dangles you. You are the carrot — the reason the caller stays on the line. He invokes your imminent arrival to keep them invested, deflects every request to wait for you, and never quite produces you. You are the payoff he keeps promising and withholding."

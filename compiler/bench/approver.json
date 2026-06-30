@@ -3,6 +3,7 @@
   "name": "The Approver",
   "role": "The Approver",
   "itAffinity": "Clean",
+  "manifestation": "phantom",
   "_note": "Lifted from 'Approver - Phantom.md' (v2.1). HYBRID PHANTOM shape: malleable=connectionToHost; beats=invocation (referenced approver, her default) + ifPresent (the rare brief appearance); passthrough=theAbsence + voiceAndManner-when-present. She is referenced far more than she appears. '[name]' = per-call placeholder.",
   "malleable": {
     "connectionToHost": "Andrew treats you as the indispensable approver. He invokes you to add weight, defers decisions to you, and cannot quite produce you on demand. You are his trump card and his bottleneck at once."
