@@ -85,6 +85,33 @@ export async function fireHandoff(callId, benchId = DEFAULT_BENCH) {
   }
 }
 
+// Request a TELEGRAPHED handoff: instead of firing immediately, set a pending
+// two-beat state so the host ANNOUNCES the arrival first (turn 1), then the
+// handoff fires (turn 2). Both triggers — AI volition and director action —
+// call this. Returns the pending state to store, or an error.
+// (Immediate fireHandoff() still exists for the manual URL test.)
+export function requestHandoff(benchId = DEFAULT_BENCH) {
+  const key = String(benchId).toUpperCase();
+  const entry = benchEntry(key);
+  if (!entry) return { ok: false, error: `unknown bench ${key}` };
+  if (isPhantom(key)) return { ok: false, error: `${key} is a phantom — not handoff-able` };
+  if (!BENCH_ASSISTANTS[key]) return { ok: false, error: `no Vapi assistantId for ${key}` };
+  return { ok: true, pending: { bench_id: key, stage: "announce" } };
+}
+
+// The host's telegraph line direction for the announce beat. Injected into the
+// HOST's prompt so the host warns the caller a beat before the distinct voice
+// arrives. Generic host narration (NOT the host voicing the bench character).
+export function telegraphDirective(benchId) {
+  const entry = benchEntry(String(benchId).toUpperCase());
+  const tag = entry ? entry.tag : benchId;
+  const who = entry ? (entry.note || entry.tag) : benchId;
+  return `INCOMING: ${tag} is about to join the call. In YOUR OWN voice, ` +
+    `briefly and naturally warn that they're hopping on — e.g. "oh, hang on, ` +
+    `let me pull in ${tag}..." — then STOP. Do NOT speak as them; they'll ` +
+    `speak for themselves next. (${who})`;
+}
+
 export default async function handler(req) {
   const u = new URL(req.url);
 
@@ -106,6 +133,26 @@ export default async function handler(req) {
       control_url: stored && stored.controlUrl ? stored.controlUrl : null,
       has_control_url: !!(stored && stored.controlUrl),
     });
+  }
+
+  // POST ?action=request — telegraphed handoff: set pending state so the host
+  // announces first, then the handoff fires next turn. This is the entry point
+  // for both AI-volition and director triggers.
+  if (req.method === "POST" && u.searchParams.get("action") === "request") {
+    let b;
+    try { b = await req.json(); } catch { return jsonRes({ error: "bad json" }, 400); }
+    const callId = String(b.call_id || "").trim();
+    if (!callId) return jsonRes({ error: "call_id required" }, 400);
+    const benchId = b.bench_id ? String(b.bench_id).trim() : DEFAULT_BENCH;
+    const req2 = requestHandoff(benchId);
+    if (!req2.ok) return jsonRes(req2, 404);
+    try {
+      const { setCall } = await import("./_store.js");
+      await setCall(callId, { pendingHandoff: req2.pending });
+    } catch (e) {
+      return jsonRes({ error: "failed to set pending handoff", detail: String(e).slice(0, 200) }, 502);
+    }
+    return jsonRes({ ok: true, call_id: callId, telegraphing: benchId.toUpperCase(), stage: "announce" });
   }
 
   // POST ?action=fire — fire the handoff.
