@@ -22,6 +22,7 @@ import { selectBit, rankBits } from "../_bits.js";
 import { archetypeFromBody } from "../_archetype.js";
 import { readAmmunition } from "../_read.js";
 import { beginArrival, advanceArrival, generateBenchBeat, isPhantom, phantomInvokeDirective, autoArrivalId, benchEntry, BENCH } from "../_bench_v2.js";
+import { telegraphDirective, fireHandoff } from "../handoff.js";
 import { makeTrace, blowLandedTotal, bitFireCount } from "../_trace.js";
 import { BITS } from "../_bits_registry.js";
 import { waitUntil } from "@vercel/functions";
@@ -277,9 +278,39 @@ export default async function handler(req) {
   const benchAppend = benchResult.benchAppend;
   const benchPhantomInvoke = benchResult.benchPhantomInvoke;
 
+  // ===== TELEGRAPHED HANDOFF (two-beat) =================================
+  // Beat 1 (stage "announce"): host warns the caller a distinct-voice bench
+  //   character is joining, then we advance the state to "fire".
+  // Beat 2 (stage "fire"): the actual Vapi handoff fires (distinct voice), and
+  //   we clear the pending state.
+  // Requested via POST /api/handoff?action=request (AI-volition or director).
+  let telegraphAnnounce = null;
+  const pend = stored && stored.pendingHandoff ? stored.pendingHandoff : null;
+  if (pend && pend.bench_id) {
+    if (pend.stage === "announce") {
+      telegraphAnnounce = telegraphDirective(pend.bench_id); // host warns this turn
+      if (callId && isConfigured()) {
+        waitUntil(setCall(callId, { pendingHandoff: { bench_id: pend.bench_id, stage: "fire" } }).catch(() => {}));
+      }
+      if (callId) makeTrace(callId, benchTurn, waitUntil).emit("handoff_telegraph", { character_id: pend.bench_id, turn_index: benchTurn }, "bench");
+    } else if (pend.stage === "fire") {
+      // Fire the real handoff, then clear the pending state.
+      if (callId) {
+        waitUntil(
+          fireHandoff(callId, pend.bench_id)
+            .then((r) => makeTrace(callId, benchTurn, waitUntil).emit("handoff_fired", { character_id: pend.bench_id, ok: !!r.ok, turn_index: benchTurn }, "bench"))
+            .catch(() => {})
+        );
+        if (isConfigured()) waitUntil(setCall(callId, { pendingHandoff: null }).catch(() => {}));
+      }
+    }
+  }
+
   // Vapi's own prompt (Stage 1/2 — keeps Andrew sounding exactly as he is).
   // The doubt-gears layer on top of whichever base is in play.
   let baseSystem = stored && stored.prefix ? stored.prefix : vapiSystem;
+  // Telegraph beat: fold the host's "someone's joining" warning into its prompt.
+  if (telegraphAnnounce) baseSystem = (baseSystem || "") + "\n\n" + telegraphAnnounce;
   // Phantom send-in: fold the invoke/dangle directive into the host's own prompt
   // (a phantom is performed BY the host, not a separate bench call).
   if (benchPhantomInvoke) baseSystem = (baseSystem || "") + "\n\n" + benchPhantomInvoke;
@@ -409,29 +440,42 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
       }
     } else {
       const count = benchLog.length;
-      const floor = count === 0 ? 0 : 3 + count; // 1st:0, 2nd:4, 3rd:5, 4th:6
-      const lastTurn = count ? benchLog[benchLog.length - 1].arrived_turn : -999;
-      const gateOpen = benchTurn - lastTurn >= floor;
-      if (gateOpen) {
-        arrival = beginArrival(wantId, benchTurn);
-        if (arrival) {
-          arrivalDirty = true;
-          benchLog = benchLog.concat([{ bench_id: arrival.bench_id, arrived_turn: benchTurn }]);
-          benchAppend = generateBenchBeat(arrival, messages).catch(() => null);
-          if (callId) {
-            makeTrace(callId, benchTurn, waitUntil).emit(
-              "bench_joined",
-              { character_id: arrival.bench_id, name: arrival.bench_id, source: "director", manifestation: arrival.type, stage: "entrance", joined_at: new Date().toISOString() },
-              "bench"
-            );
-          }
-        }
-      } else if (callId) {
-        makeTrace(callId, benchTurn, waitUntil).emit(
-          "bench_waiting",
-          { character_id: wantId, reason: "pacing", need_turn: lastTurn + floor, turn_index: benchTurn },
-          "bench"
+      // CEILING 3: drop the 4th slot (dead by math on real call lengths).
+      if (count >= 3) {
+        if (callId) makeTrace(callId, benchTurn, waitUntil).emit(
+          "bench_waiting", { character_id: wantId, reason: "ceiling", turn_index: benchTurn }, "bench"
         );
+      } else {
+        // ONE GATE: "one arrival in flight" is already enforced above (an active
+        // non-resolved arrival short-circuits this branch). We do NOT stack a
+        // turn-floor on top of it (two locks, one door). First arrival is free
+        // (floor 0); subsequent arrivals need only a light spacer so they don't
+        // land literally back-to-back the turn after one resolves.
+        const SPACER = parseInt(process.env.BENCH_ARRIVE_SPACER || "2", 10);
+        const lastTurn = count ? benchLog[benchLog.length - 1].arrived_turn : -999;
+        const floor = count === 0 ? 0 : SPACER; // 1st:0, then a light spacer
+        const gateOpen = benchTurn - lastTurn >= floor;
+        if (gateOpen) {
+          arrival = beginArrival(wantId, benchTurn);
+          if (arrival) {
+            arrivalDirty = true;
+            benchLog = benchLog.concat([{ bench_id: arrival.bench_id, arrived_turn: benchTurn }]);
+            benchAppend = generateBenchBeat(arrival, messages).catch(() => null);
+            if (callId) {
+              makeTrace(callId, benchTurn, waitUntil).emit(
+                "bench_joined",
+                { character_id: arrival.bench_id, name: arrival.bench_id, source: "director", manifestation: arrival.type, stage: "entrance", joined_at: new Date().toISOString() },
+                "bench"
+              );
+            }
+          }
+        } else if (callId) {
+          makeTrace(callId, benchTurn, waitUntil).emit(
+            "bench_waiting",
+            { character_id: wantId, reason: "spacer", need_turn: lastTurn + floor, turn_index: benchTurn },
+            "bench"
+          );
+        }
       }
     }
   } else {
