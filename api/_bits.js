@@ -38,8 +38,10 @@ export const WEIGHTS = {
 };
 
 // Mid-call deploy bar: a bit fires only if its top score clears this (it must
-// beat "just keep talking"). Death blows bypass it.
-export const DEPLOY_THRESHOLD = 1.5;
+// beat "just keep talking"). Death blows bypass it. Env-tunable (DEPLOY_THRESHOLD)
+// so it can be dialed live from Vercel without a deploy — the third pacing dial
+// alongside MIN_GAP and WARMUP_TURNS.
+export const DEPLOY_THRESHOLD = parseFloat(process.env.DEPLOY_THRESHOLD || "1.5");
 
 // Death blows are the 700-series. Identified by id, not a separate `kind`.
 const isDeathBlow = (b) => /^BIT-7\d\d$/.test(b.id);
@@ -114,7 +116,11 @@ function gearBias(bit, state) {
 function recencyPenalty(bit, state) {
   const since = state.recency?.[bit.id];
   if (since == null) return { pen: 0, why: [] };
-  const cd = bit.cooldown ?? 5;
+  // Count bits are DESIGNED to fire repeatedly — the running tally IS the joke,
+  // so a long cooldown starves them. Default them to 2; one-shots/running bits
+  // keep 5. An explicit bit.cooldown still overrides either default.
+  const dflt = bit.bit_type === "count" ? 2 : 5;
+  const cd = bit.cooldown ?? dflt;
   const pen = WEIGHTS.recencyBase * Math.max(0, 1 - since / cd);
   return { pen, why: pen > 0 ? [`used ${since} call(s) ago -${pen.toFixed(1)}`] : [] };
 }
@@ -200,28 +206,25 @@ export function rankBits(state, { pool = BITS, deathBlow = false } = {}) {
 }
 
 // --- LOADOUT: per-turn candidacy ----------------------------------------
-// Narrow the 71 to the bits that actually fit THIS moment, so ranking picks
-// among a focused set instead of a flat sea of universals. A bit is a
-// candidate when it is: not a death blow, has its fuel (or needs none), is
-// NOT actively anti-fit (negative gear_bias), AND has some positive pull this
-// turn — a positive gear_bias, a live fuel boost, or an accusation match.
-// Bits with zero signal are generic filler, not a precise pick, so they drop.
-function hasPull(bit, state) {
-  const g = gearBias(bit, state).bias;
-  if (g < 0) return { ok: false }; // actively wrong for this moment
-  const fuel = fuelFit(bit, state);
-  const acc = !!(
-    bit.accusations && state.accusation && bit.accusations.includes(state.accusation)
-  );
-  return { ok: g > 0 || fuel.boost > 0 || acc, anti: false };
-}
-
+// GEAR IS A SCORING SIGNAL, NOT AN ELIGIBILITY GATE (per the Bits chat's
+// pacing audit). Every active bit stays in the eligible pool; gear_bias
+// adjusts the SCORE up or down inside scoreBit — it never removes a bit.
+// The deploy THRESHOLD (not a candidacy filter) is what keeps a generic,
+// low-scoring bit from firing when nothing fits — so a neutral universal is
+// still eligible and WILL fire when it's the best available option, instead
+// of being starved out of the pool. Only HARD exclusions remain: parked
+// (no producer), death blows (700s, handled separately), and missing fuel
+// (genuinely can't joke about company_news with no company_news).
+//
+// [FIXED] Previously loadout required hasPull() — positive gear/fuel/accusation
+// signal — which zeroed neutral bits OUT of the pool before ranking, the
+// primary cause of under-firing. Removed: gear now only scores, never gates.
 export function loadout(state, { pool = BITS } = {}) {
   return pool.filter((b) => {
     if (b.status === "parked") return false; // no producer for its fuel yet
     if (isDeathBlow(b)) return false;
-    if (!fuelFit(b, state).available) return false; // missing ammo
-    return hasPull(b, state).ok;
+    if (!fuelFit(b, state).available) return false; // missing ammo — hard gate
+    return true; // everything else is eligible; gear/score decides ranking
   });
 }
 
