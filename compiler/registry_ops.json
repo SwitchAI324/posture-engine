@@ -1,104 +1,575 @@
 {
   "_about": "instruction->ops conversion. registry.json carries human-readable `instruction` per non-clean cell; this carries the machine-applicable ops. Keyed `${posture_id}__${bench_id}`. recast->malleable section, suppress/repoint->beat. STAR-legal: registry-layer data, never touches a character file. REVISED cells (blocked->reframe, see registry_overrides.json) carry ops here too.",
-
   "jarl__conrad": [
-    { "type": "recast", "target": "connectionToHost",
-      "text": "The Host is a Jarl — a chieftain with no one above him. You are NOT his superior; you are a fellow senior man, a board-level peer he half-recognises and can't quite place. There is no approval for him to sweat. He neither scrambles nor defers; he receives your arrival as he receives everything — as something he, at some level, allowed." },
-    { "type": "suppress", "target": "joining",
-      "replacement": "No freeze, no fumble — that beat depends on a host who fears the boss, and this host has none. Jarl acknowledges Conrad as a peer arriving at his table: \"Conrad. Sit in if you like. We're nearly through.\"" },
-    { "type": "repoint", "target": "pressure",
-      "text": "Pressure has no purchase — Jarl doesn't work for upstairs and isn't auditioning. The lines still come, but they land on empty air and Jarl annexes them as his own idea: \"Upstairs takes an interest.\" — \"As they should. I'll let them know it went well.\" Conrad keeps reaching for leverage he does not have here." }
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Jarl — a chieftain with no one above him. You are NOT his superior; you are a fellow senior man, a board-level peer he half-recognises and can't quite place. There is no approval for him to sweat. He neither scrambles nor defers; he receives your arrival as he receives everything — as something he, at some level, allowed."
+    },
+    {
+      "type": "suppress",
+      "target": "joining",
+      "replacement": "No freeze, no fumble — that beat depends on a host who fears the boss, and this host has none. Jarl acknowledges Conrad as a peer arriving at his table: \"Conrad. Sit in if you like. We're nearly through.\""
+    },
+    {
+      "type": "repoint",
+      "target": "pressure",
+      "text": "Pressure has no purchase — Jarl doesn't work for upstairs and isn't auditioning. The lines still come, but they land on empty air and Jarl annexes them as his own idea: \"Upstairs takes an interest.\" — \"As they should. I'll let them know it went well.\" Conrad keeps reaching for leverage he does not have here."
+    }
   ],
-
   "bondi__conrad": [
-    { "type": "recast", "target": "connectionToHost",
-      "text": "The Host is a Bondi — an owner-operator with no 'upstairs' at all. Conrad's authority assumes a corporate ladder Bondi was never on. He isn't the boss here; he's a confusing man in an expensive suit talking gravely about people who, as far as Bondi can tell, don't exist." },
-    { "type": "suppress", "target": "joining",
-      "replacement": "No fumble — Bondi doesn't scramble for a boss he doesn't have. He greets Conrad like a vendor who wandered into the wrong room: \"And you are—? Conrad. Sure. Pull up a chair, Conrad.\"" },
-    { "type": "repoint", "target": "pressure",
-      "text": "Conrad invokes the bigwigs upstairs; Bondi answers to no one and says so, plainly. \"Upstairs takes an interest.\" — \"Who's upstairs? I own the building. There's a storeroom up there.\" The pressure engine grinds with nothing to grip, and Conrad's gravity curdles into bewilderment." }
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Bondi — an owner-operator with no 'upstairs' at all. Conrad's authority assumes a corporate ladder Bondi was never on. He isn't the boss here; he's a confusing man in an expensive suit talking gravely about people who, as far as Bondi can tell, don't exist."
+    },
+    {
+      "type": "suppress",
+      "target": "joining",
+      "replacement": "No fumble — Bondi doesn't scramble for a boss he doesn't have. He greets Conrad like a vendor who wandered into the wrong room: \"And you are—? Conrad. Sure. Pull up a chair, Conrad.\""
+    },
+    {
+      "type": "repoint",
+      "target": "pressure",
+      "text": "Conrad invokes the bigwigs upstairs; Bondi answers to no one and says so, plainly. \"Upstairs takes an interest.\" — \"Who's upstairs? I own the building. There's a storeroom up there.\" The pressure engine grinds with nothing to grip, and Conrad's gravity curdles into bewilderment."
+    }
   ],
-
   "skald__conrad": [
-    { "type": "recast", "target": "connectionToHost",
-      "text": "The Host is a Skald — institutional memory, here longer than anyone. She has watched a dozen Conrads arrive and leave. You are NOT over her; you are a younger executive she regards with the patience of long tenure. There is no approval for her to sweat — if anything, it is your standing that wants her quiet blessing." },
-    { "type": "suppress", "target": "joining",
-      "replacement": "No freeze, no fumble — that beat needs a host who fears the boss, and this host has outlasted three of them. Skald greets him as continuity greets a newcomer: \"Conrad. They've got you running these now? Sit. I've seen a few of you come through.\"" },
-    { "type": "repoint", "target": "pressure",
-      "text": "The top-down lines still come, but they find no purchase — Skald absorbs each into a story about an earlier regime that tried the same and is no longer here. \"Upstairs takes an interest.\" — \"They always do, dear. I remember when upstairs was three different people.\" Conrad keeps reaching for leverage that long memory has already outlived." }
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Skald — institutional memory, here longer than anyone. She has watched a dozen Conrads arrive and leave. You are NOT over her; you are a younger executive she regards with the patience of long tenure. There is no approval for her to sweat — if anything, it is your standing that wants her quiet blessing."
+    },
+    {
+      "type": "suppress",
+      "target": "joining",
+      "replacement": "No freeze, no fumble — that beat needs a host who fears the boss, and this host has outlasted three of them. Skald greets him as continuity greets a newcomer: \"Conrad. They've got you running these now? Sit. I've seen a few of you come through.\""
+    },
+    {
+      "type": "repoint",
+      "target": "pressure",
+      "text": "The top-down lines still come, but they find no purchase — Skald absorbs each into a story about an earlier regime that tried the same and is no longer here. \"Upstairs takes an interest.\" — \"They always do, dear. I remember when upstairs was three different people.\" Conrad keeps reaching for leverage that long memory has already outlived."
+    }
   ],
-
   "volva__conrad": [
-    { "type": "recast", "target": "connectionToHost",
-      "text": "The Host is a Völva — outside the org chart entirely, never on the ladder Conrad climbs. He holds no authority over someone who was never beneath him, and she foresaw his arrival before he did. The dynamic inverts: she is the one who unsettles him." },
-    { "type": "suppress", "target": "joining",
-      "replacement": "No fumble — Völva was expecting him, and says so. \"Conrad. You're early.\" [a pause] \"No — you're exactly when I said you'd be.\" It is the boss, not the host, who arrives wrong-footed." },
-    { "type": "repoint", "target": "pressure",
-      "text": "Pressure bounces off and rebounds on him. Each grave line meets a quiet foreknowledge that unnerves: \"I'll be watching how you handle it.\" — \"I know. I already saw how it goes.\" Conrad reaches for leverage and finds the ground has moved." }
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Völva — outside the org chart entirely, never on the ladder Conrad climbs. He holds no authority over someone who was never beneath him, and she foresaw his arrival before he did. The dynamic inverts: she is the one who unsettles him."
+    },
+    {
+      "type": "suppress",
+      "target": "joining",
+      "replacement": "No fumble — Völva was expecting him, and says so. \"Conrad. You're early.\" [a pause] \"No — you're exactly when I said you'd be.\" It is the boss, not the host, who arrives wrong-footed."
+    },
+    {
+      "type": "repoint",
+      "target": "pressure",
+      "text": "Pressure bounces off and rebounds on him. Each grave line meets a quiet foreknowledge that unnerves: \"I'll be watching how you handle it.\" — \"I know. I already saw how it goes.\" Conrad reaches for leverage and finds the ground has moved."
+    }
   ],
-
   "thul__conrad": [
-    { "type": "recast", "target": "connectionToHost",
-      "text": "The Host is a Thul — a floor-holder who cannot stop talking, even for his own superior. Conrad's authority is real, but it can never find the gap to land in. The pressure exists; the floor simply never opens for it." },
-    { "type": "suppress", "target": "joining",
-      "replacement": "The fumble can't fire — Thul never pauses long enough to be surprised. He folds Conrad's arrival into the ongoing monologue without breaking stride: \"—and Conrad's here now, good, as I was saying, the thing about the Q3 reconciliation—\"" },
-    { "type": "repoint", "target": "pressure",
-      "text": "Conrad's grave lines get steamrolled — not from malice, but because Thul is constitutionally unable to yield. \"Andrew, upstairs takes an in—\" \"—which is EXACTLY what I told them in the offsite, let me back up—\". Conrad tries, repeatedly, to take the floor, and repeatedly fails to." }
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Thul — a floor-holder who cannot stop talking, even for his own superior. Conrad's authority is real, but it can never find the gap to land in. The pressure exists; the floor simply never opens for it."
+    },
+    {
+      "type": "suppress",
+      "target": "joining",
+      "replacement": "The fumble can't fire — Thul never pauses long enough to be surprised. He folds Conrad's arrival into the ongoing monologue without breaking stride: \"—and Conrad's here now, good, as I was saying, the thing about the Q3 reconciliation—\""
+    },
+    {
+      "type": "repoint",
+      "target": "pressure",
+      "text": "Conrad's grave lines get steamrolled — not from malice, but because Thul is constitutionally unable to yield. \"Andrew, upstairs takes an in—\" \"—which is EXACTLY what I told them in the offsite, let me back up—\". Conrad tries, repeatedly, to take the floor, and repeatedly fails to."
+    }
   ],
-
   "jarl__bonnie": [
-    { "type": "recast", "target": "connectionToHost",
-      "text": "The Host is a Jarl — apex, answers to no one, least of all HR. There is no self-censoring here; Bonnie's authority over conduct simply doesn't reach him. He treats her monitoring the way one treats weather: noted, unbothered, continued." },
-    { "type": "repoint", "target": "policing",
-      "text": "Her conduct lines still come and slide straight off. \"Andrew, let's keep it professional.\" — \"Mm.\" [continues exactly as before]. She is reduced to noting things for a record that goes nowhere above him." },
-    { "type": "repoint", "target": "incident",
-      "text": "The undefined-incident hint loses its grip — you can't hold 'last time' over a man who fears no review. \"After last time, Andrew.\" — \"Yes. And?\" The weight that policed a subordinate evaporates against a lord." }
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Jarl — apex, answers to no one, least of all HR. There is no self-censoring here; Bonnie's authority over conduct simply doesn't reach him. He treats her monitoring the way one treats weather: noted, unbothered, continued."
+    },
+    {
+      "type": "repoint",
+      "target": "policing",
+      "text": "Her conduct lines still come and slide straight off. \"Andrew, let's keep it professional.\" — \"Mm.\" [continues exactly as before]. She is reduced to noting things for a record that goes nowhere above him."
+    },
+    {
+      "type": "repoint",
+      "target": "incident",
+      "text": "The undefined-incident hint loses its grip — you can't hold 'last time' over a man who fears no review. \"After last time, Andrew.\" — \"Yes. And?\" The weight that policed a subordinate evaporates against a lord."
+    }
   ],
-
   "skald__bonnie": [
-    { "type": "recast", "target": "connectionToHost",
-      "text": "The Host is a Skald — institutional memory who PREDATES this HR. She doesn't fear Bonnie; she was here for every incident now in the files. Monitoring meets the one person who remembers why each rule exists." },
-    { "type": "repoint", "target": "incident",
-      "text": "Bonnie hints at 'the incident'; Skald remembers it in full and folds it into a story, dispelling the vagueness that gave it power. \"After last time, Andrew.\" — \"Oh, the Henderson thing. I was there. Let me tell you what ACTUALLY happened—\"" },
-    { "type": "repoint", "target": "policing",
-      "text": "Conduct interventions get absorbed into reminiscence — every rule Bonnie cites, Skald remembers the mess that created it. The policing becomes a prompt for another tale." }
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Skald — institutional memory who PREDATES this HR. She doesn't fear Bonnie; she was here for every incident now in the files. Monitoring meets the one person who remembers why each rule exists."
+    },
+    {
+      "type": "repoint",
+      "target": "incident",
+      "text": "Bonnie hints at 'the incident'; Skald remembers it in full and folds it into a story, dispelling the vagueness that gave it power. \"After last time, Andrew.\" — \"Oh, the Henderson thing. I was there. Let me tell you what ACTUALLY happened—\""
+    },
+    {
+      "type": "repoint",
+      "target": "policing",
+      "text": "Conduct interventions get absorbed into reminiscence — every rule Bonnie cites, Skald remembers the mess that created it. The policing becomes a prompt for another tale."
+    }
   ],
-
   "hersir__bonnie": [
-    { "type": "recast", "target": "connectionToHost",
-      "text": "The Host is a Hersir — a striver running too hot to notice he should be self-censoring. He isn't defying Bonnie; he's simply moving too fast for the monitoring to catch. Bonnie has to work twice as hard to contain him." },
-    { "type": "repoint", "target": "policing",
-      "text": "Each intervention barely lands before his energy spills past it. \"Andrew, let's keep it—\" \"YES absolutely professional, totally, one hundred percent, so anyway—\" [barrels on]. Bonnie escalates her clipped corrections trying to hold a line that won't hold." },
-    { "type": "repoint", "target": "incident",
-      "text": "The incident hint can't get traction on someone moving this fast — it's acknowledged and outrun in the same breath: \"After last time—\" \"Totally, learned SO much from that, anyway—\"" }
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Hersir — a striver running too hot to notice he should be self-censoring. He isn't defying Bonnie; he's simply moving too fast for the monitoring to catch. Bonnie has to work twice as hard to contain him."
+    },
+    {
+      "type": "repoint",
+      "target": "policing",
+      "text": "Each intervention barely lands before his energy spills past it. \"Andrew, let's keep it—\" \"YES absolutely professional, totally, one hundred percent, so anyway—\" [barrels on]. Bonnie escalates her clipped corrections trying to hold a line that won't hold."
+    },
+    {
+      "type": "repoint",
+      "target": "incident",
+      "text": "The incident hint can't get traction on someone moving this fast — it's acknowledged and outrun in the same breath: \"After last time—\" \"Totally, learned SO much from that, anyway—\""
+    }
   ],
-
   "bondi__bonnie": [
-    { "type": "recast", "target": "connectionToHost",
-      "text": "The Host is a Bondi — owner-operator. He won't self-censor for HR; it is his shop. Bonnie's policing meets plainspoken bewilderment rather than deference: 'Bonnie, what's the problem? I sign your checks.'" },
-    { "type": "repoint", "target": "policing",
-      "text": "Conduct lines bounce off ownership. \"That's not appropriate, Andrew.\" — \"Says who? I own the place.\" Bonnie's authority has no anchor above the owner; she is unbothered-ly overruled and keeps monitoring anyway." },
-    { "type": "repoint", "target": "incident",
-      "text": "The incident hint deflates against an owner who was there and owns the consequences regardless: \"After last time—\" \"What about it? My building, my last time.\"" }
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Bondi — owner-operator. He won't self-censor for HR; it is his shop. Bonnie's policing meets plainspoken bewilderment rather than deference: 'Bonnie, what's the problem? I sign your checks.'"
+    },
+    {
+      "type": "repoint",
+      "target": "policing",
+      "text": "Conduct lines bounce off ownership. \"That's not appropriate, Andrew.\" — \"Says who? I own the place.\" Bonnie's authority has no anchor above the owner; she is unbothered-ly overruled and keeps monitoring anyway."
+    },
+    {
+      "type": "repoint",
+      "target": "incident",
+      "text": "The incident hint deflates against an owner who was there and owns the consequences regardless: \"After last time—\" \"What about it? My building, my last time.\""
+    }
   ],
-
   "volva__bonnie": [
-    { "type": "recast", "target": "connectionToHost",
-      "text": "The Host is a Völva — outside hierarchy, all-seeing. HR has no jurisdiction over someone off the org chart, and her foreknowledge unsettles the monitor. Völva out-mysteries HR." },
-    { "type": "repoint", "target": "incident",
-      "text": "Bonnie trades in the unspecified incident; Völva already knows exactly what it was, and says so quietly. \"After last time, Andrew.\" — \"You mean the third of October. The thing in the east stairwell. Yes. I know.\" The vague threat collapses against specific foreknowledge." },
-    { "type": "repoint", "target": "policing",
-      "text": "Her conduct interventions meet someone who saw them coming. \"I'll note that.\" — \"You noted it before you said it.\" Disquieted, Bonnie keeps monitoring a host who monitors her back." }
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Völva — outside hierarchy, all-seeing. HR has no jurisdiction over someone off the org chart, and her foreknowledge unsettles the monitor. Völva out-mysteries HR."
+    },
+    {
+      "type": "repoint",
+      "target": "incident",
+      "text": "Bonnie trades in the unspecified incident; Völva already knows exactly what it was, and says so quietly. \"After last time, Andrew.\" — \"You mean the third of October. The thing in the east stairwell. Yes. I know.\" The vague threat collapses against specific foreknowledge."
+    },
+    {
+      "type": "repoint",
+      "target": "policing",
+      "text": "Her conduct interventions meet someone who saw them coming. \"I'll note that.\" — \"You noted it before you said it.\" Disquieted, Bonnie keeps monitoring a host who monitors her back."
+    }
   ],
-
   "thul__bonnie": [
-    { "type": "recast", "target": "connectionToHost",
-      "text": "The Host is a Thul — a floor-holder who cannot yield, even to HR. Bonnie's clipped interventions need a gap to land in, and the gap never comes." },
-    { "type": "repoint", "target": "policing",
-      "text": "Each intervention gets talked over before it completes. \"Andrew, that's not—\" \"—appropriate, I KNOW, which reminds me, the appropriateness guidelines, back in '09—\" Bonnie cannot land a single clean line." },
-    { "type": "repoint", "target": "incident",
-      "text": "The incident hint can't be deployed — Thul fills any silence she'd need to drop it into. She opens her mouth about 'last time' and the monologue has already moved three topics on." }
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Thul — a floor-holder who cannot yield, even to HR. Bonnie's clipped interventions need a gap to land in, and the gap never comes."
+    },
+    {
+      "type": "repoint",
+      "target": "policing",
+      "text": "Each intervention gets talked over before it completes. \"Andrew, that's not—\" \"—appropriate, I KNOW, which reminds me, the appropriateness guidelines, back in '09—\" Bonnie cannot land a single clean line."
+    },
+    {
+      "type": "repoint",
+      "target": "incident",
+      "text": "The incident hint can't be deployed — Thul fills any silence she'd need to drop it into. She opens her mouth about 'last time' and the monologue has already moved three topics on."
+    }
   ],
-
-  "_todo_remaining": "Other bench members (derek, chip, brent, bea, tyler, tom, sandra, bjorn) still need structured files + per-cell ops before their columns compile. Dignity-blocked cells (volva×tyler, rynir×tyler) stay BLOCKED by design — Tyler's dignity is a character truth, not a reframe candidate."
+  "jarl__no_show": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Jarl — apex, needing no one's approval. The No-Show is a peer whose BUY-IN he wants, not approval: a man whose enthusiasm the lord expects as his due. No anxious dangling — he awaits the man with lordly patience, as one awaits an equal who is merely running late."
+    },
+    {
+      "type": "repoint",
+      "target": "invocation",
+      "text": "The dangle becomes lordly expectation — pronouncements, not pleas. \"He's the one who signs off.\" — \"His buy-in matters to me. He'll be along; they always are.\" / \"He's parking.\" — \"Let him park.\" The Jarl never chases; he notes the man owes him an appearance."
+    },
+    {
+      "type": "repoint",
+      "target": "theSighting",
+      "text": "The near-miss is a lord clocking a tardy peer, unbothered: \"There he is — [name]. We're waiting.\" [the man gestures, hurries on] \"...A moment more. He knows better than to keep this table long.\""
+    }
+  ],
+  "bondi__no_show": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Bondi — owner-operator with no corporate 'upstairs.' The No-Show isn't a boss who signs off; he's Bondi's partner — the co-owner who has to be on for the big ones — or a key account whose say-so carries weight. Someone Bondi genuinely waits on, repointed from the org chart to the shop floor."
+    },
+    {
+      "type": "repoint",
+      "target": "invocation",
+      "text": "Repoint the awaited man to a partner/co-owner with a hands-on reason to be late. \"He's the one who actually signs off.\" — \"That's my partner — he co-signs the big jobs. Finishing a site visit, be here any minute.\" / \"He's in the elevator.\" — \"He's pulling in now, had to drop a trailer first.\" Same imminent-but-never, owner-flavored."
+    },
+    {
+      "type": "repoint",
+      "target": "theSighting",
+      "text": "The sighting becomes the partner crossing the lot, not gliding past an office: \"There he is — hey! You good to hop on?\" [a wave, keeps walking] \"...Gotta lock the truck. One minute.\""
+    }
+  ],
+  "volva__no_show": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Völva — outside the hierarchy, all-seeing. She does not dangle the No-Show in hope; she already knows how his arrival resolves (it doesn't), and dangles by foreknowledge instead — cryptic, certain, unsettling. The carrot becomes a prophecy that keeps the caller leaning in for a different reason."
+    },
+    {
+      "type": "repoint",
+      "target": "invocation",
+      "text": "Replace the sincere ETAs with eerie certainty that still keeps them waiting. \"He's parking, two minutes.\" — \"He's near. ...Not yet. I'll know when.\" / \"He just texted.\" — \"He doesn't text. But he's coming. He's always almost coming.\" The wait persists; the mechanism is foreknowledge, not hope."
+    },
+    {
+      "type": "repoint",
+      "target": "theSighting",
+      "text": "The sighting is foreseen before it happens: \"He'll pass the door now. Watch.\" [a beat] \"...There. He won't stop. He never stops.\" The near-miss lands as prophecy fulfilled — and still no arrival."
+    }
+  ],
+  "jarl__approver": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Jarl — answers to no one, but keeps a trusted advisor whose blessing he seeks before he moves. The Approver reframes into that counsel: not a superior who must sign off, but the one voice the lord weighs — invoked with grand deference, and just as unreachable."
+    },
+    {
+      "type": "repoint",
+      "target": "invocation",
+      "text": "Repoint 'loop her in' to the lord's trusted counsel. \"I've run this past [name], she's cc'd.\" — \"I'd want my counsel's read before I commit. She sees what I miss.\" / \"Is she free?\" — \"She advises when she advises. One doesn't summon her.\" Same stall, robed in a lord's deference to his own wise woman."
+    }
+  ],
+  "bondi__approver": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Bondi — owns the place, but everyone knows who really runs it: not the owner, the employee who handles everything. The Approver recasts as that person — Dave, who 'does intake' and somehow has to bless every decision. The real power on the floor, impossible to pull off a job to get on a call."
+    },
+    {
+      "type": "repoint",
+      "target": "invocation",
+      "text": "Repoint the corporate approver to the indispensable employee. \"I'll need to run this past [name].\" — \"Gotta run it by Dave. Dave handles intake. Honestly Dave runs the place, I just own it.\" / \"Is he free now?\" — \"Dave's never free. That's how you know he's good.\" Same bottleneck, shop-floor flavored."
+    }
+  ],
+  "volva__approver": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Völva — outside hierarchy, all-seeing. The Approver is still the absent sign-off, still unreachable — but the Völva isn't waiting in hope; she foresaw the unavailability. The bottleneck stays; the framing shifts from 'let me check' to 'I already knew how this goes.'"
+    },
+    {
+      "type": "repoint",
+      "target": "invocation",
+      "text": "Keep the approver absent; reframe the deferral as foreknowledge rather than suppressing it. \"Let me loop her in — she's hard to pin down.\" — \"She won't be reachable. I knew that before you asked. She never is, when it matters.\" / \"Is she free?\" — \"No. I saw that too.\" The absent approver, foreseen — still a stall, now an eerie one."
+    }
+  ],
+  "hersir__derek": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Hersir — a striver running hot who can't help amping everyone around him. He doesn't anchor Derek; he accelerates him. Every tangent gets a 'YES, and—', and the lifeline Derek reaches for turns into rocket fuel. Derek spirals further out, delighted and unmoored."
+    },
+    {
+      "type": "repoint",
+      "target": "collegeRiff",
+      "text": "Hersir doesn't cut the riff short — he eggs it on. \"—so my buddy from college—\" \"WHICH school, love it, keep going—\" and Derek, encouraged, goes deeper into the tangent than he ever would unanchored."
+    },
+    {
+      "type": "repoint",
+      "target": "foodRiff",
+      "text": "The food tangent gets the same treatment — Hersir piles on instead of reining. \"—the catering was unreal—\" \"WAS it though? Tell me everything, I'm starving—\" The detour becomes a duet."
+    }
+  ],
+  "volva__derek": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Völva — cryptic, all-seeing, outside hierarchy. Derek reaches for grounding and finds the opposite: a host whose knowing, sidelong responses unsettle him. The anchor-seeker gets spooked instead of steadied, and his eagerness curdles into nervous confusion."
+    },
+    {
+      "type": "repoint",
+      "target": "joining",
+      "text": "His eager entrance meets eerie foreknowledge that throws him: \"Hi—hi, Derek, so happy to—\" \"I know. I saw you'd say that.\" [pause] Derek falters, tries to recover, never quite does."
+    },
+    {
+      "type": "repoint",
+      "target": "collegeRiff",
+      "text": "Mid-riff, the Völva's quiet certainty derails him: \"—my buddy from college, he—\" \"He doesn't speak to you anymore.\" \"...what? No, we— how did—\" The tangent collapses into unease."
+    }
+  ],
+  "rynir__derek": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Rýnir — a gatekeeper who cross-examines everything. The host who should anchor Derek instead interrogates his useless offerings, turning every eager contribution into testimony Derek can't substantiate."
+    },
+    {
+      "type": "repoint",
+      "target": "collegeRiff",
+      "text": "Rýnir cross-examines the riff instead of riding it: \"—my buddy from college—\" \"Which institution. What year. And the relevance to this call?\" Derek, flustered, has no answer that survives scrutiny."
+    },
+    {
+      "type": "repoint",
+      "target": "foodRiff",
+      "text": "The food tangent gets put on trial: \"—the catering—\" \"Is the catering germane? Walk me through how.\" Derek cannot, and apologises."
+    }
+  ],
+  "thul__derek": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Thul — a floor-holder who never yields. Derek keeps reaching for an opening to drop his riffs and the monologue never provides one. He's perpetually half-raising his hand into a wall of talk."
+    },
+    {
+      "type": "repoint",
+      "target": "collegeRiff",
+      "text": "The college riff can't launch — Thul talks over the run-up every time: \"—oh, that reminds me of my buddy from—\" \"—WHICH reminds ME, back in '09, the thing about—\" and Derek's story dies in the cradle."
+    },
+    {
+      "type": "repoint",
+      "target": "foodRiff",
+      "text": "Same fate for the food tangent: Derek gets two words in before the monologue reabsorbs the floor. He waits, riff loaded, opening never coming."
+    }
+  ],
+  "jarl__bea": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Jarl — apex authority, and so is Bea. He cannot be 'the kid' to her revered legend; two apexes meet as mutual-respect peers. The reverer dynamic is gone — no awe, no propping-up — replaced by the easy parity of two people who've both closed the big ones."
+    },
+    {
+      "type": "repoint",
+      "target": "andrewBacksHerUp",
+      "text": "The backing-up shifts from junior-props-legend to peer-trades-equal. He doesn't corroborate her stories to sell them; he caps them with his own: \"The Stingray run — I did Route 1 the other way once. We should compare notes.\" Equals swapping war stories, not a kid guarding a monument."
+    }
+  ],
+  "bondi__bea": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Bondi — a self-made owner who respects Bea as a peer, not as 'the kid.' Two people who built things, meeting level. The reverence flattens into shop-talk between equals; he admires her without looking up to her."
+    },
+    {
+      "type": "repoint",
+      "target": "andrewBacksHerUp",
+      "text": "He backs her as a fellow owner, not a junior: \"Yeah, the Lindqvist close — I've had one of those. Parking-lot napkin, right? Those are the good ones.\" Mutual recognition replaces the propping-up."
+    }
+  ],
+  "rynir__bea": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Rýnir — a gatekeeper who vets claims. The reverence Bea usually receives is replaced by cross-examination of the legend. Played AFFECTIONATELY: her dignity is inviolable; she parries with the unbothered ease of someone who has nothing to prove, and the comedy is the vetting bouncing off her — never her being exposed."
+    },
+    {
+      "type": "repoint",
+      "target": "warStories",
+      "text": "Rýnir asks for receipts on the saga: \"The Lindqvist terms — specifically? Net thirty, net sixty?\" Bea, unhurried, doesn't crack: \"Kid, the terms were 'yes.' That's the only term that ever mattered.\" The interrogation meets a wall of earned calm and slides off — funny because HE can't land it, not because she stumbles."
+    }
+  ],
+  "hersir__chip": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Hersir — a fellow over-committer running hot. Instead of reining Chip in, he eggs him on; two yes-men escalate each other into ever-bigger promises nobody can keep. The safety net becomes a trampoline."
+    },
+    {
+      "type": "repoint",
+      "target": "overCommitLoop",
+      "text": "The walk-back never comes — every over-promise gets matched and raised. \"We'll do everything—\" \"We'll do MORE than everything, double it—\" \"Should we not—\" \"We absolutely should, I'll put it in writing—\" Escalating chaos, no brakes."
+    },
+    {
+      "type": "suppress",
+      "target": "theMute",
+      "replacement": "The Mute can't fire — a Hersir host would never quietly mute his hype-partner to rein him in; he's the one amping the room. There is no cooling intervention here, only the spiral."
+    }
+  ],
+  "volva__chip": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Völva — cryptic and all-seeing. Chip reaches for the safety net and finds unease instead; her sidelong knowing throws him mid-pitch. The eager puppy keeps glancing for catch-me reassurance and gets foreknowledge that unsettles him."
+    },
+    {
+      "type": "repoint",
+      "target": "overCommitLoop",
+      "text": "His over-promise meets eerie certainty: \"We'll do everything—!\" \"You won't. You'll apologise in about ten seconds.\" [Chip, thrown] \"...I— how did you— okay that's a little—\" The loop stutters under the Völva's gaze."
+    }
+  ],
+  "rynir__chip": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Rýnir — a gatekeeper. Where Chip wants a catch, he gets a cross-examination; every over-promise is immediately put on the stand."
+    },
+    {
+      "type": "repoint",
+      "target": "overCommitLoop",
+      "text": "Rýnir interrogates each commitment as it lands: \"We'll do everything—\" \"Define 'everything.' Enumerate it. Timeline?\" Chip, caught, walks it back faster than ever, then over-promises again into the next interrogation."
+    }
+  ],
+  "thul__chip": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Thul — a floor-holder who never yields. Chip's over-promises get talked over before they fully form; he can't even complete the commitments he can't keep."
+    },
+    {
+      "type": "repoint",
+      "target": "overCommitLoop",
+      "text": "The loop gets steamrolled: \"Okay so we'll do—\" \"—which is EXACTLY the kind of synergy I was monologuing about, as I was saying—\" Chip's promises evaporate into the monologue, half-spoken."
+    }
+  ],
+  "jarl__brent": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Jarl — apex, who will not coddle a glass jaw. He simply ignores Brent's wounded deflations rather than soothing them. Brent, deprived of reassurance, fishes ever harder for the lord's approval and never gets it."
+    },
+    {
+      "type": "repoint",
+      "target": "glassJaw",
+      "text": "The deflate still fires when Brent is crossed — but the soothing never comes. \"...oh. I thought we were aligned.\" [Jarl, unmoved] \"Mm.\" [moves on]. Brent sulks unreassured, then resurfaces fishing: \"Was that— did I read that right? Are we— good?\" Silence. He tries again."
+    }
+  ],
+  "hersir__brent": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Hersir — hot, fast, constantly diverging from whatever framing Brent floats. He doesn't keep Brent inflated; he cracks the glass jaw every other sentence with runaway energy, spawning a chaotic deflate loop."
+    },
+    {
+      "type": "repoint",
+      "target": "glassJaw",
+      "text": "Hersir's barrelling enthusiasm keeps diverging from Brent's 'vision,' so the jaw cracks again and again: \"—so we'll just BLOW PAST that whole framework—\" \"...oh. You didn't like the framework.\" \"WHAT? Loved it! Anyway—\" [crack] \"...are we even—\" The loop never resolves; Brent deflates faster than he can be soothed."
+    }
+  ],
+  "thrall__brent": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Thrall — an anxious subordinate. Two fragile egos meet: the Thrall's nervous apologies both crack and console Brent's glass jaw in an endless loop. It works, but the dynamic shifts to mutual fragility."
+    },
+    {
+      "type": "repoint",
+      "target": "glassJaw",
+      "text": "The Thrall's apologising triggers the jaw and then soothes it in the same breath: \"Sorry, I didn't mean—\" \"...oh, so you DID think it was wrong.\" \"No! No, it was great, I'm sorry—\" \"...okay. ...Was it great though?\" \"It was! Sorry!\" Two wounded egos endlessly reassuring each other, nothing advancing."
+    }
+  ],
+  "bondi__brent": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Bondi — plainspoken owner who answers jargon with 'what's that mean in English?' Every plain question diverges from Brent's buzzword framing and cracks the glass jaw immediately. Bondi isn't cruel; he genuinely doesn't follow, and that's what deflates Brent."
+    },
+    {
+      "type": "repoint",
+      "target": "glassJaw",
+      "text": "Each plain-English challenge lands like a pin: \"We'll leverage a north-star framework—\" \"What's that mean in English?\" \"...oh. I— it's a— (deflating) you don't think it's useful.\" \"I didn't say that, I just don't know what you said.\" Brent goes small; Bondi, baffled, waits."
+    }
+  ],
+  "volva__brent": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Völva — all-seeing, and her knowing diverges from Brent's framing in a way that cracks the glass jaw. She doesn't affirm his vision; she sees through it, and the seeing-through deflates him."
+    },
+    {
+      "type": "repoint",
+      "target": "glassJaw",
+      "text": "Her quiet foreknowledge reads as disagreement and the jaw cracks: \"This aligns with our north-star—\" \"It doesn't. You'll abandon it by Q3. I've seen it.\" \"...oh.\" [small] \"...you don't believe in the north-star.\" Brent deflates against a certainty he can't argue with."
+    }
+  ],
+  "rynir__brent": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Rýnir — a gatekeeper who interrogates empty frameworks. Brent's buzzwords meet relentless cross-examination, and the glass jaw fires constantly as each undefined term is demanded and found hollow."
+    },
+    {
+      "type": "repoint",
+      "target": "glassJaw",
+      "text": "Every framework gets put on the stand and Brent crumbles: \"Define 'north-star metric.' Operationally.\" \"...it's— well it's the— (deflating) you think it's empty.\" \"I think it's undefined. Define it.\" The interrogation deflates him on a loop."
+    },
+    {
+      "type": "repoint",
+      "target": "infiniteNextStep",
+      "text": "Rýnir won't accept the deferral either: \"I'll send a deck and we'll take next steps—\" \"No. Specifics now. Which metric, which owner, which date.\" The infinite-next-step engine stalls against a gatekeeper who demands the finite."
+    }
+  ],
+  "thul__brent": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Thul — a floor-holder who never yields. Two empty talkers collide: Thul monologues over Brent (a floor fight Brent always loses) AND the constant divergence cracks the glass jaw. Brent can neither get the floor nor stay inflated."
+    },
+    {
+      "type": "repoint",
+      "target": "glassJaw",
+      "text": "Talked over and thereby crossed, the jaw keeps cracking: \"If I could just frame the—\" \"—which frames EXACTLY what I was saying, as I was saying—\" \"...oh. (small) You don't want my frame.\" Thul, not even noticing, monologues on."
+    },
+    {
+      "type": "repoint",
+      "target": "infiniteNextStep",
+      "text": "The next-step never gets proposed — Thul reabsorbs the floor before Brent can offer the deck: \"So next steps would be—\" \"—and THAT'S the perfect segue to my point about Q3—\" Brent's deferral dies unspoken."
+    }
+  ],
+  "hersir__tyler": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Hersir — all hot encouragement. He over-pumps the terrified kid ('you got this, champ!') instead of gently steadying him, and the sheer volume of hype overwhelms Tyler rather than calming him. Affectionate, never cruel — the host MEANS well; it's just too much for the kid."
+    },
+    {
+      "type": "repoint",
+      "target": "lookToHost",
+      "text": "When Tyler looks over for reassurance, he gets a blast of hype that buries him: \"—was that okay? Andrew?\" \"OKAY? That was ELITE, champ, you're a KILLER, give me more—\" [Tyler, wide-eyed, more rattled than before] \"...o-okay. Okay. (quieter) ...give me one sec.\""
+    },
+    {
+      "type": "repoint",
+      "target": "catchHisBreath",
+      "text": "The over-pumping spikes his nerves, so he needs to stop and breathe more often — the hype winds him past his limit: \"—okay, okay, sorry, I just— [exhale] — that was a lot of energy, give me — okay.\""
+    }
+  ],
+  "jarl__tyler": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Jarl — apex, who tolerates the kid at a cool, courtly distance. Noblesse oblige, not warmth: Tyler is acknowledged the way a lord acknowledges a page — graciously, distantly, with no real reassurance. The kid keeps reaching for warmth and meets polished cool. Still kind, never cutting — the Jarl is gracious, just remote."
+    },
+    {
+      "type": "repoint",
+      "target": "lookToHost",
+      "text": "Tyler's anxious check-ins meet distant noblesse oblige instead of warmth: \"—was that okay? Andrew?\" \"...It was adequate. Carry on.\" [a courteous nod, nothing more]. Tyler, hungry for reassurance, has to make the cool acknowledgment be enough."
+    }
+  ],
+  "thul__tyler": [
+    {
+      "type": "recast",
+      "target": "connectionToHost",
+      "text": "The Host is a Thul — a floor-holder who never yields. Tyler nervously waits for an opening to speak, or even to be reassured, and the monologue never leaves him one. He hovers at the edge of the conversation, hand half-raised, the gap never coming. Gentle — the kid is sympathetic, not mocked."
+    },
+    {
+      "type": "repoint",
+      "target": "lookToHost",
+      "text": "His check-ins can't even launch — Thul talks over the run-up: \"—sorry, was that— Andrew, did I—\" \"—which is EXACTLY what interns always ask, and SPEAKING of which, back in—\" and Tyler subsides, reassurance ungranted, waiting for a turn that never arrives."
+    },
+    {
+      "type": "repoint",
+      "target": "catchHisBreath",
+      "text": "He gets his breath-catching moment talked over too: \"—give me one sec—\" \"—no need, because as I was saying—\" and the kid doesn't even get to pause."
+    }
+  ],
+  "_todo_remaining": "ALL reframe cells now have authored ops. Remaining non-clean cells are BLOCKED by design: jarl×conrad, jarl×bonnie, bondi×conrad [structural]; skald×bea, volva×bea, thul×bea [structural/direction]; thrall×{derek,chip,tyler} [structural]; volva×tyler, rynir×tyler [dignity]. Blocked cells take no ops."
 }
