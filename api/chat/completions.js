@@ -18,11 +18,12 @@ export const config = { runtime: "edge" };
 
 import { getCall, setCall, isConfigured, appendGearEvent, appendBitEvent, clearDeathBlow, getControls, stampArm, fireArm } from "../_store.js";
 import { applyForceAll, postureBlock, defaultState, detectAccusation } from "../_gears.js";
-import { selectBit, rankBits } from "../_bits.js";
+import { selectBit, rankBits, DEPLOY_THRESHOLD } from "../_bits.js";
 import { archetypeFromBody } from "../_archetype.js";
 import { readAmmunition } from "../_read.js";
 import { beginArrival, advanceArrival, generateBenchBeat, isPhantom, phantomInvokeDirective, autoArrivalId, benchEntry, BENCH } from "../_bench_v2.js";
 import { telegraphDirective, fireHandoff } from "../handoff.js";
+import { autoBenchAction } from "../_bench_auto.js";
 import { makeTrace, blowLandedTotal, bitFireCount } from "../_trace.js";
 import { BITS } from "../_bits_registry.js";
 import { waitUntil } from "@vercel/functions";
@@ -479,13 +480,44 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
       }
     }
   } else {
-    const autoId = autoArrivalId(benchTurn);
-    if (autoId) {
-      arrival = beginArrival(autoId, benchTurn);
+    // AUTO-TRIGGER: the conversation itself may surface a bench moment (no
+    // Director). Ships dark (BENCH_AUTO=1). Feeds the SAME gate/pipeline, so
+    // it respects one-in-flight / ceiling / spacer. Phantom actions fold into
+    // the host prompt (invoke, no arrival); arrive actions begin a staged
+    // arrival like a Director send-in would.
+    const gearState = stored
+      ? { gear: stored.gear, pressure: stored.pressure, engagement: stored.engagement, slip: stored.slip }
+      : null;
+    const auto = autoBenchAction({ gearState, benchLog, messages, callId, benchTurn });
+    if (auto && auto.type === "phantom") {
+      benchPhantomInvoke = phantomInvokeDirective(auto.who);
+      if (callId) makeTrace(callId, benchTurn, waitUntil).emit(
+        "bench_joined",
+        { character_id: auto.who, name: auto.who, source: "auto", manifestation: "phantom", invoking: true, why: auto.why, joined_at: new Date().toISOString() },
+        "bench"
+      );
+    } else if (auto && auto.type === "arrive" && benchLog.length < 3) {
+      arrival = beginArrival(auto.who, benchTurn);
       if (arrival) {
         arrivalDirty = true;
         benchLog = benchLog.concat([{ bench_id: arrival.bench_id, arrived_turn: benchTurn }]);
         benchAppend = generateBenchBeat(arrival, messages).catch(() => null);
+        if (callId) makeTrace(callId, benchTurn, waitUntil).emit(
+          "bench_joined",
+          { character_id: arrival.bench_id, name: arrival.bench_id, source: "auto", manifestation: arrival.type, stage: "entrance", why: auto.why, joined_at: new Date().toISOString() },
+          "bench"
+        );
+      }
+    } else {
+      // Legacy env-scheduled auto arrival (BENCH_ARRIVE_TURN), default off.
+      const autoId = autoArrivalId(benchTurn);
+      if (autoId) {
+        arrival = beginArrival(autoId, benchTurn);
+        if (arrival) {
+          arrivalDirty = true;
+          benchLog = benchLog.concat([{ bench_id: arrival.bench_id, arrived_turn: benchTurn }]);
+          benchAppend = generateBenchBeat(arrival, messages).catch(() => null);
+        }
       }
     }
   }
@@ -649,7 +681,25 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     const poolSize = sel.pool;
     const gap = stored && stored.lastBitTurn != null ? turn - stored.lastBitTurn : 99;
     const bar = effectiveBar(turn);
-    const fire = !!(top && top.score >= bar && gap >= MIN_GAP);
+    let fire = !!(top && top.score >= bar && gap >= MIN_GAP);
+
+    // STARVATION GUARD: if the call has gone dry (no discrete bit for
+    // STARVE_AFTER consecutive turns), the pacing has starved the comedy — drop
+    // the spacing requirement for THIS turn and let the highest-scoring eligible
+    // bit fire, so a quiet call gets more permissive instead of staying locked.
+    // EXCEPTION: an active spammer challenge (accusation this turn) overrides the
+    // guard — the challenge should be handled first, not stepped on by a bit.
+    // Still respects warm-up (bar=Infinity early) and requires a real candidate.
+    const STARVE_AFTER = parseInt(process.env.STARVE_AFTER || "4", 10);
+    let starvationFired = false;
+    if (!fire && top && !accusation && turn > WARMUP_TURNS && gap >= STARVE_AFTER) {
+      // Bar is relaxed to the deploy threshold floor (not Infinity/warmup); the
+      // top bit fires if it's a genuine candidate at all. Spacing is waived once.
+      if (top.score >= DEPLOY_THRESHOLD) {
+        fire = true;
+        starvationFired = true;
+      }
+    }
 
     // ARM resolution: reconcile the setlist with this turn's outcome. Each arm is
     // its own call_controls row, so closing one = fireArm(id) (status -> fired).
@@ -746,8 +796,14 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         bit_id: top.id,
         name: top.name,
         bit_type: top.bit_type || top.type || null,
-        trigger: firedArmedBit ? "armed" : "auto",
+        trigger: starvationFired ? "starvation" : (firedArmedBit ? "armed" : "auto"),
         turn_index: turn,
+        // TELEMETRY: dry_turns = turns since the last discrete bit before this
+        // fire (the gap the guard watches). Lets the bus compute firing rate and
+        // spot under-firing (target 5-7 per 25 turns; <4 = starved). starvation
+        // flags a guard-forced fire so its frequency is measurable separately.
+        dry_turns: gap === 99 ? null : gap,
+        starvation: starvationFired || undefined,
         // WHY-STAMP: the causal link Mead Hall draws gear->bit from. The fit
         // score that cleared the bar this turn, the bar it cleared, and the gear
         // state at fire — so "suspicion=slipping pushed score 7.0 over a 3.0 bar"
