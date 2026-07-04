@@ -26,36 +26,64 @@ const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 const MODEL = () => process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
 
-// ---- ROSTER --------------------------------------------------------------
-// type: seen | audio | phantom    personality: anxious | dominant | smooth
-// signature (optional): the character's OWN entrance, overrides the generic
-//   personality pool. barbaraLine (Gary only): his distinctive callback.
-export const BENCH = {
-  CONRAD: {
-    tag: "CONRAD", type: "seen", personality: "dominant",
-    note: "Andrew's boss — blunt, impatient, suspicious this is wasting time",
-    signature: "barges in unannounced and the room reorients to him; no greeting, no easing in — he's suddenly just there and in charge",
-  },
-  BONNIE: {
-    tag: "BONNIE", type: "audio", personality: "smooth",
-    note: "sharp, no-nonsense colleague who asks the pointed question; on the line, camera off",
-  },
-  ANDREA: {
-    tag: "ANDREA", type: "seen", personality: "anxious",
-    note: "over-eager junior who talks over people trying to help",
-    signature: "fumbles in flustered — talking before she's audible, asking if she's on, offering to take notes nobody asked for",
-  },
-  // --- TYPED SLOTS for the full roster (drop-in; Bench chat owns the content) ---
-  // DEREK:    { tag:"DEREK",    type:"seen",    personality:"...", note:"...", signature:"..." },
-  // BEA:      { tag:"BEA",      type:"seen",    personality:"...", note:"...", signature:"..." },
-  // CHIP:     { tag:"CHIP",     type:"seen",    personality:"...", note:"...", signature:"..." },
-  // BRENT:    { tag:"BRENT",    type:"seen",    personality:"...", note:"...", signature:"..." },
-  // TYLER:    { tag:"TYLER",    type:"seen",    personality:"anxious", note:"...", signature:"can't get on the call — fumbling with mute, 'is this working, am I on?', technical flailing while the real call continues around him" },
-  // GARY:     { tag:"GARY",     type:"seen",    personality:"smooth", note:"...", barbaraLine:"asks the spammer what they thought of Barbara / their email exchange with her" },
-  // NO_SHOW:  { tag:"NO_SHOW",  type:"phantom", personality:"smooth", note:"the awaited man who never arrives — host dangles his imminent arrival" },
-  // APPROVER: { tag:"APPROVER", type:"phantom", personality:"dominant", note:"the sign-off authority, invoked but unavailable" },
-  // IT_GUY:   { tag:"IT_GUY",   type:"phantom", personality:"anxious", note:"invoked, never appears" },
+// ---- ROSTER (single-source from bench/*.json via compiler/bench/index.js) ---
+// [OPTION B REFACTOR] The roster is no longer hardcoded here — it's LOADED from
+// the same bench/<id>.json content the compiler uses, so there's ONE source of
+// truth and no drift between the runtime roster and the authored content.
+// Loaded once at module load (require, not per-turn), so zero hot-path cost.
+//
+// The json shape (id/name/role/manifestation/malleable/beats/passthrough) is
+// mapped to the runtime shape PE's consumers read (tag/type/personality/note/
+// signature), and the raw json is attached as `.raw` for rich content
+// (theAbsence, hostCover, beats) the invoke/cover directives can draw on.
+// The roster content is loaded from _bench_roster.js — a plain ES module
+// GENERATED from compiler/bench/<id>.json by compiler/bench/build_roster.js.
+// This keeps a single source of truth (the json) while being EDGE-SAFE (no
+// require / createRequire / JSON-import attributes — just a JS import).
+// Re-run the generator after any bench content change.
+import { BENCH_RAW } from "./_bench_roster.js";
+const BENCH_JSON = BENCH_RAW; // { id: {json}, ... } lowercase ids
+
+// personality isn't in the json; it drives JOIN_MOVES for SEEN arrivals only.
+// Phantoms never use join moves, so their value is cosmetic. Curated per char.
+const PERSONALITY = {
+  conrad: "dominant", bonnie: "smooth", andrea: "anxious", derek: "smooth",
+  bea: "smooth", chip: "smooth", brent: "dominant", tyler: "anxious",
+  gary: "smooth", no_show: "smooth", approver: "dominant", it_guy: "anxious",
 };
+
+// Build one runtime entry from a json character block.
+function toEntry(id, j) {
+  const type = j.manifestation || "seen"; // seen|audio|phantom (the discriminator)
+  // note: a short description used by invoke/cover directives. role + the
+  // absence (phantoms) or the connectionToHost gist (seen) gives the host
+  // enough to characterize them.
+  const absence = j.passthrough && j.passthrough.theAbsence;
+  const note = absence
+    ? `${j.role} — ${String(absence).split(".")[0]}.`
+    : (j.role || j.name || id);
+  // signature: SEEN chars' own entrance, from beats.joining if present.
+  const signature = j.beats && j.beats.joining ? j.beats.joining : undefined;
+  return {
+    tag: id.toUpperCase(),
+    id,
+    type,
+    personality: PERSONALITY[id] || "smooth",
+    note,
+    signature,
+    raw: j, // full authored content: malleable/beats/passthrough (hostCover, theAbsence, invocation, ...)
+  };
+}
+
+// The runtime roster, keyed by UPPERCASE tag (PE's convention).
+export const BENCH = (() => {
+  const out = {};
+  for (const [id, j] of Object.entries(BENCH_JSON)) {
+    if (!j || typeof j !== "object") continue;
+    out[id.toUpperCase()] = toEntry(id, j);
+  }
+  return out;
+})();
 
 // ---- JOIN MOVES (staging directions, personality-typed) ------------------
 // Each is a DIRECTION the dedicated bench call performs, not literal text.
