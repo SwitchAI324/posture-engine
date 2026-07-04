@@ -657,6 +657,24 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       if (a.bit_id) armedBits[a.bit_id] = Math.max(0, turn - a.armed_turn);
     }
 
+    // EXTENDED_STALL detection (stall-breaker family). A STREAK of content-less
+    // social exchanges, NOT a clock. turns_since_pitch_or_ask increments each
+    // turn and RESETS whenever the spammer pitches or asks for something. When
+    // engagement is low AND that streak reaches STALL_N, extended_stall fires,
+    // which lifts the stall-breaker bits (via a multiplier in the scorer).
+    const STALL_N = parseInt(process.env.STALL_N || "3", 10);
+    const spammerText = lastUserText(messages).toLowerCase();
+    // Pitch/ask signal = the spammer is actually doing business (any of these
+    // resets the stall). Kept broad; the point is "did anything non-social
+    // happen this turn."
+    const pitchOrAsk = accusation != null ||
+      /\b(offer|deal|product|service|price|cost|package|plan|sign|buy|purchase|subscribe|upgrade|discount|promotion|listing|account|verify|payment|invoice|contract|proposal|demo|quote|save|free|limited|approve|decision|company|business|website|seo|insurance|warranty|policy|investment|opportunity|guarantee)\b/.test(spammerText) ||
+      /\?/.test(spammerText); // a question is an "ask"
+    const priorStall = stored ? (stored.stallCount || 0) : 0;
+    const stallCount = pitchOrAsk ? 0 : priorStall + 1;
+    const lowEngagement = state.engagement === "bored" || state.engagement === "slipping";
+    const extendedStall = lowEngagement && stallCount >= STALL_N;
+
     const scorerState = {
       archetype,
       accusation,
@@ -671,6 +689,9 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       byHook: ammo.byHook || {},
       // sequencing anchor — without this, chain + category spacing never fire.
       lastBitId: stored ? stored.lastBitId || null : null,
+      // EXTENDED_STALL: true when the call has been content-less/social too long.
+      // A STREAK (counter), not a snapshot and not a clock — see below.
+      extended_stall: extendedStall,
     };
     // LOADOUT then rank: selectBit narrows to the bits that fit this moment,
     // then ranks that focused set (not all 71). threshold:0 so we apply our own
@@ -931,6 +952,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           engagement: state.engagement,
           slip: state.slip,
           accuseFloor: state.accuseFloor, // STICKY: persist the accusation floor
+          stallCount, // extended_stall streak (resets on pitch/ask)
           ...(fire ? { lastBitId: top.id, lastBitTurn: turn } : {}),
           ...(archetypeNew ? { archetype } : {}),
         }).catch(() => {})
