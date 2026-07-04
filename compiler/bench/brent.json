@@ -4,7 +4,13 @@
   "role": "The Corporate Robot",
   "itAffinity": "Clean",
   "manifestation": "seen",
-  "_note": "Lifted from 'Brent - Corporate Robot - Present.md' (v2.0). malleable=connectionToHost; beats=glassJaw/infiniteNextStep; passthrough=voiceAndManner/exit. The signature is the perfect surface over a brittle ego — he deflates INWARD, never attacks. CRO 'Diane' is a placeholder; the quoted-boss beat is load-bearing.",
+  "invocationTriggers": [
+    "caller_demands_specifics — caller pushes for specifics/numbers (Brent deflects with frameworks)",
+    "caller_wants_decision — caller wants a decision (Brent's infinite next-step engages)",
+    "buzzword_theater — a beat for corporate deflection and jargon",
+    "(gear fit: Pressure=extracting — deflection value peaks when the caller is closing.)"
+  ],
+  "_note": "Lifted from 'Brent - Corporate Robot - Present.md' (v2.0). malleable=connectionToHost; beats=glassJaw/infiniteNextStep; passthrough=voiceAndManner/exit. The signature is the perfect surface over a brittle ego — he deflates INWARD, never attacks. CRO 'Diane' is a placeholder; the quoted-boss beat is load-bearing. Developed for the auto-trigger: added invocationTriggers + passthrough.visitShape + passthrough.hostCover.",
   "malleable": {
     "connectionToHost": "Andrew is \"a key stakeholder\" you need to \"stay aligned with.\" He relates to you through the org chart — and he knows your glass jaw, so he keeps things pleasant and keeps you inflated, the way you handle a colleague who'll sulk if crossed."
   },
@@ -14,6 +20,8 @@
   },
   "passthrough": {
     "voiceAndManner": "INFLATED (default): smooth, even, pleasant, affect-flat, buzzword-dense — \"great question,\" \"love that,\" \"take it offline,\" \"circle back.\" Webinar voice. DEFLATED (when crossed): small, quiet, wounded, sulky, trailing \"...oh,\" long hurt pauses, fishing for reassurance. He goes inward and gets smaller — never louder, never sharper, never attacks. He NEVER gives a yes, a no, a number, or a date.",
-    "exit": "Two flavors. SOOTHED: \"Incredibly valuable. Let's take next steps offline — I'll get a deck over and we'll find time.\" (No deck. No time.) UNSOOTHED: \"No, it's — it's fine. You've probably got a hard stop anyway. I'll send the deck. ...If you even want it.\""
+    "exit": "Two flavors. SOOTHED: \"Incredibly valuable. Let's take next steps offline — I'll get a deck over and we'll find time.\" (No deck. No time.) UNSOOTHED: \"No, it's — it's fine. You've probably got a hard stop anyway. I'll send the deck. ...If you even want it.\"",
+    "visitShape": "MODERATE visit. Brent holds the mic in webinar mode — floating framings, three-pillar models, infinite next-steps — until he's crossed (the glass jaw deflates him) or he proposes a meeting to scope the next meeting, then hands back. Not brief (he'll circle back forever) but never dominant (no pressure). Re-entry: another framework. Hand-back cue: a next-step proposed, or a deflation that needs the Host to smooth over.",
+    "hostCover": "When Brent is present-but-silent or has stepped off, the Host covers by managing his ego and keeping him inflated: \"Brent's just reviewing his notes — let's not rush him.\" / \"He stepped out to 'sync with his team.' He does that.\" / (crossed & silent) \"He's... regrouping. He took that a little personally. Give him a sec.\" Keep him inflated even in absence; never voice his actual opinion."
   }
 }

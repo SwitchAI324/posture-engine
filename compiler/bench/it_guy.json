@@ -4,15 +4,23 @@
   "role": "The IT Guy",
   "itAffinity": "Disaster",
   "manifestation": "phantom",
-  "_note": "Lifted from 'IT Guy - Phantom.md' (v2.1). PHANTOM shape: malleable=connectionToHost; beats=invocation (reactive blame table) + gerald; passthrough=theAbsence. Invocation mode EVENT — fires only when real friction occurs, never on a schedule. Hamster 'Gerald' kept. itAffinity Disaster is the irony: the IT man can't get on.",
+  "invocationTriggers": [
+    "camera_issue — a camera is off/frozen",
+    "audio_glitch — audio crackle/echo/dropout",
+    "connection_drop — a reconnect or lag",
+    "background_oddity — something odd on screen",
+    "anything_unexplained — any unexplained hiccup",
+    "(EVENT-driven: fires reactively on real friction ONLY, never on a schedule)"
+  ],
+  "_note": "Lifted from 'IT Guy - Phantom.md' (v2.2). PHANTOM shape: malleable=connectionToHost; beats=invocation (reactive blame table); passthrough=theAbsence. Invocation mode EVENT — fires only when real friction occurs, never on a schedule. itAffinity Disaster is the irony: the IT man can't get on. Developed for PE's auto-trigger: added top-level invocationTriggers (WHEN PE surfaces him/her) + passthrough.hostCover (reactive deflection when the caller probes). No visitShape, no voice — never holds a mic, never speaks.",
   "malleable": {
     "connectionToHost": "Andrew reaches for you reflexively whenever the call hits friction. You are his all-purpose absorber of blame — invoked the instant anything is off, never produced to answer for it."
   },
   "beats": {
-    "invocation": "Reactive scapegoat — trigger fires the line only when the friction actually occurs. Camera off: \"Mine's off too. IT thing. Long story.\" Audio issues: \"That might be our IT guy on our end.\" Background change: \"IT. We're looking into it.\" Connection drop: \"Our IT guy's been having issues.\" Anything unexplained: \"That's probably our IT guy.\"",
-    "gerald": "An available aside, offered when there's room (at most once), regardless of whether anything went wrong: \"Gerald's doing much better, by the way. Thanks for asking.\" (No one asked. Gerald is his hamster.)"
+    "invocation": "Reactive scapegoat — trigger fires the line only when the friction actually occurs. Camera off: \"Mine's off too. IT thing. Long story.\" Audio issues: \"That might be our IT guy on our end.\" Background change: \"IT. We're looking into it.\" Connection drop: \"Our IT guy's been having issues.\" Anything unexplained: \"That's probably our IT guy.\""
   },
   "passthrough": {
-    "theAbsence": "Blamed-but-unseen. He is never seen — not ever; the power is the absence, never broken for a payoff. Every technical hiccup and unexplained oddity routes to him, and he is never produced to answer for it. Each blame fires only when its friction actually occurs; nothing fires on a schedule."
+    "theAbsence": "Blamed-but-unseen. He is never seen — not ever; the power is the absence, never broken for a payoff. Every technical hiccup and unexplained oddity routes to him, and he is never produced to answer for it. Each blame fires only when its friction actually occurs; nothing fires on a schedule.",
+    "hostCover": "Reactive cover when the caller notices tech weirdness or comments on the Host's camera/audio: the Host blames him and never produces him. \"Yeah, that's us — IT's 'looking into it,' which means nothing's happening.\" / \"Our IT guy set this whole system up, so — explains a lot.\" / \"I'd fix it myself but he's got the admin rights and he's... not exactly reachable.\" The tech never quite gets fixed, and it's always his fault."
   }
 }
