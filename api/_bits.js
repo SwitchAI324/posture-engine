@@ -46,6 +46,13 @@ export const DEPLOY_THRESHOLD = parseFloat(process.env.DEPLOY_THRESHOLD || "1.5"
 // Death blows are the 700-series. Identified by id, not a separate `kind`.
 const isDeathBlow = (b) => /^BIT-7\d\d$/.test(b.id);
 
+// STALL-BREAKER family (per the Bits chat): these bits break an extended
+// content-less/social stretch. When state.extended_stall is set, their score
+// is multiplied so one lifts above the general pool. Add future stall-breakers
+// here. STALL_MULTIPLIER is env-tunable.
+const STALL_BREAKERS = new Set(["BIT-128", "BIT-129", "BIT-230", "BIT-231", "BIT-324", "BIT-325"]);
+const STALL_MULTIPLIER = parseFloat(process.env.STALL_MULTIPLIER || "2.5");
+
 // --- sequencing helpers ---------------------------------------------------
 const gv = (b, axis, st) => (b.gear && b.gear[axis] && b.gear[axis][st]) || 0;
 // amplify level = how much a bit pushes toward STUNNED vs BORED (the X axis of
@@ -178,7 +185,19 @@ export function scoreBit(bit, state) {
   const ARM_BASE = 3, ARM_STEP = 2;
   const armWaited = state.armed ? state.armed[bit.id] : undefined;
   const armBoost = armWaited != null ? ARM_BASE + ARM_STEP * armWaited : 0;
-  const score = fitTotal + g.bias - r.pen + intent + seq + armBoost;
+  let score = fitTotal + g.bias - r.pen + intent + seq + armBoost;
+
+  // EXTENDED_STALL: when the call has gone content-less/social too long
+  // (state.extended_stall, set by the engine off the turns_since_pitch_or_ask
+  // streak), lift the stall-breaker family above the general pool for this
+  // cycle so one of them fires to break the silence. Normal scoring still
+  // applies underneath — this is a multiplier ON TOP, per the Bits chat spec.
+  let stallBoost = 0;
+  if (state.extended_stall && STALL_BREAKERS.has(bit.id)) {
+    const before = score;
+    score = score * STALL_MULTIPLIER;
+    stallBoost = score - before;
+  }
   return {
     id: bit.id, name: bit.name, score, excluded: false,
     breakdown: {
@@ -187,11 +206,13 @@ export function scoreBit(bit, state) {
       sequence: seq || undefined,
       intensity: intent || undefined,
       armed: armBoost || undefined,
+      stall: stallBoost ? +stallBoost.toFixed(2) : undefined,
       why: [...f.why,
             ...(fuel.boost ? [`fuel x${fuel.count} +${fuel.boost}`] : []),
             ...g.why, ...r.why, ...seqWhy,
             ...(intent ? [`intensity +${intent}`] : []),
-            ...(armBoost ? [`armed (waited ${armWaited}) +${armBoost}`] : [])],
+            ...(armBoost ? [`armed (waited ${armWaited}) +${armBoost}`] : []),
+            ...(stallBoost ? [`extended_stall x${STALL_MULTIPLIER}`] : [])],
     },
   };
 }
