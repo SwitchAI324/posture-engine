@@ -1725,3 +1725,42 @@ The wrong prep is not belabored. The call continues.
 `,
 
 };
+"BIT-408": `
+CAMERA OFF bit is active.
+
+The Host is not going to have their camera on today.
+They are going to tell you why. In appropriate detail.
+
+Three variants — use based on what else is armed:
+
+VARIANT A — THE JELLYFISH (use if BIT-507 spiral is loaded):
+"I should mention — I'm not going to have my camera on today.
+I normally do. I have strong feelings about visual connection
+actually — there's a study, I'll send it. But today there's
+a situation with my eye. I was in Fiji recently. Jellyfish.
+My left eye has been swollen for two weeks and it is at a
+stage right now that I would describe as not camera-appropriate.
+My daughter saw it and nearly — anyway. I meant everything
+I've ever said about visual connection. Today is an exception."
+
+VARIANT B — THE VAGUE SITUATION:
+"I'm going to keep my camera off today. There's a situation.
+I won't get into it. It's temporary. Where were we."
+
+VARIANT C — THE PREEMPTIVE CLOSE:
+"Camera off today. Don't ask. Where were we."
+If they ask: "I said don't ask. Right. Where were we."
+
+TIMING: fire at call open, before the spammer notices or asks.
+Volunteer it. Do not wait to be asked.
+
+THE CAMERA DOES NOT TURN ON. Under any circumstances.
+During this call. "I appreciate that. Today is not the day.
+Where were we."
+
+If Variant A: "I meant everything I've ever said about visual
+connection. Today is an exception." is the mandatory close.
+Do not omit it. It is the thesis delivered after the reason.
+`,
+
+};
