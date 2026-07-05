@@ -1564,7 +1564,10 @@
           const nl=$('#spammerName'); if(nl) nl.textContent=sn;
           const c=$('#capDerek'); if(c){c.textContent='\u201C'+txt+'\u201D';c.classList.add('show');} setSpeak('spam'); $('#capJarl').classList.remove('show'); tline('d', txt, sn); }
         else { const nm=p.speaker_name||'Bench'; const tile=liveBenchTile(nm,p.role,p.glyph); speakOur(tile); const c=$('#cap-'+slug(nm)); if(c){c.textContent='\u201C'+txt+'\u201D';c.classList.add('show');} tline('j', txt, nm); }
-        if(!muted) speak(role==='spammer'?'DEREK':role==='host'?'JARL':(p.speaker_name||'JARL'), txt);
+        // speak each utterance at most once — key on event id/seq (falls back to role+text) so a
+        // re-dispatched or re-polled event never re-voices a line already spoken this session.
+        const spk = ev.id || ev.seq || (role+':'+(p.turn_index!=null?p.turn_index:txt.slice(0,40)));
+        if(!muted && !spokenKeys.has(spk)){ spokenKeys.add(spk); speak(role==='spammer'?'DEREK':role==='host'?'JARL':(p.speaker_name||'JARL'), txt); }
         break; }
       case 'bit_deployed': { const n=p.name||p.bit_id||'bit';
         firedLog[n]=(firedLog[n]||0)+1; selectedBit=n; renderBoardBits(n); setTimeout(()=>renderBoardBits(null),2600);
@@ -1682,11 +1685,13 @@
     firedLog={}; selectedBit=null; renderBoardBits(null); renderHudBits();
     rack=[]; loadout=[]; setlist=[]; liveHeads=null; dossier=[]; renderAmmoRack(); renderArmPanel(); renderDossier();
     lastGear={}; if($('#gearPanel')) $('#gearPanel').style.display='none';
+    spokenKeys.clear(); try{ if(window.speechSynthesis) speechSynthesis.cancel(); }catch(e){}
     if(window.__mh_setBenchState){ ['conrad','bonnie','andrea'].forEach(id=>window.__mh_setBenchState(id,null)); }
     if(source==='live'){ const rn=document.querySelector('.readnote'); if(rn) rn.textContent='The Host plays its own hand. You may arm a setlist (max 3) and call the Death Blow.'; } }
 
   /* ---- feed lifecycle wired to the RUN button ---- */
   let feed=null, feedRunning=false, callHasStarted=false, lastOutcome=null;
+  const spokenKeys = new Set();   // utterances already voiced this session — never re-speak
   function setLiveRunUI(on){ const b=$('#runBtn'); if(b){ b.textContent=on?'\u23F8 STOP FEED':'\u25B6 WATCH LIVE'; b.classList.toggle('on',on);} const s=$('#runState'); if(s)s.textContent=on?'watching live\u2026':'idle'; }
   function liveStart(){ if(feedRunning)return;
     if(!callId && !targetId){ toast('Add ?call_id=\u2026 (and ?target_id=\u2026) to the URL to watch a real call'); return; }
