@@ -1,7 +1,7 @@
 // SpamViking — Posture Engine: THE GEARS (Phase 3, FORCE-SET)
 // ----------------------------------------------------------------------
-// Three INDEPENDENT dials track the spammer. Andrew holds one position on
-// each at all times; together they are his marching orders for the turn.
+// Three INDEPENDENT dials track the spammer. HOST holds one position on
+// each at all times; together they are HOST's marching orders for the turn.
 //
 //   GEAR 1  SUSPICION   (defensive) does the cover hold?
 //             alive -> slipping -> foregone   (->foregone is ONE-WAY)
@@ -29,6 +29,7 @@
 // ----------------------------------------------------------------------
 
 import { TELLS } from "./_gears_tells.js";
+import { directiveFor } from "./_host_directives.js";
 
 export const AXES = {
   // --- GEAR 1: SUSPICION (accumulator model, harvested from §5.6) --------
@@ -294,7 +295,10 @@ export function postureBlock(state) {
   const s = { ...defaultState(), ...state };
   const line = (axis) => {
     const pos = AXES[axis].states[s[axis]] ? s[axis] : AXES[axis].default;
-    return `- ${axis} (${pos}): ${AXES[axis].states[pos].directive}`;
+    // Directive TEXT comes from the host-owned _host_directives.js (content),
+    // not from the engine. The engine still owns WHICH state is active (pos);
+    // the host owns the WORDS for that state.
+    return `- ${axis} (${pos}): ${directiveFor(axis, pos)}`;
   };
   return (
     "CURRENT POSTURE — your read on the caller right now:\n" +
