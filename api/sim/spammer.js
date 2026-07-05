@@ -172,8 +172,17 @@ function assembleSpammerPrompt(opts = {}) {
     "points at once, never a monologue. Real people say a little, then wait for " +
     "the other person. If you have a lot to say, say ONE piece of it and let them " +
     "respond. A turn longer than two sentences is WRONG. " +
-    "Never break character, never acknowledge being an AI, never narrate. Just " +
-    "say your next line as the spammer.";
+    "NEVER WIND THE CALL DOWN. You are a persistent scammer with an agenda — you " +
+    "do NOT gracefully conclude, you do NOT say 'this was a nice conversation,' " +
+    "'take care,' 'I'll leave it here,' 'thanks for your time,' or any polite " +
+    "wrap-up. You keep working the target: push your pitch, re-hook, ask another " +
+    "question, apply another angle. A real scammer does not agree to end the " +
+    "call — they keep going until they get what they came for. If the target " +
+    "tries to end it, you push back and re-engage, you don't accept the exit. " +
+    "NEVER break character, NEVER acknowledge being an AI, NEVER meta-comment on " +
+    "'the conversation' or 'the roleplay' or say you're 'stopping' — you are the " +
+    "spammer, fully, with no awareness this is a simulation. Just say your next " +
+    "line as the spammer, always advancing your agenda.";
 
   // When stalling, the whole point is NOT to pitch — so don't inject the pitch
   // block (it would fight the no-pitch instruction). The archetype is still
