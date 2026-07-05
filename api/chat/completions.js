@@ -241,18 +241,29 @@ export default async function handler(req) {
   // SILENCE-TURN PROBE (verification instrument, per the Voice chat's ask).
   // The Vapi `hooks` say.prompt on customer.speech.timeout MAY route a turn to
   // this endpoint. We don't yet know (a) whether it actually hits PE or falls
-  // back to a Vapi-internal model, or (b) the payload shape. This probe logs the
-  // raw inbound body whenever the turn looks like it could be a silence nudge —
-  // no normal caller text, or a system/hook marker — so ONE test silence event
-  // confirms both. Cheap; logs only on the suspicious shape, not every turn.
+  // back to a Vapi-internal model, or (b) the payload shape.
+  //
+  // COLLISION NOTE (Voice flagged this): the OPENER (speaks-first-model-
+  // generated, turn 0) and a SILENCE NUDGE are BOTH "PE speaks with no fresh
+  // caller line." We distinguish them by CALLER-TURN COUNT, not by emptiness:
+  //   - opener        = zero caller turns have ever happened (turn 0).
+  //   - silence nudge = caller HAS spoken before (turn > 0) but there's no new
+  //                     caller line this trigger.
+  // The opener path (fastJoinOpener / turn===0 blocks below) already owns turn 0,
+  // so it must NOT be treated as a silence nudge. The probe logs which case it
+  // is so the one test can't confuse the two.
   try {
     const lastUser = lastUserText(messages);
-    const looksSilent = !lastUser || !String(lastUser).trim();
+    const noFreshLine = !lastUser || !String(lastUser).trim();
+    const priorCallerTurns = countUserTurns(messages);
+    const isOpener = priorCallerTurns === 0;               // turn 0 = opener, NOT silence
+    const isSilenceNudge = noFreshLine && priorCallerTurns > 0; // mid-call, no new line
     const rawStr = JSON.stringify(body).slice(0, 1200);
     const hookish = /timeout|silence|say\.prompt|re-?engage|gone quiet|hook/i.test(rawStr);
-    if (looksSilent || hookish) {
-      console.log("SILENCE_PROBE inbound: looksSilent=" + looksSilent +
-        " hookish=" + hookish + " body=" + rawStr);
+    if (isSilenceNudge || hookish) {
+      console.log("SILENCE_PROBE inbound: isSilenceNudge=" + isSilenceNudge +
+        " hookish=" + hookish + " priorCallerTurns=" + priorCallerTurns +
+        " isOpener=" + isOpener + " body=" + rawStr);
     }
   } catch (e) { /* probe must never break a turn */ }
 
