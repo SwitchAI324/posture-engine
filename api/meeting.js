@@ -95,11 +95,17 @@ function PAGE(pub, asst, testMode) {
   .toast.show{opacity:1}
 </style>
 
-<!-- WAITING (early-join hold; host name filled in by JS) -->
+<!-- WAITING (early-join hold + host-arrival delay; host name filled in by JS) -->
 <div id="waiting" style="display:none;height:100vh;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px">
+  <!-- Waiting image: shows a default "BRB" tile, or a per-call custom image.
+       Set via ?wait_img=<url> on the meeting link, or window.SV_WAIT_IMG.
+       Lets a user drop in their own image (themselves, a colleague, or
+       something funny) as the pre-call hold screen. Falls back to the default
+       if none set or the image fails to load. -->
+  <img id="waitImg" alt="" style="display:none;max-width:min(420px,80vw);max-height:46vh;border-radius:14px;margin-bottom:18px;object-fit:cover" />
   <div id="waitHead" style="font-size:18px;margin-bottom:10px">Your call</div>
   <div id="waitWhen" style="color:var(--mut)"></div>
-  <div style="color:var(--mut);font-size:13px;margin-top:16px">This window will connect you automatically &mdash; no need to do anything.</div>
+  <div id="waitMsg" style="color:var(--mut);font-size:13px;margin-top:16px">This window will connect you automatically &mdash; no need to do anything.</div>
 </div>
 <div id="consent">
   <div class="lobby-card" style="max-width:520px">
@@ -174,8 +180,28 @@ var TEST_MODE = ${testMode ? "true" : "false"};
 // env var being set + redeployed. Production links carry neither, so both gates
 // enforce normally.
 var TEST = TEST_MODE || new URLSearchParams(location.search).get("test") === "1";
-
 var slug = new URLSearchParams(location.search).get("slug");
+
+// WAITING-SCREEN IMAGE (pre-call hold visual). Priority:
+//   1. ?wait_img=<url> on the meeting link (per-call custom — a user can drop
+//      in their own image: themselves, a colleague, something funny).
+//   2. window.SV_WAIT_IMG (deploy-wide default override).
+//   3. DEFAULT_WAIT_IMG (the built-in "BRB" tile).
+// Falls back gracefully: if the image fails to load, it's hidden and the text
+// hold screen stands alone. Purely cosmetic — never gates the call.
+var DEFAULT_WAIT_IMG = (typeof window !== "undefined" && window.SV_WAIT_IMG_DEFAULT) || "/waiting-brb.png";
+function showWaitImage(){
+  try{
+    var url = new URLSearchParams(location.search).get("wait_img")
+      || (typeof window !== "undefined" && window.SV_WAIT_IMG)
+      || DEFAULT_WAIT_IMG;
+    var el = document.getElementById("waitImg");
+    if(!el || !url) return;
+    el.onerror = function(){ el.style.display = "none"; }; // graceful fallback
+    el.onload  = function(){ el.style.display = "block"; };
+    el.src = url;
+  }catch(e){ /* cosmetic only, never break the hold */ }
+}
 var vapi = null, started = null, tick = null, muted = false, callId = null;
 
 // Host name (the name the spammer emailed). Filled from the token in ensureJoin;
@@ -229,6 +255,7 @@ function earlyGate(){
   if(Date.now() < bookedSlot - lead){
     $("consent").style.display = "none";
     $("waiting").style.display = "flex";
+    showWaitImage();
     var soon = (bookedSlot - Date.now()) <= 60*60*1000; // within the hour
     $("waitHead").textContent = soon
       ? ("Your call with " + hostName + " starts soon")
@@ -333,14 +360,24 @@ $("join").addEventListener("click", function(){
       // the opener honestly do the "saw you in the waiting room" callback only
       // when there was a real wait.
       vv.sv_waited_secs = String(Math.round(wait / 1000));
-      if(wait > 0){ note("Waiting for " + hostName + " to join\\u2026"); }
+      if(wait > 0){ note("Waiting for " + hostName + " to join\\u2026"); showWaitImage(); }
 
       // SILENCE HANDLING: without this, if the caller goes quiet after the
       // opener the host sits mute forever (Vapi only calls the LLM on caller
-      // input). silenceTimeoutSeconds makes Vapi act on dead air; the
-      // startSpeakingPlan waits a beat after the caller stops before the host
-      // jumps in (so it doesn't talk over a slow talker). Tunable via env.
-      var SILENCE_SECS = parseInt((window.SV_SILENCE_SECS || "20"), 10); // hang-up guard
+      // input). Two parts:
+      //  - silenceTimeoutSeconds is the BACKSTOP: ends the call after this long
+      //    of total silence. Set to 45 so the re-prompt nudges (below) have room
+      //    to fire first — at 20 the call died before any nudge (observed).
+      //  - hooks: on customer.speech.timeout, fire a say.prompt re-prompt. Since
+      //    the host model is our PE proxy, say.prompt routes a turn to our
+      //    endpoint and PE generates the re-engage line in character. Up to 3
+      //    nudges at 12s each; the counter resets when the caller speaks. The
+      //    45s backstop is the graceful end after the nudges are exhausted.
+      //  - startSpeakingPlan waits a beat after the caller stops before the host
+      //    jumps in (so it doesn't talk over a slow talker).
+      // Tunable via env: SV_SILENCE_SECS (backstop), SV_NUDGE_SECS (per-nudge).
+      var SILENCE_SECS = parseInt((window.SV_SILENCE_SECS || "45"), 10); // backstop end
+      var NUDGE_SECS   = parseInt((window.SV_NUDGE_SECS   || "12"), 10); // per re-prompt
       var overrides = {
         metadata: md,
         variableValues: vv,
@@ -348,7 +385,23 @@ $("join").addEventListener("click", function(){
         startSpeakingPlan: {
           waitSeconds: 0.6,          // small pause after caller stops before host speaks
           smartEndpointingEnabled: true
-        }
+        },
+        hooks: [
+          {
+            on: "customer.speech.timeout",
+            options: {
+              timeoutSeconds: NUDGE_SECS,
+              triggerMaxCount: 3,
+              triggerResetMode: "onUserSpeech"
+            },
+            do: [
+              {
+                type: "say",
+                prompt: "The caller has gone quiet. Speak ONE short in-character line as Andrew to re-engage \u2014 distracted, low-energy, not a speech. Vary it from any earlier nudge; if this is a later nudge, drift slightly toward wrapping up."
+              }
+            ]
+          }
+        ]
       };
 
       setTimeout(function(){
