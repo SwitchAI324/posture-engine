@@ -335,8 +335,24 @@ $("join").addEventListener("click", function(){
       vv.sv_waited_secs = String(Math.round(wait / 1000));
       if(wait > 0){ note("Waiting for " + hostName + " to join\\u2026"); }
 
+      // SILENCE HANDLING: without this, if the caller goes quiet after the
+      // opener the host sits mute forever (Vapi only calls the LLM on caller
+      // input). silenceTimeoutSeconds makes Vapi act on dead air; the
+      // startSpeakingPlan waits a beat after the caller stops before the host
+      // jumps in (so it doesn't talk over a slow talker). Tunable via env.
+      var SILENCE_SECS = parseInt((window.SV_SILENCE_SECS || "20"), 10); // hang-up guard
+      var overrides = {
+        metadata: md,
+        variableValues: vv,
+        silenceTimeoutSeconds: SILENCE_SECS,
+        startSpeakingPlan: {
+          waitSeconds: 0.6,          // small pause after caller stops before host speaks
+          smartEndpointingEnabled: true
+        }
+      };
+
       setTimeout(function(){
-        vapi.start(ASST, { metadata: md, variableValues: vv })
+        vapi.start(ASST, overrides)
           .then(function(call){
             var id = call && (call.id || call.callId);
             callId = id || null;
