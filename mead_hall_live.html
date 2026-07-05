@@ -27,8 +27,8 @@
     border-radius:6px;padding:4px 6px;background:#fff;color:var(--ink);cursor:pointer}
   .app{display:grid;grid-template-columns:minmax(0,1fr) 346px;
     grid-template-areas:"head head" "strip board" "stage board"
-    "control board" "transcript board";grid-template-rows:auto auto minmax(230px,1fr) auto 230px;
-    gap:10px;padding:10px;min-height:100vh;max-width:1440px;margin:0 auto}
+    "control board" "transcript board";grid-template-rows:auto auto auto auto minmax(0,1fr);
+    gap:10px;padding:10px;height:100vh;max-width:1440px;margin:0 auto}
   .lab{font-family:var(--mono);font-size:10px;letter-spacing:.12em;
     text-transform:uppercase;color:var(--muted)}
 
@@ -60,7 +60,7 @@
     font-size:12px;margin-left:6px;flex:1}
 
   /* stage */
-  .stage{grid-area:stage;display:grid;grid-template-columns:1fr 1fr;gap:10px;min-height:300px}
+  .stage{grid-area:stage;display:grid;grid-template-columns:1fr 1fr;gap:10px;height:128px}
   .side{display:flex;flex-direction:column;gap:6px;min-width:0}
   .sidelab{display:flex;align-items:center;gap:8px}
   .sidelab .who{font-family:var(--mono);font-weight:700;font-size:10px;letter-spacing:.12em}
@@ -154,7 +154,7 @@
     font-family:var(--mono);font-weight:700;font-size:10px;cursor:pointer}
 
   /* board */
-  .board{grid-area:board;background:#fff;border:1px solid var(--line);border-radius:8px;
+  .board{grid-area:board;background:#fff;border:1px solid var(--line);border-radius:8px;min-height:0;
     display:flex;flex-direction:column;overflow:hidden}
   .board .top{background:var(--ink);color:#fff;display:flex;align-items:center;
     padding:9px 14px;font-family:var(--mono);font-weight:700;font-size:12px;letter-spacing:.12em}
@@ -469,6 +469,13 @@
     font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
   .tch #turnNote{color:var(--muted);font-weight:400;letter-spacing:0;text-transform:none}
   .tlog{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px}
+  /* system beats in the transcript — the call spine at a glance */
+  .tl.beat{align-self:center;max-width:92%;text-align:center;font-family:var(--mono);font-size:11px;
+    color:var(--gold);background:#fbf3e2;border:1px solid #e6d6ac;border-radius:6px;padding:4px 10px}
+  .tl.beat b{color:#7a5310} .tl.beat .bmeta{color:#9a7b3a;font-style:normal}
+  .tl.beat.phantom{color:#6b5ca6;background:#efecf8;border-color:#d8d0ee} .tl.beat.phantom b{color:#4a3f80} .tl.beat.phantom .bmeta{color:#6b5ca6}
+  .tl.beat.handoff{color:var(--blood);background:#fbecec;border-color:#e8c4bf} .tl.beat.handoff b{color:var(--blood2)} .tl.beat.handoff .bmeta{color:#a5564a}
+  .tl.beat.handoff.on{background:#f7e0dc;border-color:var(--blood)}
   .scriptbtn{margin-left:auto;background:#fff;border:1px solid var(--slate);color:var(--ink);
     font-family:var(--mono);font-weight:700;font-size:9px;padding:4px 9px;border-radius:6px;cursor:pointer}
   #scriptText{width:100%;border:1px solid var(--line);border-radius:8px;padding:12px;
@@ -479,6 +486,12 @@
   .bp-scope .sendin{position:absolute;left:6px;top:6px;z-index:3;font-family:var(--mono);font-size:9px;font-weight:700;
     letter-spacing:.03em;border:1px solid var(--blood);color:#fff;background:var(--blood);border-radius:5px;padding:2px 6px;cursor:pointer}
   .bp-scope .sendin:hover{background:var(--blood2)}
+  .bp-scope .bstatus{position:absolute;bottom:5px;left:5px;right:5px;z-index:3;font-family:var(--mono);font-size:7.5px;
+    font-weight:700;letter-spacing:.04em;text-align:center;border-radius:4px;padding:2px 0;display:none}
+  .bp-scope .card.standby .bstatus{display:block;background:var(--gold2);color:#1b1714}
+  .bp-scope .card.oncall .bstatus{display:block;background:var(--green);color:#fff}
+  .bp-scope .card.standby{outline:2px solid var(--gold2);outline-offset:-2px}
+  .bp-scope .card.oncall{outline:2px solid var(--green);outline-offset:-2px}
   .bp-scope{--page:#f4efe3; --panel:#fbf8f0; --line:#d9cdb2;
     --hall:#15100d; --hall2:#221912;
     --vellum:#e7dabb; --vellum2:#d8c79f; --bone:#f3ecd8;
@@ -490,17 +503,17 @@
   .bp-scope /* ---- the inline director panel ---- */
   .bench-panel{max-width:440px;background:var(--panel);border:1px solid var(--line);
     border-radius:10px;padding:12px 12px 14px;box-shadow:0 1px 0 #fff inset,0 6px 18px -14px #000}
-  .bp-scope .panel-head{display:flex;align-items:center;justify-content:space-between;margin:0 2px 11px}
+  .bp-scope .panel-head{display:flex;align-items:center;justify-content:space-between;margin:0 2px 8px}
   .bp-scope .panel-head .title{font-family:var(--display);font-weight:700;color:var(--ink-soft);
-    font-size:12px;letter-spacing:.16em;text-transform:uppercase}
-  .bp-scope .more-btn{font-family:var(--display);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
-    color:var(--amber);background:#fff;border:1px solid var(--amber);border-radius:7px;
-    padding:5px 10px;cursor:pointer;white-space:nowrap}
+    font-size:10.5px;letter-spacing:.14em;text-transform:uppercase}
+  .bp-scope .more-btn{font-family:var(--display);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--amber);background:#fff;border:1px solid var(--amber);border-radius:6px;
+    padding:4px 8px;cursor:pointer;white-space:nowrap}
   .bp-scope .more-btn:hover{background:#fff7e8}
   .bp-scope .pinned-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
   .bp-scope /* ---- flip card (shared) ---- */
   .card{position:relative;perspective:760px;cursor:pointer;outline:none}
-  .bp-scope .card.mini{height:142px}
+  .bp-scope .card.mini{aspect-ratio:1/1;height:auto}
   .bp-scope .card.full{height:182px}
   .bp-scope .flip{position:relative;width:100%;height:100%;transform-style:preserve-3d;
     transition:transform .5s cubic-bezier(.2,.75,.2,1)}
@@ -519,10 +532,10 @@
   .bp-scope .role{font-family:var(--display);font-weight:700;color:var(--ember);letter-spacing:.13em;
     text-transform:uppercase;text-align:center;line-height:1.1}
   .bp-scope .seat{font-family:var(--body);font-style:italic;color:var(--ink-soft);opacity:.75}
-  .bp-scope .mini .emblem svg{width:38px;height:38px;display:block;color:var(--ink)}
-  .bp-scope .mini .name{font-size:13.5px}
-  .bp-scope .mini .role{font-size:8.5px}
-  .bp-scope .mini .seat{font-size:8.5px}
+  .bp-scope .mini .emblem svg{width:32px;height:32px;display:block;color:var(--ink)}
+  .bp-scope .mini .name{font-size:13px}
+  .bp-scope .mini .role{font-size:8px}
+  .bp-scope .mini .seat{font-size:8px}
   .bp-scope .full .emblem svg{width:56px;height:56px;display:block;color:var(--ink)}
   .bp-scope .full .name{font-size:15px}
   .bp-scope .full .role{font-size:9.5px}
@@ -663,7 +676,7 @@
         </div>
       </div>
       <div class="scoutbtn" id="scoutBtn">📋 SCOUT THE SPAMMER <span class="cov" id="scoutCov">—</span></div>
-      <div class="grp">Bits — the Host's hand</div>
+      <div class="grp">Bits — the Host's hand <button id="bitsDeckBtn" type="button" style="float:right;font:inherit;font-size:10px;letter-spacing:.04em;background:transparent;border:1px solid #c2832c66;color:#c2832c;border-radius:5px;padding:1px 7px;cursor:pointer">&#10070; the full deck &#8599;</button></div>
       <div id="boardBits"></div>
       <div class="grp">Ammunition — in the Host's pocket</div>
       <div id="ammoRack">
@@ -1265,7 +1278,7 @@
     if(muted&&window.speechSynthesis) speechSynthesis.cancel(); };
 
   /* ---- text-size / zoom (legibility) ---- */
-  let zoom=1.2;
+  let zoom=1.0;
   function applyZoom(){ document.body.style.zoom=zoom; const l=$('#zoomLbl'); if(l)l.textContent=Math.round(zoom*100)+'%'; }
   if($('#zoomIn'))  $('#zoomIn').onclick =()=>{ zoom=Math.min(1.8, Math.round((zoom+0.1)*10)/10); applyZoom(); };
   if($('#zoomOut')) $('#zoomOut').onclick=()=>{ zoom=Math.max(0.8, Math.round((zoom-0.1)*10)/10); applyZoom(); };
@@ -1563,13 +1576,36 @@
             note.textContent='\u2714 '+n+' fired \u2014 fit '+(typeof p.fit_score==='number'?p.fit_score.toFixed(1):p.fit_score)+(typeof bar==='number'?(' over bar '+bar.toFixed(1)):''); } }
         if(p.running_total!=null && $('#hudPosture'))$('#hudPosture').textContent=(p.count_label||n)+': '+p.running_total;
         if(p.running_total!=null){ bj=p.running_total; const be=$('#bj'); if(be){ be.textContent='\u00D7'+bj; be.style.color='var(--gold)'; setTimeout(()=>be.style.color='',500);} }
-        if(tg==='armed'){ setlist=setlist.filter(s=>s.bit_id!==p.bit_id); renderArmPanel(); }
-        renderHudBits(); break; }
+        // PE: bit_id match alone is enough to clear the ARMED state (trigger:"armed" is a bonus
+        // hint, not required) — so an armed bit that fires labeled "auto" still reverts correctly.
+        if(p.bit_id && setlist.some(s=>s.bit_id===p.bit_id)){ setlist=setlist.filter(s=>s.bit_id!==p.bit_id); renderArmPanel(); }
+        renderHudBits();
+        // pacing telemetry (PE): trigger / why / dry_turns / starvation — a compact transcript beat
+        { const log=$('#tlog'); if(log){ const meta=[];
+            if(p.trigger)meta.push(p.trigger);
+            if(p.why)meta.push(String(p.why));
+            if(p.dry_turns!=null)meta.push('dry '+p.dry_turns);
+            if(p.starvation)meta.push('starving');
+            const d=document.createElement('div'); d.className='tl beat';
+            d.innerHTML='\uD83C\uDFAF <b>'+n+'</b>'+(meta.length?' \u00B7 <span class="bmeta">'+meta.join(' \u00B7 ')+'</span>':'');
+            log.appendChild(d); log.scrollTop=log.scrollHeight; } }
+        break; }
       case 'ammo_used': { const a=rack.find(x=>x.hook_id===p.hook_id); if(a){ a.used=true; renderAmmoRack(); renderArmPanel(); renderDossier(); } toast('Ammo: '+(p.label||p.hook_id||'hook')); break; }
       case 'scout_snapshot': { dossier = Array.isArray(p.hooks)?p.hooks:(Array.isArray(p.scout)?p.scout:dossier); renderDossier(); toast('Dossier updated'); break; }
-      case 'bench_joined': liveBenchTile(p.name,p.role,p.glyph); ourSide++; peakOur=Math.max(peakOur,ourSide); liveHeads=(liveHeads||0)+1; refreshHud();
-        if($('#gfNote')){ const note=$('#gfNote'); note.className='gfitnote'; note.style.color='#8c3b2b'; note.textContent='\u2192 Director sent in '+(p.name||'bench'); setTimeout(()=>{ note.style.color=''; },2600); }
-        toast((p.name||'bench')+' joined'); break;
+      case 'bench_joined': { liveBenchTile(p.name,p.role,p.glyph); ourSide++; peakOur=Math.max(peakOur,ourSide); liveHeads=(liveHeads||0)+1; refreshHud();
+        if(window.__mh_setBenchState) window.__mh_setBenchState(p.bench_id||p.name, 'oncall');
+        const src=p.source||'auto'; const man=p.manifestation||'seen';
+        const how=(src==='director')?'Director sent in':(man==='phantom'?'Phantom invoked':(man==='audio'?'Heard, unseen:':'Joined:'));
+        const log=$('#tlog'); if(log){ const d=document.createElement('div'); d.className='tl beat'+(man==='phantom'?' phantom':'');
+          d.innerHTML='\u25C7 <b>'+how+' '+(p.name||'bench')+'</b>'+(p.why?' \u00B7 <span class="bmeta">'+p.why+'</span>':'')+(man&&man!=='seen'?' <span class="bmeta">('+man+')</span>':'');
+          log.appendChild(d); log.scrollTop=log.scrollHeight; }
+        toast((p.name||'bench')+(src==='director'?' sent in':' joined')); break; }
+      case 'handoff_telegraph': { const log=$('#tlog'); if(log){ const d=document.createElement('div'); d.className='tl beat handoff';
+          d.innerHTML='\uD83C\uDFA4 <b>Handoff coming</b> \u00B7 <span class="bmeta">host hands to '+(p.name||p.bench_id||'a colleague')+'\u2026</span>';
+          log.appendChild(d); log.scrollTop=log.scrollHeight; } break; }
+      case 'handoff_fired': { const log=$('#tlog'); if(log){ const d=document.createElement('div'); d.className='tl beat handoff on';
+          d.innerHTML='\uD83C\uDFA4 <b>Handoff fired</b> \u2192 '+(p.name||p.bench_id||'colleague')+' has the line';
+          log.appendChild(d); log.scrollTop=log.scrollHeight; } toast('Handoff \u2192 '+(p.name||'colleague')); break; }
       case 'party_joined': theirSide++; peakTheir=Math.max(peakTheir,theirSide); toast((p.label||'A colleague')+' joined their side'); break;
       case 'spammer_reaction': { const tile=$('#spammerTile'); if(tile){ tile.style.boxShadow='0 0 0 3px var(--gold)'; setTimeout(()=>tile.style.boxShadow='',700);} if(p.reaction_type) toast('Spammer: '+p.reaction_type); break; }
       case 'blow_landed': if(p.total_blows!=null) blows=p.total_blows; else blows++; refreshHud(); break;
@@ -1628,10 +1664,15 @@
     try{ const r=await fetch(CONTROL_ENDPOINT+'?action=bench',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       if(r.status===404){ const j=await r.json().catch(()=>({})); toast('\u201C'+bid+'\u201D not wired yet'+(j.valid?' \u2014 try '+(Array.isArray(j.valid)?j.valid.join(', '):j.valid):'')); return; }
       if(!r.ok){ const t=await r.text().catch(()=> ''); throw new Error('HTTP '+r.status+(t?' \u2014 '+t.slice(0,120):'')); }
-      const j=await r.json().catch(()=>({})); toast('Sent in '+(j.sent_bench||bid)+' \u2014 joins on the next host turn.'); }
+      const j=await r.json().catch(()=>({})); toast('Sent in '+(j.sent_bench||bid)+' \u2014 joins on the next host turn.');
+      if(window.__mh_setBenchState) window.__mh_setBenchState(bid, 'standby'); }
     catch(e){ toast('\u26A0 Send-in failed: '+(e.message||e)); } }
   window.__mh_sendBench = sendBenchControl;
   window.__mh_canSend = function(){ return !!callId; };
+  // Open the full bits deck (companion page) — pass the live call_id so its tap-to-arm targets this call.
+  (function(){ const b=document.getElementById('bitsDeckBtn'); if(b) b.addEventListener('click', function(){
+    const u = location.origin + '/bits_flip_deck.html' + (callId ? ('?call_id='+encodeURIComponent(callId)) : '');
+    window.open(u, '_blank', 'noopener'); }); })();
 
   /* ---- clear the demo seed when entering live ---- */
   function clearForLive(){ if(typeof stopRun==='function') stopRun();
@@ -1641,6 +1682,7 @@
     firedLog={}; selectedBit=null; renderBoardBits(null); renderHudBits();
     rack=[]; loadout=[]; setlist=[]; liveHeads=null; dossier=[]; renderAmmoRack(); renderArmPanel(); renderDossier();
     lastGear={}; if($('#gearPanel')) $('#gearPanel').style.display='none';
+    if(window.__mh_setBenchState){ ['conrad','bonnie','andrea'].forEach(id=>window.__mh_setBenchState(id,null)); }
     if(source==='live'){ const rn=document.querySelector('.readnote'); if(rn) rn.textContent='The Host plays its own hand. You may arm a setlist (max 3) and call the Death Blow.'; } }
 
   /* ---- feed lifecycle wired to the RUN button ---- */
@@ -1765,7 +1807,7 @@
   ];
   // 5 quick bits (the universal starters) — drill into categories for the rest.
   const QUICK_BITS = [{id:'BIT-201',name:'Pricing Loop'},{id:'BIT-118',name:'The Echo'},{id:'BIT-101',name:'Blame Bjorn'},
-    {id:'BIT-140',name:'Council Consult'},{id:'BIT-155',name:'Wrong Number Tease'}];
+    {id:'BIT-140',name:'Council Consult'},{id:'BIT-155',name:'Wrong Number Tease'},{id:'BIT-211',name:'The Silence'}];
   // Category browser — SCAFFOLD: structure is real, contents to be wired from Bits Library v10.9.
   const BIT_CATS = {
     universal:   {label:'Universal',        bits:QUICK_BITS},
@@ -1960,7 +2002,7 @@ function makeCard(d, {mini, star}){
     return out; }
   const card = document.createElement('article');
   card.className = 'card ' + (mini ? 'mini' : 'full') + (d.unseen ? ' unseen' : '');
-  card.tabIndex = 0; card.setAttribute('role','button');
+  card.tabIndex = 0; card.setAttribute('role','button'); card.dataset.bid = d.id;
   card.setAttribute('aria-label', d.name + ' — flip for details');
   const WIRED = ['CONRAD','BONNIE','ANDREA'];   // PE-wired send-in ids (v1); grows as _bench.js grows
   const wired = WIRED.indexOf(d.id.toUpperCase()) !== -1;
@@ -1970,6 +2012,7 @@ function makeCard(d, {mini, star}){
   card.innerHTML =
     (star ? '<button class="star" aria-label="favorite"></button>' : '') +
     (wired ? '<button class="sendin" aria-label="send into the call">send in \u25B8</button>' : '') +
+    '<span class="bstatus"></span>' +
     '<div class="flip"><div class="face front">' + emblem(d) + frontLabel(d) + '</div>' +
     '<div class="face back">' + back + '</div></div>';
   // flip on click / keyboard (hover handled by CSS) — but not when tapping a control button
@@ -1999,12 +2042,25 @@ function renderPinned(){
   const row = document.getElementById('pinnedRow');
   row.innerHTML = '';
   pinnedIds().forEach(id => row.appendChild(makeCard(byId[id], {mini:true, star:false})));
+  applyBenchStates();
 }
 function renderModal(){
   const grid = document.getElementById('modalGrid');
   grid.innerHTML = '';
   DATA.forEach(d => grid.appendChild(makeCard(d, {mini:false, star:true})));
   document.getElementById('favCount').textContent = '★ ' + favorites.length + '/' + MAX + ' favorited';
+  applyBenchStates();
+}
+// Persistent bench card state (standby/oncall) survives re-renders (e.g. favoriting).
+const benchCardState = {};
+function applyBenchStates(){
+  document.querySelectorAll('.bp-scope .card').forEach(function(card){
+    const st = benchCardState[card.dataset.bid]; const b=card.querySelector('.bstatus');
+    card.classList.remove('standby','oncall');
+    if(st==='standby'){ card.classList.add('standby'); if(b)b.textContent='JOINING NEXT TURN'; }
+    else if(st==='oncall'){ card.classList.add('oncall'); if(b)b.textContent='ON CALL'; }
+    else if(b){ b.textContent=''; }
+  });
 }
 function renderAll(){ renderPinned(); if (!document.getElementById('modal').hidden) renderModal(); }
 
@@ -2018,6 +2074,12 @@ modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
 
 renderPinned();
+  // Let the main script drive bench card state (standby/oncall) from bus events.
+  window.__mh_setBenchState = function(id, state){
+    const norm = String(id||'').toLowerCase().replace(/[^a-z0-9]+/g,'_');
+    if(state) benchCardState[norm]=state; else delete benchCardState[norm];
+    applyBenchStates();
+  };
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', initBenchPanel);
   else initBenchPanel();
