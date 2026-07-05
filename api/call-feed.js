@@ -47,15 +47,29 @@ export default async function handler(req, res) {
       .json({ error: "bad_request", detail: "need call_id or target_id" });
   }
 
+  // A sim's target_id is a "sim-<uuid>" string, not a real targets(id) UUID —
+  // and sim events are written keyed by call_id (target_id NULL in the row).
+  // Filtering the UUID-typed target_id column by "sim-..." throws Postgres
+  // 22P02. So: if a target_id was given but it isn't a bare UUID, treat it as a
+  // call_id watch (that's where sim events live; sim-call sets target_id ===
+  // call_id). Real UUID target_ids fall through to the normal arc query.
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  let effCallId = call_id;
+  let effTargetId = target_id;
+  if (!call_id && target_id && !UUID_RE.test(target_id)) {
+    effCallId = target_id;   // route the sim watch to the call_id path
+    effTargetId = undefined; // don't filter the UUID column by a non-UUID
+  }
+
   // Build the PostgREST query for whichever mode we're in.
   const params = new URLSearchParams();
   params.set("select", SELECT);
   params.set("order", "seq.asc");
   params.set("limit", String(MAX_ROWS));
 
-  if (call_id) {
+  if (effCallId) {
     // live poll: one call, rows past the cursor
-    params.set("call_id", `eq.${call_id}`);
+    params.set("call_id", `eq.${effCallId}`);
     const cursor = Number.parseInt(after_seq, 10);
     if (Number.isFinite(cursor) && cursor >= 0) {
       params.set("seq", `gt.${cursor}`);
@@ -64,7 +78,7 @@ export default async function handler(req, res) {
     // arc + live stream: the target's history, incrementally past the cursor.
     // With after_seq this streams email -> booking -> call on one target_id;
     // without it (after_seq absent/0) it returns the whole arc so far.
-    params.set("target_id", `eq.${target_id}`);
+    params.set("target_id", `eq.${effTargetId}`);
     const cursor = Number.parseInt(after_seq, 10);
     if (Number.isFinite(cursor) && cursor >= 0) {
       params.set("seq", `gt.${cursor}`);
