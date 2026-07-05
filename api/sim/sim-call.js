@@ -98,9 +98,13 @@ export default async function handler(req) {
     const archetype = body.archetype || "generic";
     const temperament = body.temperament || "pushy_closer";
     const hostName = body.host_name || "Andrew";
-    // Synthetic ids. target_id is what Mead Hall watches by; call_id keys the bus.
+    // Synthetic ids. Sims have no real targets row (target_id FK -> targets.id),
+    // and sim events are written keyed by call_id with a NULL target_id. So the
+    // sim uses ONE id: target_id === call_id. The Mead Hall watches by that
+    // value, and call-feed routes a non-UUID (sim-) target_id to the call_id
+    // query — which is where the events actually live.
     const call_id = "sim-" + crypto.randomUUID();
-    const target_id = "sim-" + crypto.randomUUID();
+    const target_id = call_id;
 
     // call_started on the bus so the Director's View opens the call.
     const trace = makeTrace(call_id, 0, waitUntil);
