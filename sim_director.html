@@ -133,8 +133,11 @@
   // ---- catalog ----
   async function loadCatalog(){
     try{ const c = await getJSON(BASE+'?action=catalog');
-      fill('#arch', c.archetypes||c.archetype||[]);
-      fill('#temp', c.temperaments||c.temperament||[]);
+      // Endpoint returns { ok:true, catalog:{ archetypes:[], temperaments:[] } }.
+      // Read from c.catalog (fall back to top level for older/flat shapes).
+      const cat = c.catalog || c;
+      fill('#arch', cat.archetypes||cat.archetype||[]);
+      fill('#temp', cat.temperaments||cat.temperament||[]);
     }catch(e){ $('#setupErr').textContent = 'Could not load catalog: '+e.message+'  — is /api/sim/sim-call deployed?'; }
   }
   function fill(sel, list){ const el=$(sel); el.innerHTML='';
