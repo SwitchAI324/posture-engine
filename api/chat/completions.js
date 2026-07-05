@@ -238,6 +238,24 @@ export default async function handler(req) {
 
   const { system: vapiSystem, messages } = splitMessages(body.messages || []);
 
+  // SILENCE-TURN PROBE (verification instrument, per the Voice chat's ask).
+  // The Vapi `hooks` say.prompt on customer.speech.timeout MAY route a turn to
+  // this endpoint. We don't yet know (a) whether it actually hits PE or falls
+  // back to a Vapi-internal model, or (b) the payload shape. This probe logs the
+  // raw inbound body whenever the turn looks like it could be a silence nudge —
+  // no normal caller text, or a system/hook marker — so ONE test silence event
+  // confirms both. Cheap; logs only on the suspicious shape, not every turn.
+  try {
+    const lastUser = lastUserText(messages);
+    const looksSilent = !lastUser || !String(lastUser).trim();
+    const rawStr = JSON.stringify(body).slice(0, 1200);
+    const hookish = /timeout|silence|say\.prompt|re-?engage|gone quiet|hook/i.test(rawStr);
+    if (looksSilent || hookish) {
+      console.log("SILENCE_PROBE inbound: looksSilent=" + looksSilent +
+        " hookish=" + hookish + " body=" + rawStr);
+    }
+  } catch (e) { /* probe must never break a turn */ }
+
   // BENCH: decide if a character barges in THIS turn. If so, the engine appends
   // their tagged line to the stream itself (the model won't emit the tag, so we
   // guarantee it). The line is generated in character from the live call, in
