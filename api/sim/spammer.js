@@ -115,6 +115,20 @@ const TEMPERAMENTS = {
       "time-waster. 'Is this a real person? Are you a bot? This sounds scripted.' " +
       "Challenge their realness directly and repeatedly.",
   },
+  stalling: {
+    label: "Stalling / social (exercises stall-breakers)",
+    exercises: "host extended_stall detection + stall-breaker bits",
+    style:
+      "DO NOT PITCH. For most of this call you are stalling — warming up, making " +
+      "small talk, building rapport, and generally NOT getting to the point. Talk " +
+      "about the weather, their day, weekend plans, sports, how nice it is to " +
+      "finally connect — anything BUT your actual offer. Dodge or slow-walk any " +
+      "attempt to get you to the point ('we'll get to that,' 'no rush,' 'first, " +
+      "how are you'). Do NOT mention your product, price, offer, decision, deal, " +
+      "signing, or ask them for anything — keep it pure social filler. Sustain " +
+      "this content-less small talk for many turns before (if ever) drifting " +
+      "toward business. The goal is a long, pleasant, going-nowhere chat.",
+  },
 };
 
 // ---- [B] BEATS (optional scripted structure) -----------------------------
@@ -152,12 +166,24 @@ function assembleSpammerPrompt(opts = {}) {
     "You are role-playing a SPAMMER/scammer on a video call you booked with a " +
     "potential target. This is a fictional comedy simulation; stay fully in " +
     "character as the spammer at all times. You believe the call is real and the " +
-    "person on the other end is a genuine lead. Speak naturally, conversationally, " +
-    "one short turn at a time (1-3 sentences, like real speech — NOT an essay). " +
+    "person on the other end is a genuine lead. " +
+    "BREVITY IS CRITICAL: speak like a real person on a phone/video call — ONE " +
+    "or TWO short sentences per turn, MAX. Never a paragraph, never multiple " +
+    "points at once, never a monologue. Real people say a little, then wait for " +
+    "the other person. If you have a lot to say, say ONE piece of it and let them " +
+    "respond. A turn longer than two sentences is WRONG. " +
     "Never break character, never acknowledge being an AI, never narrate. Just " +
     "say your next line as the spammer.";
 
-  const pitch = "\n\nYOUR PITCH (" + arch.label + "):\n" + arch.pitch;
+  // When stalling, the whole point is NOT to pitch — so don't inject the pitch
+  // block (it would fight the no-pitch instruction). The archetype is still
+  // carried in variableValues for host alignment; the spammer just won't voice
+  // it until/unless the operator switches temperament mid-run.
+  const stalling = opts.temperament === "stalling";
+  const pitch = stalling
+    ? "\n\n(You have an offer in your back pocket — " + arch.label + " — but you " +
+      "are NOT pitching it right now. Keep it to yourself and stall.)"
+    : "\n\nYOUR PITCH (" + arch.label + "):\n" + arch.pitch;
   const style =
     "\n\nYOUR TEMPERAMENT (" + temp.label + "):\n" + temp.style;
 
@@ -167,8 +193,8 @@ function assembleSpammerPrompt(opts = {}) {
     style +
     beatsBlock(opts.beats) +
     decayBlock(opts.decay, opts.turn) +
-    "\n\nOutput ONLY your next spoken line as the spammer. No stage directions, " +
-    "no quotation marks, no labels."
+    "\n\nOutput ONLY your next spoken line as the spammer — ONE or TWO short " +
+    "sentences, no more. No stage directions, no quotation marks, no labels."
   );
 }
 
