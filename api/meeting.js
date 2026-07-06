@@ -409,7 +409,13 @@ $("join").addEventListener("click", function(){
           .then(function(call){
             var id = call && (call.id || call.callId);
             callId = id || null;
-            if(id){ fetch("/api/join?slug=" + encodeURIComponent(slug) + "&call_id=" + encodeURIComponent(id), { method:"POST" }).catch(function(){}); }
+if(id){
+              fetch("/api/join?slug=" + encodeURIComponent(slug) + "&call_id=" + encodeURIComponent(id), { method:"POST" }).catch(function(){});
+              // HYDRATE the compiled prefix for this call. Without this,
+              // call_prefix.prefix stays NULL and the host runs the Vapi
+              // fallback instead of the compiled HOST prompt/bits/bench.
+              fetch("/api/hydrate?slug=" + encodeURIComponent(slug) + "&call_id=" + encodeURIComponent(id), { method:"POST" }).catch(function(){});
+            }
           })
           .catch(function(e){ note("Could not connect: " + e, true); $("join").disabled = false; });
       }, wait);
