@@ -30,13 +30,7 @@
 //   identity   = DEFERRED (owner_email not on the token yet; add later)
 // ----------------------------------------------------------------------
 
-// IMPORT PATHS (resolved to the ACTUAL repo layout):
-// - The LIVE compiler is in the ROOT compiler/ folder (assemble.js, providers.js,
-//   bits.js, postures.json all live there). From api/hydrate.js that's
-//   ../compiler/. (api/compiler/ held only a stray providers.js and is being
-//   removed — do NOT import from there.)
-// - The bits registry + store are siblings of this file under api/.
-const { assemblePrefix } = require("../compiler/assemble.js");
+const { assemblePrefix } = require("./compiler/assemble.js");
 
 // All-active bit ids for the loadout. _bits_registry.js exports BITS (records
 // with a status field); active = not parked. require() at runtime (Node).
@@ -104,10 +98,13 @@ module.exports = async function handler(req, res) {
     const posture = process.env.SV_DEFAULT_POSTURE || "skald"; // neutral/warm
     const cfg = {
       posture,
-     // BITS: empty loadout in the prefix — the engine scores from the full
-      // registry at turn time and injects fired directives after the cache
-      // breakpoint, not from this loadout. Loading all bits here just bloats
-      // the cached prefix. Empty is correct.
+      // BITS: empty loadout in the prefix — intentional. The engine scores bits
+      // from the full registry (_bits_registry.js) at turn time, independent of
+      // the prefix, and injects a fired bit's directive AFTER the cache
+      // breakpoint (never from this loadout). So loading all active bits here
+      // would just bloat the cached prefix with prose the engine gets elsewhere.
+      // The Mead Hall board (six bits) is the Director's remote, not the engine's
+      // menu; PE plays the whole library on its own. Empty is correct.
       bits: [],
       armedBench: [], // room starts empty; bench sent in live
       target: token.target_id || null,
@@ -118,7 +115,22 @@ module.exports = async function handler(req, res) {
     };
 
     const assembled = assemblePrefix(cfg);
-    const prefix = assembled.stablePrefix;
+    let prefix = assembled.stablePrefix;
+
+    // [HOST NAME] substitution: the Master Host Prompt uses [HOST NAME] as a
+    // placeholder token. It MUST be replaced with the real host name (from the
+    // booking token) before shipping, or the model sees the raw "Andrew OR
+    // Andrea" identity explanation and improvises a name. Substitute here at
+    // hydrate time, where host_name is in hand.
+    const hostName = (cfg.host_name && String(cfg.host_name).trim()) || "Andrew";
+    prefix = prefix.split("[HOST NAME]").join(hostName);
+    // Also collapse the dual-identity explainer to just the chosen name, so the
+    // model isn't told it could be either. Keep it simple + safe.
+    prefix = prefix.replace(
+      /Andrew and Andrea are two sides of the same coin[\s\S]*?different voice\./,
+      "You are " + hostName + " — warm, distracted, genuine; you remember the " +
+        "email thread."
+    );
 
     // Initial posture line so turn 1 has a value; the engine overwrites per turn.
     const initialPosture = posture.toUpperCase() + " — warm and forward.";

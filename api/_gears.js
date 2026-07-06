@@ -308,10 +308,12 @@ export function postureBlock(state) {
   };
   const line = (axis) => {
     const pos = AXES[axis].states[s[axis]] ? s[axis] : AXES[axis].default;
-    return `- ${axis} (${pos}): ${safeDirective(axis, pos)}`;
+    return `  (${axis}) ${safeDirective(axis, pos)}`;
   };
   return (
-    "CURRENT POSTURE — your read on the caller right now:\n" +
+    "[INTERNAL DIRECTION — do NOT say any of this aloud, do NOT read these " +
+    "labels or state names to the caller. This only tells you HOW to play your " +
+    "next spoken line:]\n" +
     [line("suspicion"), line("pressure"), line("engagement")].join("\n")
   );
 }
