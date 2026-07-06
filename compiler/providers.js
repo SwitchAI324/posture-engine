@@ -1,14 +1,11 @@
 // SpamViking — Posture Engine: compile-input PROVIDERS
 // ----------------------------------------------------------------------
-// The four-document merge needs four inputs. TWO are now real:
-//   [2] BIT LOADOUT  -> reads api/compiler/bits.js (BIT-xxx -> directive prose)
-//   [3] reframed bench -> compiler/compile.js (in assemble.js)
-// The other two — HOST BASE and CALL CONTEXT — are still STUBBED here behind a
-// stable interface, so when their threads ship compiled output they drop in
-// without touching assemble.js.
-//
-// HOST BASE and CALL CONTEXT bodies below are LOUD PLACEHOLDERS. Replace the
-// bodies, keep the signatures.
+// The four-document merge needs four inputs. THREE are now real:
+//   [1] HOST BASE   -> the real Master Host Prompt (inline below)
+//   [2] BIT LOADOUT -> reads ./bits.js (BIT-xxx -> directive prose)
+//   [3] reframed bench -> compile.js (in assemble.js)
+// The remaining stub is [4] CALL CONTEXT (Data/Product Logic) — still behind a
+// stable interface so it drops in without touching assemble.js when it ships.
 // ----------------------------------------------------------------------
 const POSTURES = require("./postures.json");
 
