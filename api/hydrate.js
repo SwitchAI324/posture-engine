@@ -30,7 +30,12 @@
 //   identity   = DEFERRED (owner_email not on the token yet; add later)
 // ----------------------------------------------------------------------
 
-const { assemblePrefix } = require("../compiler/assemble.js");
+// IMPORT PATH: the compiler now lives INSIDE api/ (api/compiler/*), so from
+// api/hydrate.js it's ./compiler/. This is bundle-safe — Vercel bundles files
+// inside the api/ function directory, which files outside api/ were not
+// guaranteed to be. (Earlier ../compiler/ pointed at the root compiler/ folder
+// and failed to bundle: "Cannot find module".)
+const { assemblePrefix } = require("./compiler/assemble.js");
 
 // All-active bit ids for the loadout. _bits_registry.js exports BITS (records
 // with a status field); active = not parked. require() at runtime (Node).
