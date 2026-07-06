@@ -276,7 +276,19 @@ export default async function handler(req) {
   const callId = body.call?.id ?? body.metadata?.callId ?? body.call_id;
   const benchTurn = countUserTurns(messages);
 
-  const slug = body.call?.metadata?.slug ?? body.metadata?.slug ?? null;
+  // slug: Vapi does NOT reliably surface call.metadata on WEB calls, but it DOES
+  // surface call.assistantOverrides.variableValues (sv_slug). Read both — the
+  // variableValues path is what actually survives on web calls, and without slug
+  // the pre-call slug-keyed prefix fallback can't fire (host runs flat fallback).
+  const vv =
+    body.call?.assistantOverrides?.variableValues ||
+    body.assistantOverrides?.variableValues ||
+    {};
+  const slug =
+    body.call?.metadata?.slug ??
+    body.metadata?.slug ??
+    (vv.sv_slug || null) ??
+    null;
   let stored = null;
   let ammo = { ammunition: [], byHook: {} };
   let controls = { deathBlow: null, armed: [], sentBench: null };
