@@ -30,7 +30,7 @@
 //   identity   = DEFERRED (owner_email not on the token yet; add later)
 // ----------------------------------------------------------------------
 
-const { assemblePrefix } = require("./compiler/assemble.js");
+const { assemblePrefix } = require("../compiler/assemble.js");
 
 // All-active bit ids for the loadout. _bits_registry.js exports BITS (records
 // with a status field); active = not parked. require() at runtime (Node).
