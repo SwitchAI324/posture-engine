@@ -293,12 +293,22 @@ export function applyForceAll(state, utterance) {
 // Build the single mutable posture block injected after the cached prefix.
 export function postureBlock(state) {
   const s = { ...defaultState(), ...state };
+  // Resilient directive lookup: if the host-owned directiveFor import isn't
+  // available for any reason (deploy skew, edge bundling), fall back to a safe
+  // inline directive so a host turn NEVER throws and kills the call. The call
+  // surviving matters more than the exact directive wording on a bad deploy.
+  const safeDirective = (axis, pos) => {
+    try {
+      if (typeof directiveFor === "function") {
+        const d = directiveFor(axis, pos);
+        if (d) return d;
+      }
+    } catch (e) { /* fall through to inline */ }
+    return "Read the caller and respond naturally, in character.";
+  };
   const line = (axis) => {
     const pos = AXES[axis].states[s[axis]] ? s[axis] : AXES[axis].default;
-    // Directive TEXT comes from the host-owned _host_directives.js (content),
-    // not from the engine. The engine still owns WHICH state is active (pos);
-    // the host owns the WORDS for that state.
-    return `- ${axis} (${pos}): ${directiveFor(axis, pos)}`;
+    return `- ${axis} (${pos}): ${safeDirective(axis, pos)}`;
   };
   return (
     "CURRENT POSTURE — your read on the caller right now:\n" +
