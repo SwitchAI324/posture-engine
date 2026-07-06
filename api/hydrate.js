@@ -133,13 +133,18 @@ module.exports = async function handler(req, res) {
     // hydrate time, where host_name is in hand.
     const hostName = (cfg.host_name && String(cfg.host_name).trim()) || "Andrew";
     prefix = prefix.split("[HOST NAME]").join(hostName);
-    // Also collapse the dual-identity explainer to just the chosen name, so the
-    // model isn't told it could be either. Keep it simple + safe.
+    // Remove the ENTIRE dual-identity section (the "YOUR IDENTITY" header through
+    // the ANDREA description) and replace with a single clear line, so the model
+    // is never told it could be Andrew OR Andrea and never sees the name "Andrea"
+    // at all. The old regex stopped at the first "different voice." and left the
+    // ANDREW/ANDREA block intact — this removes the whole block.
     prefix = prefix.replace(
-      /Andrew and Andrea are two sides of the same coin[\s\S]*?different voice\./,
-      "You are " + hostName + " — warm, distracted, genuine; you remember the " +
-        "email thread."
+      /YOUR IDENTITY[\s\S]*?same energy, different voice\./,
+      "YOUR IDENTITY\nYou are " + hostName + " — warm, distracted, genuine, and " +
+        "you remember the email thread."
     );
+    // Safety net: if any stray "Andrea" survives (text drift), neutralize it.
+    prefix = prefix.split("Andrea").join(hostName);
 
     // Initial posture line so turn 1 has a value; the engine overwrites per turn.
     const initialPosture = posture.toUpperCase() + " — warm and forward.";
