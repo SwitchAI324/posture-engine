@@ -104,7 +104,11 @@ module.exports = async function handler(req, res) {
     const posture = process.env.SV_DEFAULT_POSTURE || "skald"; // neutral/warm
     const cfg = {
       posture,
-      bits: activeBitIds(),
+     // BITS: empty loadout in the prefix — the engine scores from the full
+      // registry at turn time and injects fired directives after the cache
+      // breakpoint, not from this loadout. Loading all bits here just bloats
+      // the cached prefix. Empty is correct.
+      bits: [],
       armedBench: [], // room starts empty; bench sent in live
       target: token.target_id || null,
       tactic: token.archetype || "universal",
