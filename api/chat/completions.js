@@ -16,7 +16,7 @@
 
 export const config = { runtime: "edge" };
 
-import { getCall, setCall, isConfigured, appendGearEvent, appendBitEvent, clearDeathBlow, getControls, stampArm, fireArm } from "../_store.js";
+import { getCall, getCallBySlug, setCall, isConfigured, appendGearEvent, appendBitEvent, clearDeathBlow, getControls, stampArm, fireArm } from "../_store.js";
 import { applyForceAll, postureBlock, defaultState, detectAccusation } from "../_gears.js";
 import { selectBit, rankBits, DEPLOY_THRESHOLD } from "../_bits.js";
 import { archetypeFromBody } from "../_archetype.js";
@@ -291,6 +291,24 @@ export default async function handler(req) {
     if (ctl) controls = ctl;
   } catch {
     stored = null;
+  }
+
+  // RACE FALLBACK: the pre-call hydrate writes the compiled prefix under a slug
+  // key ("slug:<slug>") before the Vapi call_id exists. If the call_id row is
+  // missing or has no prefix yet (first turn beat the call_id write), pull the
+  // slug-keyed prefix so the opener still runs the REAL compiled prompt instead
+  // of the flat Vapi fallback. Best-effort; never throws.
+  if (slug && (!stored || !stored.prefix)) {
+    try {
+      const bySlug = await getCallBySlug(slug);
+      if (bySlug && bySlug.prefix) {
+        // Keep any live per-call state we already have; just borrow the prefix
+        // (and posture line) from the slug row.
+        stored = stored
+          ? { ...stored, prefix: bySlug.prefix, postureLine: stored.postureLine || bySlug.postureLine }
+          : bySlug;
+      }
+    } catch { /* fall through to vapi fallback */ }
   }
 
   // CAPTURE the Vapi per-call monitor.controlUrl (handoff target). It rides on
