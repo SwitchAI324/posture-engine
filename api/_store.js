@@ -25,6 +25,18 @@ export function isConfigured() {
   return Boolean(URL && KEY);
 }
 
+// READ BY SLUG KEY — fallback for the pre-call hydrate. The hydrate can run
+// BEFORE the Vapi call_id exists, writing the prefix under call_id="slug:<slug>"
+// (a pseudo-key). When the real first turn arrives and its call_id row has no
+// prefix yet (the hydrate raced and lost, or hasn't been re-keyed), completions
+// reads this slug row instead. This removes the hydrate-vs-first-turn race:
+// the prefix is guaranteed present before the call starts, keyed by slug.
+// No schema change — same call_prefix table, a row whose call_id is "slug:...".
+export async function getCallBySlug(slug) {
+  if (!slug) return null;
+  return getCall("slug:" + slug);
+}
+
 // READ — the one sanctioned hot-path lookup (indexed PK, not an LLM call).
 // Returns { prefix, postureLine } or null (not found / not configured).
 export async function getCall(callId) {

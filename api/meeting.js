@@ -313,6 +313,11 @@ $("join").addEventListener("click", function(){
     .then(function(j){
       if(j.error){ note("Could not start: " + j.error, true); $("join").disabled = false; return; }
       var arch = j.archetype || "universal";
+      // PRE-CALL HYDRATE: build + store the compiled prefix under the slug key
+      // NOW, before vapi.start — so it's guaranteed present before the host's
+      // first turn (no race). completions reads the slug key if the call_id row
+      // isn't written yet. Fire-and-forget; the call_id hydrate below also runs.
+      fetch("/api/hydrate?slug=" + encodeURIComponent(slug), { method:"POST" }).catch(function(){});
       // Carry the target identifier into call metadata so the end-of-call-report
       // (api/vapi-eoc) can route the transcript to the right target in Scouting.
       var md = { archetype: arch, slug: slug };
@@ -409,11 +414,14 @@ $("join").addEventListener("click", function(){
           .then(function(call){
             var id = call && (call.id || call.callId);
             callId = id || null;
-if(id){
+            if(id){
               fetch("/api/join?slug=" + encodeURIComponent(slug) + "&call_id=" + encodeURIComponent(id), { method:"POST" }).catch(function(){});
               // HYDRATE the compiled prefix for this call. Without this,
               // call_prefix.prefix stays NULL and the host runs the Vapi
-              // fallback instead of the compiled HOST prompt/bits/bench.
+              // fallback instead of the compiled HOST prompt/bits/bench. Fire
+              // and forget — the first host turn reads the stored prefix; the
+              // hydrate races the ~arrival delay + first utterance and normally
+              // wins. Logged server-side either way.
               fetch("/api/hydrate?slug=" + encodeURIComponent(slug) + "&call_id=" + encodeURIComponent(id), { method:"POST" }).catch(function(){});
             }
           })

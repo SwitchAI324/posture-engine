@@ -77,16 +77,20 @@ async function writePrefix(callId, prefix, archetype, postureLine) {
 }
 
 module.exports = async function handler(req, res) {
-  // Accept POST /api/hydrate?slug=..&call_id=..
+  // Accept POST /api/hydrate?slug=..[&call_id=..]
+  // call_id is OPTIONAL: we ALWAYS write the prefix under a slug key
+  // ("slug:<slug>") so it exists BEFORE the Vapi call_id is known — this
+  // removes the hydrate-vs-first-turn race. If call_id is supplied we also
+  // write it there. completions reads call_id first, then the slug key.
   try {
     const url = new URL(req.url, "http://x");
     const slug = url.searchParams.get("slug");
     const callId =
       url.searchParams.get("call_id") ||
       url.searchParams.get("vapi_call_id");
-    if (!slug || !callId) {
+    if (!slug) {
       res.statusCode = 400;
-      return res.end(JSON.stringify({ error: "missing slug or call_id" }));
+      return res.end(JSON.stringify({ error: "missing slug" }));
     }
 
     const token = await readToken(slug);
@@ -135,17 +139,19 @@ module.exports = async function handler(req, res) {
     // Initial posture line so turn 1 has a value; the engine overwrites per turn.
     const initialPosture = posture.toUpperCase() + " — warm and forward.";
 
-    await writePrefix(callId, prefix, cfg.tactic, initialPosture);
+    // ALWAYS write the slug key (pre-call safe, removes the race). Also write
+    // the call_id row if we have it (the direct hit).
+    await writePrefix("slug:" + slug, prefix, cfg.tactic, initialPosture);
+    if (callId) {
+      await writePrefix(callId, prefix, cfg.tactic, initialPosture);
+    }
 
     console.log(
-      "hydrate OK call_id=" +
-        callId +
-        " slug=" +
+      "hydrate OK slug=" +
         slug +
+        (callId ? " call_id=" + callId : " (slug-key only)") +
         " posture=" +
         posture +
-        " bits=" +
-        cfg.bits.length +
         " hash=" +
         assembled.hash
     );
@@ -153,9 +159,9 @@ module.exports = async function handler(req, res) {
     return res.end(
       JSON.stringify({
         ok: true,
-        call_id: callId,
+        slug,
+        call_id: callId || null,
         posture,
-        bits: cfg.bits.length,
         hash: assembled.hash,
       })
     );
