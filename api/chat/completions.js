@@ -196,6 +196,123 @@ async function generateBenchLine(bench, messages) {
   }
 }
 
+// ASYNC CALL READER — the Stage-4 meaning-based read. Runs in waitUntil AFTER
+// the host's response streams out (zero added latency), judges the call from the
+// recent conversation, and writes the result for the NEXT turn to read. ONE LLM
+// call per turn returns phase + all three gears — so meaning-based reading costs
+// a single call, not one per signal.
+//
+// BLEND (not replace): the keyword layer (_gears_tells.js via applyForceAll) still
+// runs synchronously each turn for INSTANT reaction to obvious signals (an
+// explicit "are you a bot?" moves suspicion THIS turn). This async reader layers
+// on top for NUANCE the keywords miss (subtle disengagement, sincere pressure
+// with no trigger word), correcting the gear state a turn later. Keywords = fast
+// + obvious; async = accurate + subtle.
+//
+// Returns { phase, suspicion, pressure, engagement } with only LEGAL values, or
+// null on any failure (blend then just keeps the keyword state — safe).
+async function readCall(messages, prior) {
+  try {
+    const convo = messages
+      .slice(-8)
+      .map((m) => (m.role === "user" ? "Caller: " : "Host: ") + m.content)
+      .join("\n");
+    const p = prior || {};
+    const sys =
+      "You read a live sales/spam call and report the caller's state. The caller " +
+      "cold-contacted the host to sell something; the host is stalling them. " +
+      "Judge FOUR things from the caller's recent behavior, reading INTENT (not " +
+      "keywords). Reply as compact JSON only, no prose.\n\n" +
+      "phase — where the call is now:\n" +
+      "  opening (pleasantries, no pitch yet) | pitching (presenting their " +
+      "offer) | probing (pressing for a decision/commitment/payment/info) | " +
+      "drifting (wandered into chit-chat mid-call)\n" +
+      "suspicion — do they doubt the host is a real, normal person:\n" +
+      "  alive (no doubt) | slipping (getting suspicious/confused) | foregone " +
+      "(sure it's fake/a bot). NOTE: suspicion NEVER decreases below its prior " +
+      "level in this reply — only report slipping/foregone if AT LEAST the prior.\n" +
+      "pressure — how hard they push to close/extract:\n" +
+      "  calm | pushing (pressing the sale) | extracting (demanding info/payment/" +
+      "action now)\n" +
+      "engagement — how invested they are:\n" +
+      "  bored (disengaging) | hooked (engaged) | stunned (thrown/derailed by the " +
+      "host)\n\n" +
+      "SARCASM / CONTEMPT / MOCKERY (important — read the TONE, not the words): a " +
+      "caller who says 'oh this sounds GREAT' or 'wow, real professional' " +
+      "sarcastically is NOT engaged or complimenting — they are mocking, cooling, " +
+      "or testing the host. The literal words look positive; the INTENT is cold. " +
+      "When you detect sarcasm, mockery, or contempt aimed at the host, register " +
+      "it as a TEMPERATURE DROP in the gears: nudge engagement toward 'bored' " +
+      "(they're checking out / above it) and, if it reads as doubt or a test, " +
+      "suspicion toward 'slipping'. Do NOT be fooled by the positive surface " +
+      "words. This is exactly the signal keywords cannot catch and you can.\n\n" +
+      "Prior read: phase=" + (p.phase || "opening") + " suspicion=" +
+      (p.suspicion || "alive") + " pressure=" + (p.pressure || "calm") +
+      " engagement=" + (p.engagement || "hooked") + ". Only change a value if the " +
+      "recent turns clearly warrant it (avoid flip-flopping).\n" +
+      'Reply EXACTLY: {"phase":"..","suspicion":"..","pressure":"..","engagement":".."}';
+    const r = await fetch(ANTHROPIC_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": ANTHROPIC_VERSION,
+      },
+      body: JSON.stringify({
+        model: MODEL(),
+        max_tokens: 60,
+        system: sys,
+        messages: [{ role: "user", content: convo + "\n\nJSON:" }],
+      }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const txt = (j.content || []).map((c) => c.text || "").join("").trim();
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    let parsed;
+    try { parsed = JSON.parse(m[0]); } catch { return null; }
+    // Validate each field against legal values; drop anything illegal.
+    const legal = {
+      phase: ["opening", "pitching", "probing", "drifting"],
+      suspicion: ["alive", "slipping", "foregone"],
+      pressure: ["calm", "pushing", "extracting"],
+      engagement: ["bored", "hooked", "stunned"],
+    };
+    const out = {};
+    for (const k of Object.keys(legal)) {
+      const v = typeof parsed[k] === "string" ? parsed[k].toLowerCase().trim() : null;
+      if (v && legal[k].includes(v)) out[k] = v;
+    }
+    return Object.keys(out).length ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+// Merge the async read into the keyword-derived gear state, respecting the
+// engine's rules. Suspicion is ONE-WAY (never pull back from a higher keyword
+// suspicion, never un-foregone). Pressure/engagement are reversible, so the
+// async read can move them either direction. Phase is the async read's alone.
+function blendRead(keywordState, read) {
+  if (!read) return null; // nothing to persist beyond keyword state
+  const rank = { alive: 0, slipping: 1, foregone: 2 };
+  const out = {};
+  if (read.phase) out.phase = read.phase;
+  // suspicion: take the MORE suspicious of keyword vs async (one-way ratchet).
+  // IMPORTANT: suspicion is persisted under the store key "gear" (read back as
+  // stored.gear next turn), so we write out.gear — not out.suspicion.
+  if (read.suspicion) {
+    const kw = keywordState.suspicion || "alive";
+    out.gear = rank[read.suspicion] > rank[kw] ? read.suspicion : kw;
+  }
+  // pressure + engagement: async read wins (reversible, nuance-driven). These
+  // ARE stored under their own names.
+  if (read.pressure) out.pressure = read.pressure;
+  if (read.engagement) out.engagement = read.engagement;
+  return out;
+}
+
 // Bit injection tuning (starting values — tune from real calls / DEC-2).
 // In the flat-fit era (all bits universal, no archetype yet) scores cluster
 // low, so the bar is modest and the gap keeps Andrew from spamming beats.
@@ -734,6 +851,47 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     const lowEngagement = state.engagement === "bored" || state.engagement === "slipping";
     const extendedStall = lowEngagement && stallCount >= STALL_N;
 
+    // CALL PHASE — judged by the ASYNC phase reader (readPhase), NOT keywords.
+    // The reader ran in waitUntil on the PREVIOUS turn and wrote stored.phase,
+    // so THIS turn just reads it (zero latency). We then fire the reader again
+    // below (also in waitUntil) to update it for the NEXT turn. On turn 1 there's
+    // no prior judgment yet, so it defaults to "opening" until the reader lands.
+    // Phase is REVERSIBLE and multi-state (opening/pitching/probing/drifting) —
+    // the model re-judges from the real conversation each turn, reading intent
+    // rather than spotting single words.
+    const phase = (stored && stored.phase) || "opening";
+    // Fire the async CALL READER AFTER this turn (waitUntil = post-response, off
+    // the critical path, zero added latency). It judges phase + all three gears
+    // by MEANING, blends with this turn's keyword-derived gear state (keywords
+    // win on obvious/instant signals; the reader refines the nuance), and writes
+    // the result for the NEXT turn. Failures are swallowed — the next turn simply
+    // keeps the keyword state.
+    if (callId && isConfigured()) {
+      const priorRead = {
+        phase,
+        suspicion: state.suspicion,
+        pressure: state.pressure,
+        engagement: state.engagement,
+      };
+      waitUntil(
+        readCall(messages, priorRead)
+          .then((read) => {
+            const merged = blendRead(state, read);
+            if (merged && Object.keys(merged).length) {
+              return setCall(callId, merged).then(() => {
+                console.log(
+                  "callread phase=" + (merged.phase || phase) +
+                    " susp=" + (merged.gear || state.suspicion) +
+                    " press=" + (merged.pressure || state.pressure) +
+                    " eng=" + (merged.engagement || state.engagement)
+                );
+              });
+            }
+          })
+          .catch(() => {})
+      );
+    }
+
     const scorerState = {
       archetype,
       accusation,
@@ -751,6 +909,9 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       // EXTENDED_STALL: true when the call has been content-less/social too long.
       // A STREAK (counter), not a snapshot and not a clock — see below.
       extended_stall: extendedStall,
+      // CALL PHASE — "opening" (pre-pitch small talk) or "engaged" (business
+      // started). Soft bias in the scorer; latched above.
+      phase,
     };
     // LOADOUT then rank: selectBit narrows to the bits that fit this moment,
     // then ranks that focused set (not all 71). threshold:0 so we apply our own
