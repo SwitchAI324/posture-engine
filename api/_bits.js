@@ -35,6 +35,10 @@ export const WEIGHTS = {
   chain: 1.5, // SEQUENCING: reward a bit that escalates from the last one
   categorySpacing: 1.0, // SEQUENCING: penalize same category back-to-back
   recencyBase: 3.0,
+  phasePref: 1.5, // SOFT phase bias: a bit whose phase_pref matches the call
+                  // phase (opening/pitching/probing/drifting — judged by the
+                  // async phase reader) scores higher. Phase-neutral bits (no
+                  // phase_pref) are unaffected. Bias, not a gate.
 };
 
 // Mid-call deploy bar: a bit fires only if its top score clears this (it must
@@ -178,6 +182,14 @@ export function scoreBit(bit, state) {
   }
 
   const fitTotal = f.score + fuel.boost;
+  // PHASE bias (soft): if the bit declares a phase_pref ("opening" or "engaged")
+  // and it matches the call's current phase, give a small boost. Bits with no
+  // phase_pref are phase-neutral (unaffected). This makes small-talk/opening
+  // bits more likely before the pitch starts, without hard-gating anything.
+  let phaseBias = 0;
+  if (bit.phase_pref && state.phase && bit.phase_pref === state.phase) {
+    phaseBias = WEIGHTS.phasePref;
+  }
   // ARM (learning phase): a Director-armed bit gets an escalating boost — it
   // rises and crosses the bar sooner the longer it has waited, so even an
   // "unreasonable" bit eventually lands at a tolerable spot instead of never
@@ -185,7 +197,7 @@ export function scoreBit(bit, state) {
   const ARM_BASE = 3, ARM_STEP = 2;
   const armWaited = state.armed ? state.armed[bit.id] : undefined;
   const armBoost = armWaited != null ? ARM_BASE + ARM_STEP * armWaited : 0;
-  let score = fitTotal + g.bias - r.pen + intent + seq + armBoost;
+  let score = fitTotal + g.bias - r.pen + intent + seq + armBoost + phaseBias;
 
   // EXTENDED_STALL: when the call has gone content-less/social too long
   // (state.extended_stall, set by the engine off the turns_since_pitch_or_ask
@@ -206,12 +218,14 @@ export function scoreBit(bit, state) {
       sequence: seq || undefined,
       intensity: intent || undefined,
       armed: armBoost || undefined,
+      phase: phaseBias || undefined,
       stall: stallBoost ? +stallBoost.toFixed(2) : undefined,
       why: [...f.why,
             ...(fuel.boost ? [`fuel x${fuel.count} +${fuel.boost}`] : []),
             ...g.why, ...r.why, ...seqWhy,
             ...(intent ? [`intensity +${intent}`] : []),
             ...(armBoost ? [`armed (waited ${armWaited}) +${armBoost}`] : []),
+            ...(phaseBias ? [`phase:${bit.phase_pref} +${phaseBias}`] : []),
             ...(stallBoost ? [`extended_stall x${STALL_MULTIPLIER}`] : [])],
     },
   };

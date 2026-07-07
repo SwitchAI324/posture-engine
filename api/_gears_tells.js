@@ -1,22 +1,20 @@
 // SpamViking — Posture Engine: GEAR TELLS (recognition patterns)
 // ----------------------------------------------------------------------
-// Regex "tells" the FORCE-SET gear engine (_gears.js) runs over each caller
-// line to move gear states. Case-insensitive, phrase-favoring.
+// TRIMMED (Stage-4). Division of labor between the two gear layers:
 //
-// DESIGN: ARCHETYPE-AGNOSTIC. These key on the universal LANGUAGE OF PRESSURE,
-// HANDOVER, DISENGAGEMENT, and BEING THROWN — not on scam-specific nouns (card,
-// contract, credentials). The NOUN varies by archetype (a payment scam wants a
-// card, a legal one wants a signature, a SaaS one wants credentials); the
-// PHRASING of the pressure is the same across all of them ("send me", "I need
-// you to", "who signs off", "just confirm your ___"). We match the phrasing and
-// let the noun be anything. This works for archetypes we haven't enumerated.
+//   KEYWORD layer (this file, synchronous, THIS turn): kept ONLY for the SHARP,
+//   UNAMBIGUOUS, INSTANT-REACTION signals where same-turn response matters and
+//   the phrasing is explicit enough that regex nails it — i.e. SUSPICION
+//   (accusations / hard exits) and ACCUSATION typing. These must move the gear
+//   THIS turn so the host reacts to "are you a bot?" in its very next line.
 //
-// The gears drive the host's POSTURE, not a detailed classification — the host
-// fumbles/stalls the same way whether the caller wants a card or a signature,
-// so it only needs to know "the caller is pressing me to hand something over,"
-// not what the thing is.
+//   SEMANTIC layer (readCall in completions.js, async, NEXT turn): owns the
+//   GRADUAL signals — PRESSURE and ENGAGEMENT (and phase). These build over
+//   turns, so the reader's one-turn lag is invisible, and meaning-reading beats
+//   brittle archetype-specific keywords. So pressure/engagement keyword rules
+//   below are intentionally NO-OP stubs — the reader moves those axes.
 //
-// Fires on the CALLER's line only (a spammer / cold-caller / salesperson).
+// Case-insensitive, phrase-favoring. Fires on the CALLER's line only.
 // ----------------------------------------------------------------------
 export const TELLS = {
   // GEAR 1: SUSPICION — unchanged (already working).
@@ -27,33 +25,26 @@ export const TELLS = {
     soft: /\b(you sound (?:a (?:little|bit) )?(?:off|odd|strange|automated|robotic|scripted|weird|funny)|are you (?:even )?(?:real|there|listening))\b/i,
   },
 
-  // GEAR 2: PRESSURE — is the caller pushing to close / pulling something out?
+  // GEAR 2: PRESSURE — TRIMMED. Keyword rules are intentionally no-op now.
+  // The async meaning-reader (readCall) owns pressure: it reads INTENT across
+  // all archetypes, and pressure builds gradually so the reader's one-turn lag
+  // is invisible. Keywords were redundant + brittle here (archetype-specific
+  // nouns, false-fires like "no deal, I have insurance"). Kept as stubs so the
+  // axis structure is intact; the reader moves it.
   pressure: {
-    // EXTRACTING: pressing you to HAND OVER / DO the specific thing that closes
-    // their deal — whatever it is (info, signature, access, payment, a form,
-    // a decision NOW). Archetype-agnostic: keys on the handover PHRASING, not
-    // the noun. "give me / send me / read me / confirm your / provide the /
-    // go to / fill out / I need you to ___".
-    extracting: /\b((?:can you |could you |please |i (?:need|want) you to |just )?(?:give|send|read|provide|share|confirm|verify|enter|fill(?: out)?|submit|forward|hand over|pass (?:me |along )|get me|email me|text me)\b.{0,30}\b(?:me|your|the|it|that|this|over|details|info(?:rmation)?|number|code|form|link|access|now)|go to (?:this |the )?(?:website|link|url|page|site)|(?:click|open|download|install) (?:this|the|that)|what'?s your \w+|need (?:your|the) \w+ (?:number|details|info|code)|log ?in (?:to|with)|remote (?:access|session|support))\b/i,
-    // PUSHING: pressing toward the SALE / COMMITMENT / next step — wants a yes,
-    // a decision, a signer, a timeline. The "close the deal" pressure.
-    // Archetype-agnostic: "sign", "approve", "commit", "who decides", "move
-    // forward", "get started", "ready to ___", "budget", "when can we ___".
-    pushing: /\b(let'?s (?:get started|move forward|do this|close|proceed|move ahead|make it happen|get going|lock (?:this |it )?in)|can we (?:get started|move forward|proceed|close|finalize|move ahead|set (?:this|it) up)|are you ready to|ready to (?:sign|start|buy|commit|move|proceed|go|begin)|(?:go ahead and )?sign(?: up| off| the| this| today| now| here)?|approve (?:this|it|the|today|now)|who (?:signs off|approves|makes the (?:call|decision)|handles (?:the )?(?:budget|contract|purchasing|procurement)|(?:the )?decision(?:-| )?maker|do i (?:talk|speak) to)|(?:just )?need your (?:approval|sign|signature|decision|commitment|yes|go(?:-| )?ahead)|when can (?:we|you) (?:start|begin|close|meet|move)|(?:can|could) you commit|make (?:a|the) decision|move (?:this |it )?(?:forward|ahead)|what'?s your (?:budget|timeline|price range)|how (?:soon|quickly) can (?:we|you)|(?:let'?s )?get (?:the )?(?:paperwork|contract|agreement|deal) (?:going|started|signed|done))\b/i,
-    // CALM: neutral default; the axis sits at calm unless pushing/extracting
-    // fires. No matcher (default state).
+    extracting: /\bxxxneverxxx\b/i,
+    pushing: /\bxxxneverxxx\b/i,
     calm: /\bxxxneverxxx\b/i,
   },
 
-  // GEAR 3: ENGAGEMENT — how invested is the caller right now?
+  // GEAR 3: ENGAGEMENT — TRIMMED. Same reasoning as pressure. Engagement drifts
+  // gradually (bored/hooked/stunned build over turns), so the reader's one-turn
+  // lag doesn't matter, and meaning beats keywords for "is the caller checking
+  // out / genuinely thrown." The async reader owns this axis.
   engagement: {
-    // BORED: disengaging, flat, impatient, trying to wrap. Universal.
-    bored: /\b(uh ?huh|mm ?hmm|ok(?:ay)? sure|sure sure|yeah yeah|whatever|any(?:ways?)?|look,?|get to the point|(?:can we )?(?:speed|hurry|move) (?:this|it) (?:up|along)|i don'?t have (?:time|all day)|(?:i'?m|we'?re) (?:busy|in a hurry|pressed for time)|is (?:that|this) (?:it|all)|are we (?:done|finished|good)|so anyway|cut to the chase|wrap (?:this|it) up|(?:can you )?keep it (?:short|brief)|fine\.?|k\.?)\b/i,
-    // STUNNED: thrown off, derailed, confused by the host's absurdity. Trophy
-    // state — the host broke the caller's script. Universal.
-    stunned: /\b(wait,? what|what\?|huh\??|i'?m sorry\??|excuse me\??|hold on|hang on|come again|what does that have to do|i'?m (?:confused|lost)|what are you (?:talking about|on about|saying)|that'?s (?:weird|strange|unusual|odd|random|bizarre)|why (?:would|are|do) you|where did that come from|i don'?t (?:understand|follow|get it)|say that again|you lost me|what the|that came out of nowhere|how is that (?:relevant|related))\b/i,
-    // HOOKED: engaged, curious, playing along, reacting. Universal.
-    hooked: /\b(oh (?:interesting|nice|wow|really|cool|neat)|tell me more|(?:that'?s |how )interesting|really\?|go on|how does (?:that|it) work|what do you mean|tell me (?:about|more)|(?:that|this) sounds (?:good|great|interesting|nice)|i'?d (?:love|like) to|(?:ha){2,}|haha|lol|that'?s (?:funny|great|amazing|hilarious|wild)|no way|you'?re kidding|wait really|(?:that'?s |sounds )(?:cool|awesome))\b/i,
+    bored: /\bxxxneverxxx\b/i,
+    stunned: /\bxxxneverxxx\b/i,
+    hooked: /\bxxxneverxxx\b/i,
   },
 
   // ACCUSATION — tags the TYPE of accusation (used by suspicion + bit select).

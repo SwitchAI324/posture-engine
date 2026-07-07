@@ -58,6 +58,7 @@ export async function getCall(callId) {
     engagement: rows[0].engagement || "hooked",
  slip: rows[0].slip ?? 0, // suspicion slip accumulator (hysteresis)
     accuseFloor: rows[0].accuse_floor ?? 0, // STICKY: accusation ratchet floor
+    phase: rows[0].phase ?? "opening", // Stage-4 call phase (async read)
     arrivalState: rows[0].arrival_state ?? null, // v2 bench: in-progress arrival (jsonb)
     benchLog: rows[0].bench_log ?? [], // v2 bench: [{bench_id,arrived_turn}] for pacing/cap
     controlUrl: rows[0].control_url ?? null, // Vapi per-call monitor.controlUrl (for handoff)
@@ -74,7 +75,7 @@ export async function getCall(callId) {
 // posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, archetype, characterId }
+  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, phase, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, archetype, characterId }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -88,6 +89,7 @@ export async function setCall(
   if (pressure !== undefined) row.pressure = pressure;
   if (engagement !== undefined) row.engagement = engagement;
   if (slip !== undefined) row.slip = slip;
+  if (phase !== undefined) row.phase = phase; // Stage-4 call phase (async read)
   if (accuseFloor !== undefined) row.accuse_floor = accuseFloor;
   if (arrivalState !== undefined) row.arrival_state = arrivalState; // v2 bench (jsonb, nullable)
   if (benchLog !== undefined) row.bench_log = benchLog; // v2 bench arrival log (jsonb array)
