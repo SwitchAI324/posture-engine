@@ -16,10 +16,12 @@
 // Needs VAPI_PUBLIC_KEY (browser-safe) in env; assistant model.metadataSendMode
 // must NOT be "off" or the proxy won't see the archetype.
 //
-// HOST NAME: read off the token (the name the spammer emailed) and threaded
-// through every visible "Andrew" on the page + the call carrier, so a booking
-// made as Andrea reads as Andrea end to end. Falls back to "Andrew" only if the
-// token has no host_name.
+// HOST NAME: read off the booking token (the name the spammer emailed) and
+// threaded through the page, the call carrier (variableValues.sv_host_name),
+// AND the silence nudge prompts — so a booking made under any name reads as that
+// name end to end. "Andrew" appears ONLY as the pre-fetch placeholder in the
+// HTML; setHostName() overwrites it once join data arrives. Falls back to the
+// placeholder only if the token has no host_name.
 //
 // FAST-JOIN: a "today / next-available" booking minutes out (token.fast_join).
 // The host arrives at max(join+30s, slot-5min) — never sooner than 5 min before
@@ -380,13 +382,23 @@ $("join").addEventListener("click", function(){
       //    45s backstop is the graceful end after the nudges are exhausted.
       //  - startSpeakingPlan waits a beat after the caller stops before the host
       //    jumps in (so it doesn't talk over a slow talker).
-      // Tunable via env: SV_SILENCE_SECS (backstop), SV_NUDGE_SECS (per-nudge).
-      var SILENCE_SECS = parseInt((window.SV_SILENCE_SECS || "45"), 10); // backstop end
-      var NUDGE_SECS   = parseInt((window.SV_NUDGE_SECS   || "12"), 10); // per re-prompt
+      // SILENCE STEP FUNCTION (Call Design's design, implemented here).
+      // Two sequential timeout hooks: the first fires at 2s (up to 2x), the
+      // second at 4s (up to 2x), drifting toward wrapping up. Backstop ends the
+      // call at 60s total silence. NOTE: whether Vapi fires two same-event hooks
+      // in sequence (2s x2 THEN 4s x2) vs. only honoring one is UNCONFIRMED at
+      // the Vapi layer — the silent test call is the check. If it doesn't behave
+      // as a step function, this is where to revisit.
+      // The nudge fires on a TINY context (no compiled prefix), so the model
+      // won't know HOST's real name unless we put it here. Thread the token's
+      // host_name into the nudge prompt the same way we thread it into the page
+      // and the call carrier. Fall back to a nameless "the host" — never a
+      // hardcoded "Andrew".
+      var nudgeName = (j.host_name && String(j.host_name).trim()) || "the host";
       var overrides = {
         metadata: md,
         variableValues: vv,
-        silenceTimeoutSeconds: SILENCE_SECS,
+        silenceTimeoutSeconds: 60, // backstop: end the call after 60s of silence
         startSpeakingPlan: {
           waitSeconds: 0.6,          // small pause after caller stops before host speaks
           smartEndpointingEnabled: true
@@ -395,14 +407,28 @@ $("join").addEventListener("click", function(){
           {
             on: "customer.speech.timeout",
             options: {
-              timeoutSeconds: NUDGE_SECS,
-              triggerMaxCount: 3,
+              timeoutSeconds: 2,
+              triggerMaxCount: 2,
               triggerResetMode: "onUserSpeech"
             },
             do: [
               {
                 type: "say",
-                prompt: "The caller has gone quiet. Speak ONE short in-character line as Andrew to re-engage \u2014 distracted, low-energy, not a speech. Vary it from any earlier nudge; if this is a later nudge, drift slightly toward wrapping up."
+                prompt: "The caller went quiet. Say ONE short in-character line as " + nudgeName + " to re-engage \u2014 distracted, low-energy, not a speech. Vary it."
+              }
+            ]
+          },
+          {
+            on: "customer.speech.timeout",
+            options: {
+              timeoutSeconds: 4,
+              triggerMaxCount: 2,
+              triggerResetMode: "onUserSpeech"
+            },
+            do: [
+              {
+                type: "say",
+                prompt: "Caller still quiet, later in the silence. Say ONE short in-character line as " + nudgeName + ", drifting slightly toward wrapping up. Vary from earlier nudges."
               }
             ]
           }
