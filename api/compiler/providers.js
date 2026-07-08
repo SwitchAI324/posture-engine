@@ -1,11 +1,14 @@
 // SpamViking — Posture Engine: compile-input PROVIDERS
 // ----------------------------------------------------------------------
-// The four-document merge needs four inputs. THREE are now real:
-//   [1] HOST BASE   -> the real Master Host Prompt (inline below)
-//   [2] BIT LOADOUT -> reads ./bits.js (BIT-xxx -> directive prose)
-//   [3] reframed bench -> compile.js (in assemble.js)
-// The remaining stub is [4] CALL CONTEXT (Data/Product Logic) — still behind a
-// stable interface so it drops in without touching assemble.js when it ships.
+// The four-document merge needs four inputs. TWO are now real:
+//   [2] BIT LOADOUT  -> reads api/compiler/_bits_directives.js (BIT-xxx -> directive prose)
+//   [3] reframed bench -> compiler/compile.js (in assemble.js)
+// The other two — HOST BASE and CALL CONTEXT — are still STUBBED here behind a
+// stable interface, so when their threads ship compiled output they drop in
+// without touching assemble.js.
+//
+// HOST BASE and CALL CONTEXT bodies below are LOUD PLACEHOLDERS. Replace the
+// bodies, keep the signatures.
 // ----------------------------------------------------------------------
 const POSTURES = require("./postures.json");
 
@@ -15,9 +18,9 @@ const POSTURES = require("./postures.json");
 // skipped, never fatal: the call still runs, that bit just doesn't load.
 let BITS = {};
 try {
-  BITS = require("./bits.js");
+  BITS = require("./_bits_directives.js");
 } catch (e) {
-  // bits.js not present yet — loadout falls back to a visible notice rather
+  // _bits_directives.js not present yet — loadout falls back to a visible notice rather
   // than crashing the whole prefix assembly.
   BITS = {};
 }
@@ -189,7 +192,7 @@ function hostBaseFor(postureId) {
 }
 
 // [2] BIT LOADOUT — the armed bits as in-call directives, REAL now.
-// Reads each armed bit id's prose from bits.js. Ids are canonical BIT-xxx
+// Reads each armed bit id's prose from _bits_directives.js. Ids are canonical BIT-xxx
 // (matching bits_registry PKs and bit_deployments). Unknown/parked ids are
 // listed quietly at the end so a missing producer is visible but non-fatal.
 function loadoutFor(bitIds) {
@@ -215,9 +218,9 @@ function loadoutFor(bitIds) {
     out += "\n(none of the armed bits have a directive available)";
   }
   if (missing.length) {
-    // Visible but harmless: these ids had no entry in bits.js (parked, or a
+    // Visible but harmless: these ids had no entry in _bits_directives.js (parked, or a
     // bad id). They simply don't load; the call is unaffected.
-    out += `\n\n[unloaded bit ids (no directive in bits.js): ${missing.join(", ")}]`;
+    out += `\n\n[unloaded bit ids (no directive in _bits_directives.js): ${missing.join(", ")}]`;
   }
   return out;
 }
