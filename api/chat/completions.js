@@ -1334,6 +1334,8 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
       let finished = false;
       let appendSent = false;
       let hostText = "";
+      let headBuf = "";          // buffers stream head to scrub leading *action*/quote
+      let headReleased = false;  // true once the (scrubbed) head has been sent
       // utterance emitter: turn+0.5 so the host line sorts after this turn's
       // analysis events but before the next turn — no seq collision.
       const utterTrace =
@@ -1454,8 +1456,43 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
               p.type === "content_block_delta" &&
               p.delta?.type === "text_delta"
             ) {
-              if (p.delta.text) { hostText += p.delta.text; send({ content: p.delta.text }); }
+              if (p.delta.text) {
+                hostText += p.delta.text;
+                // LEAD SCRUB: the model sometimes prefixes a stage direction the
+                // TTS can't speak — "*slight pause, then warmth* Hey..." — or a
+                // wrapping quote. Buffer the head until we can strip a leading
+                // *...* action and/or opening quote, THEN release. After the head
+                // is released, stream normally (no per-delta cost).
+                if (!headReleased) {
+                  headBuf += p.delta.text;
+                  // Wait until we have a closing * for a leading action, or enough
+                  // chars to be sure there's no leading action, or a sentence end.
+                  const startsAction = /^\s*\*/.test(headBuf);
+                  const hasCloseStar = /^\s*\*[^*]*\*/.test(headBuf);
+                  if (startsAction && !hasCloseStar && headBuf.length < 200) {
+                    // still inside an unterminated leading *action* — keep buffering
+                  } else {
+                    let cleaned = headBuf
+                      .replace(/^\s*\*[^*]*\*\s*/, "")   // leading *stage direction*
+                      .replace(/^\s*["'“”]+\s*/, "");     // leading wrapping quote
+                    headReleased = true;
+                    if (cleaned) { if (!roleSent) { send({ role: "assistant" }); roleSent = true; } send({ content: cleaned }); }
+                  }
+                } else {
+                  send({ content: p.delta.text });
+                }
+              }
             } else if (p.type === "message_stop" || p.type === "error") {
+              // If the whole message was shorter than the head buffer threshold,
+              // release whatever we buffered (scrubbed) before finishing.
+              if (!headReleased && headBuf) {
+                let cleaned = headBuf
+                  .replace(/^\s*\*[^*]*\*\s*/, "")
+                  .replace(/^\s*["'“”]+\s*/, "")
+                  .replace(/\s*["'“”]+\s*$/, "");
+                headReleased = true;
+                if (cleaned) { if (!roleSent) { send({ role: "assistant" }); roleSent = true; } send({ content: cleaned }); }
+              }
               await finishUp();
               finished = true;
               break;
