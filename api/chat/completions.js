@@ -369,14 +369,22 @@ export default async function handler(req) {
   // The opener path (fastJoinOpener / turn===0 blocks below) already owns turn 0,
   // so it must NOT be treated as a silence nudge. The probe logs which case it
   // is so the one test can't confuse the two.
+  let isSilenceNudge = false; // hoisted: needed later to skip bit injection
   try {
     const lastUser = lastUserText(messages);
     const noFreshLine = !lastUser || !String(lastUser).trim();
     const priorCallerTurns = countUserTurns(messages);
     const isOpener = priorCallerTurns === 0;               // turn 0 = opener, NOT silence
-    const isSilenceNudge = noFreshLine && priorCallerTurns > 0; // mid-call, no new line
     const rawStr = JSON.stringify(body).slice(0, 1200);
+    // hookish: the say.prompt nudge text is present in the body — the RELIABLE
+    // signal that this turn was fired by the silence hook (not a real caller
+    // line). We check it BEFORE isSilenceNudge because the hook injects its own
+    // prompt as a user message, which makes noFreshLine=false and would
+    // otherwise hide the nudge. So: a hook-originated turn (turn>0) IS a silence
+    // nudge regardless of noFreshLine.
     const hookish = /timeout|silence|say\.prompt|re-?engage|gone quiet|hook/i.test(rawStr);
+    isSilenceNudge =
+      !isOpener && (hookish || noFreshLine); // mid-call hook OR genuinely no new line
     if (isSilenceNudge || hookish) {
       console.log("SILENCE_PROBE inbound: isSilenceNudge=" + isSilenceNudge +
         " hookish=" + hookish + " priorCallerTurns=" + priorCallerTurns +
@@ -922,7 +930,13 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     const poolSize = sel.pool;
     const gap = stored && stored.lastBitTurn != null ? turn - stored.lastBitTurn : 99;
     const bar = effectiveBar(turn);
-    let fire = !!(top && top.score >= bar && gap >= MIN_GAP);
+    // SILENCE NUDGE: on a hook-fired silence turn, do NOT inject a bit. The
+    // caller has gone quiet; this turn should be a short in-character re-engage
+    // line (driven by the hook's say.prompt), not a comedy beat. Gating fire
+    // here also blocks the starvation guard below (it only runs when !fire, but
+    // we belt-and-suspenders it too). The gear read still runs — silence is
+    // engagement data.
+    let fire = !isSilenceNudge && !!(top && top.score >= bar && gap >= MIN_GAP);
 
     // STARVATION GUARD: if the call has gone dry (no discrete bit for
     // STARVE_AFTER consecutive turns), the pacing has starved the comedy — drop
@@ -933,7 +947,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // Still respects warm-up (bar=Infinity early) and requires a real candidate.
     const STARVE_AFTER = parseInt(process.env.STARVE_AFTER || "4", 10);
     let starvationFired = false;
-    if (!fire && top && !accusation && turn > WARMUP_TURNS && gap >= STARVE_AFTER) {
+    if (!fire && !isSilenceNudge && top && !accusation && turn > WARMUP_TURNS && gap >= STARVE_AFTER) {
       // Bar is relaxed to the deploy threshold floor (not Infinity/warmup); the
       // top bit fires if it's a genuine candidate at all. Spacing is waived once.
       if (top.score >= DEPLOY_THRESHOLD) {
