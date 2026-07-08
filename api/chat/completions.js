@@ -18,7 +18,7 @@ export const config = { runtime: "edge" };
 
 import { getCall, getCallBySlug, setCall, isConfigured, appendGearEvent, appendBitEvent, clearDeathBlow, getControls, stampArm, fireArm } from "../_store.js";
 import { applyForceAll, postureBlock, defaultState, detectAccusation } from "../_gears.js";
-import { selectBit, rankBits, DEPLOY_THRESHOLD } from "../_bits.js";
+import { selectBit, rankBits, DEPLOY_THRESHOLD } from "../_bits_scorer.js";
 import { archetypeFromBody } from "../_archetype.js";
 import { readAmmunition } from "../_read.js";
 import { beginArrival, advanceArrival, generateBenchBeat, isPhantom, phantomInvokeDirective, autoArrivalId, benchEntry, BENCH } from "../_bench_v2.js";
