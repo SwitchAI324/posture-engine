@@ -409,11 +409,32 @@ export default async function handler(req) {
     body.call?.assistantOverrides?.variableValues ||
     body.assistantOverrides?.variableValues ||
     {};
+  // FIX B: the 2nd+ silence nudge arrives as a BARE body ({messages:[...]}) with
+  // NO call/metadata/variableValues — so none of the normal slug sources resolve,
+  // and the nudge would run on the flat shim instead of the real prefix. To fix,
+  // meeting.js embeds a [[sv_slug:<slug>]] tag at the front of the nudge prompt.
+  // Extract it here as a last-resort slug source. (The tag is stripped from the
+  // message before it reaches the model, below, so it's never spoken.)
+  let nudgeSlug = null;
+  try {
+    const lastMsg = messages && messages.length ? messages[messages.length - 1] : null;
+    const c = lastMsg && typeof lastMsg.content === "string" ? lastMsg.content : "";
+    const m = c.match(/\[\[sv_slug:([^\]]+)\]\]/);
+    if (m) nudgeSlug = m[1].trim();
+  } catch { /* ignore */ }
   const slug =
     body.call?.metadata?.slug ??
     body.metadata?.slug ??
     (vv.sv_slug || null) ??
+    nudgeSlug ??
     null;
+  // Strip the sv_slug tag from the message so it never reaches the model / TTS.
+  if (nudgeSlug && messages && messages.length) {
+    const last = messages[messages.length - 1];
+    if (last && typeof last.content === "string") {
+      last.content = last.content.replace(/\[\[sv_slug:[^\]]+\]\]\s*/, "");
+    }
+  }
   let stored = null;
   let ammo = { ammunition: [], byHook: {} };
   let controls = { deathBlow: null, armed: [], sentBench: null };
@@ -454,6 +475,10 @@ export default async function handler(req) {
   const controlUrl = body.call?.monitor?.controlUrl ?? null;
   if (controlUrl && callId && isConfigured() && (!stored || stored.controlUrl !== controlUrl)) {
     waitUntil(setCall(callId, { controlUrl }).catch(() => {}));
+    // Also stamp it on the SLUG row, so silence nudges (which load by slug, not
+    // callId — the bare nudge body has no call object) can read the controlUrl
+    // to POST say.exact lines over the control channel.
+    if (slug) waitUntil(setCall("slug:" + slug, { controlUrl }).catch(() => {}));
   }
 
   // ===== BENCH v2: STAGED ARRIVAL MACHINE ================================
