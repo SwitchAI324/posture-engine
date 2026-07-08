@@ -1324,6 +1324,14 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
       // tagged content delta, THEN finish. Guarantees the [[NAME]] marker
       // reaches Vapi/TTS regardless of what the model wrote.
       const finishUp = async () => {
+        // DIAGNOSTIC: log what PE is actually sending back to Vapi to be spoken.
+        // On a silence-nudge turn this reveals whether PE produced real speakable
+        // words (=> problem is Vapi not speaking them) or empty/non-speakable
+        // output (=> problem is PE's nudge generation). Preview only, truncated.
+        try {
+          const outPreview = String(hostText || "").replace(/\s+/g, " ").trim();
+          console.log("OUT len=" + outPreview.length + " text=" + JSON.stringify(outPreview.slice(0, 120)));
+        } catch { /* never break the stream */ }
         let benchTxt = null;
         if (appendText && !appendSent) {
           appendSent = true;
