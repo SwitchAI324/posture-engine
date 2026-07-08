@@ -500,7 +500,7 @@ export default async function handler(req) {
   // (a phantom is performed BY the host, not a separate bench call).
   if (benchPhantomInvoke) baseSystem = (baseSystem || "") + "\n\n" + benchPhantomInvoke;
   const built = baseSystem
-    ? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil)
+    ? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil, isSilenceNudge)
     : null;
   const systemBlocks = built ? built.blocks : null;
   const deathBlowFiring = built ? built.deathBlowFiring : false;
@@ -712,7 +712,7 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
   return { benchAppend, benchPhantomInvoke };
 }
 
-function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil) {
+function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil, isSilenceNudge) {
   ammo = ammo || { ammunition: [], byHook: {} };
   let deathBlowFiring = false; // set true on the turn a Death Blow lands
   const blocks = [
@@ -1504,7 +1504,7 @@ export async function runHostTurn({ messages, callId, meta }) {
   // Phantom send-in: fold invoke/dangle directive into the host's own prompt.
   if (benchPhantomInvoke) baseSystem = baseSystem + "\n\n" + benchPhantomInvoke;
 
-  const built = buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil);
+  const built = buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil, false);
   const systemBlocks = built ? built.blocks : null;
   const deathBlowFiring = built ? built.deathBlowFiring : false;
   const turn = countUserTurns(messages);
