@@ -383,8 +383,8 @@ $("join").addEventListener("click", function(){
       //  - startSpeakingPlan waits a beat after the caller stops before the host
       //    jumps in (so it doesn't talk over a slow talker).
       // SILENCE STEP FUNCTION (Call Design's design, implemented here).
-      // Two sequential timeout hooks: the first fires at 4s (up to 2x), the
-      // second at 8s (up to 2x), staying warm and patient. Backstop ends the
+      // Two sequential timeout hooks: the first fires at 5s (up to 2x), the
+      // second at 9s (up to 2x), staying warm and patient. Backstop ends the
       // call at 60s total silence. NOTE: whether Vapi fires two same-event hooks
       // in sequence (2s x2 THEN 4s x2) vs. only honoring one is UNCONFIRMED at
       // the Vapi layer — the silent test call is the check. If it doesn't behave
@@ -407,7 +407,7 @@ $("join").addEventListener("click", function(){
           {
             on: "customer.speech.timeout",
             options: {
-              timeoutSeconds: 4,
+              timeoutSeconds: 5,
               triggerMaxCount: 2,
               triggerResetMode: "onUserSpeech"
             },
@@ -421,7 +421,7 @@ $("join").addEventListener("click", function(){
           {
             on: "customer.speech.timeout",
             options: {
-              timeoutSeconds: 8,
+              timeoutSeconds: 9,
               triggerMaxCount: 2,
               triggerResetMode: "onUserSpeech"
             },
