@@ -414,7 +414,7 @@ $("join").addEventListener("click", function(){
             do: [
               {
                 type: "say",
-                prompt: "The caller went quiet. Say ONE short in-character line as " + nudgeName + " to re-engage \u2014 distracted, low-energy, not a speech. Output ONLY the spoken words \u2014 no quotation marks, no name label, no stage directions. Vary it."
+                prompt: "[[sv_slug:" + slug + "]] The caller went quiet. Say ONE short in-character line as " + nudgeName + " to re-engage \u2014 distracted, low-energy, not a speech. Output ONLY the spoken words \u2014 no quotation marks, no name label, no stage directions. Vary it."
               }
             ]
           },
@@ -428,7 +428,7 @@ $("join").addEventListener("click", function(){
             do: [
               {
                 type: "say",
-                prompt: "Caller still quiet, later in the silence. Say ONE short in-character line as " + nudgeName + ", drifting slightly toward wrapping up. Output ONLY the spoken words \u2014 no quotation marks, no name label, no stage directions. Vary from earlier nudges."
+                prompt: "[[sv_slug:" + slug + "]] Caller still quiet, later in the silence. Say ONE short in-character line as " + nudgeName + ", drifting slightly toward wrapping up. Output ONLY the spoken words \u2014 no quotation marks, no name label, no stage directions. Vary from earlier nudges."
               }
             ]
           }
