@@ -463,7 +463,14 @@ export default async function handler(req) {
         // Keep any live per-call state we already have; just borrow the prefix
         // (and posture line) from the slug row.
         stored = stored
-          ? { ...stored, prefix: bySlug.prefix, postureLine: stored.postureLine || bySlug.postureLine }
+          ? { ...stored,
+              prefix: bySlug.prefix,
+              postureLine: stored.postureLine || bySlug.postureLine,
+              // Carry controlUrl from the slug row — silence nudges need it for
+              // the say.exact control POST, and the bare nudge's own `stored`
+              // (if any) won't have it. Prefer an existing value, else the row's.
+              controlUrl: stored.controlUrl || bySlug.controlUrl,
+              archetype: stored.archetype || bySlug.archetype }
           : bySlug;
       }
     } catch { /* fall through to vapi fallback */ }
