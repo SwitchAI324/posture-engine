@@ -537,6 +537,64 @@ export default async function handler(req) {
   const systemBlocks = built ? built.blocks : null;
   const deathBlowFiring = built ? built.deathBlowFiring : false;
 
+  // ===== OPTION B (INDEPENDENT DRIVER) — SILENCE NUDGE say.exact =============
+  // On a silence nudge, Vapi's say.prompt hook opens the SSE stream but tears it
+  // down early — so the stream's finishUp NEVER runs, and a POST placed there
+  // never fires (proven live: no cache/OUT/NUDGE_FINISH lines on nudge turns).
+  // Fix: here, BEFORE returning the stream, do a SEPARATE non-streaming
+  // completion and POST the line to the control URL ourselves. This does not
+  // depend on the stream surviving. Fire-and-forget via waitUntil.
+  if (isSilenceNudge && stored && stored.controlUrl) {
+    const controlU = stored.controlUrl;
+    const sysForNudge = systemBlocks;
+    const drive = (async () => {
+      try {
+        const r = await fetch(ANTHROPIC_URL, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-api-key": process.env.ANTHROPIC_API_KEY,
+            "anthropic-version": ANTHROPIC_VERSION,
+          },
+          body: JSON.stringify({
+            model: MODEL(),
+            max_tokens: 120,
+            stream: false,               // non-streaming: we need the whole line
+            messages,
+            ...(sysForNudge ? { system: sysForNudge } : {}),
+          }),
+        });
+        const data = await r.json().catch(() => null);
+        let line = "";
+        if (data && Array.isArray(data.content)) {
+          line = data.content.filter(b => b && b.type === "text").map(b => b.text).join(" ");
+        }
+        line = String(line || "")
+          .replace(/\[\[[^\]]*\]\]/g, "")
+          .replace(/\*[^*\n]{0,60}\*/g, "")
+          .replace(/\[[^\]\n]{0,60}\]/g, "")
+          .replace(/^\s*["'“”]+|["'“”]+\s*$/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+        console.log("NUDGE_DRIVE genStatus=" + r.status + " lineLen=" + line.length + " line=" + JSON.stringify(line.slice(0, 80)));
+        if (line) {
+          const lastUserText2 = (messages && messages.length)
+            ? String(messages[messages.length - 1]?.content || "") : "";
+          const endAfter = /wrapping up|drifting/i.test(lastUserText2);
+          const pr = await fetch(controlU, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ type: "say", content: line, endCallAfterSpoken: endAfter }),
+          });
+          console.log("SAY_EXACT status=" + pr.status + " end=" + endAfter);
+        }
+      } catch (e) {
+        console.log("NUDGE_DRIVE failed: " + String(e && e.message));
+      }
+    })();
+    if (typeof waitUntil === "function") waitUntil(drive);
+  }
+
   const anthropicReq = {
     model: MODEL(),
     max_tokens: MAX_TOKENS(),
