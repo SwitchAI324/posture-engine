@@ -136,18 +136,64 @@ function fastJoinOpener(body, turn) {
         "appreciate you hopping on at short notice.\""
       : "Open by appreciating that they jumped on at such short notice.";
 
+  // ===== MESSY OPEN (Host Canon §7) — self-flub, TEXT ONLY ==================
+  // Gated by FLUB_OPEN (env "1" to enable). When on, pick a size tier via the
+  // FLUB_MIX knob and tell the host to ARRIVE MID-MESS on this first line, then
+  // recover into warmth. The Canon's §7 in the master prompt defines what each
+  // tier IS and how the recovery reads; here we only (a) switch it on and (b)
+  // pass the chosen tier label so the master-prompt §7 text knows the size.
+  // This is the SELF-FLUB (verbal) messy open — no audio clip, works on TTS now.
+  var flubOpen = "";
+  if (/^(1|true|yes|on)$/i.test(String(process.env.FLUB_OPEN || ""))) {
+    var tier = pickFlubTier(); // "medium" | "bigger" | "big"
+    flubOpen =
+      " MESSY OPEN — instead of a clean composed greeting, ARRIVE MID-MESS on " +
+      "this first line: you're caught already mid-fumble (talking to someone " +
+      "off-mic, wrangling a thing that just went wrong, half a sentence already " +
+      "in motion) and only now landing on the caller. Size of the mess this " +
+      "call: [" + tier + "] — follow the §7 tier guidance for that size. Let it " +
+      "resolve into warmth FAST — the mess is the entrance, not the whole line; " +
+      "you recover and greet them within a breath. Rotate hard; never the same " +
+      "mess twice. It stays self-directed chaos, never aimed at the caller.";
+  }
+
   return (
     "\n\nOPENER — this is your FIRST line of the call, and it's a fast-turnaround " +
     "booking they grabbed just now. You are " + name + ", an eager, slightly " +
     "self-important host who likes to keep the calendar full. " + timeCue + " " +
-    waitCue + " Keep it to one or two warm sentences, fully in character, then " +
-    "hand it to them. Do not mention scheduling software, slots, or the word " +
-    "\"fast-join\"."
+    waitCue + flubOpen + " Keep it to one or two warm sentences, fully in " +
+    "character, then hand it to them. Do not mention scheduling software, slots, " +
+    "or the word \"fast-join\"."
   );
 }
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
+
+// ===== FLUB_MIX KNOB (Host Canon §7 messy-open size ratio) =================
+// The messy-open has three size tiers: medium / bigger / big. Andrew tunes the
+// mix by flipping ONE env var — no prompt or code edit. FLUB_MIX is three
+// comma-separated weights [medium,bigger,big]; default leans big per the Canon.
+// pickFlubTier() does a weighted random per call and returns the tier label,
+// which the opener passes to the model so the Canon's tier text picks the size.
+const FLUB_MIX = () => {
+  const raw = String(process.env.FLUB_MIX || "20,30,50");
+  const parts = raw.split(",").map((n) => parseInt(n.trim(), 10));
+  const [m, b, big] = [parts[0], parts[1], parts[2]].map((n) =>
+    Number.isFinite(n) && n >= 0 ? n : 0
+  );
+  const total = m + b + big;
+  return total > 0 ? { medium: m, bigger: b, big: big } : { medium: 20, bigger: 30, big: 50 };
+};
+function pickFlubTier() {
+  const w = FLUB_MIX();
+  const total = w.medium + w.bigger + w.big;
+  let r = Math.random() * total;
+  if ((r -= w.medium) < 0) return "medium";
+  if ((r -= w.bigger) < 0) return "bigger";
+  return "big";
+}
+
 
 // Set ANTHROPIC_MODEL in Vercel to match (or beat) whatever the Vapi
 // assistant uses today. Haiku is the low-latency default for voice; bump
