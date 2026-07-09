@@ -407,7 +407,7 @@ $("join").addEventListener("click", function(){
           {
             on: "customer.speech.timeout",
             options: {
-              timeoutSeconds: 2,
+              timeoutSeconds: 4,
               triggerMaxCount: 2,
               triggerResetMode: "onUserSpeech"
             },
@@ -421,7 +421,7 @@ $("join").addEventListener("click", function(){
           {
             on: "customer.speech.timeout",
             options: {
-              timeoutSeconds: 4,
+              timeoutSeconds: 8,
               triggerMaxCount: 2,
               triggerResetMode: "onUserSpeech"
             },
