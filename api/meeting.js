@@ -407,20 +407,6 @@ $("join").addEventListener("click", function(){
           {
             on: "customer.speech.timeout",
             options: {
-              timeoutSeconds: 2,
-              triggerMaxCount: 2,
-              triggerResetMode: "onUserSpeech"
-            },
-            do: [
-              {
-                type: "say",
-                prompt: "[[sv_slug:" + slug + "]] The caller went quiet. Say ONE short in-character line as " + nudgeName + " to re-engage \u2014 distracted, low-energy, not a speech. Output ONLY the spoken words \u2014 no quotation marks, no name label, no stage directions. Vary it."
-              }
-            ]
-          },
-          {
-            on: "customer.speech.timeout",
-            options: {
               timeoutSeconds: 4,
               triggerMaxCount: 2,
               triggerResetMode: "onUserSpeech"
@@ -428,7 +414,21 @@ $("join").addEventListener("click", function(){
             do: [
               {
                 type: "say",
-                prompt: "[[sv_slug:" + slug + "]] Caller still quiet, later in the silence. Say ONE short in-character line as " + nudgeName + ", drifting slightly toward wrapping up. Output ONLY the spoken words \u2014 no quotation marks, no name label, no stage directions. Vary from earlier nudges."
+                prompt: "[[sv_slug:" + slug + "]] The caller's audio went quiet \u2014 assume a connection hiccup or they stepped away, never that they left you. Say ONE short, warm, in-character line as " + nudgeName + " checking the line is still connected \u2014 easy and unbothered, blame the connection not the person, the way you'd check on a friend whose call dropped. Not low-energy, not annoyed, not winding down. Output ONLY the spoken words \u2014 no quotation marks, no name label, no stage directions. Vary it."
+              }
+            ]
+          },
+          {
+            on: "customer.speech.timeout",
+            options: {
+              timeoutSeconds: 8,
+              triggerMaxCount: 2,
+              triggerResetMode: "onUserSpeech"
+            },
+            do: [
+              {
+                type: "say",
+                prompt: "[[sv_slug:" + slug + "]] Still quiet on their end. Say ONE short, warm, in-character line as " + nudgeName + " \u2014 still patient and happy to wait, assume they're about to come back, maybe a light easy aside so it doesn't feel like pressure. Do NOT wind down, do NOT say you'll let them go, do NOT wrap up \u2014 you'd gladly keep talking. Output ONLY the spoken words \u2014 no quotation marks, no name label, no stage directions. Vary from earlier nudges."
               }
             ]
           }
