@@ -390,6 +390,18 @@ export default async function handler(req) {
         " hookish=" + hookish + " priorCallerTurns=" + priorCallerTurns +
         " isOpener=" + isOpener + " body=" + rawStr);
     }
+    // RESUME DIAGNOSTIC: log the shape of any turn that reads as the opener
+    // (priorCallerTurns===0) but is NOT hook-originated — this is the post-nudge
+    // "resume" turn we suspect is falsely re-greeting. One line tells us whether
+    // Vapi really sends an empty message[] after nudges (=> opened-flag fix) or
+    // something else.
+    if (isOpener && !hookish) {
+      try {
+        const roles = (messages || []).map(m => m && m.role).join(",");
+        console.log("RESUME_CHECK priorCallerTurns=0 isOpener=true msgCount=" +
+          (messages ? messages.length : 0) + " roles=[" + roles + "]");
+      } catch { /* never break */ }
+    }
   } catch (e) { /* probe must never break a turn */ }
 
   // BENCH: decide if a character barges in THIS turn. If so, the engine appends
