@@ -1365,6 +1365,17 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
           const outPreview = String(hostText || "").replace(/\s+/g, " ").trim();
           console.log("OUT len=" + outPreview.length + " text=" + JSON.stringify(outPreview.slice(0, 120)));
         } catch { /* never break the stream */ }
+        // LOUD DIAGNOSTIC: on a nudge, print the exact state of every link in the
+        // Option B chain, so ONE call reveals which one is broken. Unconditional.
+        if (isSilenceNudge) {
+          try {
+            console.log("NUDGE_FINISH isSilence=" + isSilenceNudge +
+              " hasStored=" + (!!stored) +
+              " hasControlUrl=" + (!!(stored && stored.controlUrl)) +
+              " controlUrl=" + JSON.stringify((stored && stored.controlUrl) ? String(stored.controlUrl).slice(0, 60) : null) +
+              " hostTextLen=" + String(hostText || "").length);
+          } catch (e) { console.log("NUDGE_FINISH diag error: " + String(e && e.message)); }
+        }
         // ===== OPTION B: CONTROL-CHANNEL say.exact FOR SILENCE NUDGES =========
         // Vapi's say.prompt hook does NOT voice our custom-LLM completion (proven
         // live: intro via the normal path is heard; nudge via say.prompt is not).
