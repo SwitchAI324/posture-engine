@@ -1334,8 +1334,7 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
       let finished = false;
       let appendSent = false;
       let hostText = "";
-      let headBuf = "";          // buffers stream head to scrub leading *action*/quote
-      let headReleased = false;  // true once the (scrubbed) head has been sent
+      let firstDeltaSeen = false; // for the first-delta stage-direction/quote scrub
       // utterance emitter: turn+0.5 so the host line sorts after this turn's
       // analysis events but before the next turn — no seq collision.
       const utterTrace =
@@ -1359,6 +1358,41 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
           const outPreview = String(hostText || "").replace(/\s+/g, " ").trim();
           console.log("OUT len=" + outPreview.length + " text=" + JSON.stringify(outPreview.slice(0, 120)));
         } catch { /* never break the stream */ }
+        // ===== OPTION B: CONTROL-CHANNEL say.exact FOR SILENCE NUDGES =========
+        // Vapi's say.prompt hook does NOT voice our custom-LLM completion (proven
+        // live: intro via the normal path is heard; nudge via say.prompt is not).
+        // So on a silence nudge we POST the generated line to the per-call
+        // monitor.controlUrl as {type:"say", content:<line>} — which IS voiced
+        // (proven via /api/saytest). The stored controlUrl was stamped on the
+        // slug row on turn 1; the nudge loads `stored` by slug (Fix B), so it's
+        // available here. endOnLast lets the FINAL nudge hang up after speaking.
+        if (isSilenceNudge && stored && stored.controlUrl) {
+          try {
+            let line = String(hostText || "")
+              .replace(/\[\[[^\]]*\]\]/g, "")        // strip sv_slug tag
+              .replace(/\*[^*\n]{0,60}\*/g, "")      // strip *stage directions*
+              .replace(/\[[^\]\n]{0,60}\]/g, "")      // strip [tags]
+              .replace(/^\s*["'“”]+|["'“”]+\s*$/g, "") // strip wrapping quotes
+              .replace(/\s+/g, " ")
+              .trim();
+            if (line) {
+              // Is this the LAST nudge? The 2nd hook prompt says "drifting toward
+              // wrapping up" — use that as the signal to end the call after it
+              // speaks. Best-effort detection from the inbound nudge prompt.
+              const lastUserText2 = (messages && messages.length)
+                ? String(messages[messages.length - 1]?.content || "") : "";
+              const endAfter = /wrapping up|drifting/i.test(lastUserText2);
+              const payload = { type: "say", content: line, endCallAfterSpoken: endAfter };
+              const post = fetch(stored.controlUrl, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(payload),
+              }).then(r => console.log("SAY_EXACT status=" + r.status + " end=" + endAfter + " line=" + JSON.stringify(line.slice(0, 80))))
+                .catch(e => console.log("SAY_EXACT FAILED: " + String(e && e.message)));
+              if (typeof waitUntil === "function") waitUntil(post); else await post;
+            }
+          } catch (e) { console.log("SAY_EXACT block error: " + String(e && e.message)); }
+        }
         let benchTxt = null;
         if (appendText && !appendSent) {
           appendSent = true;
@@ -1457,42 +1491,23 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
               p.delta?.type === "text_delta"
             ) {
               if (p.delta.text) {
-                hostText += p.delta.text;
-                // LEAD SCRUB: the model sometimes prefixes a stage direction the
-                // TTS can't speak — "*slight pause, then warmth* Hey..." — or a
-                // wrapping quote. Buffer the head until we can strip a leading
-                // *...* action and/or opening quote, THEN release. After the head
-                // is released, stream normally (no per-delta cost).
-                if (!headReleased) {
-                  headBuf += p.delta.text;
-                  // Wait until we have a closing * for a leading action, or enough
-                  // chars to be sure there's no leading action, or a sentence end.
-                  const startsAction = /^\s*\*/.test(headBuf);
-                  const hasCloseStar = /^\s*\*[^*]*\*/.test(headBuf);
-                  if (startsAction && !hasCloseStar && headBuf.length < 200) {
-                    // still inside an unterminated leading *action* — keep buffering
-                  } else {
-                    let cleaned = headBuf
-                      .replace(/^\s*\*[^*]*\*\s*/, "")   // leading *stage direction*
-                      .replace(/^\s*["'“”]+\s*/, "");     // leading wrapping quote
-                    headReleased = true;
-                    if (cleaned) { if (!roleSent) { send({ role: "assistant" }); roleSent = true; } send({ content: cleaned }); }
-                  }
-                } else {
-                  send({ content: p.delta.text });
+                let t = p.delta.text;
+                // STAGE-DIRECTION SCRUB (stream-safe, no buffering):
+                // (a) strip any COMPLETE *action* or [tag] pair inside this delta —
+                //     the TTS (Flash v2.5) reads BOTH "*laughs a little*" and
+                //     "[sneezes]" aloud, so remove both. Only complete pairs within
+                //     one delta are touched (no cross-delta state).
+                t = t.replace(/\*[^*\n]{0,60}\*/g, "").replace(/\[[^\]\n]{0,60}\]/g, "");
+                // (b) on the FIRST delta only, also strip a leading wrapping quote
+                //     or a leading (possibly unpaired-in-delta) action/tag opener.
+                if (!firstDeltaSeen) {
+                  firstDeltaSeen = true;
+                  t = t.replace(/^\s*\*[^*\n]*\*?\s*/, "").replace(/^\s*\[[^\]\n]*\]?\s*/, "").replace(/^\s*["'“”]+\s*/, "");
                 }
+                hostText += p.delta.text;
+                if (t) send({ content: t });
               }
             } else if (p.type === "message_stop" || p.type === "error") {
-              // If the whole message was shorter than the head buffer threshold,
-              // release whatever we buffered (scrubbed) before finishing.
-              if (!headReleased && headBuf) {
-                let cleaned = headBuf
-                  .replace(/^\s*\*[^*]*\*\s*/, "")
-                  .replace(/^\s*["'“”]+\s*/, "")
-                  .replace(/\s*["'“”]+\s*$/, "");
-                headReleased = true;
-                if (cleaned) { if (!roleSent) { send({ role: "assistant" }); roleSent = true; } send({ content: cleaned }); }
-              }
               await finishUp();
               finished = true;
               break;
