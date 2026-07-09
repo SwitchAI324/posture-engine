@@ -10,7 +10,7 @@
 // Hear nothing -> read the JSON: it says whether the POST was egress-blocked,
 // errored, or returned 200-but-silent. Surfaces the unknown for ~30 lines.
 
-import { getCallBySlug } from "../_store.js";
+import { getCallBySlug } from "./_store.js";
 
 export default async function handler(req) {
   const url = new URL(req.url);
