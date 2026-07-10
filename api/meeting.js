@@ -41,12 +41,12 @@ const ASSISTANT_ID =
   process.env.VAPI_ASSISTANT_ID || "c8917a9c-dee6-4044-bf20-39212d63937d";
 
 export default async function handler() {
-  return new Response(PAGE(PUBLIC_KEY, ASSISTANT_ID, envBool("TEST_MODE", false), envBool("SILENCE_NUDGE", false)), {
+  return new Response(PAGE(PUBLIC_KEY, ASSISTANT_ID, envBool("TEST_MODE", false), envBool("SILENCE_NUDGE", false), envBool("SNEEZE_SPIKE", false)), {
     headers: { "content-type": "text/html; charset=utf-8" },
   });
 }
 
-function PAGE(pub, asst, testMode, silenceNudge) {
+function PAGE(pub, asst, testMode, silenceNudge, sneezeSpike) {
   return `<!doctype html><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SpamViking Meeting</title>
@@ -178,6 +178,7 @@ var PUB = ${JSON.stringify(pub)};
 var ASST = ${JSON.stringify(asst)};
 var TEST_MODE = ${testMode ? "true" : "false"};
 var SILENCE_NUDGE = ${silenceNudge ? "true" : "false"};
+var SNEEZE_SPIKE = ${sneezeSpike ? "true" : "false"};
 // Effective test flag: server env TEST_MODE OR ?test=1 on the URL. The URL form
 // lets testers always reach a days-out proving call without depending on the
 // env var being set + redeployed. Production links carry neither, so both gates
@@ -476,6 +477,68 @@ $("muteCtrl").addEventListener("click", function(){
 $("camCtrl").addEventListener("click", function(){ toast("The host has turned video off for this meeting."); });
 $("partCtrl").addEventListener("click", function(){ toast("In this meeting: the host and you."); });
 $("leaveCtrl").addEventListener("click", function(){ if(vapi) vapi.stop(); });
+
+// ===== SNEEZE SPIKE — inject a pre-rendered clip into the outbound audio ======
+// Proof-of-concept per the greenlit spike. Mixes a decoded clip with the live
+// mic into one MediaStreamDestination track, then swaps that mixed track into
+// the Daily call via setInputDevicesAsync (confirmed present on window.__svVapi
+// .call). A hidden test button (#sneezeBtn) triggers it. Gated by SNEEZE_SPIKE.
+// This is a SPIKE: one clip, manual trigger, success = the other end hears it.
+var svAudioCtx = null, svMicStream = null, svClipBuf = null, svMixDest = null;
+
+async function svLoadClip(url){
+  if (svClipBuf) return svClipBuf;
+  var resp = await fetch(url);
+  var arr = await resp.arrayBuffer();
+  svClipBuf = await svAudioCtx.decodeAudioData(arr);
+  return svClipBuf;
+}
+
+async function svEnsureMixedInput(){
+  // Build (once) an AudioContext graph: mic source + (later) clip -> mixDest.
+  // Swap the call's input to mixDest's track so BOTH mic and clip transmit.
+  if (svMixDest) return svMixDest;
+  var call = window.__svVapi && window.__svVapi.call;
+  if (!call) throw new Error("no Daily call object");
+  // AudioContext at 16kHz to match Vapi's expected sample rate.
+  svAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+  // Fresh mic WITHOUT echoCancellation/noiseSuppression/AGC — those crush a clip.
+  svMicStream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+  });
+  var micSrc = svAudioCtx.createMediaStreamSource(svMicStream);
+  svMixDest = svAudioCtx.createMediaStreamDestination();
+  micSrc.connect(svMixDest);           // mic -> mix (host still hears the caller)
+  var mixedTrack = svMixDest.stream.getAudioTracks()[0];
+  // Hand the mixed track to Daily as the microphone input.
+  await call.setInputDevicesAsync({ audioSource: mixedTrack });
+  console.log("SNEEZE_SPIKE: mixed input installed");
+  return svMixDest;
+}
+
+async function svPlaySneeze(url){
+  try {
+    await svEnsureMixedInput();
+    var buf = await svLoadClip(url);
+    var node = svAudioCtx.createBufferSource();
+    node.buffer = buf;
+    node.connect(svMixDest);           // clip -> mix -> transmitted to the call
+    node.start();
+    console.log("SNEEZE_SPIKE: clip playing (" + buf.duration.toFixed(2) + "s)");
+  } catch(e){
+    console.log("SNEEZE_SPIKE failed: " + (e && e.message));
+  }
+}
+
+if (SNEEZE_SPIKE) {
+  var sb = document.createElement("button");
+  sb.id = "sneezeBtn";
+  sb.textContent = "🤧 test sneeze";
+  sb.style.cssText = "position:fixed;bottom:12px;right:12px;z-index:9999;padding:8px 12px;";
+  sb.addEventListener("click", function(){ svPlaySneeze(${JSON.stringify("/sneeze.mp3")}); });
+  document.body.appendChild(sb);
+}
+
 </script>`;
 }
 
