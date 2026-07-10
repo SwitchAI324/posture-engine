@@ -41,12 +41,12 @@ const ASSISTANT_ID =
   process.env.VAPI_ASSISTANT_ID || "c8917a9c-dee6-4044-bf20-39212d63937d";
 
 export default async function handler() {
-  return new Response(PAGE(PUBLIC_KEY, ASSISTANT_ID, envBool("TEST_MODE", false)), {
+  return new Response(PAGE(PUBLIC_KEY, ASSISTANT_ID, envBool("TEST_MODE", false), envBool("SILENCE_NUDGE", false)), {
     headers: { "content-type": "text/html; charset=utf-8" },
   });
 }
 
-function PAGE(pub, asst, testMode) {
+function PAGE(pub, asst, testMode, silenceNudge) {
   return `<!doctype html><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SpamViking Meeting</title>
@@ -177,6 +177,7 @@ import Vapi from "https://esm.sh/@vapi-ai/web";
 var PUB = ${JSON.stringify(pub)};
 var ASST = ${JSON.stringify(asst)};
 var TEST_MODE = ${testMode ? "true" : "false"};
+var SILENCE_NUDGE = ${silenceNudge ? "true" : "false"};
 // Effective test flag: server env TEST_MODE OR ?test=1 on the URL. The URL form
 // lets testers always reach a days-out proving call without depending on the
 // env var being set + redeployed. Production links carry neither, so both gates
@@ -274,7 +275,7 @@ function earlyGate(){
 }
 if(slug){ ensureJoin().then(earlyGate).catch(function(){}); }
 
-try { vapi = new Vapi(PUB); } catch(e){ note("Could not load the meeting: " + e, true); }
+try { vapi = new Vapi(PUB); window.__svVapi = vapi; } catch(e){ note("Could not load the meeting: " + e, true); }
 
 if(vapi){
   vapi.on("call-start", function(){
@@ -402,8 +403,17 @@ $("join").addEventListener("click", function(){
         startSpeakingPlan: {
           waitSeconds: 0.6,          // small pause after caller stops before host speaks
           smartEndpointingEnabled: true
-        },
-        hooks: [
+        }
+      };
+
+      // ===== SILENCE NUDGE KILL SWITCH =======================================
+      // The silence re-engage nudges only attach when SILENCE_NUDGE env is on.
+      // OFF (unset/0) = NO timeout hooks are sent -> no silence probes fire at
+      // all, and the host simply waits quietly (the 60s backstop still ends a
+      // truly dead call). Flip SILENCE_NUDGE=1 in Vercel to turn nudges back on.
+      // SILENCE_NUDGE is interpolated into this script by PAGE() from server env.
+      if (SILENCE_NUDGE) {
+        overrides.hooks = [
           {
             on: "customer.speech.timeout",
             options: {
@@ -432,8 +442,8 @@ $("join").addEventListener("click", function(){
               }
             ]
           }
-        ]
-      };
+        ];
+      }
 
       setTimeout(function(){
         vapi.start(ASST, overrides)
