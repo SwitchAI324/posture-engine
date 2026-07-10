@@ -510,9 +510,10 @@ async function svEnsureMixedInput(){
   svMixDest = svAudioCtx.createMediaStreamDestination();
   micSrc.connect(svMixDest);           // mic -> mix (host still hears the caller)
   var mixedTrack = svMixDest.stream.getAudioTracks()[0];
+  window.__svMixTrackId = mixedTrack && mixedTrack.id;
   // Hand the mixed track to Daily as the microphone input.
   await call.setInputDevicesAsync({ audioSource: mixedTrack });
-  console.log("SNEEZE_SPIKE: mixed input installed");
+  console.log("SNEEZE_SPIKE: mixed input installed (mix track " + window.__svMixTrackId + ")");
   return svMixDest;
 }
 
