@@ -1458,6 +1458,7 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
       let appendSent = false;
       let hostText = "";
       let firstDeltaSeen = false; // for the first-delta stage-direction/quote scrub
+      let svScrubBuf = "";        // holds partial *action*/[tag] across deltas
       // utterance emitter: turn+0.5 so the host line sorts after this turn's
       // analysis events but before the next turn — no seq collision.
       const utterTrace =
@@ -1625,23 +1626,50 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
               p.delta?.type === "text_delta"
             ) {
               if (p.delta.text) {
-                let t = p.delta.text;
-                // STAGE-DIRECTION SCRUB (stream-safe, no buffering):
-                // (a) strip any COMPLETE *action* or [tag] pair inside this delta —
-                //     the TTS (Flash v2.5) reads BOTH "*laughs a little*" and
-                //     "[sneezes]" aloud, so remove both. Only complete pairs within
-                //     one delta are touched (no cross-delta state).
-                t = t.replace(/\*[^*\n]{0,60}\*/g, "").replace(/\[[^\]\n]{0,60}\]/g, "");
-                // (b) on the FIRST delta only, also strip a leading wrapping quote
-                //     or a leading (possibly unpaired-in-delta) action/tag opener.
-                if (!firstDeltaSeen) {
-                  firstDeltaSeen = true;
-                  t = t.replace(/^\s*\*[^*\n]*\*?\s*/, "").replace(/^\s*\[[^\]\n]*\]?\s*/, "").replace(/^\s*["'“”]+\s*/, "");
-                }
                 hostText += p.delta.text;
-                if (t) send({ content: t });
+                // STAGE-DIRECTION SCRUB (stream-safe, WITH minimal buffering):
+                // Flash reads BOTH "*action*" and "[tag]" aloud. A pair can be
+                // SPLIT across deltas (e.g. "*[I " ... "present]*"), so a purely
+                // per-delta regex misses it and it leaks to TTS. Fix: accumulate
+                // into svScrubBuf, strip all COMPLETE pairs, and only emit up to
+                // the last point with no OPEN "*" or "[" still pending; hold the
+                // rest until the closer arrives (or the stream ends / flushes).
+                svScrubBuf += p.delta.text;
+                svScrubBuf = svScrubBuf
+                  .replace(/\*[^*\n]{0,80}\*/g, "")
+                  .replace(/\[[^\]\n]{0,80}\]/g, "");
+                // Find the earliest still-open action/tag marker; hold from there.
+                var openStar = svScrubBuf.indexOf("*");
+                var openBrk = svScrubBuf.indexOf("[");
+                var holdAt = -1;
+                if (openStar >= 0) holdAt = openStar;
+                if (openBrk >= 0 && (holdAt < 0 || openBrk < holdAt)) holdAt = openBrk;
+                var emit;
+                if (holdAt >= 0) { emit = svScrubBuf.slice(0, holdAt); svScrubBuf = svScrubBuf.slice(holdAt); }
+                else { emit = svScrubBuf; svScrubBuf = ""; }
+                // First emitted chunk: also strip a leading wrapping quote.
+                if (!firstDeltaSeen && emit) {
+                  firstDeltaSeen = true;
+                  emit = emit.replace(/^\s*["'“”]+\s*/, "");
+                }
+                if (emit) send({ content: emit });
               }
             } else if (p.type === "message_stop" || p.type === "error") {
+              // Flush any held buffer. If it still contains an UNCLOSED action/
+              // tag opener (a "*" or "[" with no closer), drop from that point —
+              // an unterminated stage direction should never reach TTS.
+              if (svScrubBuf) {
+                var flush = svScrubBuf
+                  .replace(/\*[^*\n]{0,80}\*/g, "")
+                  .replace(/\[[^\]\n]{0,80}\]/g, "");
+                var os = flush.indexOf("*"), ob = flush.indexOf("[");
+                var cut = -1;
+                if (os >= 0) cut = os;
+                if (ob >= 0 && (cut < 0 || ob < cut)) cut = ob;
+                if (cut >= 0) flush = flush.slice(0, cut);
+                if (flush) send({ content: flush });
+                svScrubBuf = "";
+              }
               await finishUp();
               finished = true;
               break;
