@@ -578,6 +578,64 @@ async function svClipOnlyTest(url){
 }
 window.svClipOnlyTest = svClipOnlyTest;
 
+// REPLACETRACK SPIKE — the last untried Vapi-native lever. Operates BELOW the
+// device layer: reach the RTCRtpSender on the underlying peer connection and
+// replaceTrack() with a clip-only track. If the far end hears THIS (when
+// setInputDevicesAsync failed), the sender layer is controllable and sound
+// unlocks on Vapi. If silent too -> Daily-direct confirmed. Auto-restores.
+function svFindAudioSender(){
+  // Daily hides the RTCPeerConnection; hunt common internal locations.
+  var call = window.__svVapi && window.__svVapi.call;
+  var pcs = [];
+  var scan = function(obj, depth){
+    if (!obj || depth > 4 || typeof obj !== "object") return;
+    for (var k in obj){
+      var val;
+      try { val = obj[k]; } catch(e){ continue; }
+      if (val instanceof RTCPeerConnection){ pcs.push(val); continue; }
+      if (val && typeof val === "object" && depth < 4){
+        try { scan(val, depth + 1); } catch(e){}
+      }
+    }
+  };
+  try { scan(call, 0); } catch(e){}
+  // also try window-level daily internals
+  try { scan(window.__svVapi, 0); } catch(e){}
+  for (var i = 0; i < pcs.length; i++){
+    var senders = pcs[i].getSenders ? pcs[i].getSenders() : [];
+    for (var j = 0; j < senders.length; j++){
+      if (senders[j].track && senders[j].track.kind === "audio") {
+        console.log("REPLACETRACK: found audio sender on PC #" + i);
+        return senders[j];
+      }
+    }
+  }
+  return null;
+}
+
+async function svReplaceTrackTest(url){
+  try {
+    var sender = svFindAudioSender();
+    if (!sender) { console.log("REPLACETRACK: no audio RTCRtpSender found — Daily PC not reachable this way"); return; }
+    var origTrack = sender.track;
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === "suspended") await ctx.resume();
+    var buf = await ctx.decodeAudioData(await (await fetch(url)).arrayBuffer());
+    var dest = ctx.createMediaStreamDestination();
+    var node = ctx.createBufferSource();
+    node.buffer = buf; node.connect(dest);
+    var clipTrack = dest.stream.getAudioTracks()[0];
+    await sender.replaceTrack(clipTrack);
+    node.start();
+    console.log("REPLACETRACK: swapped clip onto sender + playing (" + buf.duration.toFixed(2) + "s) — far end hear it?");
+    setTimeout(async function(){
+      try { await sender.replaceTrack(origTrack); console.log("REPLACETRACK: original mic track restored"); }
+      catch(e){ console.log("REPLACETRACK restore failed: " + e.message); }
+    }, 3000);
+  } catch(e){ console.log("REPLACETRACK failed: " + (e && e.message)); }
+}
+window.svReplaceTrackTest = svReplaceTrackTest;
+
 if (SNEEZE_SPIKE) {
   var sb = document.createElement("button");
   sb.id = "sneezeBtn";
@@ -599,6 +657,13 @@ if (SNEEZE_SPIKE) {
   cb.style.cssText = "position:fixed;bottom:12px;right:270px;z-index:9999;padding:8px 12px;";
   cb.addEventListener("click", function(){ svClipOnlyTest(${JSON.stringify("/sneeze.mp3")}); });
   document.body.appendChild(cb);
+
+  var pb = document.createElement("button");
+  pb.id = "replaceTrackBtn";
+  pb.textContent = "🎚 replaceTrack test";
+  pb.style.cssText = "position:fixed;bottom:12px;right:410px;z-index:9999;padding:8px 12px;";
+  pb.addEventListener("click", function(){ svReplaceTrackTest(${JSON.stringify("/sneeze.mp3")}); });
+  document.body.appendChild(pb);
 }
 
 </script>`;
