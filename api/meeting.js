@@ -553,6 +553,31 @@ async function svRestoreMic(){
 }
 window.svRestoreMic = svRestoreMic;
 
+// ISOLATION TEST — swap in a CLIP-ONLY track (no mic tap at all). If the other
+// side hears the clip, the swap path transmits our audio and only mic-MIXING is
+// broken. If they hear nothing, the swap path itself isn't sending our track.
+// Auto-restores the mic ~3s later so the call recovers.
+async function svClipOnlyTest(url){
+  try {
+    var call = window.__svVapi && window.__svVapi.call;
+    if (!call) throw new Error("no call");
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === "suspended") await ctx.resume();
+    var resp = await fetch(url);
+    var buf = await ctx.decodeAudioData(await resp.arrayBuffer());
+    var dest = ctx.createMediaStreamDestination();
+    var node = ctx.createBufferSource();
+    node.buffer = buf; node.connect(dest);
+    var clipTrack = dest.stream.getAudioTracks()[0];
+    await call.setInputDevicesAsync({ audioSource: clipTrack });
+    node.start();
+    console.log("SNEEZE_SPIKE: CLIP-ONLY track swapped in + playing (" +
+      buf.duration.toFixed(2) + "s) — do you/the other side hear it?");
+    setTimeout(function(){ svRestoreMic(); }, 3000);
+  } catch(e){ console.log("clip-only test failed: " + (e && e.message)); }
+}
+window.svClipOnlyTest = svClipOnlyTest;
+
 if (SNEEZE_SPIKE) {
   var sb = document.createElement("button");
   sb.id = "sneezeBtn";
@@ -567,6 +592,13 @@ if (SNEEZE_SPIKE) {
   rb.style.cssText = "position:fixed;bottom:12px;right:130px;z-index:9999;padding:8px 12px;";
   rb.addEventListener("click", function(){ svRestoreMic(); });
   document.body.appendChild(rb);
+
+  var cb = document.createElement("button");
+  cb.id = "clipOnlyBtn";
+  cb.textContent = "🔊 clip-only test";
+  cb.style.cssText = "position:fixed;bottom:12px;right:270px;z-index:9999;padding:8px 12px;";
+  cb.addEventListener("click", function(){ svClipOnlyTest(${JSON.stringify("/sneeze.mp3")}); });
+  document.body.appendChild(cb);
 }
 
 </script>`;
