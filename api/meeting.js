@@ -478,13 +478,21 @@ $("camCtrl").addEventListener("click", function(){ toast("The host has turned vi
 $("partCtrl").addEventListener("click", function(){ toast("In this meeting: the host and you."); });
 $("leaveCtrl").addEventListener("click", function(){ if(vapi) vapi.stop(); });
 
-// ===== SNEEZE SPIKE — inject a pre-rendered clip into the outbound audio ======
-// Proof-of-concept per the greenlit spike. Mixes a decoded clip with the live
-// mic into one MediaStreamDestination track, then swaps that mixed track into
-// the Daily call via setInputDevicesAsync (confirmed present on window.__svVapi
-// .call). A hidden test button (#sneezeBtn) triggers it. Gated by SNEEZE_SPIKE.
-// This is a SPIKE: one clip, manual trigger, success = the other end hears it.
-var svAudioCtx = null, svMicStream = null, svClipBuf = null, svMixDest = null;
+// ===== SNEEZE SPIKE v2 — mix clip into Vapi's EXISTING mic track =============
+// v1 bug: a 2nd getUserMedia grabbed a NEW mic that conflicted with Vapi's mic
+// grab -> the swapped-in track was dead -> caller mic died on the call. v2
+// reuses the LIVE mic track Vapi already sends (from participants().local),
+// mixes the clip into it, and swaps the mixed track back in. A "restore mic"
+// button recovers the plain mic if a swap misbehaves. Gated by SNEEZE_SPIKE.
+var svAudioCtx = null, svMixDest = null, svClipBuf = null, svMicSrc = null;
+
+function svLiveMicTrack(){
+  var call = window.__svVapi && window.__svVapi.call;
+  var p = call && call.participants ? call.participants() : null;
+  var local = p && p.local;
+  return (local && local.tracks && local.tracks.audio && local.tracks.audio.persistentTrack) ||
+         (local && local.audioTrack) || null;
+}
 
 async function svLoadClip(url){
   if (svClipBuf) return svClipBuf;
@@ -495,23 +503,23 @@ async function svLoadClip(url){
 }
 
 async function svEnsureMixedInput(){
-  // Build (once) an AudioContext graph: mic source + (later) clip -> mixDest.
-  // Swap the call's input to mixDest's track so BOTH mic and clip transmit.
   if (svMixDest) return svMixDest;
   var call = window.__svVapi && window.__svVapi.call;
   if (!call) throw new Error("no Daily call object");
-  // AudioContext at 16kHz to match Vapi's expected sample rate.
-  svAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-  // Fresh mic WITHOUT echoCancellation/noiseSuppression/AGC — those crush a clip.
-  svMicStream = await navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-  });
-  var micSrc = svAudioCtx.createMediaStreamSource(svMicStream);
+
+  // Reuse the mic track Vapi is ALREADY sending — do NOT grab a new one.
+  var liveMic = svLiveMicTrack();
+  if (!liveMic) throw new Error("no live mic track on local participant");
+
+  svAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  // Wrap the existing mic track so we can route it through the graph.
+  var micStream = new MediaStream([liveMic]);
+  svMicSrc = svAudioCtx.createMediaStreamSource(micStream);
   svMixDest = svAudioCtx.createMediaStreamDestination();
-  micSrc.connect(svMixDest);           // mic -> mix (host still hears the caller)
+  svMicSrc.connect(svMixDest);          // live mic -> mix (mic keeps flowing)
+
   var mixedTrack = svMixDest.stream.getAudioTracks()[0];
   window.__svMixTrackId = mixedTrack && mixedTrack.id;
-  // Hand the mixed track to Daily as the microphone input.
   await call.setInputDevicesAsync({ audioSource: mixedTrack });
   console.log("SNEEZE_SPIKE: mixed input installed (mix track " + window.__svMixTrackId + ")");
   return svMixDest;
@@ -523,13 +531,27 @@ async function svPlaySneeze(url){
     var buf = await svLoadClip(url);
     var node = svAudioCtx.createBufferSource();
     node.buffer = buf;
-    node.connect(svMixDest);           // clip -> mix -> transmitted to the call
+    node.connect(svMixDest);            // clip -> mix -> transmitted to the call
     node.start();
     console.log("SNEEZE_SPIKE: clip playing (" + buf.duration.toFixed(2) + "s)");
   } catch(e){
     console.log("SNEEZE_SPIKE failed: " + (e && e.message));
   }
 }
+
+// Recover the plain mic if a swap misbehaves — no call drop.
+async function svRestoreMic(){
+  try {
+    var call = window.__svVapi && window.__svVapi.call;
+    if (!call) throw new Error("no call");
+    var t = svLiveMicTrack();
+    if (t) { await call.setInputDevicesAsync({ audioSource: t }); }
+    else { await call.setInputDevicesAsync({ audioSource: true }); } // fallback: default mic
+    svMixDest = null; // force a fresh graph next time
+    console.log("SNEEZE_SPIKE: mic restored");
+  } catch(e){ console.log("restore failed: " + (e && e.message)); }
+}
+window.svRestoreMic = svRestoreMic;
 
 if (SNEEZE_SPIKE) {
   var sb = document.createElement("button");
@@ -538,6 +560,13 @@ if (SNEEZE_SPIKE) {
   sb.style.cssText = "position:fixed;bottom:12px;right:12px;z-index:9999;padding:8px 12px;";
   sb.addEventListener("click", function(){ svPlaySneeze(${JSON.stringify("/sneeze.mp3")}); });
   document.body.appendChild(sb);
+
+  var rb = document.createElement("button");
+  rb.id = "restoreMicBtn";
+  rb.textContent = "🎙 restore mic";
+  rb.style.cssText = "position:fixed;bottom:12px;right:130px;z-index:9999;padding:8px 12px;";
+  rb.addEventListener("click", function(){ svRestoreMic(); });
+  document.body.appendChild(rb);
 }
 
 </script>`;
