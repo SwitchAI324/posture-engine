@@ -41,12 +41,12 @@ const ASSISTANT_ID =
   process.env.VAPI_ASSISTANT_ID || "c8917a9c-dee6-4044-bf20-39212d63937d";
 
 export default async function handler() {
-  return new Response(PAGE(PUBLIC_KEY, ASSISTANT_ID, envBool("TEST_MODE", false), envBool("SILENCE_NUDGE", false), envBool("SNEEZE_SPIKE", false)), {
+  return new Response(PAGE(PUBLIC_KEY, ASSISTANT_ID, envBool("TEST_MODE", false), envBool("SILENCE_NUDGE", false)), {
     headers: { "content-type": "text/html; charset=utf-8" },
   });
 }
 
-function PAGE(pub, asst, testMode, silenceNudge, sneezeSpike) {
+function PAGE(pub, asst, testMode, silenceNudge) {
   return `<!doctype html><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SpamViking Meeting</title>
@@ -178,7 +178,6 @@ var PUB = ${JSON.stringify(pub)};
 var ASST = ${JSON.stringify(asst)};
 var TEST_MODE = ${testMode ? "true" : "false"};
 var SILENCE_NUDGE = ${silenceNudge ? "true" : "false"};
-var SNEEZE_SPIKE = ${sneezeSpike ? "true" : "false"};
 // Effective test flag: server env TEST_MODE OR ?test=1 on the URL. The URL form
 // lets testers always reach a days-out proving call without depending on the
 // env var being set + redeployed. Production links carry neither, so both gates
@@ -276,7 +275,7 @@ function earlyGate(){
 }
 if(slug){ ensureJoin().then(earlyGate).catch(function(){}); }
 
-try { vapi = new Vapi(PUB); window.__svVapi = vapi; } catch(e){ note("Could not load the meeting: " + e, true); }
+try { vapi = new Vapi(PUB); } catch(e){ note("Could not load the meeting: " + e, true); }
 
 if(vapi){
   vapi.on("call-start", function(){
@@ -478,193 +477,6 @@ $("camCtrl").addEventListener("click", function(){ toast("The host has turned vi
 $("partCtrl").addEventListener("click", function(){ toast("In this meeting: the host and you."); });
 $("leaveCtrl").addEventListener("click", function(){ if(vapi) vapi.stop(); });
 
-// ===== SNEEZE SPIKE v2 — mix clip into Vapi's EXISTING mic track =============
-// v1 bug: a 2nd getUserMedia grabbed a NEW mic that conflicted with Vapi's mic
-// grab -> the swapped-in track was dead -> caller mic died on the call. v2
-// reuses the LIVE mic track Vapi already sends (from participants().local),
-// mixes the clip into it, and swaps the mixed track back in. A "restore mic"
-// button recovers the plain mic if a swap misbehaves. Gated by SNEEZE_SPIKE.
-var svAudioCtx = null, svMixDest = null, svClipBuf = null, svMicSrc = null;
-
-function svLiveMicTrack(){
-  var call = window.__svVapi && window.__svVapi.call;
-  var p = call && call.participants ? call.participants() : null;
-  var local = p && p.local;
-  return (local && local.tracks && local.tracks.audio && local.tracks.audio.persistentTrack) ||
-         (local && local.audioTrack) || null;
-}
-
-async function svLoadClip(url){
-  if (svClipBuf) return svClipBuf;
-  var resp = await fetch(url);
-  var arr = await resp.arrayBuffer();
-  svClipBuf = await svAudioCtx.decodeAudioData(arr);
-  return svClipBuf;
-}
-
-async function svEnsureMixedInput(){
-  if (svMixDest) return svMixDest;
-  var call = window.__svVapi && window.__svVapi.call;
-  if (!call) throw new Error("no Daily call object");
-
-  // Reuse the mic track Vapi is ALREADY sending — do NOT grab a new one.
-  var liveMic = svLiveMicTrack();
-  if (!liveMic) throw new Error("no live mic track on local participant");
-
-  svAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  // Wrap the existing mic track so we can route it through the graph.
-  var micStream = new MediaStream([liveMic]);
-  svMicSrc = svAudioCtx.createMediaStreamSource(micStream);
-  svMixDest = svAudioCtx.createMediaStreamDestination();
-  svMicSrc.connect(svMixDest);          // live mic -> mix (mic keeps flowing)
-
-  var mixedTrack = svMixDest.stream.getAudioTracks()[0];
-  window.__svMixTrackId = mixedTrack && mixedTrack.id;
-  await call.setInputDevicesAsync({ audioSource: mixedTrack });
-  console.log("SNEEZE_SPIKE: mixed input installed (mix track " + window.__svMixTrackId + ")");
-  return svMixDest;
-}
-
-async function svPlaySneeze(url){
-  try {
-    await svEnsureMixedInput();
-    var buf = await svLoadClip(url);
-    var node = svAudioCtx.createBufferSource();
-    node.buffer = buf;
-    node.connect(svMixDest);            // clip -> mix -> transmitted to the call
-    node.start();
-    console.log("SNEEZE_SPIKE: clip playing (" + buf.duration.toFixed(2) + "s)");
-  } catch(e){
-    console.log("SNEEZE_SPIKE failed: " + (e && e.message));
-  }
-}
-
-// Recover the plain mic if a swap misbehaves — no call drop.
-async function svRestoreMic(){
-  try {
-    var call = window.__svVapi && window.__svVapi.call;
-    if (!call) throw new Error("no call");
-    var t = svLiveMicTrack();
-    if (t) { await call.setInputDevicesAsync({ audioSource: t }); }
-    else { await call.setInputDevicesAsync({ audioSource: true }); } // fallback: default mic
-    svMixDest = null; // force a fresh graph next time
-    console.log("SNEEZE_SPIKE: mic restored");
-  } catch(e){ console.log("restore failed: " + (e && e.message)); }
-}
-window.svRestoreMic = svRestoreMic;
-
-// ISOLATION TEST — swap in a CLIP-ONLY track (no mic tap at all). If the other
-// side hears the clip, the swap path transmits our audio and only mic-MIXING is
-// broken. If they hear nothing, the swap path itself isn't sending our track.
-// Auto-restores the mic ~3s later so the call recovers.
-async function svClipOnlyTest(url){
-  try {
-    var call = window.__svVapi && window.__svVapi.call;
-    if (!call) throw new Error("no call");
-    var ctx = new (window.AudioContext || window.webkitAudioContext)();
-    if (ctx.state === "suspended") await ctx.resume();
-    var resp = await fetch(url);
-    var buf = await ctx.decodeAudioData(await resp.arrayBuffer());
-    var dest = ctx.createMediaStreamDestination();
-    var node = ctx.createBufferSource();
-    node.buffer = buf; node.connect(dest);
-    var clipTrack = dest.stream.getAudioTracks()[0];
-    await call.setInputDevicesAsync({ audioSource: clipTrack });
-    node.start();
-    console.log("SNEEZE_SPIKE: CLIP-ONLY track swapped in + playing (" +
-      buf.duration.toFixed(2) + "s) — do you/the other side hear it?");
-    setTimeout(function(){ svRestoreMic(); }, 3000);
-  } catch(e){ console.log("clip-only test failed: " + (e && e.message)); }
-}
-window.svClipOnlyTest = svClipOnlyTest;
-
-// REPLACETRACK SPIKE — the last untried Vapi-native lever. Operates BELOW the
-// device layer: reach the RTCRtpSender on the underlying peer connection and
-// replaceTrack() with a clip-only track. If the far end hears THIS (when
-// setInputDevicesAsync failed), the sender layer is controllable and sound
-// unlocks on Vapi. If silent too -> Daily-direct confirmed. Auto-restores.
-function svFindAudioSender(){
-  // Daily hides the RTCPeerConnection; hunt common internal locations.
-  var call = window.__svVapi && window.__svVapi.call;
-  var pcs = [];
-  var scan = function(obj, depth){
-    if (!obj || depth > 4 || typeof obj !== "object") return;
-    for (var k in obj){
-      var val;
-      try { val = obj[k]; } catch(e){ continue; }
-      if (val instanceof RTCPeerConnection){ pcs.push(val); continue; }
-      if (val && typeof val === "object" && depth < 4){
-        try { scan(val, depth + 1); } catch(e){}
-      }
-    }
-  };
-  try { scan(call, 0); } catch(e){}
-  // also try window-level daily internals
-  try { scan(window.__svVapi, 0); } catch(e){}
-  for (var i = 0; i < pcs.length; i++){
-    var senders = pcs[i].getSenders ? pcs[i].getSenders() : [];
-    for (var j = 0; j < senders.length; j++){
-      if (senders[j].track && senders[j].track.kind === "audio") {
-        console.log("REPLACETRACK: found audio sender on PC #" + i);
-        return senders[j];
-      }
-    }
-  }
-  return null;
-}
-
-async function svReplaceTrackTest(url){
-  try {
-    var sender = svFindAudioSender();
-    if (!sender) { console.log("REPLACETRACK: no audio RTCRtpSender found — Daily PC not reachable this way"); return; }
-    var origTrack = sender.track;
-    var ctx = new (window.AudioContext || window.webkitAudioContext)();
-    if (ctx.state === "suspended") await ctx.resume();
-    var buf = await ctx.decodeAudioData(await (await fetch(url)).arrayBuffer());
-    var dest = ctx.createMediaStreamDestination();
-    var node = ctx.createBufferSource();
-    node.buffer = buf; node.connect(dest);
-    var clipTrack = dest.stream.getAudioTracks()[0];
-    await sender.replaceTrack(clipTrack);
-    node.start();
-    console.log("REPLACETRACK: swapped clip onto sender + playing (" + buf.duration.toFixed(2) + "s) — far end hear it?");
-    setTimeout(async function(){
-      try { await sender.replaceTrack(origTrack); console.log("REPLACETRACK: original mic track restored"); }
-      catch(e){ console.log("REPLACETRACK restore failed: " + e.message); }
-    }, 3000);
-  } catch(e){ console.log("REPLACETRACK failed: " + (e && e.message)); }
-}
-window.svReplaceTrackTest = svReplaceTrackTest;
-
-if (SNEEZE_SPIKE) {
-  var sb = document.createElement("button");
-  sb.id = "sneezeBtn";
-  sb.textContent = "🤧 test sneeze";
-  sb.style.cssText = "position:fixed;bottom:12px;right:12px;z-index:9999;padding:8px 12px;";
-  sb.addEventListener("click", function(){ svPlaySneeze(${JSON.stringify("/sneeze.mp3")}); });
-  document.body.appendChild(sb);
-
-  var rb = document.createElement("button");
-  rb.id = "restoreMicBtn";
-  rb.textContent = "🎙 restore mic";
-  rb.style.cssText = "position:fixed;bottom:12px;right:130px;z-index:9999;padding:8px 12px;";
-  rb.addEventListener("click", function(){ svRestoreMic(); });
-  document.body.appendChild(rb);
-
-  var cb = document.createElement("button");
-  cb.id = "clipOnlyBtn";
-  cb.textContent = "🔊 clip-only test";
-  cb.style.cssText = "position:fixed;bottom:12px;right:270px;z-index:9999;padding:8px 12px;";
-  cb.addEventListener("click", function(){ svClipOnlyTest(${JSON.stringify("/sneeze.mp3")}); });
-  document.body.appendChild(cb);
-
-  var pb = document.createElement("button");
-  pb.id = "replaceTrackBtn";
-  pb.textContent = "🎚 replaceTrack test";
-  pb.style.cssText = "position:fixed;bottom:12px;right:410px;z-index:9999;padding:8px 12px;";
-  pb.addEventListener("click", function(){ svReplaceTrackTest(${JSON.stringify("/sneeze.mp3")}); });
-  document.body.appendChild(pb);
-}
 
 </script>`;
 }
