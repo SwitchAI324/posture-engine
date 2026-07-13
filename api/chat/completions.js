@@ -481,6 +481,7 @@ export default async function handler(req) {
     if (m) nudgeSlug = m[1].trim();
   } catch { /* ignore */ }
   const slug =
+    body.slug ??
     body.call?.metadata?.slug ??
     body.metadata?.slug ??
     (vv.sv_slug || null) ??
