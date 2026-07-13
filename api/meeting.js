@@ -173,9 +173,8 @@ function PAGE(pub, asst, testMode, silenceNudge) {
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import Vapi from "https://esm.sh/@vapi-ai/web";
-var PUB = ${JSON.stringify(pub)};
-var ASST = ${JSON.stringify(asst)};
+import { Room, RoomEvent } from "https://esm.sh/livekit-client";
+// (Vapi PUB/ASST removed — LiveKit uses a server-minted token, no browser key.)
 var TEST_MODE = ${testMode ? "true" : "false"};
 var SILENCE_NUDGE = ${silenceNudge ? "true" : "false"};
 // Effective test flag: server env TEST_MODE OR ?test=1 on the URL. The URL form
@@ -205,7 +204,7 @@ function showWaitImage(){
     el.src = url;
   }catch(e){ /* cosmetic only, never break the hold */ }
 }
-var vapi = null, started = null, tick = null, muted = false, callId = null;
+var room = null, started = null, tick = null, muted = false, callId = null;
 
 // Host name (the name the spammer emailed). Filled from the token in ensureJoin;
 // "Andrew" is only the pre-fetch placeholder. setHostName threads it everywhere
@@ -228,7 +227,8 @@ $("agree").addEventListener("change", function(e){ $("continue").disabled = !e.t
 $("continue").addEventListener("click", function(){ $("consent").style.display = "none"; $("lobby").style.display = "flex"; });
 
 if(!slug){ $("join").disabled = true; note("This meeting link looks invalid.", true); }
-if(!PUB){ $("join").disabled = true; note("Meeting not configured yet.", true); }
+// LiveKit config (key/secret/url) lives server-side in /api/livekit-token; the
+// browser needs no public key. If the token mint fails at join, we surface that.
 
 // --- JOIN-TIME GATES (read booked_slot off the token) -----------------------
 // joinData is fetched up front so the early-join gate can run on open, and so
@@ -275,10 +275,10 @@ function earlyGate(){
 }
 if(slug){ ensureJoin().then(earlyGate).catch(function(){}); }
 
-try { vapi = new Vapi(PUB); } catch(e){ note("Could not load the meeting: " + e, true); }
-
-if(vapi){
-  vapi.on("call-start", function(){
+// LiveKit: wire a freshly-connected Room's events to the same UI beats the Vapi
+// handlers drove. Called after room.connect() succeeds in the join handler.
+function wireRoom(rm){
+  rm.on(RoomEvent.Connected, function(){
     $("lobby").style.display = "none";
     $("meeting").style.display = "flex";
     started = Date.now();
@@ -288,9 +288,31 @@ if(vapi){
     }, 1000);
     setTimeout(function(){ toast("The host has video off for this meeting, so everyone's camera stays off."); }, 700);
   });
-  vapi.on("speech-start", function(){ $("hostTile").classList.add("speaking"); });
-  vapi.on("speech-end", function(){ $("hostTile").classList.remove("speaking"); });
-  vapi.on("call-end", function(){
+  // Hear the host: attach any subscribed audio track to a hidden <audio>.
+  rm.on(RoomEvent.TrackSubscribed, function(track){
+    if(track.kind === "audio"){
+      var el = track.attach();
+      el.style.display = "none";
+      document.body.appendChild(el);
+    }
+  });
+  // Speaking indicator: light the host tile when a remote participant speaks.
+  rm.on(RoomEvent.ActiveSpeakersChanged, function(speakers){
+    var hostSpeaking = (speakers || []).some(function(p){ return p && !p.isLocal; });
+    if(hostSpeaking) $("hostTile").classList.add("speaking");
+    else $("hostTile").classList.remove("speaking");
+  });
+  // Captions: if the agent publishes transcriptions, show them.
+  rm.on(RoomEvent.TranscriptionReceived, function(segments){
+    try {
+      var txt = (segments || []).map(function(s){ return s.text; }).join(" ").trim();
+      if(txt){
+        $("caption").style.display = "block";
+        $("captionText").textContent = txt.replace(/\\[\\[[^\\]]*\\]\\]/g, "").trim();
+      }
+    } catch(e){}
+  });
+  rm.on(RoomEvent.Disconnected, function(){
     if(tick) clearInterval(tick);
     $("timer").textContent = "Call ended";
     $("hostTile").classList.remove("speaking");
@@ -301,13 +323,6 @@ if(vapi){
         body: JSON.stringify({ call_id: callId, ending_type: "hung_up", duration_seconds: dur }) }).catch(function(){});
     }
   });
-  vapi.on("message", function(m){
-    if(m && m.type === "transcript" && m.transcriptType === "final" && m.transcript){
-      $("caption").style.display = "block";
-      $("captionText").textContent = m.transcript.replace(/\\[\\[[^\\]]*\\]\\]/g, "").trim();
-    }
-  });
-  vapi.on("error", function(e){ toast("Call error: " + (e && e.message ? e.message : "see console")); });
 }
 
 $("join").addEventListener("click", function(){
@@ -317,39 +332,15 @@ $("join").addEventListener("click", function(){
       if(j.error){ note("Could not start: " + j.error, true); $("join").disabled = false; return; }
       var arch = j.archetype || "universal";
       // PRE-CALL HYDRATE: build + store the compiled prefix under the slug key
-      // NOW, before vapi.start — so it's guaranteed present before the host's
-      // first turn (no race). completions reads the slug key if the call_id row
-      // isn't written yet. Fire-and-forget; the call_id hydrate below also runs.
-      fetch("/api/hydrate?slug=" + encodeURIComponent(slug), { method:"POST" }).catch(function(){});
-      // Carry the target identifier into call metadata so the end-of-call-report
-      // (api/vapi-eoc) can route the transcript to the right target in Scouting.
-      var md = { archetype: arch, slug: slug };
-      if(j.target_id){ md.target_id = j.target_id; }
-      if(j.target_email){ md.target_email = j.target_email; }
-      if(j.host_name){ md.host_name = j.host_name; }
-      if(j.host_tz){ md.host_tz = j.host_tz; }
-      // Belt-and-suspenders: also pass the same ids as variableValues. For web
-      // calls, assistantOverrides.metadata does NOT reliably surface as
-      // call.metadata in the end-of-call report, but variableValues DO (under
-      // call.assistantOverrides.variableValues). vapi-eoc + the proxy read these.
-      var vv = { sv_archetype: arch, sv_slug: slug || "" };
-      if(j.target_id){ vv.sv_target_id = j.target_id; }
-      if(j.target_email){ vv.sv_target_email = j.target_email; }
-      // Host name into the call so the proxy makes the VOICE use it (it's who
-      // they emailed). booked_slot rides along so the opener can read the
-      // host-local hour; sv_fast_join flags the eager "great timing" opener.
-      if(j.host_name){ vv.sv_host_name = j.host_name; }
-      if(j.host_tz){ vv.sv_host_tz = j.host_tz; }
-      if(j.booked_slot){ vv.sv_booked_slot = j.booked_slot; }
-      if(fastJoin){ vv.sv_fast_join = "1"; }
+      // LiveKit: the slug rides in the token metadata (minted server-side by
+      // /api/livekit-token). agent.py reads it at entrypoint, calls /api/hydrate,
+      // and uses the returned prefix as the session system prompt. So the browser
+      // only hands over identity (slug + host_name) — no overrides, no hooks, no
+      // variableValues, no call-id threading (LiveKit has none).
 
-      // GATE 2 — host arrival timing.
-      //  - Normal booking: host joins ~1 min late by design (booked_slot+60s),
-      //    a late joiner only waits ~5s so they're not met mid-sentence. The
-      //    wait is "Andrew running late" — free time-waste in the room.
-      //  - Fast-join: host arrives at max(join+30s, slot-5min) — never sooner
-      //    than 5 min before the slot, never less than 30s after they join.
-      //  - TEST_MODE -> immediate.
+      // GATE 2 — host arrival timing (UNCHANGED from the Vapi flow; transport-
+      // independent). Host joins ~1 min late by design; fast-join uses its own
+      // window; TEST_MODE -> immediate. We simply delay the connect by `wait`.
       var joinClick = Date.now();
       var hostStart = joinClick;
       if(!TEST){
@@ -364,118 +355,44 @@ $("join").addEventListener("click", function(){
         }
       }
       var wait = Math.max(0, hostStart - joinClick);
-      // waited_secs = how long they actually sat before the host arrived. Lets
-      // the opener honestly do the "saw you in the waiting room" callback only
-      // when there was a real wait.
-      vv.sv_waited_secs = String(Math.round(wait / 1000));
       if(wait > 0){ note("Waiting for " + hostName + " to join\\u2026"); showWaitImage(); }
 
-      // SILENCE HANDLING: without this, if the caller goes quiet after the
-      // opener the host sits mute forever (Vapi only calls the LLM on caller
-      // input). Two parts:
-      //  - silenceTimeoutSeconds is the BACKSTOP: ends the call after this long
-      //    of total silence. Set to 45 so the re-prompt nudges (below) have room
-      //    to fire first — at 20 the call died before any nudge (observed).
-      //  - hooks: on customer.speech.timeout, fire a say.prompt re-prompt. Since
-      //    the host model is our PE proxy, say.prompt routes a turn to our
-      //    endpoint and PE generates the re-engage line in character. Up to 3
-      //    nudges at 12s each; the counter resets when the caller speaks. The
-      //    45s backstop is the graceful end after the nudges are exhausted.
-      //  - startSpeakingPlan waits a beat after the caller stops before the host
-      //    jumps in (so it doesn't talk over a slow talker).
-      // SILENCE STEP FUNCTION (Call Design's design, implemented here).
-      // Two sequential timeout hooks: the first fires at 5s (up to 2x), the
-      // second at 9s (up to 2x), staying warm and patient. Backstop ends the
-      // call at 60s total silence. NOTE: whether Vapi fires two same-event hooks
-      // in sequence (2s x2 THEN 4s x2) vs. only honoring one is UNCONFIRMED at
-      // the Vapi layer — the silent test call is the check. If it doesn't behave
-      // as a step function, this is where to revisit.
-      // The nudge fires on a TINY context (no compiled prefix), so the model
-      // won't know HOST's real name unless we put it here. Thread the token's
-      // host_name into the nudge prompt the same way we thread it into the page
-      // and the call carrier. Fall back to a nameless "the host" — never a
-      // hardcoded "Andrew".
-      var nudgeName = (j.host_name && String(j.host_name).trim()) || "the host";
-      var overrides = {
-        metadata: md,
-        variableValues: vv,
-        silenceTimeoutSeconds: 60, // backstop: end the call after 60s of silence
-        startSpeakingPlan: {
-          waitSeconds: 0.6,          // small pause after caller stops before host speaks
-          smartEndpointingEnabled: true
-        }
-      };
-
-      // ===== SILENCE NUDGE KILL SWITCH =======================================
-      // The silence re-engage nudges only attach when SILENCE_NUDGE env is on.
-      // OFF (unset/0) = NO timeout hooks are sent -> no silence probes fire at
-      // all, and the host simply waits quietly (the 60s backstop still ends a
-      // truly dead call). Flip SILENCE_NUDGE=1 in Vercel to turn nudges back on.
-      // SILENCE_NUDGE is interpolated into this script by PAGE() from server env.
-      if (SILENCE_NUDGE) {
-        overrides.hooks = [
-          {
-            on: "customer.speech.timeout",
-            options: {
-              timeoutSeconds: 5,
-              triggerMaxCount: 2,
-              triggerResetMode: "onUserSpeech"
-            },
-            do: [
-              {
-                type: "say",
-                prompt: "[[sv_slug:" + slug + "]] The caller's audio went quiet \u2014 assume a connection hiccup or they stepped away, never that they left you. Say ONE short, warm, in-character line as " + nudgeName + " checking the line is still connected \u2014 easy and unbothered, blame the connection not the person, the way you'd check on a friend whose call dropped. Not low-energy, not annoyed, not winding down. Output ONLY the spoken words \u2014 no quotation marks, no name label, no stage directions. Vary it."
-              }
-            ]
-          },
-          {
-            on: "customer.speech.timeout",
-            options: {
-              timeoutSeconds: 9,
-              triggerMaxCount: 2,
-              triggerResetMode: "onUserSpeech"
-            },
-            do: [
-              {
-                type: "say",
-                prompt: "[[sv_slug:" + slug + "]] Still quiet on their end. Say ONE short, warm, in-character line as " + nudgeName + " \u2014 still patient and happy to wait, assume they're about to come back, maybe a light easy aside so it doesn't feel like pressure. Do NOT wind down, do NOT say you'll let them go, do NOT wrap up \u2014 you'd gladly keep talking. Output ONLY the spoken words \u2014 no quotation marks, no name label, no stage directions. Vary from earlier nudges."
-              }
-            ]
-          }
-        ];
-      }
-
       setTimeout(function(){
-        vapi.start(ASST, overrides)
-          .then(function(call){
-            var id = call && (call.id || call.callId);
-            callId = id || null;
-            if(id){
-              fetch("/api/join?slug=" + encodeURIComponent(slug) + "&call_id=" + encodeURIComponent(id), { method:"POST" }).catch(function(){});
-              // HYDRATE the compiled prefix for this call. Without this,
-              // call_prefix.prefix stays NULL and the host runs the Vapi
-              // fallback instead of the compiled HOST prompt/bits/bench. Fire
-              // and forget — the first host turn reads the stored prefix; the
-              // hydrate races the ~arrival delay + first utterance and normally
-              // wins. Logged server-side either way.
-              fetch("/api/hydrate?slug=" + encodeURIComponent(slug) + "&call_id=" + encodeURIComponent(id), { method:"POST" }).catch(function(){});
+        // 1) mint a token carrying the slug (+ host_name) as participant metadata.
+        var qs = "?slug=" + encodeURIComponent(slug);
+        if(j.host_name){ qs += "&host_name=" + encodeURIComponent(j.host_name); }
+        fetch("/api/livekit-token" + qs, { method:"POST" })
+          .then(function(r){ return r.json(); })
+          .then(function(tok){
+            if(!tok || !tok.token || !tok.url){
+              note("Could not start: " + ((tok && tok.error) || "no token"), true);
+              $("join").disabled = false; return;
             }
+            callId = tok.room || null; // use the room name as our call handle
+            // 2) connect to the room + publish mic. agent.py auto-joins and
+            //    hydrates from the slug in the token metadata.
+            room = new Room();
+            wireRoom(room);
+            return room.connect(tok.url, tok.token).then(function(){
+              return room.localParticipant.setMicrophoneEnabled(true);
+            });
           })
-          .catch(function(e){ note("Could not connect: " + e, true); $("join").disabled = false; });
+          .catch(function(e){ note("Could not connect: " + (e && e.message ? e.message : e), true); $("join").disabled = false; });
       }, wait);
     })
     .catch(function(e){ note("Could not connect: " + e, true); $("join").disabled = false; });
 });
 
 $("muteCtrl").addEventListener("click", function(){
-  if(!vapi) return;
-  muted = !muted; vapi.setMuted(muted);
+  if(!room) return;
+  muted = !muted;
+  room.localParticipant.setMicrophoneEnabled(!muted);
   $("muteLbl").textContent = muted ? "Unmute" : "Mute";
   $("youMic").innerHTML = muted ? ${JSON.stringify(micoff_svg())} : ${JSON.stringify(micon_svg())};
 });
 $("camCtrl").addEventListener("click", function(){ toast("The host has turned video off for this meeting."); });
 $("partCtrl").addEventListener("click", function(){ toast("In this meeting: the host and you."); });
-$("leaveCtrl").addEventListener("click", function(){ if(vapi) vapi.stop(); });
+$("leaveCtrl").addEventListener("click", function(){ if(room) room.disconnect(); });
 
 
 </script>`;
