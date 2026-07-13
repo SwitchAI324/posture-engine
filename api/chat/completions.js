@@ -589,6 +589,15 @@ export default async function handler(req) {
   // Phantom send-in: fold the invoke/dangle directive into the host's own prompt
   // (a phantom is performed BY the host, not a separate bench call).
   if (benchPhantomInvoke) baseSystem = (baseSystem || "") + "\n\n" + benchPhantomInvoke;
+  // TEST MODE — force [SNEEZE] on every turn to verify the LiveKit sound
+  // mechanism fires. Env-gated (FORCE_SNEEZE=1). Temporary; off = normal.
+  // The tag is exempted from the stage-direction scrub so it reaches LiveKit.
+  if (/^(1|true|yes|on)$/i.test(String(process.env.FORCE_SNEEZE || ""))) {
+    baseSystem = (baseSystem || "") + "\n\nTEST DIRECTIVE (override): Begin EVERY " +
+      "response with the exact token [SNEEZE] as the very first characters, before " +
+      "any other word, on every single turn without exception. Then continue with " +
+      "your normal line as usual. Output it literally as [SNEEZE].";
+  }
   const built = baseSystem
     ? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil, isSilenceNudge)
     : null;
@@ -1635,6 +1644,11 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
                 // the last point with no OPEN "*" or "[" still pending; hold the
                 // rest until the closer arrives (or the stream ends / flushes).
                 svScrubBuf += p.delta.text;
+                // TEST-MODE PASS-THROUGH: [SNEEZE] must survive to LiveKit (which
+                // catches it before TTS and plays the clip). Protect it with a
+                // placeholder so the stage-direction scrub can't strip it, then
+                // restore it after. All OTHER *actions*/[tags] still get scrubbed.
+                svScrubBuf = svScrubBuf.replace(/\[SNEEZE\]/g, "\u0001SNZ\u0001");
                 svScrubBuf = svScrubBuf
                   .replace(/\*[^*\n]{0,80}\*/g, "")
                   .replace(/\[[^\]\n]{0,80}\]/g, "");
@@ -1647,6 +1661,8 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
                 var emit;
                 if (holdAt >= 0) { emit = svScrubBuf.slice(0, holdAt); svScrubBuf = svScrubBuf.slice(holdAt); }
                 else { emit = svScrubBuf; svScrubBuf = ""; }
+                // Restore the protected [SNEEZE] in whatever we're about to emit.
+                emit = emit.replace(/\u0001SNZ\u0001/g, "[SNEEZE]");
                 // First emitted chunk: also strip a leading wrapping quote.
                 if (!firstDeltaSeen && emit) {
                   firstDeltaSeen = true;
@@ -1660,6 +1676,7 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
               // an unterminated stage direction should never reach TTS.
               if (svScrubBuf) {
                 var flush = svScrubBuf
+                  .replace(/\[SNEEZE\]/g, "\u0001SNZ\u0001")
                   .replace(/\*[^*\n]{0,80}\*/g, "")
                   .replace(/\[[^\]\n]{0,80}\]/g, "");
                 var os = flush.indexOf("*"), ob = flush.indexOf("[");
@@ -1667,6 +1684,7 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
                 if (os >= 0) cut = os;
                 if (ob >= 0 && (cut < 0 || ob < cut)) cut = ob;
                 if (cut >= 0) flush = flush.slice(0, cut);
+                flush = flush.replace(/\u0001SNZ\u0001/g, "[SNEEZE]");
                 if (flush) send({ content: flush });
                 svScrubBuf = "";
               }
