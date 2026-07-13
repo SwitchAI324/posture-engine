@@ -340,7 +340,7 @@ $("join").addEventListener("click", function(){
 
       // GATE 2 — host arrival timing (UNCHANGED from the Vapi flow; transport-
       // independent). Host joins ~1 min late by design; fast-join uses its own
-      // window; TEST_MODE -> immediate. We simply delay the connect by `wait`.
+      // window; TEST_MODE -> immediate. We simply delay the connect by wait ms.
       var joinClick = Date.now();
       var hostStart = joinClick;
       if(!TEST){
