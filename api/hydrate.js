@@ -173,6 +173,12 @@ module.exports = async function handler(req, res) {
         call_id: callId || null,
         posture,
         hash: assembled.hash,
+        // The compiled system prompt itself. Vapi ignored this (it read the
+        // stored prefix per-request), but the LiveKit agent uses it DIRECTLY as
+        // the session's system instructions — LiveKit holds no per-request call
+        // identity, so it must receive the prompt text here at call start.
+        prefix,
+        postureLine: initialPosture,
       })
     );
   } catch (e) {
