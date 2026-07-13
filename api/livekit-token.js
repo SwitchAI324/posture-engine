@@ -14,7 +14,17 @@
 // The room name is derived from the slug so each caller gets their own room and
 // the agent auto-dispatches into it.
 
-const { AccessToken } = require("livekit-server-sdk");
+const {
+  AccessToken,
+  RoomConfiguration,
+  RoomAgentDispatch,
+} = require("livekit-server-sdk");
+
+// The agent uses agent_name="spamviking", which makes it EXPLICIT-DISPATCH only
+// (it no longer auto-joins rooms). LiveKit's Console dispatches it for you, which
+// is why console tests worked — but a real caller's room got no agent. So the
+// token must carry a dispatch request for this agent name.
+const AGENT_NAME = process.env.LIVEKIT_AGENT_NAME || "spamviking";
 
 const LK_KEY = process.env.LIVEKIT_API_KEY;
 const LK_SECRET = process.env.LIVEKIT_API_SECRET;
@@ -50,8 +60,14 @@ module.exports = async function handler(req, res) {
     }
     if (!slug) return send({ error: "missing slug" }, 400);
 
-    // One room per caller, derived from slug so it's stable + agent-dispatchable.
-    const room = "sv-" + String(slug).replace(/[^a-zA-Z0-9_-]/g, "-");
+    // Unique room per SESSION (not per slug). Dispatch-via-token only fires when
+    // the room is first CREATED — reusing a slug-derived name (e.g. always
+    // "sv-test-andy") means the 2nd+ attempt hits an existing room and the agent
+    // is NOT re-dispatched. A random suffix guarantees a fresh room each call, so
+    // the agent dispatch always fires. The slug still travels via participant
+    // metadata, so identity is unaffected by the room name being unique.
+    const room = "sv-" + String(slug).replace(/[^a-zA-Z0-9_-]/g, "-") +
+                 "-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const who = identity || ("caller-" + Math.random().toString(36).slice(2, 8));
 
     // The slug (and optional host_name) ride in the token as PARTICIPANT
@@ -68,6 +84,19 @@ module.exports = async function handler(req, res) {
       roomJoin: true,
       canPublish: true,
       canSubscribe: true,
+    });
+    // Request explicit dispatch of the "spamviking" agent into this room when it
+    // is created. Without this, an agent with agent_name set never joins a
+    // token-created room. We also pass the slug as dispatch metadata so the agent
+    // can read it from the job (ctx.job.metadata) as a fallback to participant
+    // metadata — whichever the agent code reads, the slug is available.
+    at.roomConfig = new RoomConfiguration({
+      agents: [
+        new RoomAgentDispatch({
+          agentName: AGENT_NAME,
+          metadata: JSON.stringify({ slug, host_name: hostName || null }),
+        }),
+      ],
     });
 
     const token = await at.toJwt();
