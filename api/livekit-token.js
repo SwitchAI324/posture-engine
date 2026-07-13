@@ -54,10 +54,11 @@ module.exports = async function handler(req, res) {
     const room = "sv-" + String(slug).replace(/[^a-zA-Z0-9_-]/g, "-");
     const who = identity || ("caller-" + Math.random().toString(36).slice(2, 8));
 
-    // The slug (and optional host_name) ride in the token so the agent can read
-    // them off the participant/room at entrypoint. We put slug in BOTH the
-    // token's metadata and the roomConfig-independent participant metadata; the
-    // agent reads participant metadata.
+    // The slug (and optional host_name) ride in the token as PARTICIPANT
+    // metadata (the `metadata` field on AccessToken attaches to the joining
+    // identity). agent.py reads it off the PARTICIPANT object once they connect
+    // (participant.metadata -> JSON.parse), NOT from ctx.job.metadata — this is
+    // participant metadata, not room/job metadata.
     const at = new AccessToken(LK_KEY, LK_SECRET, {
       identity: who,
       metadata: JSON.stringify({ slug, host_name: hostName || null }),
