@@ -179,6 +179,11 @@ module.exports = async function handler(req, res) {
         // identity, so it must receive the prompt text here at call start.
         prefix,
         postureLine: initialPosture,
+        // Per-slug voice config (optional). Sourced from booking_tokens.voice
+        // (jsonb), shape: { voice_id, model, stability, similarity }. The agent
+        // merges this over its code defaults and falls back safely if null —
+        // changing a host's voice = editing the Supabase row, zero deploys.
+        voice: token.voice || null,
       })
     );
   } catch (e) {
