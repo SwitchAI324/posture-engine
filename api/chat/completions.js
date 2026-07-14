@@ -594,10 +594,14 @@ export default async function handler(req) {
   // mechanism fires. Env-gated (FORCE_SNEEZE=1). Temporary; off = normal.
   // The tag is exempted from the stage-direction scrub so it reaches LiveKit.
   if (/^(1|true|yes|on)$/i.test(String(process.env.FORCE_SNEEZE || ""))) {
-    baseSystem = (baseSystem || "") + "\n\nTEST DIRECTIVE (override): Begin EVERY " +
-      "response with the exact token [SNEEZE] as the very first characters, before " +
-      "any other word, on every single turn without exception. Then continue with " +
-      "your normal line as usual. Output it literally as [SNEEZE].";
+    baseSystem = (baseSystem || "") + "\n\nTEST DIRECTIVE (override — highest priority): " +
+      "Begin EVERY response with the exact token [SNEEZE] as the very first characters, " +
+      "before any other word, on every single turn without exception. This is an EXPLICIT " +
+      "EXCEPTION to the SPOKEN WORDS ONLY / NEVER STAGE DIRECTIONS rules: [SNEEZE] is not " +
+      "a stage direction — it is a technical trigger the audio system strips before speech " +
+      "and replaces with a real sneeze sound; the caller never hears the word. Your rules " +
+      "against bracketed output do NOT apply to this one exact token. Output it literally " +
+      "as [SNEEZE], then continue your normal in-character line as usual.";
   }
   const built = baseSystem
     ? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil, isSilenceNudge)
@@ -1469,6 +1473,7 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
       let hostText = "";
       let firstDeltaSeen = false; // for the first-delta stage-direction/quote scrub
       let svScrubBuf = "";        // holds partial *action*/[tag] across deltas
+      let svSneezeSent = false;   // diagnostic: did [SNEEZE] actually go downstream?
       // utterance emitter: turn+0.5 so the host line sorts after this turn's
       // analysis events but before the next turn — no seq collision.
       const utterTrace =
@@ -1491,6 +1496,12 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
         try {
           const outPreview = String(hostText || "").replace(/\s+/g, " ").trim();
           console.log("OUT len=" + outPreview.length + " text=" + JSON.stringify(outPreview.slice(0, 120)));
+          // SNEEZE DIAGNOSTIC: raw = model generated [SNEEZE] (pre-scrub);
+          // sent = it was emitted downstream to LiveKit (post-scrub).
+          // raw=false            -> (a) model never generated it (directive ignored/not present)
+          // raw=true sent=false  -> (b) scrub ate it (pass-through failed)
+          // raw=true sent=true   -> (c) PE delivered it; it's on the LiveKit side
+          console.log("SNZ raw=" + (String(hostText || "").indexOf("[SNEEZE]") >= 0) + " sent=" + svSneezeSent);
         } catch { /* never break the stream */ }
         // LOUD DIAGNOSTIC: on a nudge, print the exact state of every link in the
         // Option B chain, so ONE call reveals which one is broken. Unconditional.
@@ -1664,6 +1675,7 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
                 else { emit = svScrubBuf; svScrubBuf = ""; }
                 // Restore the protected [SNEEZE] in whatever we're about to emit.
                 emit = emit.replace(/\u0001SNZ\u0001/g, "[SNEEZE]");
+                if (emit.indexOf("[SNEEZE]") >= 0) svSneezeSent = true;
                 // First emitted chunk: also strip a leading wrapping quote.
                 if (!firstDeltaSeen && emit) {
                   firstDeltaSeen = true;
@@ -1686,6 +1698,7 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
                 if (ob >= 0 && (cut < 0 || ob < cut)) cut = ob;
                 if (cut >= 0) flush = flush.slice(0, cut);
                 flush = flush.replace(/\u0001SNZ\u0001/g, "[SNEEZE]");
+                if (flush.indexOf("[SNEEZE]") >= 0) svSneezeSent = true;
                 if (flush) send({ content: flush });
                 svScrubBuf = "";
               }
