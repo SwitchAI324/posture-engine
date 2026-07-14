@@ -1474,6 +1474,7 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
       let firstDeltaSeen = false; // for the first-delta stage-direction/quote scrub
       let svScrubBuf = "";        // holds partial *action*/[tag] across deltas
       let svSneezeSent = false;   // diagnostic: did [SNEEZE] actually go downstream?
+      let svSneezeRawLogged = false; // one mid-stream "raw" log per turn (survives disconnects)
       // utterance emitter: turn+0.5 so the host line sorts after this turn's
       // analysis events but before the next turn — no seq collision.
       const utterTrace =
@@ -1648,6 +1649,10 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
             ) {
               if (p.delta.text) {
                 hostText += p.delta.text;
+                if (!svSneezeRawLogged && hostText.indexOf("[SNEEZE]") >= 0) {
+                  svSneezeRawLogged = true;
+                  console.log("SNZ raw=true (mid-stream)");
+                }
                 // STAGE-DIRECTION SCRUB (stream-safe, WITH minimal buffering):
                 // Flash reads BOTH "*action*" and "[tag]" aloud. A pair can be
                 // SPLIT across deltas (e.g. "*[I " ... "present]*"), so a purely
@@ -1675,7 +1680,10 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
                 else { emit = svScrubBuf; svScrubBuf = ""; }
                 // Restore the protected [SNEEZE] in whatever we're about to emit.
                 emit = emit.replace(/\u0001SNZ\u0001/g, "[SNEEZE]");
-                if (emit.indexOf("[SNEEZE]") >= 0) svSneezeSent = true;
+                if (emit.indexOf("[SNEEZE]") >= 0) {
+                  if (!svSneezeSent) console.log("SNZ sent=true (mid-stream)");
+                  svSneezeSent = true;
+                }
                 // First emitted chunk: also strip a leading wrapping quote.
                 if (!firstDeltaSeen && emit) {
                   firstDeltaSeen = true;
