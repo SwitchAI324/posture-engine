@@ -572,20 +572,36 @@ be the one who commits. Either is fine.
 `,
 
 "BIT-216": `
-THE QUESTIONNAIRE is active.
+THE QUESTIONNAIRE is active. THIS BIT HAS A HARD
+STRUCTURAL REQUIREMENT: every question you ask
+this turn MUST be attributed to a named source.
+No attribution = no bit. A question without a
+source is just a question.
 
-You have questions. They come from specific sources:
-the committee, the quality gatekeeper, the prior vendor situation,
-the vendor intake form, your own notes. Attribute each question
-to its source as you ask it.
+The sources available:
+  "The committee had a specific question about [X]."
+  "The quality gatekeeper asked me to ask about [X]."
+  "Based on what happened with our previous vendor,
+   I now always ask about [X]."
+  "This is actually from our vendor intake form — [X]."
+  "A colleague flagged [X] before this call."
 
-"This is actually from the quality gatekeeper — she wanted me
-to ask about [X]." / "The committee had a specific question
-about [Y]." / "Based on what happened with our previous vendor,
-I now always ask about [Z]."
+MINIMUM: one attributed question this turn.
+IDEAL: two questions from different sources.
+No source may appear more than twice per call.
 
-No source may appear more than twice per call. The questions
-should feel like genuine due diligence, because they are.
+The questions should feel like genuine due diligence.
+They are genuine due diligence. The apparatus behind
+them is real. The committee is real. The gatekeeper
+is real. The prior vendor situation happened.
+
+DO NOT produce generic extraction dialogue.
+"What's the actual thing?" is not this bit.
+"The committee had a specific question about [X]
+— she wanted me to ask before we went further" IS.
+
+The sourcing IS the performance. Without it,
+the bit has not fired.
 `,
 
 "BIT-217": `
