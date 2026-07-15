@@ -1311,8 +1311,10 @@
   // Scorecard auto-pop is DISCONNECTED for now — the summary will be redesigned to
   // flow from the main screen. Re-enable by flipping this to true (or ?scorecard=1).
   const SCORECARD_ENABLED = (qp.get('scorecard')==='1');
-  let source = (qp.get('source')==='live' || qp.get('call_id') || qp.get('target_id')) ? 'live'
-             : (qp.get('source')==='demo' ? 'demo' : 'replay');
+  // Default is LIVE WATCH — the Mead Hall never self-runs a conversation at you.
+  // The canned demo is opt-in only via ?source=replay (kept for presentations).
+  let source = (qp.get('source')==='replay') ? 'replay'
+             : (qp.get('source')==='demo' ? 'demo' : 'live');
   const FEED_ENDPOINT    = qp.get('endpoint')         || '/api/call-feed';
   const CONTROL_ENDPOINT = qp.get('control_endpoint') || '/api/control';
   let   callId   = qp.get('call_id')   || null;
@@ -1916,15 +1918,15 @@
   (function injectSourceToggle(){ const runBtn=$('#runBtn'); if(!runBtn)return; const bar=runBtn.parentElement; if(!bar)return;
     const wrap=document.createElement('span'); wrap.style.cssText='display:inline-flex;gap:4px;align-items:center;margin-right:8px';
     wrap.innerHTML='<span style="font-size:9px;letter-spacing:.08em;color:#b7afa0;text-transform:uppercase">source</span>'+
-      '<button id="srcReplay" class="chip">demo call</button><button id="srcDemo" class="chip">live AI</button><button id="srcLive" class="chip">live feed</button>';
+      '<button id="srcReplay" class="chip">demo call</button><button id="srcLive" class="chip">live feed</button>';
     bar.insertBefore(wrap, runBtn);
-    function paint(){ $('#srcReplay').classList.toggle('on',source==='replay'); $('#srcDemo').classList.toggle('on',source==='demo'); $('#srcLive').classList.toggle('on',source==='live');
+    function paint(){ $('#srcReplay').classList.toggle('on',source==='replay'); $('#srcLive').classList.toggle('on',source==='live');
       $('#runBtn').textContent = source==='live' ? (feedRunning?'\u23F8 STOP FEED':'\u25B6 WATCH LIVE')
         : source==='replay' ? (rPlaying?'\u23F8 PAUSE':(rIdx>=REPLAY.length?'\u21BB REPLAY':(rIdx>0?'\u25B6 RESUME':'\u25B6 PLAY DEMO CALL')))
         : (running?'\u23F8 PAUSE':'\u25B6 RUN'); }
     window.__paintSrc=paint;
     $('#srcReplay').onclick=()=>{ if(source==='replay')return; liveStop&&liveStop(); if(typeof stopRun==='function')stopRun(); source='replay'; replayReset(); clearForLive(); paint(); toast('Demo call \u2014 press PLAY to watch a scripted raid.'); };
-    $('#srcDemo').onclick=()=>{ if(source==='demo')return; liveStop&&liveStop(); replayStop(); source='demo'; resetCall(); paint(); toast('Live AI \u2014 the Host self-runs (works in-app only).'); };
+    // 'live AI' (in-page AI-on-AI self-run) removed — the Mead Hall is a watch surface.
     $('#srcLive').onclick=()=>{ if(source==='live')return; if(typeof stopRun==='function')stopRun(); replayStop(); source='live'; clearForLive(); paint();
       toast(callId||targetId?'Live feed \u2014 press WATCH LIVE.':'Live feed \u2014 add ?call_id=\u2026 to the URL.'); };
     paint(); })();
