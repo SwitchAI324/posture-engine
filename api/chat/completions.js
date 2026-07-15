@@ -350,7 +350,15 @@ function blendRead(keywordState, read) {
   // stored.gear next turn), so we write out.gear — not out.suspicion.
   if (read.suspicion) {
     const kw = keywordState.suspicion || "alive";
-    out.gear = rank[read.suspicion] > rank[kw] ? read.suspicion : kw;
+    // READER CAP: the async meaning-reader may raise suspicion only as far as
+    // SLIPPING. FOREGONE is terminal and one-way, so it must come only from
+    // the explicit keyword layer (hardExit / the 3-accusation ratchet in
+    // _gears.js) or a Director death blow — never from a one-shot vibe read
+    // of the whole conversation. Without this cap, one weird-sounding call
+    // (e.g. a meandering test call) gets read as foregone and the performance
+    // layer is bricked for the rest of the call on no explicit evidence.
+    const capped = rank[read.suspicion] > rank.slipping ? "slipping" : read.suspicion;
+    out.gear = rank[capped] > rank[kw] ? capped : kw;
   }
   // pressure + engagement: async read wins (reversible, nuance-driven). These
   // ARE stored under their own names.
@@ -1661,11 +1669,15 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
                 // the last point with no OPEN "*" or "[" still pending; hold the
                 // rest until the closer arrives (or the stream ends / flushes).
                 svScrubBuf += p.delta.text;
-                // TEST-MODE PASS-THROUGH: [SNEEZE] must survive to LiveKit (which
-                // catches it before TTS and plays the clip). Protect it with a
-                // placeholder so the stage-direction scrub can't strip it, then
-                // restore it after. All OTHER *actions*/[tags] still get scrubbed.
-                svScrubBuf = svScrubBuf.replace(/\[SNEEZE\]/g, "\u0001SNZ\u0001");
+                // SOUND-MARKER PASS-THROUGH (per the sound-marker contract):
+                // ALL-CAPS bracket tokens ([SNEEZE], [COUGH], [TYPING_LOOP],
+                // [DOOR_SLAM], ...) are AGENT API — the agent strips them and
+                // plays clips; unknown all-caps markers are stripped agent-side,
+                // so passing the whole family is safe. Protect them with
+                // placeholders so the stage-direction scrub can't touch them.
+                // Lowercase/natural-language brackets ([chuckles], [I settle
+                // in...]) remain stage directions and are still stripped here.
+                svScrubBuf = svScrubBuf.replace(/\[([A-Z0-9_]{2,32})\]/g, "\u0001$1\u0001");
                 svScrubBuf = svScrubBuf
                   .replace(/\*[^*\n]{0,80}\*/g, "")
                   .replace(/\[[^\]\n]{0,80}\]/g, "");
@@ -1678,8 +1690,8 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
                 var emit;
                 if (holdAt >= 0) { emit = svScrubBuf.slice(0, holdAt); svScrubBuf = svScrubBuf.slice(holdAt); }
                 else { emit = svScrubBuf; svScrubBuf = ""; }
-                // Restore the protected [SNEEZE] in whatever we're about to emit.
-                emit = emit.replace(/\u0001SNZ\u0001/g, "[SNEEZE]");
+                // Restore protected markers in whatever we're about to emit.
+                emit = emit.replace(/\u0001([A-Z0-9_]+)\u0001/g, "[$1]");
                 if (emit.indexOf("[SNEEZE]") >= 0) {
                   if (!svSneezeSent) console.log("SNZ sent=true (mid-stream)");
                   svSneezeSent = true;
@@ -1697,7 +1709,7 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
               // an unterminated stage direction should never reach TTS.
               if (svScrubBuf) {
                 var flush = svScrubBuf
-                  .replace(/\[SNEEZE\]/g, "\u0001SNZ\u0001")
+                  .replace(/\[([A-Z0-9_]{2,32})\]/g, "\u0001$1\u0001")
                   .replace(/\*[^*\n]{0,80}\*/g, "")
                   .replace(/\[[^\]\n]{0,80}\]/g, "");
                 var os = flush.indexOf("*"), ob = flush.indexOf("[");
@@ -1705,7 +1717,7 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
                 if (os >= 0) cut = os;
                 if (ob >= 0 && (cut < 0 || ob < cut)) cut = ob;
                 if (cut >= 0) flush = flush.slice(0, cut);
-                flush = flush.replace(/\u0001SNZ\u0001/g, "[SNEEZE]");
+                flush = flush.replace(/\u0001([A-Z0-9_]+)\u0001/g, "[$1]");
                 if (flush.indexOf("[SNEEZE]") >= 0) svSneezeSent = true;
                 if (flush) send({ content: flush });
                 svScrubBuf = "";
