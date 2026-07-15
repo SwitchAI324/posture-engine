@@ -16,7 +16,7 @@
 
 export const config = { runtime: "edge" };
 
-import { getCall, getCallBySlug, setCall, isConfigured, appendGearEvent, appendBitEvent, clearDeathBlow, getControls, stampArm, fireArm } from "../_store.js";
+import { getCall, getCallBySlug, setCall, isConfigured, appendGearEvent, appendBitEvent, clearDeathBlow, getControls, stampArm, fireArm, saveTranscript } from "../_store.js";
 import { applyForceAll, postureBlock, defaultState, detectAccusation } from "../_gears.js";
 import { selectBit, rankBits, DEPLOY_THRESHOLD } from "../_bits_scorer.js";
 import { archetypeFromBody } from "../_archetype.js";
@@ -27,6 +27,19 @@ import { autoBenchAction } from "../_bench_auto.js";
 import { makeTrace, blowLandedTotal, bitFireCount } from "../_trace.js";
 import { BITS } from "../_bits_registry.js";
 import { waitUntil } from "@vercel/functions";
+
+// FULL BIT DIRECTIVES (id -> directive prose), same source providers.js
+// compiles the ARMED loadout from. Needed here because AUTO-fired bits (the
+// 61-pool) are NOT in the prefix loadout — without this, the model only ever
+// saw the fired bit's NAME and performed name-flavored mood instead of the
+// routine (the systemic sanding Bits chat diagnosed). Defensive import to
+// mirror providers.js: a missing file degrades to the loadout-pointer
+// fallback, never a build/boot failure.
+let BIT_DIRECTIVES = {};
+try {
+  const mod = await import("../compiler/_bits_directives.js");
+  BIT_DIRECTIVES = mod.default || mod;
+} catch { BIT_DIRECTIVES = {}; }
 
 // HOST NAME is per-call now: it's whoever the spammer emailed, carried on the
 // booking token -> meeting page -> call (variableValues.sv_host_name, also
@@ -505,6 +518,14 @@ export default async function handler(req) {
   let stored = null;
   let ammo = { ammunition: [], byHook: {} };
   let controls = { deathBlow: null, armed: [], sentBench: null };
+  // TRANSCRIPT: persist the full conversation-so-far on every turn, keyed by
+  // callId (room name), slug alongside. Runs after the sv_slug tag strip so
+  // the stored transcript is clean. Last write = the complete transcript when
+  // the call ends — no end-of-call event needed, survives mid-call crashes.
+  // Fire-and-forget via waitUntil; never blocks the voice, never throws.
+  if (callId && isConfigured()) {
+    waitUntil(saveTranscript(callId, slug, messages).catch(() => {}));
+  }
   try {
     const [s, a, ctl] = await Promise.all([
       getCall(callId).catch(() => null),
@@ -1205,16 +1226,41 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       trace.emit("blow_armed", { armed_at: new Date().toISOString() }, "director");
       waitUntil(clearDeathBlow(callId, "fired").catch(() => {}));
     } else if (fire) {
+      // HARDENED FRAMING (Bits chat, Jul 15): the old wording ("work the bit in
+      // ONLY if it lands naturally") made the fire optional, and the model was
+      // producing thematically-adjacent mood instead of the bit's structure —
+      // sanding was systemic across every multi-beat bit. A fire is now a
+      // command to PERFORM the specific routine, not ambient guidance.
+      const bitDirective =
+        BIT_DIRECTIVES && BIT_DIRECTIVES[top.id] && String(BIT_DIRECTIVES[top.id]).trim()
+          ? String(BIT_DIRECTIVES[top.id]).trim()
+          : null;
       mutable +=
-        '\n\nIMPROV BEAT — work the bit "' + top.name +
-        '" into your next line ONLY if it lands naturally. ' +
-        "Never name it; never break character.";
+        '\n\n[BIT ACTIVE: ' + top.id + ' — "' + top.name + '"]\n' +
+        "A specific routine has been selected and MUST be performed this turn. " +
+        "This is not ambient guidance and not a tone suggestion — a bit has " +
+        "fired. " +
+        (bitDirective
+          ? "Its directive follows. Perform ITS specific structure: hit its " +
+            "beats, its required moves, its sequence. Do NOT produce behavior " +
+            "that is merely consistent with the bit's tone — that is a failed " +
+            "performance.\n\n" + bitDirective + "\n\n"
+          : "Its full directive is under " + top.id + " in your ARMED BITS " +
+            "section. Perform THAT routine's specific structure: hit its " +
+            "beats, its required moves, its sequence. Do NOT produce behavior " +
+            "that is merely consistent with the bit's tone — that is a failed " +
+            "performance. ") +
+        "If the bit has sequenced beats, start beat one now and carry the " +
+        "sequence across turns as its directive specifies. Still in force: " +
+        "never name the bit, never break character, and stay in the live " +
+        "thread — the caller's last line still gets a real response woven " +
+        "through the performance.\n[END BIT]";
       // If this bit is fueled, hand the host the REAL scouted fact to weave in.
       const fact = factHint(top, scorerState.byHook);
       if (fact) {
         mutable +=
           "\n\nYou happen to know this about them: " + fact +
-          ". Weave that specific detail in naturally if you use the bit — " +
+          ". Work that specific real detail into the bit's performance — " +
           "quote the real fact, never invent one.";
       }
       const bitBase = {
