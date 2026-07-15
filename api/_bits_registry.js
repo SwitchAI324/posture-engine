@@ -1,1142 +1,147 @@
-// AUTO-GENERATED — compiled bit registry (Bits Library handoff).
-// Source: SpamViking_BitsRegistry.json (75 bits; count+parked+themed tags).
-// Do NOT hand-edit. Regenerate when the Bits Library recompiles.
-// 75 bits.
+// api/_bits_registry.js
+// Source: SpamViking_BitsRegistry.json (140 bits)
+// DO NOT hand-edit. Regenerate from SpamViking_BitsRegistry.json when the Bits Library recompiles.
+// Generated: 2026-07-15
 
 export const BITS = [
-  {
-    "archetypes": "universal",
-    "cooldown": 3,
-    "gear": {
-      "pressure": {
-        "pushing": 1.0,
-        "extracting": 1.0
-      },
-      "engagement": {
-        "bored": 2.0,
-        "hooked": 1.0,
-        "stunned": -1.0
-      }
-    },
-    "id": "BIT-101",
-    "name": "The Echo",
-    "bit_type": "count",
-    "count_label": "phrases adopted"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 3,
-    "gear": {
-      "pressure": {
-        "calm": 0.5,
-        "pushing": 1.0,
-        "extracting": 1.0
-      }
-    },
-    "id": "BIT-102",
-    "name": "Old Saws"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 4,
-    "gear": {
-      "engagement": {
-        "bored": 1.0,
-        "hooked": 1.0,
-        "stunned": 0.0
-      }
-    },
-    "id": "BIT-103",
-    "name": "The Quotes Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 2,
-    "gear": {
-      "pressure": {
-        "calm": 1.0,
-        "pushing": 1.0,
-        "extracting": 1.0
-      }
-    },
-    "id": "BIT-104",
-    "name": "Malaprops",
-    "bit_type": "count",
-    "count_label": "substitutions"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 3,
-    "gear": {
-      "pressure": {
-        "calm": 1.0,
-        "pushing": 1.0,
-        "extracting": 1.0
-      }
-    },
-    "id": "BIT-105",
-    "name": "The Eggcorn Bit",
-    "bit_type": "count",
-    "count_label": "eggcorns"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 4,
-    "gear": {
-      "pressure": {
-        "pushing": 1.0,
-        "extracting": 2.0
-      }
-    },
-    "id": "BIT-106",
-    "name": "The Metric Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 4,
-    "gear": {
-      "pressure": {
-        "pushing": 1.0,
-        "extracting": 2.0
-      }
-    },
-    "id": "BIT-107",
-    "name": "Metric Vs. Imperial"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 3,
-    "gear": {
-      "pressure": {
-        "calm": 1.0,
-        "pushing": 2.0,
-        "extracting": 1.0
-      }
-    },
-    "id": "BIT-108",
-    "name": "The Acronym Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 3,
-    "gear": {
-      "engagement": {
-        "bored": 2.0,
-        "hooked": 0.0,
-        "stunned": -1.0
-      }
-    },
-    "id": "BIT-109",
-    "name": "The Buzzword Lag"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 4,
-    "gear": {
-      "pressure": {
-        "calm": 1.0,
-        "pushing": 1.0,
-        "extracting": 0.0
-      }
-    },
-    "id": "BIT-110",
-    "name": "The Name Pronunciation Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 4,
-    "gear": {
-      "engagement": {
-        "bored": 2.0,
-        "hooked": 1.0,
-        "stunned": 0.0
-      }
-    },
-    "id": "BIT-111",
-    "name": "The Callback Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 3,
-    "gear": {
-      "pressure": {
-        "pushing": 1.0,
-        "extracting": 2.0
-      }
-    },
-    "id": "BIT-112",
-    "name": "The Pause Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 5,
-    "gear": {
-      "engagement": {
-        "bored": -1.0,
-        "hooked": 2.0,
-        "stunned": 1.0
-      }
-    },
-    "id": "BIT-113",
-    "name": "The Movie Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 5,
-    "gear": {
-      "engagement": {
-        "bored": -1.0,
-        "hooked": 2.0,
-        "stunned": 1.0
-      }
-    },
-    "id": "BIT-114",
-    "name": "The Movie Quote / Misquote Bit"
-  },
-  {
-    "archetypes": "universal",
-    "accusations": [
-      "ai"
-    ],
-    "cooldown": 5,
-    "gear": {
-      "suspicion": {
-        "alive": 1.0,
-        "slipping": 2.0,
-        "foregone": 0.0
-      },
-      "engagement": {
-        "hooked": 1.0,
-        "stunned": 2.0,
-        "bored": -1.0
-      }
-    },
-    "id": "BIT-115",
-    "name": "The Robot Voice Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 3,
-    "gear": {
-      "pressure": {
-        "calm": 1.0,
-        "pushing": 2.0,
-        "extracting": 1.0
-      }
-    },
-    "id": "BIT-116",
-    "name": "The Name Collision Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 4,
-    "gear": {
-      "engagement": {
-        "bored": 0.0,
-        "hooked": 2.0,
-        "stunned": 1.0
-      }
-    },
-    "id": "BIT-117",
-    "name": "The Lyric Bit"
-  },
-  {
-    "archetypes": "universal",
-    "fuel_hooks": [
-      "dossier_negation"
-    ],
-    "cooldown": 6,
-    "gear": {
-      "pressure": {
-        "extracting": 2.0
-      },
-      "engagement": {
-        "hooked": 2.0,
-        "stunned": 1.0,
-        "bored": -1.0
-      }
-    },
-    "id": "BIT-118",
-    "name": "The Negation Drop"
-  },
-  {
-    "id": "BIT-119",
-    "name": "The Hype Spiral",
-    "archetypes": [
-      "crypto_investment"
-    ],
-    "gear": {
-      "engagement": {
-        "bored": -1.0,
-        "hooked": 2.0,
-        "stunned": 2.0
-      },
-      "pressure": {
-        "calm": 1.0,
-        "pushing": 2.0,
-        "extracting": 1.0
-      }
-    },
-    "cooldown": 5
-  },
-  {
-    "id": "BIT-120",
-    "name": "The Emotional Crescendo",
-    "archetypes": [
-      "crypto_investment"
-    ],
-    "gear": {
-      "engagement": {
-        "bored": -1.0,
-        "hooked": 2.0,
-        "stunned": 3.0
-      },
-      "pressure": {
-        "pushing": 1.0,
-        "extracting": 2.0
-      }
-    },
-    "cooldown": 5
-  },
-  {
-    "id": "BIT-201",
-    "name": "The Competitor Bit",
-    "archetypes": "universal",
-    "gear": {
-      "engagement": {
-        "bored": 1.0,
-        "hooked": 2.0,
-        "stunned": 0.0
-      }
-    },
-    "cooldown": 4
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 5,
-    "gear": {
-      "pressure": {
-        "calm": 2.0,
-        "pushing": 1.0,
-        "extracting": 0.0
-      },
-      "engagement": {
-        "hooked": 1.0
-      }
-    },
-    "id": "BIT-202",
-    "name": "The Foreshadowing Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 3,
-    "gear": {
-      "pressure": {
-        "calm": 2.0,
-        "pushing": 2.0,
-        "extracting": 1.0
-      }
-    },
-    "id": "BIT-203",
-    "name": "The Agenda Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 4,
-    "gear": {
-      "suspicion": {
-        "slipping": 1.0
-      },
-      "pressure": {
-        "pushing": 2.0,
-        "extracting": 2.0
-      }
-    },
-    "id": "BIT-204",
-    "name": "The Nda Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 4,
-    "gear": {
-      "pressure": {
-        "pushing": 1.0,
-        "extracting": 2.0
-      }
-    },
-    "id": "BIT-205",
-    "name": "The Reschedule Bit"
-  },
-  {
-    "archetypes": [
-      "b2b_saas"
-    ],
-    "cooldown": 4,
-    "gear": {
-      "pressure": {
-        "pushing": 2.0,
-        "extracting": 1.0
-      }
-    },
-    "id": "BIT-206",
-    "name": "The Document Request + Photo Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 3,
-    "gear": {
-      "pressure": {
-        "calm": 1.0,
-        "pushing": 2.0,
-        "extracting": 2.0
-      }
-    },
-    "id": "BIT-207",
-    "name": "The Tom Echo",
-    "bit_type": "count",
-    "count_label": "check-ins"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 4,
-    "gear": {
-      "engagement": {
-        "bored": 1.0,
-        "hooked": 2.0
-      }
-    },
-    "id": "BIT-208",
-    "name": "The Forwarded Email Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 6,
-    "gear": {
-      "engagement": {
-        "bored": 1.0,
-        "hooked": 3.0
-      }
-    },
-    "id": "BIT-209",
-    "name": "The Previous Call Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 3,
-    "gear": {
-      "pressure": {
-        "pushing": 1.0,
-        "extracting": 2.0
-      },
-      "engagement": {
-        "bored": 2.0
-      }
-    },
-    "id": "BIT-210",
-    "name": "Cry Poverty"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 3,
-    "gear": {
-      "pressure": {
-        "pushing": 2.0,
-        "extracting": 3.0
-      }
-    },
-    "id": "BIT-211",
-    "name": "The Silence / The Pile-Up",
-    "bit_type": "count",
-    "count_label": "silences"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 4,
-    "gear": {
-      "pressure": {
-        "calm": 1.0,
-        "pushing": 2.0
-      },
-      "engagement": {
-        "hooked": 1.0
-      }
-    },
-    "id": "BIT-212",
-    "name": "The Join"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 5,
-    "gear": {
-      "suspicion": {
-        "slipping": -1.0,
-        "foregone": -2.0
-      },
-      "engagement": {
-        "hooked": 2.0,
-        "stunned": 1.0,
-        "bored": -1.0
-      }
-    },
-    "id": "BIT-213",
-    "name": "The Accidental Joiner"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 5,
-    "gear": {
-      "pressure": {
-        "extracting": 2.0
-      },
-      "engagement": {
-        "hooked": 2.0,
-        "stunned": 1.0
-      }
-    },
-    "id": "BIT-214",
-    "name": "The Two Spammers"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 3,
-    "gear": {
-      "pressure": {
-        "calm": 1.0,
-        "pushing": 1.0
-      },
-      "engagement": {
-        "hooked": 1.0
-      }
-    },
-    "id": "BIT-215",
-    "name": "No You Go",
-    "bit_type": "count",
-    "count_label": "deferrals"
-  },
-  {
-    "archetypes": [
-      "b2b_saas"
-    ],
-    "cooldown": 4,
-    "gear": {
-      "pressure": {
-        "calm": 2.0,
-        "pushing": 1.0,
-        "extracting": -1.0
-      },
-      "engagement": {
-        "hooked": 2.0,
-        "bored": -1.0,
-        "stunned": -1.0
-      }
-    },
-    "id": "BIT-216",
-    "name": "The Questionnaire"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 6,
-    "gear": {
-      "pressure": {
-        "extracting": 1.0
-      },
-      "engagement": {
-        "bored": -2.0,
-        "hooked": 3.0,
-        "stunned": 2.0
-      }
-    },
-    "id": "BIT-217",
-    "name": "The Conrad Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 4,
-    "gear": {
-      "pressure": {
-        "calm": 1.0,
-        "pushing": 1.0
-      },
-      "engagement": {
-        "bored": 1.0,
-        "hooked": 2.0,
-        "stunned": 1.0
-      }
-    },
-    "id": "BIT-218",
-    "name": "The Introduction"
-  },
-  {
-    "id": "BIT-218",
-    "name": "The Introduction",
-    "archetypes": "universal",
-    "gear": {
-      "engagement": {
-        "bored": 1.0,
-        "hooked": 2.0,
-        "stunned": 1.0
-      },
-      "pressure": {
-        "calm": 1.0,
-        "pushing": 1.0
-      }
-    },
-    "cooldown": 4
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 3,
-    "gear": {
-      "suspicion": {
-        "slipping": 1.0
-      },
-      "pressure": {
-        "pushing": 2.0,
-        "extracting": 3.0
-      }
-    },
-    "id": "BIT-301",
-    "name": "Technical Difficulties"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 4,
-    "gear": {
-      "engagement": {
-        "bored": 1.0,
-        "hooked": 2.0,
-        "stunned": 0.0
-      }
-    },
-    "id": "BIT-302",
-    "name": "The Dog Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 5,
-    "gear": {
-      "engagement": {
-        "bored": 2.0,
-        "hooked": 2.0,
-        "stunned": 1.0
-      }
-    },
-    "id": "BIT-303",
-    "name": "The Insect Bit"
-  },
-  {
-    "archetypes": [
-      "crypto_investment"
-    ],
-    "cooldown": 5,
-    "gear": {
-      "pressure": {
-        "extracting": 3.0
-      },
-      "engagement": {
-        "hooked": 2.0
-      }
-    },
-    "id": "BIT-304",
-    "name": "The Heartbeat Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 3,
-    "gear": {
-      "pressure": {
-        "pushing": 1.0,
-        "extracting": 2.0
-      }
-    },
-    "id": "BIT-305",
-    "name": "The Extensive Typing Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 3,
-    "gear": {
-      "pressure": {
-        "calm": 1.0,
-        "pushing": 1.0
-      }
-    },
-    "id": "BIT-306",
-    "name": "Room Presence Bits"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 4,
-    "gear": {
-      "pressure": {
-        "pushing": 1.0,
-        "extracting": 1.0
-      },
-      "engagement": {
-        "bored": 2.0
-      }
-    },
-    "id": "BIT-307",
-    "name": "The Spill"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 5,
-    "gear": {
-      "engagement": {
-        "stunned": 2.0,
-        "hooked": 1.0,
-        "bored": 0.0
-      }
-    },
-    "id": "BIT-308",
-    "name": "The Snot-Burst / Laughter Reaction"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 5,
-    "gear": {
-      "engagement": {
-        "bored": 2.0,
-        "hooked": 2.0,
-        "stunned": 1.0
-      }
-    },
-    "id": "BIT-309",
-    "name": "The Late Arrival"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 3,
-    "gear": {
-      "suspicion": {
-        "slipping": 1.0
-      },
-      "pressure": {
-        "pushing": 1.0,
-        "extracting": 2.0
-      },
-      "engagement": {
-        "bored": 1.0
-      }
-    },
-    "id": "BIT-310",
-    "name": "The Scapegoat"
-  },
-  {
-    "id": "BIT-310",
-    "name": "The Scapegoat",
-    "archetypes": "universal",
-    "gear": {
-      "pressure": {
-        "pushing": 1.0,
-        "extracting": 2.0
-      },
-      "suspicion": {
-        "slipping": 1.0
-      },
-      "engagement": {
-        "bored": 1.0
-      }
-    },
-    "cooldown": 3
-  },
-  {
-    "id": "BIT-401",
-    "name": "The Wrong Window Bit",
-    "archetypes": "universal",
-    "gear": {
-      "pressure": {
-        "pushing": 2.0,
-        "extracting": 2.0
-      },
-      "suspicion": {
-        "slipping": 1.0
-      }
-    },
-    "cooldown": 4
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 3,
-    "gear": {
-      "pressure": {
-        "calm": 1.0,
-        "pushing": 2.0
-      },
-      "engagement": {
-        "hooked": 1.0
-      }
-    },
-    "id": "BIT-402",
-    "name": "Chat Injection Bit"
-  },
-  {
-    "archetypes": "universal",
-    "accusations": [
-      "ai"
-    ],
-    "cooldown": 4,
-    "gear": {
-      "suspicion": {
-        "alive": 0.0,
-        "slipping": 2.0,
-        "foregone": 1.0
-      }
-    },
-    "id": "BIT-403",
-    "name": "Ai Reacting To Spammer Chat"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 3,
-    "gear": {
-      "engagement": {
-        "hooked": 1.0
-      }
-    },
-    "id": "BIT-404",
-    "name": "The Email Signature Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 3,
-    "gear": {
-      "engagement": {
-        "bored": 2.0,
-        "hooked": 2.0,
-        "stunned": 1.0
-      }
-    },
-    "id": "BIT-405",
-    "name": "The Background Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 5,
-    "gear": {
-      "pressure": {
-        "calm": 1.0
-      },
-      "engagement": {
-        "bored": 2.0,
-        "hooked": 2.0
-      }
-    },
-    "id": "BIT-406",
-    "name": "The Camera On"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 4,
-    "gear": {
-      "engagement": {
-        "bored": 2.0,
-        "hooked": 1.0
-      }
-    },
-    "id": "BIT-501",
-    "name": "The Office Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 4,
-    "gear": {
-      "engagement": {
-        "bored": 1.0,
-        "hooked": 2.0
-      }
-    },
-    "id": "BIT-502",
-    "name": "Personal Background Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 4,
-    "gear": {
-      "engagement": {
-        "bored": 2.0,
-        "hooked": 1.0
-      }
-    },
-    "id": "BIT-503",
-    "name": "Job Title / Company Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 4,
-    "gear": {
-      "suspicion": {
-        "slipping": -1.0
-      },
-      "engagement": {
-        "bored": 1.0,
-        "hooked": 2.0
-      }
-    },
-    "id": "BIT-504",
-    "name": "The Linkedin Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 3,
-    "gear": {
-      "pressure": {
-        "pushing": 1.0,
-        "extracting": 1.0
-      }
-    },
-    "id": "BIT-505",
-    "name": "The Linkedin Profile Bit"
-  },
-  {
-    "archetypes": "universal",
-    "cooldown": 4,
-    "gear": {
-      "suspicion": {
-        "slipping": 1.0
-      },
-      "pressure": {
-        "pushing": 2.0,
-        "extracting": 1.0
-      }
-    },
-    "id": "BIT-506",
-    "name": "The Oversight Bit"
-  },
-  {
-    "archetypes": "universal",
-    "fuel_hooks": [
-      "connection_count"
-    ],
-    "cooldown": 4,
-    "gear": {
-      "engagement": {
-        "bored": 2.0,
-        "hooked": 2.0
-      }
-    },
-    "id": "BIT-601",
-    "name": "The Networker",
-    "status": "parked",
-    "park_reason": "no_producer",
-    "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026."
-  },
-  {
-    "archetypes": "universal",
-    "fuel_hooks": [
-      "company_news"
-    ],
-    "cooldown": 5,
-    "gear": {
-      "pressure": {
-        "calm": 2.0
-      },
-      "engagement": {
-        "bored": 1.0,
-        "hooked": 3.0
-      }
-    },
-    "id": "BIT-602",
-    "name": "Condolences",
-    "status": "parked",
-    "park_reason": "no_producer",
-    "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026."
-  },
-  {
-    "archetypes": "universal",
-    "fuel_hooks": [
-      "employer_dates"
-    ],
-    "cooldown": 4,
-    "gear": {
-      "engagement": {
-        "bored": 2.0,
-        "hooked": 2.0
-      }
-    },
-    "id": "BIT-603",
-    "name": "Tenure Math",
-    "status": "parked",
-    "park_reason": "no_producer",
-    "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026."
-  },
-  {
-    "archetypes": "universal",
-    "fuel_hooks": [
-      "company_rating"
-    ],
-    "cooldown": 5,
-    "gear": {
-      "pressure": {
-        "pushing": 1.0
-      },
-      "engagement": {
-        "bored": 1.0,
-        "hooked": 3.0
-      }
-    },
-    "id": "BIT-604",
-    "name": "Glassdoor",
-    "status": "parked",
-    "park_reason": "no_producer",
-    "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026."
-  },
-  {
-    "archetypes": "universal",
-    "fuel_hooks": [
-      "school"
-    ],
-    "cooldown": 4,
-    "gear": {
-      "engagement": {
-        "bored": 2.0,
-        "hooked": 1.0
-      }
-    },
-    "id": "BIT-605",
-    "name": "The Alumni",
-    "status": "parked",
-    "park_reason": "no_producer",
-    "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026."
-  },
-  {
-    "archetypes": "universal",
-    "fuel_hooks": [
-      "relocation_trail"
-    ],
-    "cooldown": 4,
-    "gear": {
-      "engagement": {
-        "bored": 2.0,
-        "hooked": 1.0
-      }
-    },
-    "id": "BIT-606",
-    "name": "The Relocator",
-    "status": "parked",
-    "park_reason": "no_producer",
-    "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026."
-  },
-  {
-    "archetypes": "universal",
-    "fuel_hooks": [
-      "otw_badge"
-    ],
-    "cooldown": 5,
-    "gear": {
-      "suspicion": {
-        "foregone": 1.0
-      },
-      "engagement": {
-        "hooked": 3.0,
-        "stunned": 1.0
-      }
-    },
-    "id": "BIT-607",
-    "name": "Open To Work",
-    "status": "parked",
-    "park_reason": "no_producer",
-    "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026."
-  },
-  {
-    "archetypes": "universal",
-    "fuel_hooks": [
-      "headline_buzzwords"
-    ],
-    "cooldown": 3,
-    "gear": {
-      "engagement": {
-        "bored": 2.0,
-        "hooked": 1.0
-      }
-    },
-    "id": "BIT-608",
-    "name": "The Headline",
-    "status": "parked",
-    "park_reason": "no_producer",
-    "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026."
-  },
-  {
-    "archetypes": "universal",
-    "intensity": 0.4,
-    "cooldown": 6,
-    "gear": {
-      "suspicion": {
-        "alive": 2.0,
-        "slipping": 1.0,
-        "foregone": -1.0
-      },
-      "pressure": {
-        "extracting": 2.0
-      },
-      "engagement": {
-        "hooked": 2.0
-      }
-    },
-    "id": "BIT-701",
-    "name": "The Callback Hook"
-  },
-  {
-    "id": "BIT-702",
-    "name": "The Guilt Pivot",
-    "archetypes": "universal",
-    "gear": {
-      "engagement": {
-        "bored": 3.0,
-        "hooked": 0.0,
-        "stunned": -1.0
-      },
-      "pressure": {
-        "extracting": 2.0
-      }
-    },
-    "intensity": 0.5,
-    "cooldown": 6
-  },
-  {
-    "id": "BIT-703",
-    "name": "The Confused Recap",
-    "archetypes": "universal",
-    "gear": {
-      "pressure": {
-        "extracting": 3.0
-      },
-      "engagement": {
-        "hooked": 1.0
-      }
-    },
-    "intensity": 0.6,
-    "cooldown": 6
-  },
-  {
-    "id": "BIT-704",
-    "name": "The Colleague Pull",
-    "archetypes": "universal",
-    "gear": {
-      "engagement": {
-        "hooked": 2.0,
-        "stunned": 2.0
-      }
-    },
-    "intensity": 0.5,
-    "cooldown": 6
-  },
-  {
-    "id": "BIT-705",
-    "name": "The Send-Off",
-    "archetypes": "universal",
-    "gear": {
-      "suspicion": {
-        "alive": 3.0,
-        "slipping": 0.0,
-        "foregone": -2.0
-      },
-      "engagement": {
-        "hooked": 2.0
-      }
-    },
-    "intensity": 0.3,
-    "cooldown": 6
-  }
+  {"id": "BIT-101", "name": "The Echo", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "phrases adopted", "fuel_hooks": ["pitch_claims"], "cooldown": 3, "gear": {"pressure": {"pushing": 1.0, "extracting": 1.0}, "engagement": {"bored": 2.0, "hooked": 1.0, "stunned": -1.0}}, "phase_pref": "pitching"},
+  {"id": "BIT-102", "name": "Old Saws", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"pressure": {"calm": 0.5, "pushing": 1.0, "extracting": 1.0}}},
+  {"id": "BIT-103", "name": "The Quotes Bit", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 1.0, "hooked": 1.0, "stunned": 0.0}}},
+  {"id": "BIT-104", "name": "Malaprops", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "substitutions", "cooldown": 2, "gear": {"pressure": {"calm": 1.0, "pushing": 1.0, "extracting": 1.0}}},
+  {"id": "BIT-105", "name": "The Eggcorn Bit", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "eggcorns", "cooldown": 3, "gear": {"pressure": {"calm": 1.0, "pushing": 1.0, "extracting": 1.0}}},
+  {"id": "BIT-106", "name": "The Metric Bit", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"pressure": {"pushing": 1.0, "extracting": 2.0}}},
+  {"id": "BIT-107", "name": "Metric Vs. Imperial", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"pressure": {"pushing": 1.0, "extracting": 2.0}}},
+  {"id": "BIT-108", "name": "The Acronym Bit", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"pressure": {"calm": 1.0, "pushing": 2.0, "extracting": 1.0}}},
+  {"id": "BIT-109", "name": "The Buzzword Lag", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"engagement": {"bored": 2.0, "hooked": 0.0, "stunned": -1.0}}},
+  {"id": "BIT-110", "name": "The Name Pronunciation Bit", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"pressure": {"calm": 1.0, "pushing": 1.0, "extracting": 0.0}}},
+  {"id": "BIT-111", "name": "The Callback Bit", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 1.0, "stunned": 0.0}}},
+  {"id": "BIT-112", "name": "The Pause Bit", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"pressure": {"pushing": 1.0, "extracting": 2.0}}, "phase_pref": "drifting"},
+  {"id": "BIT-112b", "name": "Still Going?", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "overheld pauses", "cooldown": 3, "gear": {"suspicion": {"alive": 1.0, "slipping": 2.0}, "pressure": {"pushing": 1.0, "extracting": 2.0}, "engagement": {"bored": 2.0, "hooked": 2.0}}, "phase_pref": "drifting"},
+  {"id": "BIT-113", "name": "The Movie Bit", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"bored": -1.0, "hooked": 2.0, "stunned": 1.0}}},
+  {"id": "BIT-114", "name": "The Movie Quote / Misquote Bit", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"bored": -1.0, "hooked": 2.0, "stunned": 1.0}}},
+  {"id": "BIT-115", "name": "The Robot Voice Bit", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"suspicion": {"alive": 1.0, "slipping": 2.0, "foregone": 0.0}, "engagement": {"hooked": 1.0, "stunned": 2.0, "bored": -1.0}}},
+  {"id": "BIT-116", "name": "The Name Collision Bit", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"pressure": {"calm": 1.0, "pushing": 2.0, "extracting": 1.0}}},
+  {"id": "BIT-117", "name": "The Lyric Bit", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 0.0, "hooked": 2.0, "stunned": 1.0}}},
+  {"id": "BIT-118", "name": "The Negation Drop", "status": "active", "archetypes": "universal", "fuel_hooks": ["dossier_negation"], "cooldown": 6, "gear": {"pressure": {"extracting": 2.0}, "engagement": {"hooked": 2.0, "stunned": 1.0, "bored": -1.0}}, "phase_pref": "pitching"},
+  {"id": "BIT-119", "name": "The Hype Spiral", "status": "active", "archetypes": ["crypto_investment"], "cooldown": 5, "gear": {"engagement": {"bored": -1.0, "hooked": 2.0, "stunned": 2.0}, "pressure": {"calm": 1.0, "pushing": 2.0, "extracting": 1.0}}, "phase_pref": "pitching"},
+  {"id": "BIT-120", "name": "The Emotional Crescendo", "status": "active", "archetypes": ["crypto_investment"], "cooldown": 5, "gear": {"engagement": {"bored": -1.0, "hooked": 2.0, "stunned": 3.0}, "pressure": {"pushing": 1.0, "extracting": 2.0}}},
+  {"id": "BIT-121", "name": "My Name, Actually", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0, "stunned": 1.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
+  {"id": "BIT-122", "name": "I Get That A Lot", "status": "active", "archetypes": "universal", "cooldown": 6, "gear": {"engagement": {"bored": 1.0, "hooked": 1.0, "stunned": 2.0}, "suspicion": {"alive": 1.0, "slipping": 1.0}}},
+  {"id": "BIT-123", "name": "The Strong Opinion", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"hooked": 2.0, "stunned": 1.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
+  {"id": "BIT-124", "name": "The Previous Vendor", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"pressure": {"pushing": 1.0, "extracting": 1.0}, "engagement": {"hooked": 2.0, "stunned": 1.0}}},
+  {"id": "BIT-125", "name": "The Tangent", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "tangents", "cooldown": 3, "gear": {"engagement": {"bored": 2.0, "hooked": 1.0}, "pressure": {"calm": 1.0}}},
+  {"id": "BIT-126", "name": "The Aside", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
+  {"id": "BIT-127", "name": "The Correction", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "self-corrections", "cooldown": 3, "gear": {"engagement": {"bored": 1.0, "hooked": 1.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
+  {"id": "BIT-128", "name": "The Pivot Question", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"suspicion": {"slipping": 2.0, "foregone": 1.0}, "pressure": {"extracting": 2.0, "pushing": 1.0}, "engagement": {"bored": 3.0, "hooked": 1.0}}, "phase_pref": "drifting"},
+  {"id": "BIT-129", "name": "The Reframe", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"suspicion": {"slipping": 2.0}, "pressure": {"extracting": 2.0, "pushing": 1.0}, "engagement": {"bored": 3.0, "hooked": 1.0}}, "phase_pref": "drifting"},
+  {"id": "BIT-130", "name": "How Are You", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "genuine answers", "cooldown": 5, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0}, "pressure": {"calm": 2.0}}, "phase_pref": "opening"},
+  {"id": "BIT-131", "name": "The Busy Escalation", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "busy exchanges", "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 1.0}, "pressure": {"calm": 2.0}}, "phase_pref": "opening"},
+  {"id": "BIT-132", "name": "The Expansion News", "status": "active", "archetypes": "universal", "cooldown": 6, "gear": {"suspicion": {"alive": 2.0, "slipping": 1.0}, "engagement": {"hooked": 2.0, "stunned": 2.0}, "pressure": {"pushing": 1.0}}, "phase_pref": "opening"},
+  {"id": "BIT-133", "name": "Audio Verification", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "audio checks", "cooldown": 3, "gear": {"engagement": {"bored": 2.0}, "pressure": {"calm": 2.0}}, "phase_pref": "opening"},
+  {"id": "BIT-134", "name": "Six Degrees", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0}, "pressure": {"calm": 1.0}}, "phase_pref": "opening"},
+  {"id": "BIT-135", "name": "The Punctuality", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0}, "pressure": {"calm": 2.0}}, "phase_pref": "opening"},
+  {"id": "BIT-136", "name": "The Commute", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 1.0}, "pressure": {"calm": 1.0}}},
+  {"id": "BIT-137", "name": "The History Lesson", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 2.0, "stunned": 1.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
+  {"id": "BIT-138", "name": "The Hobby", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"engagement": {"hooked": 3.0, "stunned": 2.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
+  {"id": "BIT-139", "name": "Genealogy", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"bored": 2.0, "hooked": 2.0}, "pressure": {"calm": 1.0}}},
+  {"id": "BIT-140", "name": "The Bucket List", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"hooked": 2.0, "stunned": 1.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
+  {"id": "BIT-141", "name": "Sports Expectations", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0}, "pressure": {"calm": 1.0}}},
+  {"id": "BIT-142", "name": "Fantasy Football", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0, "stunned": 1.0}, "pressure": {"calm": 1.0}}},
+  {"id": "BIT-143", "name": "The Challenge Riff", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"hooked": 2.0, "stunned": 1.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
+  {"id": "BIT-144", "name": "Celebrity Sighting", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0, "stunned": 2.0}, "pressure": {"calm": 1.0}}},
+  {"id": "BIT-145", "name": "The Sniglet", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
+  {"id": "BIT-201", "name": "The Competitor Bit", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0, "stunned": 0.0}}},
+  {"id": "BIT-202", "name": "The Foreshadowing Bit", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"pressure": {"calm": 2.0, "pushing": 1.0, "extracting": 0.0}, "engagement": {"hooked": 1.0}}},
+  {"id": "BIT-203", "name": "The Agenda Bit", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"pressure": {"calm": 2.0, "pushing": 2.0, "extracting": 1.0}}},
+  {"id": "BIT-204", "name": "The Nda Bit", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"suspicion": {"slipping": 1.0}, "pressure": {"pushing": 2.0, "extracting": 2.0}}},
+  {"id": "BIT-205", "name": "The Reschedule Bit", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"pressure": {"pushing": 1.0, "extracting": 2.0}}},
+  {"id": "BIT-206", "name": "The Document Request + Photo Bit", "status": "active", "archetypes": ["b2b_saas"], "cooldown": 4, "gear": {"pressure": {"pushing": 2.0, "extracting": 1.0}}},
+  {"id": "BIT-207", "name": "The Tom Echo", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "check-ins", "cooldown": 3, "gear": {"pressure": {"calm": 1.0, "pushing": 2.0, "extracting": 2.0}}},
+  {"id": "BIT-208", "name": "The Forwarded Email Bit", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0}}},
+  {"id": "BIT-209", "name": "The Previous Call Bit", "status": "active", "archetypes": "universal", "cooldown": 6, "gear": {"engagement": {"bored": 1.0, "hooked": 3.0}}},
+  {"id": "BIT-210", "name": "Cry Poverty", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"pressure": {"pushing": 1.0, "extracting": 2.0}, "engagement": {"bored": 2.0}}},
+  {"id": "BIT-211", "name": "The Silence / The Pile-Up", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "silences", "cooldown": 3, "gear": {"pressure": {"pushing": 2.0, "extracting": 3.0}}},
+  {"id": "BIT-212", "name": "The Join", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"pressure": {"calm": 1.0, "pushing": 2.0}, "engagement": {"hooked": 1.0}}},
+  {"id": "BIT-213", "name": "The Accidental Joiner", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"suspicion": {"slipping": -1.0, "foregone": -2.0}, "engagement": {"hooked": 2.0, "stunned": 1.0, "bored": -1.0}}},
+  {"id": "BIT-214", "name": "The Two Spammers", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"pressure": {"extracting": 2.0}, "engagement": {"hooked": 2.0, "stunned": 1.0}}},
+  {"id": "BIT-215", "name": "No You Go", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "deferrals", "cooldown": 3, "gear": {"pressure": {"calm": 1.0, "pushing": 1.0}, "engagement": {"hooked": 1.0}}},
+  {"id": "BIT-216", "name": "The Questionnaire", "status": "active", "archetypes": ["b2b_saas"], "cooldown": 4, "gear": {"pressure": {"calm": 2.0, "pushing": 1.0, "extracting": -1.0}, "engagement": {"hooked": 2.0, "bored": -1.0, "stunned": -1.0}}, "phase_pref": "probing"},
+  {"id": "BIT-217", "name": "The Conrad Bit", "status": "active", "archetypes": "universal", "cooldown": 6, "gear": {"pressure": {"extracting": 1.0}, "engagement": {"bored": -2.0, "hooked": 3.0, "stunned": 2.0}}},
+  {"id": "BIT-218", "name": "The Introduction", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"pressure": {"calm": 1.0, "pushing": 1.0}, "engagement": {"bored": 1.0, "hooked": 2.0, "stunned": 1.0}}},
+  {"id": "BIT-219", "name": "The Terrible Notes", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 2.0, "stunned": 1.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
+  {"id": "BIT-220", "name": "Offscreen Chaos", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 2.0, "stunned": 1.0}, "pressure": {"calm": 1.0, "pushing": 1.0, "extracting": 1.0}}},
+  {"id": "BIT-221", "name": "The Name Slip", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0, "stunned": 2.0}, "suspicion": {"slipping": 1.0}}},
+  {"id": "BIT-222", "name": "The Overlap", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "overlaps", "cooldown": 3, "gear": {"engagement": {"bored": 2.0, "hooked": 1.0}, "pressure": {"calm": 1.0}}},
+  {"id": "BIT-223", "name": "The Hard Stop", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"pressure": {"pushing": 2.0, "extracting": 2.0}, "engagement": {"hooked": 2.0, "stunned": 1.0}}, "phase_pref": "probing"},
+  {"id": "BIT-224", "name": "The CC Mistake", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"suspicion": {"slipping": 1.0}, "engagement": {"hooked": 2.0, "stunned": 2.0}}},
+  {"id": "BIT-225", "name": "The Reference Check", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"suspicion": {"alive": 1.0, "slipping": 1.0}, "pressure": {"pushing": 1.0, "extracting": 1.0}, "engagement": {"hooked": 2.0}}, "phase_pref": "probing"},
+  {"id": "BIT-226", "name": "The Reintroduction", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"bored": 2.0, "hooked": 1.0}, "pressure": {"calm": 1.0}}},
+  {"id": "BIT-227", "name": "The Recap", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"pressure": {"calm": 1.0, "pushing": 1.0}, "engagement": {"bored": 2.0, "hooked": 1.0}}},
+  {"id": "BIT-228", "name": "The Time Check", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "time checks", "cooldown": 3, "gear": {"pressure": {"pushing": 1.0, "extracting": 1.0}, "engagement": {"bored": 1.0, "hooked": 1.0}}},
+  {"id": "BIT-229", "name": "The Dropped Thread", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
+  {"id": "BIT-230", "name": "The Deadline Mention", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"suspicion": {"slipping": 1.0, "foregone": 2.0}, "pressure": {"extracting": 3.0, "pushing": 2.0}, "engagement": {"bored": 2.0}}, "phase_pref": "probing"},
+  {"id": "BIT-231", "name": "The Competing Vendor", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"suspicion": {"slipping": 2.0, "foregone": 1.0}, "pressure": {"extracting": 3.0, "pushing": 2.0}, "engagement": {"bored": 2.0, "hooked": 1.0}}, "phase_pref": "probing"},
+  {"id": "BIT-232", "name": "The Weather", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 1.0}, "pressure": {"calm": 2.0}}, "phase_pref": "opening"},
+  {"id": "BIT-301", "name": "Technical Difficulties", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"suspicion": {"slipping": 1.0}, "pressure": {"pushing": 2.0, "extracting": 3.0}}},
+  {"id": "BIT-302", "name": "The Dog Bit", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0, "stunned": 0.0}}},
+  {"id": "BIT-303", "name": "The Insect Bit", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"bored": 2.0, "hooked": 2.0, "stunned": 1.0}}},
+  {"id": "BIT-304", "name": "The Heartbeat Bit", "status": "active", "archetypes": ["crypto_investment"], "cooldown": 5, "gear": {"pressure": {"extracting": 3.0}, "engagement": {"hooked": 2.0}}, "phase_pref": "pitching"},
+  {"id": "BIT-305", "name": "The Extensive Typing Bit", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"pressure": {"pushing": 1.0, "extracting": 2.0}}},
+  {"id": "BIT-306", "name": "Room Presence Bits", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"pressure": {"calm": 1.0, "pushing": 1.0}}},
+  {"id": "BIT-307", "name": "The Spill", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"pressure": {"pushing": 1.0, "extracting": 1.0}, "engagement": {"bored": 2.0}}},
+  {"id": "BIT-308", "name": "The Snot-Burst / Laughter Reaction", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"stunned": 2.0, "hooked": 1.0, "bored": 0.0}}},
+  {"id": "BIT-309", "name": "The Late Arrival", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"bored": 2.0, "hooked": 2.0, "stunned": 1.0}}, "phase_pref": "opening"},
+  {"id": "BIT-310", "name": "The Scapegoat", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"suspicion": {"slipping": 1.0}, "pressure": {"pushing": 1.0, "extracting": 2.0}, "engagement": {"bored": 1.0}}},
+  {"id": "BIT-311", "name": "The Sick Day", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"bored": 2.0, "hooked": 2.0, "stunned": 1.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
+  {"id": "BIT-312", "name": "Barbara", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 2.0, "stunned": 1.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
+  {"id": "BIT-313", "name": "The Hangover", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"bored": 2.0, "hooked": 2.0, "stunned": 1.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
+  {"id": "BIT-314", "name": "The Unmuted Door", "status": "active", "archetypes": "universal", "cooldown": 6, "gear": {"engagement": {"bored": 2.0, "hooked": 2.0, "stunned": 2.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
+  {"id": "BIT-315", "name": "The Wrong Link", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"pressure": {"calm": 1.0, "pushing": 1.0}, "engagement": {"bored": 2.0, "hooked": 1.0}}},
+  {"id": "BIT-317", "name": "The Update", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"pressure": {"calm": 1.0, "pushing": 1.0}, "engagement": {"bored": 2.0, "hooked": 1.0}}},
+  {"id": "BIT-318", "name": "The Mute Confusion", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "mute incidents", "cooldown": 3, "gear": {"pressure": {"calm": 1.0}, "engagement": {"bored": 2.0, "hooked": 1.0}}},
+  {"id": "BIT-319", "name": "The Phone Call", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"pressure": {"calm": 1.0, "pushing": 1.0}, "engagement": {"bored": 2.0, "hooked": 1.0}}},
+  {"id": "BIT-320", "name": "The Knock", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"pressure": {"calm": 1.0}, "engagement": {"bored": 2.0, "hooked": 1.0}}},
+  {"id": "BIT-321", "name": "The Child", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"pressure": {"calm": 1.0}, "engagement": {"bored": 2.0, "hooked": 1.0, "stunned": 1.0}}},
+  {"id": "BIT-322", "name": "The Alarm", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"pressure": {"calm": 1.0, "pushing": 1.0}, "engagement": {"bored": 2.0, "hooked": 1.0, "stunned": 1.0}}},
+  {"id": "BIT-323", "name": "The Colleague At The Door", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"pressure": {"calm": 1.0}, "engagement": {"bored": 2.0, "hooked": 1.0}}},
+  {"id": "BIT-324", "name": "The Window", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"suspicion": {"slipping": 1.0, "foregone": 1.0}, "pressure": {"calm": 1.0, "pushing": 1.0}, "engagement": {"bored": 3.0, "stunned": 1.0}}, "phase_pref": "drifting"},
+  {"id": "BIT-325", "name": "The Admission", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"suspicion": {"slipping": 2.0, "foregone": 1.0}, "pressure": {"extracting": 2.0}, "engagement": {"bored": 3.0, "stunned": 2.0}}, "phase_pref": "drifting"},
+  {"id": "BIT-326", "name": "The Commute", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 1.0}, "pressure": {"calm": 1.0}}, "phase_pref": "opening"},
+  {"id": "BIT-327", "name": "The History Lesson", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 2.0, "stunned": 1.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
+  {"id": "BIT-328", "name": "The Hobby", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"engagement": {"hooked": 3.0, "stunned": 2.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
+  {"id": "BIT-401", "name": "The Wrong Window Bit", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"pressure": {"pushing": 2.0, "extracting": 2.0}, "suspicion": {"slipping": 1.0}}},
+  {"id": "BIT-402", "name": "Chat Injection Bit", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"pressure": {"calm": 1.0, "pushing": 2.0}, "engagement": {"hooked": 1.0}}},
+  {"id": "BIT-403", "name": "Ai Reacting To Spammer Chat", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"suspicion": {"alive": 0.0, "slipping": 2.0, "foregone": 1.0}}},
+  {"id": "BIT-404", "name": "The Email Signature Bit", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"engagement": {"hooked": 1.0}}},
+  {"id": "BIT-405", "name": "The Background Bit", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"engagement": {"bored": 2.0, "hooked": 2.0, "stunned": 1.0}}},
+  {"id": "BIT-406", "name": "The Camera On", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"pressure": {"calm": 1.0}, "engagement": {"bored": 2.0, "hooked": 2.0}}},
+  {"id": "BIT-407", "name": "The Frozen Screen", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"pressure": {"calm": 1.0, "pushing": 1.0}, "engagement": {"bored": 2.0, "stunned": 1.0}}},
+  {"id": "BIT-408", "name": "Camera Off", "status": "active", "archetypes": "universal", "cooldown": 6, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0, "stunned": 2.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}, "phase_pref": "opening"},
+  {"id": "BIT-501", "name": "The Office Bit", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 1.0}}},
+  {"id": "BIT-502", "name": "Personal Background Bit", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0}}},
+  {"id": "BIT-503", "name": "Job Title / Company Bit", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 1.0}}},
+  {"id": "BIT-504", "name": "The Linkedin Bit", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"suspicion": {"slipping": -1.0}, "engagement": {"bored": 1.0, "hooked": 2.0}}},
+  {"id": "BIT-505", "name": "The Linkedin Profile Bit", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"pressure": {"pushing": 1.0, "extracting": 1.0}}},
+  {"id": "BIT-506", "name": "The Oversight Bit", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"suspicion": {"slipping": 1.0}, "pressure": {"pushing": 2.0, "extracting": 1.0}}},
+  {"id": "BIT-507", "name": "The Fiji Callback", "status": "active", "archetypes": "universal", "fuel_hooks": ["browsed_tmi"], "cooldown": 6, "gear": {"engagement": {"bored": 1.0, "hooked": 3.0, "stunned": 3.0}, "suspicion": {"alive": 1.0, "slipping": 2.0}}},
+  {"id": "BIT-508", "name": "Have We Spoken", "status": "active", "archetypes": "universal", "fuel_hooks": ["prior_contact"], "cooldown": 5, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0, "stunned": 2.0}, "suspicion": {"alive": 1.0, "slipping": 2.0}}},
+  {"id": "BIT-509", "name": "You Were Going To", "status": "active", "archetypes": "universal", "fuel_hooks": ["call_callback"], "cooldown": 4, "gear": {"pressure": {"pushing": 1.0, "extracting": 2.0}, "engagement": {"bored": 1.0, "hooked": 2.0}}},
+  {"id": "BIT-510", "name": "I Thought You Said", "status": "active", "archetypes": "universal", "fuel_hooks": ["call_claim"], "cooldown": 5, "gear": {"pressure": {"extracting": 2.0, "pushing": 1.0}, "suspicion": {"alive": 1.0, "slipping": 1.0}, "engagement": {"hooked": 2.0, "stunned": 1.0}}},
+  {"id": "BIT-511", "name": "You Were Going To Send", "status": "active", "archetypes": "universal", "fuel_hooks": ["call_commitment"], "cooldown": 5, "gear": {"pressure": {"pushing": 2.0, "extracting": 2.0}, "engagement": {"bored": 1.0, "hooked": 2.0}, "suspicion": {"slipping": 1.0}}},
+  {"id": "BIT-512", "name": "Are You In", "status": "active", "archetypes": "universal", "fuel_hooks": ["office_location"], "cooldown": 4, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0, "stunned": 1.0}, "suspicion": {"alive": 1.0}}},
+  {"id": "BIT-513", "name": "I Saw In Your Materials", "status": "active", "archetypes": "universal", "fuel_hooks": ["attachment_facts"], "cooldown": 4, "gear": {"engagement": {"hooked": 3.0, "stunned": 2.0, "bored": -1.0}, "pressure": {"pushing": 1.0, "extracting": 2.0}}},
+  {"id": "BIT-514", "name": "The Prep Mismatch", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"suspicion": {"alive": 1.0}, "engagement": {"hooked": 2.0, "stunned": 1.0}, "pressure": {"pushing": 1.0}}},
+  {"id": "BIT-601", "name": "The Networker", "status": "parked", "park_reason": "no_producer", "archetypes": "universal", "fuel_hooks": ["connection_count"], "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 2.0}}},
+  {"id": "BIT-602", "name": "Condolences", "status": "parked", "park_reason": "no_producer", "archetypes": "universal", "fuel_hooks": ["company_news"], "cooldown": 5, "gear": {"pressure": {"calm": 2.0}, "engagement": {"bored": 1.0, "hooked": 3.0}}},
+  {"id": "BIT-603", "name": "Tenure Math", "status": "parked", "park_reason": "no_producer", "archetypes": "universal", "fuel_hooks": ["employer_dates"], "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 2.0}}},
+  {"id": "BIT-604", "name": "Glassdoor", "status": "parked", "park_reason": "no_producer", "archetypes": "universal", "fuel_hooks": ["company_rating"], "cooldown": 5, "gear": {"pressure": {"pushing": 1.0}, "engagement": {"bored": 1.0, "hooked": 3.0}}},
+  {"id": "BIT-605", "name": "The Alumni", "status": "parked", "park_reason": "no_producer", "archetypes": "universal", "fuel_hooks": ["school"], "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 1.0}}},
+  {"id": "BIT-606", "name": "The Relocator", "status": "parked", "park_reason": "no_producer", "archetypes": "universal", "fuel_hooks": ["relocation_trail"], "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 1.0}}},
+  {"id": "BIT-607", "name": "Open To Work", "status": "parked", "park_reason": "no_producer", "archetypes": "universal", "fuel_hooks": ["otw_badge"], "cooldown": 5, "gear": {"suspicion": {"foregone": 1.0}, "engagement": {"hooked": 3.0, "stunned": 1.0}}},
+  {"id": "BIT-608", "name": "The Headline", "status": "parked", "park_reason": "no_producer", "archetypes": "universal", "fuel_hooks": ["headline_buzzwords"], "cooldown": 3, "gear": {"engagement": {"bored": 2.0, "hooked": 1.0}}},
+  {"id": "BIT-701", "name": "The Callback Hook", "status": "active", "archetypes": "universal", "cooldown": 6, "intensity": 0.4, "gear": {"suspicion": {"alive": 2.0, "slipping": 1.0, "foregone": -1.0}, "pressure": {"extracting": 2.0}, "engagement": {"hooked": 2.0}}},
+  {"id": "BIT-702", "name": "The Guilt Pivot", "status": "active", "archetypes": "universal", "cooldown": 6, "intensity": 0.5, "gear": {"engagement": {"bored": 3.0, "hooked": 0.0, "stunned": -1.0}, "pressure": {"extracting": 2.0}}},
+  {"id": "BIT-703", "name": "The Confused Recap", "status": "active", "archetypes": "universal", "cooldown": 6, "intensity": 0.6, "gear": {"pressure": {"extracting": 3.0}, "engagement": {"hooked": 1.0}}},
+  {"id": "BIT-704", "name": "The Colleague Pull", "status": "active", "archetypes": "universal", "cooldown": 6, "intensity": 0.5, "gear": {"engagement": {"hooked": 2.0, "stunned": 2.0}}},
+  {"id": "BIT-705", "name": "The Send-Off", "status": "active", "archetypes": "universal", "cooldown": 6, "intensity": 0.3, "gear": {"suspicion": {"alive": 3.0, "slipping": 0.0, "foregone": -2.0}, "engagement": {"hooked": 2.0}}},
 ];
