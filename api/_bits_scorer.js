@@ -1,8 +1,8 @@
 // SpamViking — Posture Engine: BIT SELECTION (scorer over the real registry)
 // ----------------------------------------------------------------------
-// One ranking mechanism for the whole library (71 compiled bits). Death-blow
-// finishers (the 700s) are the special case — same scorer, triggered at the
-// Director's break-glass, always-fire.
+// One ranking mechanism for the whole library. Death-blow finishers (the 700s)
+// are the special case — same scorer, triggered at the Director's break-glass,
+// always-fire.
 //
 //   effective_score = fit_score + gear_bias - recency_penalty
 //
@@ -15,14 +15,13 @@
 //   recency        — suppress a just-used bit; decays over its cooldown.
 //
 // Two-stage pick: LOADOUT (per-turn candidacy — drop death blows, fuel-less,
-// and bits the moment actively doesn't want) narrows the 71 to a focused set;
-// then we RANK that set. Narrow hard, pick easy.
+// parked, and bits the CALL TURN has closed the door on) narrows the registry
+// to a focused set; then we RANK that set. Narrow hard, pick easy.
 //
 // Engine PICKS; prompt/pack PERFORMS. Pure & synchronous — safe on the hot
 // path; runs no LLM. Registry is compiled from the Bits Library — never
 // hand-authored here (see api/_bits_registry.js).
 // ----------------------------------------------------------------------
-
 import { BITS } from "./_bits_registry.js";
 
 export const WEIGHTS = {
@@ -47,6 +46,31 @@ export const WEIGHTS = {
 // alongside MIN_GAP and WARMUP_TURNS.
 export const DEPLOY_THRESHOLD = parseFloat(process.env.DEPLOY_THRESHOLD || "1.5");
 
+// OPENING GATE (Bits chat spec, Jul 15) — the last caller-turn on which an
+// opening-only bit may still fire. Opening bits are about ARRIVING ("how are
+// you", the commute, camera-off, the late arrival); at turn 12 they are
+// nonsense no matter how they score, so this is an EXCLUSION, not a bias.
+//
+// Why both this AND WEIGHTS.phasePref exist, per Bits:
+//   phase_pref bias  -> PREFERENCE. Soft (+1.5). Can be outranked. Says
+//                       "this fits the opening better than other moments."
+//   this turn gate   -> AVAILABILITY. Hard. Says "this bit no longer exists
+//                       as an option." A soft bias alone cannot stop a strong
+//                       opening bit from topping the ranking mid-pitch.
+//
+// Implemented as the RULE (phase_pref === "opening"), not a hardcoded ID list —
+// Bits' explicit preference, so future opening bits inherit the gate with no
+// PE change. Bits' reference list at time of writing: BIT-130 How Are You,
+// BIT-131 Busy Escalation, BIT-132 Expansion News, BIT-133 Audio Verification,
+// BIT-134 Six Degrees, BIT-135 Punctuality, BIT-232 Weather, BIT-309 Late
+// Arrival, BIT-326 Commute, BIT-408 Camera Off. The rule only catches bits the
+// REGISTRY tags phase_pref:"opening" — if 309/408 are meant to be gated, they
+// must carry that tag in the compiled registry.
+//
+// Env-tunable so it can be dialed without a deploy, matching MIN_GAP /
+// WARMUP_TURNS / DEPLOY_THRESHOLD.
+export const OPENING_MAX_TURN = parseInt(process.env.OPENING_MAX_TURN || "3", 10);
+
 // Death blows are the 700-series. Identified by id, not a separate `kind`.
 const isDeathBlow = (b) => /^BIT-7\d\d$/.test(b.id);
 
@@ -54,6 +78,8 @@ const isDeathBlow = (b) => /^BIT-7\d\d$/.test(b.id);
 // content-less/social stretch. When state.extended_stall is set, their score
 // is multiplied so one lifts above the general pool. Add future stall-breakers
 // here. STALL_MULTIPLIER is env-tunable.
+// NOTE (Jul 15): none of these ids exist in the currently compiled registry —
+// this whole family is a no-op until the Bits Library recompiles _bits_registry.js.
 const STALL_BREAKERS = new Set(["BIT-128", "BIT-129", "BIT-230", "BIT-231", "BIT-324", "BIT-325"]);
 const STALL_MULTIPLIER = parseFloat(process.env.STALL_MULTIPLIER || "2.5");
 
@@ -160,7 +186,6 @@ export function scoreBit(bit, state) {
   const g = gearBias(bit, state);
   const r = recencyPenalty(bit, state);
   const intent = isDeathBlow(bit) ? (bit.intensity || 0) : 0;
-
   // SEQUENCING — relative to the last bit fired, so a call BUILDS instead of
   // throwing independent gags. Chaining rewards escalation (toward stunned);
   // category spacing discourages the same kind of bit twice running.
@@ -180,12 +205,12 @@ export function scoreBit(bit, state) {
       seqWhy.push(`same category as last -${WEIGHTS.categorySpacing}`);
     }
   }
-
   const fitTotal = f.score + fuel.boost;
   // PHASE bias (soft): if the bit declares a phase_pref ("opening" or "engaged")
   // and it matches the call's current phase, give a small boost. Bits with no
   // phase_pref are phase-neutral (unaffected). This makes small-talk/opening
   // bits more likely before the pitch starts, without hard-gating anything.
+  // (The HARD side of this is the opening turn gate in loadout(), below.)
   let phaseBias = 0;
   if (bit.phase_pref && state.phase && bit.phase_pref === state.phase) {
     phaseBias = WEIGHTS.phasePref;
@@ -198,7 +223,6 @@ export function scoreBit(bit, state) {
   const armWaited = state.armed ? state.armed[bit.id] : undefined;
   const armBoost = armWaited != null ? ARM_BASE + ARM_STEP * armWaited : 0;
   let score = fitTotal + g.bias - r.pen + intent + seq + armBoost + phaseBias;
-
   // EXTENDED_STALL: when the call has gone content-less/social too long
   // (state.extended_stall, set by the engine off the turns_since_pitch_or_ask
   // streak), lift the stall-breaker family above the general pool for this
@@ -247,9 +271,11 @@ export function rankBits(state, { pool = BITS, deathBlow = false } = {}) {
 // The deploy THRESHOLD (not a candidacy filter) is what keeps a generic,
 // low-scoring bit from firing when nothing fits — so a neutral universal is
 // still eligible and WILL fire when it's the best available option, instead
-// of being starved out of the pool. Only HARD exclusions remain: parked
-// (no producer), death blows (700s, handled separately), and missing fuel
-// (genuinely can't joke about company_news with no company_news).
+// of being starved out of the pool. Only HARD exclusions live here: parked
+// (no producer), death blows (700s, handled separately), missing fuel
+// (genuinely can't joke about company_news with no company_news), and the
+// opening turn gate (an arrival bit is not an option once the call is
+// underway — see OPENING_MAX_TURN).
 //
 // [FIXED] Previously loadout required hasPull() — positive gear/fuel/accusation
 // signal — which zeroed neutral bits OUT of the pool before ranking, the
@@ -259,12 +285,19 @@ export function loadout(state, { pool = BITS } = {}) {
     if (b.status === "parked") return false; // no producer for its fuel yet
     if (isDeathBlow(b)) return false;
     if (!fuelFit(b, state).available) return false; // missing ammo — hard gate
+    // OPENING GATE: arrival-only bits leave the pool once the call is past its
+    // opening turns. Fails OPEN — if the caller didn't pass a turn number
+    // (state.turn undefined), nothing is gated, so this can never silently
+    // starve the pool for a caller that predates the `turn` field.
+    if (b.phase_pref === "opening" && (state.turn ?? 0) > OPENING_MAX_TURN) {
+      return false;
+    }
     return true; // everything else is eligible; gear/score decides ranking
   });
 }
 
-// Mid-call pick: rank the LOADOUT (not all 71) and take the top if it clears
-// the deploy bar; else null ("just keep talking").
+// Mid-call pick: rank the LOADOUT (not the whole registry) and take the top if
+// it clears the deploy bar; else null ("just keep talking").
 export function selectBit(state, { threshold = DEPLOY_THRESHOLD } = {}) {
   const pool = loadout(state);
   const ranked = rankBits(state, { pool });
