@@ -1111,6 +1111,13 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       // CALL PHASE — "opening" (pre-pitch small talk) or "engaged" (business
       // started). Soft bias in the scorer; latched above.
       phase,
+      // CALL TURN — the caller-turn index this fire would land on. Added for
+      // the scorer's turn gates (e.g. opening-only bits — "How Are You",
+      // Camera Off, Late Arrival — must drop out of the pool after the first
+      // few turns; a phase boost alone can't do that because phase is a soft
+      // bias, not an exclusion). The scorer previously received NO turn
+      // number, so no turn gate was implementable there at all.
+      turn,
     };
     // LOADOUT then rank: selectBit narrows to the bits that fit this moment,
     // then ranks that focused set (not all 71). threshold:0 so we apply our own
