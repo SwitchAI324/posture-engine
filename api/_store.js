@@ -344,3 +344,40 @@ export async function appendBitEvent(
   });
   return r.ok;
 }
+// TRANSCRIPT — upsert the full conversation-so-far every turn, keyed by
+// call_id (the LiveKit room name). Last write wins, so the row always holds
+// the complete transcript up to the latest turn — including when the call
+// ends or crashes, with no end-of-call event needed. The system prompt is
+// EXCLUDED (it's the ~4,700-token prefix resent every turn; storing it per
+// call would bloat every row with a copy of the same prompt — the prefix
+// already lives in call_prefix). Best-effort, only ever called via
+// waitUntil(): telemetry must never break a call.
+// Table (run once):
+//   create table if not exists call_transcripts (
+//     call_id    text primary key,
+//     slug       text,
+//     messages   jsonb,
+//     updated_at timestamptz default now()
+//   );
+export async function saveTranscript(callId, slug, messages) {
+  if (!isConfigured() || !callId || !Array.isArray(messages)) return false;
+  const convo = messages.filter((m) => m && m.role !== "system");
+  if (!convo.length) return false;
+  const row = {
+    call_id: callId,
+    slug: slug || null,
+    messages: convo,
+    updated_at: new Date().toISOString(),
+  };
+  const r = await fetch(`${URL}/rest/v1/call_transcripts`, {
+    method: "POST",
+    headers: {
+      apikey: KEY,
+      authorization: `Bearer ${KEY}`,
+      "content-type": "application/json",
+      prefer: "resolution=merge-duplicates,return=minimal",
+    },
+    body: JSON.stringify(row),
+  });
+  return r.ok;
+}
