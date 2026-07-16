@@ -30,16 +30,30 @@ import { waitUntil } from "@vercel/functions";
 
 // FULL BIT DIRECTIVES (id -> directive prose), same source providers.js
 // compiles the ARMED loadout from. Needed here because AUTO-fired bits (the
-// 61-pool) are NOT in the prefix loadout — without this, the model only ever
-// saw the fired bit's NAME and performed name-flavored mood instead of the
-// routine (the systemic sanding Bits chat diagnosed). Defensive import to
-// mirror providers.js: a missing file degrades to the loadout-pointer
-// fallback, never a build/boot failure.
+// pool) are NOT in the prefix loadout — without this, the model only ever saw
+// the fired bit's NAME and performed name-flavored mood instead of the routine
+// (the systemic sanding Bits chat diagnosed).
+//
+// LAZY, NOT TOP-LEVEL. This was `await import(...)` at module scope, which
+// FAILED THE VERCEL BUILD: Vercel transpiles these ESM functions to CommonJS
+// ("Node.js functions are compiled from ESM to CommonJS"), and top-level await
+// is legal in ESM but illegal in CJS — it broke every deploy, and took
+// api/sim/sim-call.js down with it (it requires this file). Do NOT reintroduce
+// a top-level await here. The fix is to load on first use instead: the promise
+// is created once and reused, so the import cost is paid once per isolate and
+// every later turn hits warm module state. Still defensive like providers.js —
+// a missing/unloadable file degrades to the loadout-pointer fallback, never a
+// crash.
 let BIT_DIRECTIVES = {};
-try {
-  const mod = await import("../compiler/_bits_directives.js");
-  BIT_DIRECTIVES = mod.default || mod;
-} catch { BIT_DIRECTIVES = {}; }
+let bitDirectivesPromise = null;
+function loadBitDirectives() {
+  if (!bitDirectivesPromise) {
+    bitDirectivesPromise = import("../compiler/_bits_directives.js")
+      .then((mod) => { BIT_DIRECTIVES = mod.default || mod || {}; return BIT_DIRECTIVES; })
+      .catch(() => { BIT_DIRECTIVES = {}; return BIT_DIRECTIVES; });
+  }
+  return bitDirectivesPromise;
+}
 
 // HOST NAME is per-call now: it's whoever the spammer emailed, carried on the
 // booking token -> meeting page -> call (variableValues.sv_host_name, also
@@ -632,6 +646,11 @@ export default async function handler(req) {
       "against bracketed output do NOT apply to this one exact token. Output it literally " +
       "as [SNEEZE], then continue your normal in-character line as usual.";
   }
+  // Populate BIT_DIRECTIVES before building blocks: buildSystemBlocks is sync
+  // and reads the module-level map when a bit fires, so the load must finish
+  // first or a fire falls back to the name-only loadout pointer (the sanding
+  // bug). Cached after the first call — later turns don't re-import.
+  if (baseSystem) await loadBitDirectives();
   const built = baseSystem
     ? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil, isSilenceNudge)
     : null;
@@ -1866,6 +1885,7 @@ export async function runHostTurn({ messages, callId, meta }) {
   // Phantom send-in: fold invoke/dangle directive into the host's own prompt.
   if (benchPhantomInvoke) baseSystem = baseSystem + "\n\n" + benchPhantomInvoke;
 
+  await loadBitDirectives(); // see the handler site — must precede buildSystemBlocks
   const built = buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil, false);
   const systemBlocks = built ? built.blocks : null;
   const deathBlowFiring = built ? built.deathBlowFiring : false;
