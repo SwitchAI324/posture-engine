@@ -597,13 +597,13 @@ export default async function handler(req) {
       if (callId && isConfigured()) {
         waitUntil(setCall(callId, { pendingHandoff: { bench_id: pend.bench_id, stage: "fire" } }).catch(() => {}));
       }
-      if (callId) makeTrace(callId, benchTurn, waitUntil).emit("handoff_telegraph", { character_id: pend.bench_id, turn_index: benchTurn }, "bench");
+      if (callId) makeTrace(callId, benchTurn, waitUntil, stored?.targetId).emit("handoff_telegraph", { character_id: pend.bench_id, turn_index: benchTurn }, "bench");
     } else if (pend.stage === "fire") {
       // Fire the real handoff, then clear the pending state.
       if (callId) {
         waitUntil(
           fireHandoff(callId, pend.bench_id)
-            .then((r) => makeTrace(callId, benchTurn, waitUntil).emit("handoff_fired", { character_id: pend.bench_id, ok: !!r.ok, turn_index: benchTurn }, "bench"))
+            .then((r) => makeTrace(callId, benchTurn, waitUntil, stored?.targetId).emit("handoff_fired", { character_id: pend.bench_id, ok: !!r.ok, turn_index: benchTurn }, "bench"))
             .catch(() => {})
         );
         if (isConfigured()) waitUntil(setCall(callId, { pendingHandoff: null }).catch(() => {}));
@@ -731,6 +731,9 @@ export default async function handler(req) {
     callId,
     turn: countUserTurns(messages),
     hostName: hostNameFromBody(body), // per-call host name for the utterance trace
+    // target the booking token was minted for — stamped on the utterance event
+    // so Mead Hall can watch by target (the SSE transform has no `stored`).
+    targetId: stored?.targetId ?? null,
     deathBlowFiring, // finishUp emits blow_fired + call_ended with the real line
   };
 
@@ -796,7 +799,7 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
     } else {
       benchAppend = generateBenchBeat(arrival, messages).catch(() => null);
       if (callId) {
-        makeTrace(callId, benchTurn, waitUntil).emit(
+        makeTrace(callId, benchTurn, waitUntil, stored?.targetId).emit(
           "bench_stage",
           { character_id: arrival.bench_id, stage: arrival.stage, turn_index: benchTurn },
           "bench"
@@ -808,7 +811,7 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
     if (isPhantom(wantId)) {
       benchPhantomInvoke = phantomInvokeDirective(wantId);
       if (callId) {
-        makeTrace(callId, benchTurn, waitUntil).emit(
+        makeTrace(callId, benchTurn, waitUntil, stored?.targetId).emit(
           "bench_joined",
           { character_id: wantId, name: wantId, source: "director", manifestation: "phantom", invoking: true, joined_at: new Date().toISOString() },
           "bench"
@@ -818,7 +821,7 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
       const count = benchLog.length;
       // CEILING 3: drop the 4th slot (dead by math on real call lengths).
       if (count >= 3) {
-        if (callId) makeTrace(callId, benchTurn, waitUntil).emit(
+        if (callId) makeTrace(callId, benchTurn, waitUntil, stored?.targetId).emit(
           "bench_waiting", { character_id: wantId, reason: "ceiling", turn_index: benchTurn }, "bench"
         );
       } else {
@@ -838,7 +841,7 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
             benchLog = benchLog.concat([{ bench_id: arrival.bench_id, arrived_turn: benchTurn }]);
             benchAppend = generateBenchBeat(arrival, messages).catch(() => null);
             if (callId) {
-              makeTrace(callId, benchTurn, waitUntil).emit(
+              makeTrace(callId, benchTurn, waitUntil, stored?.targetId).emit(
                 "bench_joined",
                 { character_id: arrival.bench_id, name: arrival.bench_id, source: "director", manifestation: arrival.type, stage: "entrance", joined_at: new Date().toISOString() },
                 "bench"
@@ -846,7 +849,7 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
             }
           }
         } else if (callId) {
-          makeTrace(callId, benchTurn, waitUntil).emit(
+          makeTrace(callId, benchTurn, waitUntil, stored?.targetId).emit(
             "bench_waiting",
             { character_id: wantId, reason: "spacer", need_turn: lastTurn + floor, turn_index: benchTurn },
             "bench"
@@ -866,7 +869,7 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
     const auto = autoBenchAction({ gearState, benchLog, messages, callId, benchTurn });
     if (auto && auto.type === "phantom") {
       benchPhantomInvoke = phantomInvokeDirective(auto.who);
-      if (callId) makeTrace(callId, benchTurn, waitUntil).emit(
+      if (callId) makeTrace(callId, benchTurn, waitUntil, stored?.targetId).emit(
         "bench_joined",
         { character_id: auto.who, name: auto.who, source: "auto", manifestation: "phantom", invoking: true, why: auto.why, joined_at: new Date().toISOString() },
         "bench"
@@ -877,7 +880,7 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
         arrivalDirty = true;
         benchLog = benchLog.concat([{ bench_id: arrival.bench_id, arrived_turn: benchTurn }]);
         benchAppend = generateBenchBeat(arrival, messages).catch(() => null);
-        if (callId) makeTrace(callId, benchTurn, waitUntil).emit(
+        if (callId) makeTrace(callId, benchTurn, waitUntil, stored?.targetId).emit(
           "bench_joined",
           { character_id: arrival.bench_id, name: arrival.bench_id, source: "auto", manifestation: arrival.type, stage: "entrance", why: auto.why, joined_at: new Date().toISOString() },
           "bench"
@@ -951,7 +954,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     const turn = countUserTurns(messages);
 
     // --- MEAD HALL TRACE (dark unless TRACE_ENABLED=1) ---------------------
-    const trace = makeTrace(callId, turn, waitUntil);
+    const trace = makeTrace(callId, turn, waitUntil, stored?.targetId);
     // Death Blow (Trigger A): rungs are gone. Fire on a PENDING control alone;
     // PE generates the absurd closing line in persona at fire time (below).
     const dbCtl = controls && controls.deathBlow;
@@ -1395,6 +1398,13 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
             gap,
             bar: turn <= WARMUP_TURNS ? "warmup" : +bar.toFixed(2),
             pool: poolSize,
+            // turn + phase: what the SCORER actually consumed this turn. phase
+            // is what the store handed back (not what the reader last judged —
+            // those differ by one turn, and a bug that freezes phase is
+            // invisible without logging the consumed value). turn drives the
+            // opening-bit gate in _bits_scorer.js loadout().
+            turn,
+            phase,
             top3: ranked.slice(0, 3).map((r) => r.name + ":" + r.score.toFixed(1)),
           })
       );
@@ -1539,7 +1549,7 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
       // utterance emitter: turn+0.5 so the host line sorts after this turn's
       // analysis events but before the next turn — no seq collision.
       const utterTrace =
-        meta.callId != null ? makeTrace(meta.callId, (Number(meta.turn) || 0) + 0.5, null) : null;
+        meta.callId != null ? makeTrace(meta.callId, (Number(meta.turn) || 0) + 0.5, null, meta.targetId) : null;
 
       const send = (delta, finish_reason = null) =>
         controller.enqueue(encoder.encode(chunkStr(delta, finish_reason)));
@@ -1900,7 +1910,7 @@ export async function runHostTurn({ messages, callId, meta }) {
   }
 
   // Emit the HOST utterance to the bus (sim's equivalent of finishUp).
-  const trace = makeTrace(callId, turn, waitUntil);
+  const trace = makeTrace(callId, turn, waitUntil, stored?.targetId);
   if (clean) {
     await trace.emit(
       "utterance",
