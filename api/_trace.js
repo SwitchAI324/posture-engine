@@ -2,13 +2,25 @@
 // ----------------------------------------------------------------------
 // Emits live-call events into `engagement_events` for Mead Hall's Director's
 // View. Envelope per Mead Hall's contract: { type, seq, payload } with
-// call_id = the Vapi call id. Physical row (Data's columns):
-//   call_id  (the Vapi call id)
-//   event_type  (= Mead Hall's `type`)
-//   actor    (host | spammer | bench | director | engine)
-//   ts       (ISO timestamp)
-//   payload  (jsonb: { seq, ...type-specific fields }; gears live here too)
+// call_id = the call id (on LiveKit: the room name, sv-<slug>-<rand>).
+// Physical row (Data's columns):
+//   call_id    (the call id)
+//   target_id  (the target the booking token was minted for — see below)
+//   event_type (= Mead Hall's `type`)
+//   actor      (host | spammer | bench | director | engine)
+//   ts         (ISO timestamp)
+//   payload    (jsonb: { seq, ...type-specific fields }; gears live here too)
 // So Mead Hall reads: type=event_type, seq=payload.seq, payload=payload.
+//
+// TARGET_ID (added Jul 15, for Mead Hall): real calls used to emit with
+// target_id NULL, so the Director could not open the watch surface BEFORE a
+// call — target_id is knowable in advance (it's on the booking token), the
+// call_id is not (LiveKit mints the room name at join). Now the compiled
+// target rides call_prefix (written by hydrate, read back by getCall) and is
+// stamped on every event, so the board can subscribe by target and pick up
+// whatever call starts. Passed as the 4th arg; omitting it stamps NULL, which
+// is exactly the old behavior — so any call site that can't resolve a target
+// degrades instead of breaking.
 //
 // DARK BY DEFAULT: emits only when TRACE_ENABLED=1. Until Data confirms the
 // `engagement_events.call_id` migration has run, leave the env unset and this
@@ -16,7 +28,6 @@
 // emit is best-effort and swallowed — telemetry must never break a call. Pass
 // waitUntil so writes run after the voice already has its turn.
 // ----------------------------------------------------------------------
-
 import { envBool } from "./_env.js";
 
 const URL = process.env.SUPABASE_URL;
@@ -55,12 +66,14 @@ export async function blowLandedTotal(callId) {
   return null;
 }
 
-// makeTrace(callId, turn, waitUntil) -> { emit(type, payload, actor) }
+// makeTrace(callId, turn, waitUntil, targetId) -> { emit(type, payload, actor) }
 // seq is NOT written here: engagement_events.seq is a top-level bigserial the DB
 // auto-assigns on insert (monotonic across the table). Mead Hall orders by that
 // top-level column, not by anything in payload. (turn is kept in the signature
 // for call-site clarity but no longer drives ordering.)
-export function makeTrace(callId, turn, waitUntil) {
+// targetId is OPTIONAL and defaults to NULL — a call site that hasn't resolved
+// the target emits exactly what it emitted before this was added.
+export function makeTrace(callId, turn, waitUntil, targetId) {
   async function emit(type, payload, actor) {
     if (!ON || !URL || !KEY || !callId) {
       try {
@@ -74,7 +87,11 @@ export function makeTrace(callId, turn, waitUntil) {
       } catch {}
       return;
     }
-    console.log("EMIT-ENTER type=" + type + " hasWaitUntil=" + (typeof waitUntil));
+    console.log(
+      "EMIT-ENTER type=" + type +
+        " hasWaitUntil=" + (typeof waitUntil) +
+        " target=" + (targetId || "NULL")
+    );
     const row = {
       call_id: callId,
       event_type: type,
@@ -83,6 +100,9 @@ export function makeTrace(callId, turn, waitUntil) {
       ts: new Date().toISOString(),
       payload: payload || {},
     };
+    // Only send target_id when we actually have one. Omitting the key lets the
+    // column keep its own default rather than us asserting NULL over it.
+    if (targetId) row.target_id = targetId;
     try {
       const r = await fetch(`${URL}/rest/v1/${TABLE}`, {
         method: "POST",

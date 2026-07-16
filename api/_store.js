@@ -43,7 +43,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-   `&select=prefix,posture_line,gear,pressure,engagement,slip,accuse_floor,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,archetype,character_id`;
+   `&select=prefix,posture_line,gear,pressure,engagement,slip,accuse_floor,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,archetype,character_id`;
   const r = await fetch(url, {
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
@@ -59,6 +59,11 @@ export async function getCall(callId) {
  slip: rows[0].slip ?? 0, // suspicion slip accumulator (hysteresis)
     accuseFloor: rows[0].accuse_floor ?? 0, // STICKY: accusation ratchet floor
     phase: rows[0].phase ?? "opening", // Stage-4 call phase (async read)
+    targetId: rows[0].target_id ?? null, // the target the booking token was
+                                         // minted for; compiled at hydrate,
+                                         // stamped on every Mead Hall event so
+                                         // the board can watch by target before
+                                         // the call_id exists
     arrivalState: rows[0].arrival_state ?? null, // v2 bench: in-progress arrival (jsonb)
     benchLog: rows[0].bench_log ?? [], // v2 bench: [{bench_id,arrived_turn}] for pacing/cap
     controlUrl: rows[0].control_url ?? null, // Vapi per-call monitor.controlUrl (for handoff)
@@ -75,7 +80,7 @@ export async function getCall(callId) {
 // posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, phase, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, archetype, characterId }
+  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, archetype, characterId }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -91,6 +96,8 @@ export async function setCall(
   if (slip !== undefined) row.slip = slip;
   if (phase !== undefined) row.phase = phase; // Stage-4 call phase (async read)
   if (accuseFloor !== undefined) row.accuse_floor = accuseFloor;
+  if (targetId !== undefined) row.target_id = targetId; // booking_tokens.target_id,
+                                                        // written once at hydrate
   if (arrivalState !== undefined) row.arrival_state = arrivalState; // v2 bench (jsonb, nullable)
   if (benchLog !== undefined) row.bench_log = benchLog; // v2 bench arrival log (jsonb array)
   if (controlUrl !== undefined) row.control_url = controlUrl; // Vapi monitor.controlUrl

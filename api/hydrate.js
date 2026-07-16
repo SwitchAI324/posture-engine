@@ -76,9 +76,14 @@ async function readToken(slug) {
 // Write the compiled prefix to call_prefix via the store. setCall handles the
 // upsert; we pass prefix + archetype (+ the initial posture line so turn 1 has
 // one before the engine sets its own).
-async function writePrefix(callId, prefix, archetype, postureLine) {
+async function writePrefix(callId, prefix, archetype, postureLine, targetId) {
   const { setCall } = require("./_store.js");
-  await setCall(callId, { prefix, archetype, postureLine });
+  // targetId rides the same path archetype does: resolved once here from the
+  // booking token, frozen on the call_prefix row, read back by completions on
+  // every turn. Mead Hall stamps it on each event so the Director can open the
+  // watch surface BEFORE the call — target is knowable in advance, the call_id
+  // (the LiveKit room name) is not.
+  await setCall(callId, { prefix, archetype, postureLine, targetId: targetId ?? null });
 }
 
 module.exports = async function handler(req, res) {
@@ -151,9 +156,9 @@ module.exports = async function handler(req, res) {
 
     // ALWAYS write the slug key (pre-call safe, removes the race). Also write
     // the call_id row if we have it (the direct hit).
-    await writePrefix("slug:" + slug, prefix, cfg.tactic, initialPosture);
+    await writePrefix("slug:" + slug, prefix, cfg.tactic, initialPosture, cfg.target);
     if (callId) {
-      await writePrefix(callId, prefix, cfg.tactic, initialPosture);
+      await writePrefix(callId, prefix, cfg.tactic, initialPosture, cfg.target);
     }
 
     console.log(
