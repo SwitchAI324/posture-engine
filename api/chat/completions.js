@@ -572,6 +572,16 @@ export default async function handler(req) {
               // the say.exact control POST, and the bare nudge's own `stored`
               // (if any) won't have it. Prefer an existing value, else the row's.
               controlUrl: stored.controlUrl || bySlug.controlUrl,
+              // Carry targetId the same way. On LiveKit, hydrate only ever
+              // writes the "slug:<slug>" row (the agent calls /api/hydrate
+              // ?slug=... before any call_id exists), so the target lives ONLY
+              // there. PE's own per-turn state write then creates the call_id
+              // row WITHOUT it — so from the first state write on, getCall hits
+              // that row, this merge runs, and target_id was silently dropped:
+              // Mead Hall saw target=<uuid> for the first turn or two and
+              // target=NULL for the rest of every call. Same shape as
+              // archetype/controlUrl: prefer live state, else the slug row.
+              targetId: stored.targetId || bySlug.targetId,
               archetype: stored.archetype || bySlug.archetype }
           : bySlug;
       }
