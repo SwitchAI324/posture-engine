@@ -177,6 +177,8 @@
     border-radius:4px;padding:1px 5px;min-width:30px;text-align:center}
   .bscore.dim{color:#c3bcae;font-weight:400}
   .bscore.clears{background:var(--green);color:#fff}
+  .bscore.out{background:transparent;border:1px dashed #cfc8ba;color:#b3ab9c;font-weight:400;font-size:8.5px;min-width:0;cursor:help}
+  .brank{font-family:var(--mono);font-size:8px;font-weight:700;color:var(--gold);margin-right:-3px}
   .gearpanel{border:1px solid var(--bone2);border-radius:7px;padding:9px 10px;margin:0 0 10px;background:#faf8f3}
   .gptop{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px}
   .gplab{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate)}
@@ -1477,12 +1479,23 @@
     if(g.top_bit && (g.top_bit===b.name || g.top_bit===b.bit_id) && g.fit_score!=null) return g.fit_score;
     return null;
   }
+  // PE: a bit ABSENT from `scores` wasn't scored badly — it was EXCLUDED from the pool this
+  // call (parked / archetype mismatch / missing fuel / death blow / past its opening) and can
+  // NEVER fire. That's different from "no score yet", and arming it would wait forever.
+  function bitExcluded(b){
+    const g=lastGear||{};
+    if(!g.scores) return false;              // no scores map yet -> unknown, not excluded
+    return g.scores[b.bit_id]==null;         // absent from the map -> not in play this call
+  }
   function scoreCell(b){
     const s=bitScore(b); const bar=(lastGear||{}).deploy_bar;
+    if(bitExcluded(b)) return '<span class="bscore out" title="not in play this call \u2014 excluded from the pool (parked, wrong archetype, missing fuel, or past its window). Arming it will never fire.">not in play</span>';
     if(s==null) return '<span class="bscore dim">\u2014</span>';
     const n=(typeof s==='number')?s.toFixed(1):s;
     const clears=(typeof s==='number' && typeof bar==='number' && s>=bar);
-    return '<span class="bscore'+(clears?' clears':'')+'" title="fit score this turn'+(typeof bar==='number'?(' \u00B7 bar '+bar.toFixed(1)):'')+'">'+n+'</span>';
+    const rank=(Array.isArray((lastGear||{}).top3))?(lastGear.top3.findIndex(x=>x&&(x.bit_id===b.bit_id||x.name===b.name))):-1;
+    const badge=(rank>=0)?'<span class="brank">#'+(rank+1)+'</span>':'';
+    return badge+'<span class="bscore'+(clears?' clears':'')+'" title="fit score this turn'+(typeof bar==='number'?(' \u00B7 bar '+bar.toFixed(1)):'')+'">'+n+'</span>';
   }
   function renderArmPanel(){ const el=$('#armPanel'); if(!el)return;
     if(source!=='live'){ el.style.display='none'; return; }
@@ -1492,10 +1505,12 @@
     // PE doesn't always send a loadout on call_started; the arm endpoint accepts any bit_id,
     // so fall back to the quick set rather than showing an empty, unusable panel.
     const inHand = loadout.length ? loadout : QUICK_BITS.map(q=>({ bit_id:q.id, name:q.name }));
-    const bitRows=inHand.map(b=>{ const ok=armable(b), armed=setlist.some(s=>s.bit_id===b.bit_id);
+    const bitRows=inHand.map(b=>{ const excluded=bitExcluded(b);
+      const ok=armable(b) && !excluded, armed=setlist.some(s=>s.bit_id===b.bit_id);
       const parked=(b.status==='parked');
-      const tip=ok?'':(parked?'parked \u2014 unavailable this call'
-        :('needs '+(missingHook(b)||'a scouted fact')+' \u2014 not scouted for this target'));
+      const tip=ok?'':(excluded?'not in play this call \u2014 excluded from the engine\u2019s pool; arming it will never fire'
+        :(parked?'parked \u2014 unavailable this call'
+        :('needs '+(missingHook(b)||'a scouted fact')+' \u2014 not scouted for this target')));
       const dis=(!ok||full||armed)?'disabled':''; const op=(!ok&&!armed)?';opacity:.4':'';
       const mark=parked?' <span style="color:#b7afa0;font-size:8px">\u00B7 parked</span>':'';
       return '<div style="'+ROW+op+'" title="'+tip.replace(/"/g,'')+'"><span>'+(armed?'\u25B6 ':'')+b.name+mark+'</span>'+
@@ -1784,7 +1799,9 @@
     { t:5200, e:{ event_type:'bit_deployed', actor:'governor', seq:4, payload:{ bit_id:'BIT-201', name:'Pricing Loop', bit_type:'one_shot', trigger:'auto', turn_index:2, fit_score:5.1, deploy_bar:3.0, gears_at_fire:{ suspicion:'alive', pressure:'pushing', engagement:'hooked', slip:0 } }}},
     { t:1200, e:{ event_type:'utterance', actor:'spammer', seq:5, payload:{ speaker_role:'spammer', speaker_name:'Derek', turn_index:3,
         text:"Uh — no council needed. So pricing starts at two thousand a month for the growth tier." }}},
-    { t:600,  e:{ event_type:'gear_state', actor:'system', seq:5, payload:{ suspicion:'slipping', pressure:'extracting', engagement:'hooked', slip:1, fit_score:2.4, deploy_bar:3.0, pool:38, will_fire:false, top_bit:'The Questionnaire', turn_index:3 }}},
+    { t:600,  e:{ event_type:'gear_state', actor:'system', seq:5, payload:{ suspicion:'slipping', pressure:'extracting', engagement:'hooked', slip:1, fit_score:2.4, deploy_bar:3.0, pool:38, will_fire:false, top_bit:'The Questionnaire', turn_index:3,
+        top3:[{bit_id:'BIT-216',name:'The Questionnaire',score:2.4},{bit_id:'BIT-118',name:'The Echo',score:2.1},{bit_id:'BIT-101',name:'Blame Bjorn',score:1.9}],
+        scores:{'BIT-201':1.4,'BIT-118':2.1,'BIT-101':1.9,'BIT-140':0.8,'BIT-216':2.4} }}},
     { t:3600, e:{ event_type:'utterance', actor:'host', seq:6, payload:{ speaker_role:'host', speaker_name:'Jarl', turn_index:4,
         text:"Two thousand. And that two thousand — is that before or after the other two thousand you mentioned? I want to be sure which two thousand we're agreeing on." }}},
     { t:4200, e:{ event_type:'spammer_reaction', actor:'system', seq:7, payload:{ reaction_type:'confused', turn_index:4 }}},
