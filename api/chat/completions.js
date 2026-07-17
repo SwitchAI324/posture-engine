@@ -1172,7 +1172,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // INJECT_BAR below; we just want the ranked loadout + its size.
     const sel = selectBit(scorerState, { threshold: 0 });
     const ranked = sel.ranked;
-    const top = ranked[0] || null;
+    let top = ranked[0] || null;
     const poolSize = sel.pool;
     const gap = stored && stored.lastBitTurn != null ? turn - stored.lastBitTurn : 99;
     const bar = effectiveBar(turn);
@@ -1183,6 +1183,29 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // we belt-and-suspenders it too). The gear read still runs — silence is
     // engagement data.
     let fire = !isSilenceNudge && !!(top && top.score >= bar && gap >= MIN_GAP);
+
+    // SAME-TURN RE-INJECTION — the fix for "bits never landed".
+    // gap === 0 means a bit already fired on THIS turn. That is NOT a spacing
+    // violation: LiveKit runs PREEMPTIVE GENERATION — it starts an LLM call on
+    // a partial transcript, then regenerates the SAME user turn as more speech
+    // arrives, and plays whichever generation wins. PE handed the bit to the
+    // FIRST generation and MIN_GAP then blocked every regeneration of that same
+    // moment — so the bit-carrying generation was always the one thrown away,
+    // and the caller heard a bit-less rewrite. Proven on a live call: turn 9 ran
+    // twice, input 1075 (fired, "The Window") vs input 526 (gap:0, no bit) —
+    // same messages, 549 tokens of directive, and only the discarded one had it.
+    // MIN_GAP exists to space bits across TURNS, not to punish a re-roll of the
+    // current one. So: re-inject the same bit, and let whichever generation
+    // survives perform it.
+    let sameTurnReinject = false;
+    if (!fire && !isSilenceNudge && gap === 0 && stored && stored.lastBitId) {
+      const same = ranked.find((r) => r.id === stored.lastBitId);
+      if (same) {
+        top = same;
+        fire = true;
+        sameTurnReinject = true; // suppresses the duplicate trace + state write
+      }
+    }
 
     // STARVATION GUARD: if the call has gone dry (no discrete bit for
     // STARVE_AFTER consecutive turns), the pacing has starved the comedy — drop
@@ -1343,7 +1366,13 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           slip: state.slip,
         },
       };
-      if (top.bit_type === "count") {
+      if (sameTurnReinject) {
+        // Already traced when this bit fired earlier on this same turn. The
+        // regeneration is the same comedic moment, not a second deployment —
+        // emitting again would show Mead Hall the bit two or three times and
+        // inflate a count bit's running_total.
+        console.log("bit re-injected (same turn) id=" + top.id + " turn=" + turn);
+      } else if (top.bit_type === "count") {
         // count bit: PE owns the running tally. count_label is static on the bit;
         // running_total = prior fires (off the event log) + this one.
         waitUntil(
@@ -1484,7 +1513,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           slip: state.slip,
           accuseFloor: state.accuseFloor, // STICKY: persist the accusation floor
           stallCount, // extended_stall streak (resets on pitch/ask)
-          ...(fire ? { lastBitId: top.id, lastBitTurn: turn } : {}),
+          ...(fire && !sameTurnReinject ? { lastBitId: top.id, lastBitTurn: turn } : {}),
           ...(archetypeNew ? { archetype } : {}),
         }).catch(() => {})
       ); // never awaited
