@@ -1498,7 +1498,7 @@
     return badge+'<span class="bscore'+(clears?' clears':'')+'" title="fit score this turn'+(typeof bar==='number'?(' \u00B7 bar '+bar.toFixed(1)):'')+'">'+n+'</span>';
   }
   function renderArmPanel(){ const el=$('#armPanel'); if(!el)return;
-    if(source!=='live'){ el.style.display='none'; return; }
+    if(source==='demo'){ el.style.display='none'; return; }   // replay shows it so bits+scores are testable
     el.style.display='block';
     const full=setlist.length>=3;
     const ROW='display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;font-size:11px';
@@ -1770,6 +1770,7 @@
           {bit_id:'BIT-201', name:'Pricing Loop',   bit_type:'one_shot', fuel_hooks:[],            status:'active'},
           {bit_id:'BIT-118', name:'The Echo',        bit_type:'one_shot', fuel_hooks:[],            status:'active'},
           {bit_id:'BIT-101', name:'Blame Bjorn',     bit_type:'count',    fuel_hooks:[],            status:'active'},
+          {bit_id:'BIT-216', name:'The Questionnaire',bit_type:'one_shot',fuel_hooks:[],            status:'active'},
           {bit_id:'BIT-309', name:'Domain Doubt',    bit_type:'one_shot', fuel_hooks:['domain_age'],status:'active'},
           {bit_id:'BIT-601', name:'LinkedIn Deep Cut',bit_type:'one_shot',fuel_hooks:['linkedin_role'],status:'parked'}
         ],
