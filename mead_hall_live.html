@@ -173,6 +173,10 @@
   #boardBench{max-height:190px;overflow-y:auto;overflow-x:hidden}
   #ammoRack{max-height:200px;overflow-y:auto;overflow-x:hidden}
   /* gear panel — the engine's live read (gear_state) */
+  .bscore{font-family:var(--mono);font-size:10px;font-weight:700;color:#8a7b5c;background:#f3efe6;
+    border-radius:4px;padding:1px 5px;min-width:30px;text-align:center}
+  .bscore.dim{color:#c3bcae;font-weight:400}
+  .bscore.clears{background:var(--green);color:#fff}
   .gearpanel{border:1px solid var(--bone2);border-radius:7px;padding:9px 10px;margin:0 0 10px;background:#faf8f3}
   .gptop{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px}
   .gplab{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate)}
@@ -674,12 +678,6 @@
       </div>
       <div class="grp">Bits — the Host's hand <button id="bitsDeckBtn" type="button" style="float:right;font:inherit;font-size:10px;letter-spacing:.04em;background:transparent;border:1px solid #c2832c66;color:#c2832c;border-radius:5px;padding:1px 7px;cursor:pointer">&#10070; the full deck &#8599;</button></div>
       <div id="boardBits"></div>
-      <div class="grp">Ammunition — in the Host's pocket</div>
-      <div id="ammoRack">
-        <div class="brow muted">College — Notre Dame <span class="st used">used ✓</span></div>
-        <div class="brow">Prior job — Aetna</div>
-        <div class="brow">Prior role — Regional Sales Mgr</div>
-      </div>
       <div class="bp-scope">
 <div class="bench-panel">
   <div class="panel-head">
@@ -1469,6 +1467,23 @@
     (bit.fuel_hooks||[]).every(h=>rack.some(a=>a.hook_id===h)); }
   function missingHook(bit){ return (bit.fuel_hooks||[]).find(h=>!rack.some(a=>a.hook_id===h)); }
 
+  // The bit's current fit score, as the engine sees it this turn.
+  // PE's gear_state carries fit_score for the TOP bit only (+ top_bit name). If PE later
+  // emits a per-bit map (`scores`) or `top3`, this picks it up with no further change.
+  function bitScore(b){
+    const g=lastGear||{};
+    if(g.scores && g.scores[b.bit_id]!=null) return g.scores[b.bit_id];
+    if(Array.isArray(g.top3)){ const h=g.top3.find(x=>x&&(x.bit_id===b.bit_id||x.name===b.name)); if(h&&h.score!=null) return h.score; }
+    if(g.top_bit && (g.top_bit===b.name || g.top_bit===b.bit_id) && g.fit_score!=null) return g.fit_score;
+    return null;
+  }
+  function scoreCell(b){
+    const s=bitScore(b); const bar=(lastGear||{}).deploy_bar;
+    if(s==null) return '<span class="bscore dim">\u2014</span>';
+    const n=(typeof s==='number')?s.toFixed(1):s;
+    const clears=(typeof s==='number' && typeof bar==='number' && s>=bar);
+    return '<span class="bscore'+(clears?' clears':'')+'" title="fit score this turn'+(typeof bar==='number'?(' \u00B7 bar '+bar.toFixed(1)):'')+'">'+n+'</span>';
+  }
   function renderArmPanel(){ const el=$('#armPanel'); if(!el)return;
     if(source!=='live'){ el.style.display='none'; return; }
     el.style.display='block';
@@ -1484,7 +1499,8 @@
       const dis=(!ok||full||armed)?'disabled':''; const op=(!ok&&!armed)?';opacity:.4':'';
       const mark=parked?' <span style="color:#b7afa0;font-size:8px">\u00B7 parked</span>':'';
       return '<div style="'+ROW+op+'" title="'+tip.replace(/"/g,'')+'"><span>'+(armed?'\u25B6 ':'')+b.name+mark+'</span>'+
-        '<button class="chip arm-bit" data-bid="'+b.bit_id+'" '+dis+'>'+(armed?'armed \u2713':'arm')+'</button></div>'; }).join('');
+        '<span style="margin-left:auto;display:flex;align-items:center;gap:7px">'+scoreCell(b)+
+        '<button class="chip arm-bit" data-bid="'+b.bit_id+'" '+dis+'>'+(armed?'armed \u2713':'arm')+'</button></span></div>'; }).join('');
     const hookRows=rack.map(a=>{ const armed=setlist.some(s=>s.hook_id===a.hook_id); const dis=(full||armed||a.used)?'disabled':'';
       return '<div style="'+ROW+'"><span>\u00B7 '+(a.label||a.hook_id)+'</span>'+
         '<button class="chip arm-hook" data-hid="'+a.hook_id+'" '+dis+'>'+(armed?'forced \u2713':'force')+'</button></div>'; }).join('');
@@ -1636,7 +1652,7 @@
         if(p.to_state){ const s=String(p.to_state).toLowerCase();
           const g=$('#hudGear'); if(g){ g.textContent=p.to_state; g.className='gear '+(s==='alive'?'a':s==='slipping'?'s':'f'); }
           renderGear({suspicion:s}); } break; }
-      case 'gear_state': renderGear(p); break;
+      case 'gear_state': renderGear(p); renderArmPanel(); break;
       case 'blow_armed': {
         document.body.style.transition='background .15s'; document.body.style.background='var(--blood)'; setTimeout(()=>document.body.style.background='',300);
         toast('Death Blow armed'); break; }
