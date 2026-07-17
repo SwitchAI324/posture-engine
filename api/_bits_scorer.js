@@ -69,7 +69,19 @@ export const DEPLOY_THRESHOLD = parseFloat(process.env.DEPLOY_THRESHOLD || "1.5"
 //
 // Env-tunable so it can be dialed without a deploy, matching MIN_GAP /
 // WARMUP_TURNS / DEPLOY_THRESHOLD.
-export const OPENING_MAX_TURN = parseInt(process.env.OPENING_MAX_TURN || "3", 10);
+// Backstop only — NOT the boundary. Bits' ruling (Jul 15): if the reader says
+// "opening" at turn 10 because the caller is genuinely still doing pleasantries,
+// opening bits BELONG there; excluding "How Are You" from a call that is
+// literally still in how-are-you territory is the wrong outcome, and a turn
+// ceiling must not paper over reader mis-classification. So phase is the gate.
+// This ceiling exists for ONE case: the reader never speaking at all. readCall
+// returns null on every failure (upstream !ok, no JSON match, parse failure,
+// throw), and getCall's fallback is `?? "opening"` — so a reader that never
+// succeeds leaves phase="opening" for the whole call, and opening bits would
+// fire forever. That's not a mis-read, it's silence defaulting onto the stuck
+// state. 20 is deliberately far past any real opening. Set to 0 to disable
+// entirely once reader failures are proven rare (see the callread FAILED log).
+export const OPENING_MAX_TURN = parseInt(process.env.OPENING_MAX_TURN || "20", 10);
 
 // Death blows are the 700-series. Identified by id, not a separate `kind`.
 const isDeathBlow = (b) => /^BIT-7\d\d$/.test(b.id);
@@ -285,12 +297,20 @@ export function loadout(state, { pool = BITS } = {}) {
     if (b.status === "parked") return false; // no producer for its fuel yet
     if (isDeathBlow(b)) return false;
     if (!fuelFit(b, state).available) return false; // missing ammo — hard gate
-    // OPENING GATE: arrival-only bits leave the pool once the call is past its
-    // opening turns. Fails OPEN — if the caller didn't pass a turn number
-    // (state.turn undefined), nothing is gated, so this can never silently
-    // starve the pool for a caller that predates the `turn` field.
-    if (b.phase_pref === "opening" && (state.turn ?? 0) > OPENING_MAX_TURN) {
-      return false;
+    // OPENING GATE — two rules, phase first (Bits ratified Jul 15).
+    //
+    // 1. PHASE is the real boundary: opening bits leave the pool the moment the
+    //    reader says the call is no longer in its opening. This is an
+    //    EXCLUSION, not the soft +1.5 phasePref bias — a bias can be outranked
+    //    (all 10 opening bits clear the bar on gear alone), an exclusion can't.
+    //    Fails OPEN when state.phase is absent, so a caller that predates the
+    //    phase field is never silently starved.
+    // 2. TURN CEILING is only a backstop for a SILENT reader — see
+    //    OPENING_MAX_TURN above. It is not the boundary and must never be
+    //    tuned as if it were.
+    if (b.phase_pref === "opening") {
+      if (state.phase && state.phase !== "opening") return false;
+      if (OPENING_MAX_TURN > 0 && (state.turn ?? 0) > OPENING_MAX_TURN) return false;
     }
     return true; // everything else is eligible; gear/score decides ranking
   });
