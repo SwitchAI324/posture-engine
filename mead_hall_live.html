@@ -212,10 +212,9 @@
   .db{border-top:1px solid var(--line);padding:12px;background:#fdf6f6}
   .db .one{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.12em;color:var(--blood);margin-bottom:8px}
   .dbbtn{width:100%;background:#fdeaea;border:2px solid var(--blood);border-radius:9px;
-    padding:14px;cursor:pointer;text-align:center;transition:transform .1s}
+    padding:8px;cursor:pointer;text-align:center;transition:transform .1s}
   .dbbtn:hover{background:#fbdede}.dbbtn:active{transform:scale(.98)}
-  .dbbtn .ic{font-size:24px}
-  .dbbtn .t{font-family:var(--mono);font-weight:700;font-size:15px;color:var(--blood);margin-top:2px}
+  .dbbtn .t{font-family:var(--mono);font-weight:700;font-size:14px;color:var(--blood);margin:0}
   .dbbtn .s{font-size:10px;color:#8a1419;margin-top:3px}
   .dbcap{font-family:var(--serif);font-style:italic;color:var(--muted);font-size:10px;margin-top:8px}
 
@@ -657,9 +656,7 @@
 
   <!-- BOARD -->
   <div class="board">
-    <div class="top">ON THE BOARD <span class="ro">read-only</span></div>
     <div class="body">
-      <div class="lock">🔒 PERSONALITY · Jarl</div>
       <div id="gearPanel" class="gearpanel" style="display:none">
         <div class="gptop"><span class="gplab">The engine's read</span><span class="gpturn" id="gpTurn">turn —</span></div>
         <div class="gaxis"><span class="gname">suspicion</span><span class="gvals" id="gxSusp">
@@ -675,7 +672,6 @@
           <div class="gfitnote" id="gfNote"></div>
         </div>
       </div>
-      <div class="scoutbtn" id="scoutBtn">📋 SCOUT THE SPAMMER <span class="cov" id="scoutCov">—</span></div>
       <div class="grp">Bits — the Host's hand <button id="bitsDeckBtn" type="button" style="float:right;font:inherit;font-size:10px;letter-spacing:.04em;background:transparent;border:1px solid #c2832c66;color:#c2832c;border-radius:5px;padding:1px 7px;cursor:pointer">&#10070; the full deck &#8599;</button></div>
       <div id="boardBits"></div>
       <div class="grp">Ammunition — in the Host's pocket</div>
@@ -697,11 +693,8 @@
       <div class="readnote">Everything here runs itself — the Host plays its own hand. You deploy none of it.</div>
     </div>
     <div class="db">
-      <div class="one">YOUR ONE CONTROL</div>
       <div class="dbbtn" id="dbbtn">
-        <div class="ic">🧯</div>
         <div class="t">DEATH BLOW</div>
-        <div class="s">break glass → end the call now</div>
       </div>
       <div class="dbcap">Guarded. The one thing you actively do all call.</div>
     </div>
@@ -971,6 +964,16 @@
         +'%"></i></span><b>'+(v==null?'—':v.toFixed(2))+'</b></div>'; }).join(''); }
   function renderBoardBits(current){
     const el=$('#boardBits'); if(!el)return;
+    // LIVE: only ever show bits that ACTUALLY fired on this call. The demo LOADOUT and its
+    // "armed"/"INJECTED" labels are replay scaffolding and are meaningless on a real call.
+    if(source==='live'){
+      const fired=Object.keys(firedLog);
+      if(!fired.length && !current){ el.innerHTML='<div class="brow muted">no bits fired yet \u2014 arm one below</div>'; return; }
+      el.innerHTML=[...new Set([...fired, ...(current?[current]:[])])].map(n=>{ const c=firedLog[n]||0, firing=(n===current);
+        const st=firing?'<span class="st firing">FIRING\u2026</span>':'<span class="st fired">FIRED \u00D7'+c+'</span>';
+        return '<div class="brow'+(firing?' firing':' muted')+'">'+n+' '+st+'</div>'; }).join('');
+      return;
+    }
     const list=[...new Set([...LOADOUT, ...Object.keys(firedLog)])];
     el.innerHTML=list.map(n=>{ const c=firedLog[n]||0, firing=(n===current), armed=LOADOUT.includes(n);
       const st=firing?'<span class="st firing">FIRING…</span>'
@@ -1430,7 +1433,10 @@
         const clears=(lastGear.will_fire===true)||(lastGear.will_fire==null && score>=bar);
         fill.classList.toggle('clears',clears);
         note.className='gfitnote '+(clears?'clears':''); note.textContent=clears?('\u2714 '+lead+' clears the bar ('+score.toFixed(1)+' \u2265 '+bar.toFixed(1)+')'):(lead+' leading \u2014 below bar, holding'); }
-      else { thresh.style.display='none'; fill.classList.remove('clears'); note.className='gfitnote warm'; note.textContent='warming up \u2014 '+lead+' leading, no bit yet'; }
+      else { thresh.style.display='none'; fill.classList.remove('clears'); note.className='gfitnote warm';
+        // PE: during warmup effectiveBar() is Infinity — NOTHING fires, and the finite arm boost
+        // can't beat it either. Say so plainly so an armed bit sitting idle isn't a mystery.
+        note.textContent='warmup \u2014 nothing can fire yet (armed bits wait too) \u00B7 '+lead+' leading'; }
     } else { note.className='gfitnote'; note.textContent=''; }
   }
 
@@ -1466,7 +1472,10 @@
     el.style.display='block';
     const full=setlist.length>=3;
     const ROW='display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;font-size:11px';
-    const bitRows=loadout.map(b=>{ const ok=armable(b), armed=setlist.some(s=>s.bit_id===b.bit_id);
+    // PE doesn't always send a loadout on call_started; the arm endpoint accepts any bit_id,
+    // so fall back to the quick set rather than showing an empty, unusable panel.
+    const inHand = loadout.length ? loadout : QUICK_BITS.map(q=>({ bit_id:q.id, name:q.name }));
+    const bitRows=inHand.map(b=>{ const ok=armable(b), armed=setlist.some(s=>s.bit_id===b.bit_id);
       const parked=(b.status==='parked');
       const tip=ok?'':(parked?'parked \u2014 unavailable this call'
         :('needs '+(missingHook(b)||'a scouted fact')+' \u2014 not scouted for this target'));
@@ -1492,7 +1501,10 @@
       if(r.status===404){ const t=await r.text().catch(()=> ''); toast('\u26A0 '+(sel.bit_id?'Unknown bit':'Non-canonical hook')+(t?': '+t.slice(0,90):'')); return; }
       if(r.status===409){ const t=await r.text().catch(()=> ''); toast('\u26A0 '+(/full/i.test(t)?'Setlist full':'Parked / unavailable')+(t?': '+t.slice(0,90):'')); return; }
       if(!r.ok){ throw new Error('HTTP '+r.status); }
-      setlist.push(sel); renderArmPanel(); toast('Armed \u2014 fires when its timing allows'); }
+      setlist.push(sel); renderArmPanel();
+      toast(typeof lastGear.deploy_bar==='string'
+        ? 'Armed \u2014 held until warmup ends (nothing fires on the first turns)'
+        : 'Armed \u2014 fires when its timing allows'); }
     catch(e){ toast('\u26A0 Arm failed: '+(e.message||e)); } }
 
   /* ---- scout dossier (full enrichment, read-only) ---- */
