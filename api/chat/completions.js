@@ -1097,6 +1097,20 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       waitUntil(
         readCall(messages, priorRead)
           .then((read) => {
+            // A SILENT reader is the one failure that matters: readCall returns
+            // null on upstream !ok / no JSON / parse failure, and getCall's
+            // fallback is `?? "opening"` — so a reader that never succeeds
+            // leaves phase="opening" all call, which is exactly the state the
+            // opening-bit gate keys on. This used to vanish into .catch(()=>{})
+            // with no log, making a dead reader indistinguishable from a
+            // genuinely long opening. Log it instead.
+            if (!read) {
+              console.log(
+                "callread FAILED — no read this turn; phase/gears unchanged " +
+                  "(persistent failure leaves phase stuck at its default)"
+              );
+              return;
+            }
             const merged = blendRead(state, read);
             if (merged && Object.keys(merged).length) {
               return setCall(callId, merged).then(() => {
@@ -1109,7 +1123,9 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
               });
             }
           })
-          .catch(() => {})
+          .catch((e) => {
+            console.log("callread THREW " + (e && e.message ? e.message : e));
+          })
       );
     }
 
@@ -1368,6 +1384,25 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         will_fire: fire,                   // did a bit clear the bar this turn
         top_bit: top ? top.name : null,
         turn_index: turn,
+        // PER-BIT SCORES (added Jul 15 for Mead Hall's arm panel). Free: the
+        // scorer already ranked every eligible bit this turn — this is the same
+        // `ranked` the fit log slices, just structured instead of a preview
+        // string.
+        //   top3   — the ranking, not just the winner.
+        //   scores — every bit the scorer CONSIDERED this turn, id -> score.
+        // IMPORTANT for rendering: a bit ABSENT from `scores` was excluded from
+        // the pool this call, not scored zero. Exclusions are hard: parked (no
+        // fuel producer), archetype mismatch, missing fuel hooks, death blows
+        // (700s, they never rank here), and — from this deploy — opening bits
+        // once the reader says the call is past its opening. Absent means "not
+        // in play", which is different from "scored badly", and worth showing
+        // differently in the panel.
+        top3: ranked.slice(0, 3).map((r) => ({
+          bit_id: r.id,
+          name: r.name,
+          score: +r.score.toFixed(2),
+        })),
+        scores: Object.fromEntries(ranked.map((r) => [r.id, +r.score.toFixed(2)])),
       },
       "engine"
     );
