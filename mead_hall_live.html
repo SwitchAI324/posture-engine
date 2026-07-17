@@ -663,7 +663,7 @@
   <!-- BOARD -->
   <div class="board">
     <div class="body">
-      <div id="gearPanel" class="gearpanel" style="display:none">
+      <div id="gearPanel" class="gearpanel">
         <div class="gptop"><span class="gplab">The engine's read</span><span class="gpturn" id="gpTurn">turn —</span></div>
         <div class="gaxis"><span class="gname">suspicion</span><span class="gvals" id="gxSusp">
           <span class="gval" data-v="alive">alive</span><span class="gval" data-v="slipping">slipping</span><span class="gval" data-v="foregone">foregone</span></span>
@@ -1414,6 +1414,8 @@
   let lastGear={};
   function renderGear(p){ const pn=$('#gearPanel'); if(!pn)return; pn.style.display='block';
     lastGear=Object.assign(lastGear,p);
+    const gotData = lastGear.suspicion!=null || lastGear.fit_score!=null;
+    if(!gotData){ const t=$('#gpTurn'); if(t) t.textContent='waiting for the engine\u2026'; }
     function setAxis(id,val){ if(val==null)return; const wrap=$(id); if(!wrap)return;
       wrap.querySelectorAll('.gval').forEach(function(el){ el.classList.toggle('on', el.getAttribute('data-v')===String(val).toLowerCase()); }); }
     setAxis('#gxSusp', lastGear.suspicion); setAxis('#gxPress', lastGear.pressure); setAxis('#gxEng', lastGear.engagement);
@@ -1735,7 +1737,7 @@
     const cd=$('#capDerek'); if(cd){cd.classList.remove('show'); cd.textContent='';}
     firedLog={}; selectedBit=null; renderBoardBits(null); renderHudBits();
     rack=[]; loadout=[]; setlist=[]; liveHeads=null; dossier=[]; renderAmmoRack(); renderArmPanel(); renderDossier();
-    lastGear={}; if($('#gearPanel')) $('#gearPanel').style.display='none';
+    lastGear={}; renderGear({});   // reset the readout but keep the panel on screen
     spokenKeys.clear(); try{ if(window.speechSynthesis) speechSynthesis.cancel(); }catch(e){}
     if(window.__mh_setBenchState){ ['conrad','bonnie','andrea'].forEach(id=>window.__mh_setBenchState(id,null)); }
     if(source==='live'){ const rn=document.querySelector('.readnote'); if(rn) rn.textContent='The Host plays its own hand. You may arm a setlist (max 3) and call the Death Blow.'; } }
@@ -2009,10 +2011,13 @@
       toast('Add ?target_id=\u2026 to the URL to watch a real call.'); }
   } else {
     showPresnap();
-    if(source==='replay'){ setReplayUI(false); toast('Demo call ready \u2014 press \u25B6 PLAY DEMO CALL.'); }
+    // ?source=replay is an explicit request for the demo — just play it, don't make them click.
+    if(source==='replay'){ toast('Demo call \u2014 playing.'); replayStart(); }
   }
 
   renderDossier();
+  // Paint the gear + arm panels immediately — they must never look "missing" before data lands.
+  renderGear({}); renderArmPanel();
   toast('Live in the hall — the Host is running the raid.');
 })();
 
