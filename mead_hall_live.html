@@ -179,6 +179,13 @@
   .bscore.clears{background:var(--green);color:#fff}
   .bscore.out{background:transparent;border:1px dashed #cfc8ba;color:#b3ab9c;font-weight:400;font-size:8.5px;min-width:0;cursor:help}
   .brank{font-family:var(--mono);font-size:8px;font-weight:700;color:var(--gold);margin-right:-3px}
+  /* bit about to fire (engine says will_fire) vs actually firing (bit_deployed) */
+  .bitrow{border-radius:5px;padding-left:5px !important;padding-right:5px !important;transition:background .2s}
+  .bitrow.pending{animation:bitPending 1s ease-in-out infinite}
+  .bitrow.firing{animation:bitFiring .5s ease-in-out 6}
+  @keyframes bitPending{0%,100%{background:transparent}50%{background:#fdf0d2;box-shadow:0 0 0 1px #e3a93f inset}}
+  @keyframes bitFiring{0%,100%{background:#fdeaea}50%{background:var(--gold2);box-shadow:0 0 0 2px var(--blood) inset}}
+  @media (prefers-reduced-motion:reduce){ .bitrow.pending,.bitrow.firing{animation:none;background:#fdf0d2} }
   .gearpanel{border:1px solid var(--bone2);border-radius:7px;padding:9px 10px;margin:0 0 10px;background:#faf8f3}
   .gptop{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px}
   .gplab{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate)}
@@ -678,8 +685,7 @@
           <div class="gfitnote" id="gfNote"></div>
         </div>
       </div>
-      <div class="grp">Bits — the Host's hand <button id="bitsDeckBtn" type="button" style="float:right;font:inherit;font-size:10px;letter-spacing:.04em;background:transparent;border:1px solid #c2832c66;color:#c2832c;border-radius:5px;padding:1px 7px;cursor:pointer">&#10070; the full deck &#8599;</button></div>
-      <div id="boardBits"></div>
+      <div id="armPanel" style="display:none"></div>
       <div class="bp-scope">
 <div class="bench-panel">
   <div class="panel-head">
@@ -689,7 +695,6 @@
   <div class="pinned-row" id="pinnedRow"></div>
 </div>
       </div>
-      <div id="armPanel" style="display:none"></div>
       <div class="readnote">Everything here runs itself — the Host plays its own hand. You deploy none of it.</div>
     </div>
     <div class="db">
@@ -1411,9 +1416,10 @@
   // suspicion: alive|slipping|foregone, pressure: calm|pushing|extracting,
   // engagement: bored|hooked|stunned, slip:int, fit_score (bar-scale, not 0-1),
   // deploy_bar (number or "warmup"), pool:int, turn:int. Any field may be absent.
-  let lastGear={};
+  let lastGear={}, firingBit=null;
   function renderGear(p){ const pn=$('#gearPanel'); if(!pn)return; pn.style.display='block';
     lastGear=Object.assign(lastGear,p);
+    if(Array.isArray(lastGear.top3)) lastGear.top3.forEach(x=>{ if(x&&x.bit_id&&x.name) bitNames[x.bit_id]=x.name; });
     const gotData = lastGear.suspicion!=null || lastGear.fit_score!=null;
     if(!gotData){ const t=$('#gpTurn'); if(t) t.textContent='waiting for the engine\u2026'; }
     function setAxis(id,val){ if(val==null)return; const wrap=$(id); if(!wrap)return;
@@ -1499,6 +1505,25 @@
     const badge=(rank>=0)?'<span class="brank">#'+(rank+1)+'</span>':'';
     return badge+'<span class="bscore'+(clears?' clears':'')+'" title="fit score this turn'+(typeof bar==='number'?(' \u00B7 bar '+bar.toFixed(1)):'')+'">'+n+'</span>';
   }
+  // Names learned from PE's own events (top3 carries name+bit_id; bit_deployed too).
+  const bitNames = {};
+  // The bits the Director can actually arm, in priority order:
+  //  1. PE's call_started loadout (authoritative, if sent)
+  //  2. the LIVE eligible pool from gear_state.scores — REAL bit_ids, ranked by this turn's score
+  //  3. QUICK_BITS — demo placeholders, last resort only. These are NOT real registry ids and
+  //     arming them can never fire; they exist so the panel isn't empty before any data lands.
+  function handBits(){
+    if(loadout.length) return loadout;
+    const g = lastGear||{};
+    if(g.scores && Object.keys(g.scores).length){
+      const ids = Object.keys(g.scores).sort((a,b)=>(g.scores[b]||0)-(g.scores[a]||0));
+      const armedIds = setlist.map(s=>s.bit_id);
+      const top = ids.slice(0, 6);                                   // the 6 likeliest to fire
+      armedIds.forEach(id=>{ if(!top.includes(id)) top.push(id); }); // never hide an armed bit
+      return top.map(id=>({ bit_id:id, name: bitNames[id] || id }));
+    }
+    return QUICK_BITS.map(q=>({ bit_id:q.id, name:q.name, _placeholder:true }));
+  }
   function renderArmPanel(){ const el=$('#armPanel'); if(!el)return;
     if(source==='demo'){ el.style.display='none'; return; }   // replay shows it so bits+scores are testable
     el.style.display='block';
@@ -1506,25 +1531,38 @@
     const ROW='display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;font-size:11px';
     // PE doesn't always send a loadout on call_started; the arm endpoint accepts any bit_id,
     // so fall back to the quick set rather than showing an empty, unusable panel.
-    const inHand = loadout.length ? loadout : QUICK_BITS.map(q=>({ bit_id:q.id, name:q.name }));
+    const inHand = handBits();
     const bitRows=inHand.map(b=>{ const excluded=bitExcluded(b);
-      const ok=armable(b) && !excluded, armed=setlist.some(s=>s.bit_id===b.bit_id);
+      const ok=armable(b) && !excluded && !b._placeholder, armed=setlist.some(s=>s.bit_id===b.bit_id);
       const parked=(b.status==='parked');
-      const tip=ok?'':(excluded?'not in play this call \u2014 excluded from the engine\u2019s pool; arming it will never fire'
+      const tip=ok?'':(b._placeholder?'placeholder \u2014 waiting for the engine\u2019s real bit pool; not armable'
+        :(excluded?'not in play this call \u2014 excluded from the engine\u2019s pool; arming it will never fire'
         :(parked?'parked \u2014 unavailable this call'
-        :('needs '+(missingHook(b)||'a scouted fact')+' \u2014 not scouted for this target')));
+        :('needs '+(missingHook(b)||'a scouted fact')+' \u2014 not scouted for this target'))));
       const dis=(!ok||full||armed)?'disabled':''; const op=(!ok&&!armed)?';opacity:.4':'';
-      const mark=parked?' <span style="color:#b7afa0;font-size:8px">\u00B7 parked</span>':'';
-      return '<div style="'+ROW+op+'" title="'+tip.replace(/"/g,'')+'"><span>'+(armed?'\u25B6 ':'')+b.name+mark+'</span>'+
+      // FLASH: about-to-fire = the engine says this bit clears the bar next turn (will_fire on
+      // the top bit); firing = bit_deployed just landed for it.
+      const g=lastGear||{};
+      const isTop=(g.top_bit && (g.top_bit===b.name || g.top_bit===b.bit_id));
+      const pending=(g.will_fire===true && isTop);
+      const firing=(firingBit && firingBit===b.bit_id);
+      const cls='bitrow'+(pending?' pending':'')+(firing?' firing':'');
+      const mark=b._placeholder?' <span style="color:#b7afa0;font-size:8px">\u00B7 placeholder</span>'
+        :(parked?' <span style="color:#b7afa0;font-size:8px">\u00B7 parked</span>':'');
+      return '<div class="'+cls+'" style="'+ROW+op+'" title="'+tip.replace(/"/g,'')+'"><span>'+(armed?'\u25B6 ':'')+b.name+mark+'</span>'+
         '<span style="margin-left:auto;display:flex;align-items:center;gap:7px">'+scoreCell(b)+
         '<button class="chip arm-bit" data-bid="'+b.bit_id+'" '+dis+'>'+(armed?'armed \u2713':'arm')+'</button></span></div>'; }).join('');
     const hookRows=rack.map(a=>{ const armed=setlist.some(s=>s.hook_id===a.hook_id); const dis=(full||armed||a.used)?'disabled':'';
       return '<div style="'+ROW+'"><span>\u00B7 '+(a.label||a.hook_id)+'</span>'+
         '<button class="chip arm-hook" data-hid="'+a.hook_id+'" '+dis+'>'+(armed?'forced \u2713':'force')+'</button></div>'; }).join('');
-    el.innerHTML='<div class="grp">Director\u2019s setlist <span style="color:'+(full?'var(--blood)':'#b7afa0')+'">'+setlist.length+'/3</span></div>'+
+    el.innerHTML='<div class="grp">Director\u2019s setlist <span style="color:'+(full?'var(--blood)':'#b7afa0')+'">'+setlist.length+'/3</span>'+
+      '<button id="bitsDeckBtn" type="button" style="float:right;font:inherit;font-size:10px;letter-spacing:.04em;background:transparent;border:1px solid #c2832c66;color:#c2832c;border-radius:5px;padding:1px 7px;cursor:pointer">&#10070; the full deck &#8599;</button></div>'+
       (bitRows||'<div class="brow muted">no bits in hand yet</div>')+
       (hookRows?('<div class="grp" style="margin-top:6px">Force a scouted fact</div>'+hookRows):'');
     el.querySelectorAll('.arm-bit').forEach(b=>b.onclick=()=>postArm({bit_id:b.dataset.bid}));
+    const db=el.querySelector('#bitsDeckBtn'); if(db) db.onclick=()=>{
+      const u=location.origin+'/bits_flip_deck.html'+(callId?('?call_id='+encodeURIComponent(callId)):'');
+      window.open(u,'_blank','noopener'); };
     el.querySelectorAll('.arm-hook').forEach(b=>b.onclick=()=>postArm({hook_id:b.dataset.hid})); }
 
   /* arm POST (#4): arm a bit and/or a fact; setlist max 3; surface rejections */
@@ -1623,6 +1661,9 @@
         if(!muted && !spokenKeys.has(spk)){ spokenKeys.add(spk); speak(role==='spammer'?'DEREK':role==='host'?'JARL':(p.speaker_name||'JARL'), txt); }
         break; }
       case 'bit_deployed': { const n=p.name||p.bit_id||'bit';
+        if(p.bit_id && p.name) bitNames[p.bit_id]=p.name;
+        firingBit=p.bit_id||null; renderArmPanel();
+        setTimeout(()=>{ firingBit=null; renderArmPanel(); }, 3000);
         firedLog[n]=(firedLog[n]||0)+1; selectedBit=n; renderBoardBits(n); setTimeout(()=>renderBoardBits(null),2600);
         const tg=p.trigger; const tag=(tg==='armed')?'ARMED \u2192 ':(tg==='injected')?'INJECTED \u2192 ':'DEPLOY \u2192 ';
         if($('#hudDecision'))$('#hudDecision').textContent=tag+n;
