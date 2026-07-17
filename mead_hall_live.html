@@ -856,6 +856,13 @@
 (function(){
   const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
   function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),1700);}
+  // MUST be first: top-level render calls further down reference `source`. A `let` read
+  // before its declaration throws a TDZ ReferenceError and kills the entire script.
+  const qp = new URLSearchParams(location.search);
+  // Default is LIVE WATCH — the Mead Hall never self-runs a conversation at you.
+  // The canned demo is opt-in only via ?source=replay (kept for presentations).
+  let source = (qp.get('source')==='replay') ? 'replay'
+             : (qp.get('source')==='demo' ? 'demo' : 'live');
 
   /* clock */
   let secs=378, live=true;
@@ -1310,14 +1317,9 @@
      URL params: ?source=live  ?call_id=<vapi>  ?target_id=<uuid>
                  ?endpoint=/api/call-feed  ?db_endpoint=/api/death-blow
      =================================================================== */
-  const qp = new URLSearchParams(location.search);
   // Scorecard auto-pop is DISCONNECTED for now — the summary will be redesigned to
   // flow from the main screen. Re-enable by flipping this to true (or ?scorecard=1).
   const SCORECARD_ENABLED = (qp.get('scorecard')==='1');
-  // Default is LIVE WATCH — the Mead Hall never self-runs a conversation at you.
-  // The canned demo is opt-in only via ?source=replay (kept for presentations).
-  let source = (qp.get('source')==='replay') ? 'replay'
-             : (qp.get('source')==='demo' ? 'demo' : 'live');
   // On a LIVE call the audio is already in your ear (Vapi/Zoom) — the browser reading the
   // same lines a beat later just echoes you. TTS is for demo/replay only. Override with ?sound=1.
   if(source==='live' && qp.get('sound')!=='1'){ muted=true;
