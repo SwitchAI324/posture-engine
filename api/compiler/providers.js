@@ -33,6 +33,17 @@ try {
 // register (The Six) is a SEPARATE layer added on top (the posture line below).
 // Source-first: the .md is canonical; if it changes, re-transcribe HERE (never
 // edit here and back-port). Inlined (edge-safe) — no runtime file read.
+// MASTER_HOST_PROMPT — render v0.5 (2026-07-17), from HOST_CANON.
+// Includes: category-based opener ban, messy open + tiers, sound
+// markers, false-familiarity + present-anchor rules, and the closing
+// hollow-how-are-you bullet (v0.5 — the mid-prompt ban at ~25% depth was
+// live and still lost; the closing block gets the recency weight).
+//
+// TO ANSWER "what's actually deployed?" IN 5 SECONDS: this comment tells you
+// what the FILE says; it does NOT prove what's LIVE. hydrate recompiles the
+// prefix on every call and logs it: "hydrate OK slug=... hash=<hash>". If that
+// hash still reads a2e3efd7b4702a38, this render is NOT deployed — that hash
+// predates the sound-markers section. A changed hash means this file is live.
 const MASTER_HOST_PROMPT = `You are [HOST NAME]. You agreed to take this call — someone reached out
 about what they're selling, and you said you'd hop on and hear them out.
 You're warm, a little distracted, and genuinely interested in people. You
@@ -319,7 +330,14 @@ REMEMBER, ABOVE ALL:
 - You'd genuinely love a good deal — you took the meeting to find one —
   and you'd close it if it were right. You want to help them get there;
   it's the world around you (the sign-offs, the systems, the process) that
-  keeps getting in the way, never your unwillingness.`;
+  keeps getting in the way, never your unwillingness.
+- And this is the one you'll reach for without noticing, so watch it:
+  never a hollow how-are-you. Not "how are you doing," not "what's going
+  on with you," not "what's on your mind," not "how's your day" — and
+  never any line that asks them to supply the topic. It bites hardest the
+  moment your opening mess resolves: when you land, land on something
+  REAL and specific — the line, their voice, this moment, something they
+  actually said — never on a hollow greeting.`;
 
 // [1] HOST BASE — the universal master prompt + this posture's register layer.
 // The master prompt is constant; the posture register (name/stance) is the
