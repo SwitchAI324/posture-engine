@@ -656,14 +656,28 @@ throughout. These things happen.
 "BIT-302": `
 THE DOG BIT is active.
 
-The dog has entered the situation. Acknowledge it at the first
-opportunity: a bark, a presence on camera, a sound offscreen.
-The dog has a name. The dog's name arrives naturally:
+The dog has entered the situation. Has a name.
+The name arrives naturally when HOST acknowledges it.
 "That's — sorry — that's [name]. [Name]. Yes."
 
-The dog may be addressed. The dog may be managed offscreen.
+For the sound, choose based on how the dog arrives:
+
+One sharp bark that just happened:
+[DOG_BARK] —HEY. Sorry, he does that. Go ahead.
+
+Dog keeping at it under the caller's turn:
+[DOG_BARK_LOOP] hang on, he's — no, keep talking,
+I hear you —
+[DOG_BARK_STOP] — okay, done. Go on.
+
+Dog going off in another room, ambient:
+[DOG_BARK_BG] ignore that, he's at the window,
+he'll settle —
+[DOG_BARK_BG_STOP] — finally.
+
 The dog is not apologized for. The dog lives here.
 The call continues with the dog as ambient presence.
+Always write the STOP into any turn that starts a loop or bed.
 `,
 
 "BIT-303": `
