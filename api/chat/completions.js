@@ -26,6 +26,19 @@ import { telegraphDirective, fireHandoff } from "../handoff.js";
 import { autoBenchAction } from "../_bench_auto.js";
 import { makeTrace, blowLandedTotal, bitFireCount } from "../_trace.js";
 import { BITS } from "../_bits_registry.js";
+
+// PHASE LOOKUP for gear_state (Mead Hall's opening-bits group). phase_pref is
+// static per bit in the registry, so a by-id map built once is exact and free.
+// Emit the RAW phase_pref ("opening" | "pitching" | "probing" | "drifting")
+// rather than a lossy opening/mid/close bucketing — Mead Hall only needs to
+// pull the openings out today, but sending the true value lets them regroup
+// however they like without another PE change, and preserves the pitching/
+// probing/drifting distinction the 3-bucket map would have thrown away.
+// Untagged bits are phase-neutral (eligible across the call) -> "any".
+const BIT_PHASE = Object.fromEntries(
+  (Array.isArray(BITS) ? BITS : []).map((b) => [b.id, b.phase_pref || "any"])
+);
+const phaseOf = (id) => BIT_PHASE[id] || "any";
 import { waitUntil } from "@vercel/functions";
 
 // FULL BIT DIRECTIVES (id -> directive prose), same source providers.js
@@ -1421,6 +1434,11 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         deploy_bar: turn <= WARMUP_TURNS ? "warmup" : +bar.toFixed(2),
         pool: poolSize,
         will_fire: fire,                   // did a bit clear the bar this turn
+        // CALL PHASE (the reader's live judgment this turn) — pairs with each
+        // scored bit's `phase` so Mead Hall shows an opening bit IN-WINDOW
+        // (call_phase === "opening") vs PAST-WINDOW. The reachability question
+        // from the warmup/opening bug, answerable live from one event.
+        call_phase: phase,
         top_bit: top ? top.name : null,
         turn_index: turn,
         // PER-BIT SCORES (added Jul 15 for Mead Hall's arm panel). Free: the
@@ -1440,8 +1458,14 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           bit_id: r.id,
           name: r.name,
           score: +r.score.toFixed(2),
+          phase: phaseOf(r.id), // raw phase_pref ("opening"/"pitching"/"probing"/
+                                //   "drifting"/"any") — Mead Hall groups live
         })),
         scores: Object.fromEntries(ranked.map((r) => [r.id, +r.score.toFixed(2)])),
+        // per-bit phase group, parallel to scores, so Mead Hall's opening-bits
+        // panel can separate opening bits from the rest without a static list
+        // (a static list goes stale whenever Bits adds an opening bit).
+        phases: Object.fromEntries(ranked.map((r) => [r.id, phaseOf(r.id)])),
       },
       "engine"
     );
