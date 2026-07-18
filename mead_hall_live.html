@@ -488,6 +488,7 @@
   .tl.beat.phantom{color:#6b5ca6;background:#efecf8;border-color:#d8d0ee} .tl.beat.phantom b{color:#4a3f80} .tl.beat.phantom .bmeta{color:#6b5ca6}
   .tl.beat.handoff{color:var(--blood);background:#fbecec;border-color:#e8c4bf} .tl.beat.handoff b{color:var(--blood2)} .tl.beat.handoff .bmeta{color:#a5564a}
   .tl.beat.handoff.on{background:#f7e0dc;border-color:var(--blood)}
+  .tl.beat.sound{color:#5a7a8a;background:#eef4f7;border-color:#cfe0e8} .tl.beat.sound .bmeta{color:#5a7a8a}
   .scriptbtn{margin-left:auto;background:#fff;border:1px solid var(--slate);color:var(--ink);
     font-family:var(--mono);font-weight:700;font-size:9px;padding:4px 9px;border-radius:6px;cursor:pointer}
   #scriptText{width:100%;border:1px solid var(--line);border-radius:8px;padding:12px;
@@ -1507,32 +1508,44 @@
   }
   // Names learned from PE's own events (top3 carries name+bit_id; bit_deployed too).
   const bitNames = {};
-  // The bits the Director can actually arm, in priority order:
-  //  1. PE's call_started loadout (authoritative, if sent)
-  //  2. the LIVE eligible pool from gear_state.scores — REAL bit_ids, ranked by this turn's score
-  //  3. QUICK_BITS — demo placeholders, last resort only. These are NOT real registry ids and
-  //     arming them can never fire; they exist so the panel isn't empty before any data lands.
-  function handBits(){
-    if(loadout.length) return loadout;
-    const g = lastGear||{};
-    if(g.scores && Object.keys(g.scores).length){
-      const ids = Object.keys(g.scores).sort((a,b)=>(g.scores[b]||0)-(g.scores[a]||0));
-      const armedIds = setlist.map(s=>s.bit_id);
-      const top = ids.slice(0, 6);                                   // the 6 likeliest to fire
-      armedIds.forEach(id=>{ if(!top.includes(id)) top.push(id); }); // never hide an armed bit
-      return top.map(id=>({ bit_id:id, name: bitNames[id] || id }));
-    }
-    return QUICK_BITS.map(q=>({ bit_id:q.id, name:q.name, _placeholder:true }));
+  // SIX FIXED bits — stable order, never reshuffle. The AI still deploys from the whole
+  // library independently; these are the Director's fixed manual handles. Scores update live
+  // on each, but the ROWS never move (so you can actually track them). Swap ids freely.
+  const FIXED_BITS = [
+    { bit_id:'BIT-216', name:'The Questionnaire' },
+    { bit_id:'BIT-201', name:'The Competitor' },
+    { bit_id:'BIT-118', name:'Negation Drop' },
+    { bit_id:'BIT-302', name:'The Dog' },
+    { bit_id:'BIT-308', name:'The Snot-Burst' },
+    { bit_id:'BIT-314', name:'The Unmuted Door' }
+  ];
+  // Opening bits — shown as their own group ABOVE the six so you can watch whether an
+  // opening actually fires during the opening. Which bit_ids are "opening" is PE's to tell us
+  // (see the note in chat); until then this stays empty and the group hides itself.
+  // Opening bits are derived LIVE from PE's phase_pref (no hardcoded list): any scored bit
+  // whose preferred phase is "opening". call_phase tells us where the call is now, so each
+  // opening bit shows in-window (openings can still fire) vs past-window (opening has passed).
+  function phasePrefOf(id){
+    const g=lastGear||{};
+    if(g.phase_pref && g.phase_pref[id]!=null) return String(g.phase_pref[id]).toLowerCase();
+    if(Array.isArray(g.top3)){ const h=g.top3.find(x=>x&&x.bit_id===id); if(h&&h.phase_pref) return String(h.phase_pref).toLowerCase(); }
+    return null;
   }
+  function openingBits(){
+    const g=lastGear||{}; const seen={}; const out=[];
+    const ids = g.phase_pref ? Object.keys(g.phase_pref) : (g.scores?Object.keys(g.scores):[]);
+    ids.forEach(id=>{ if(phasePrefOf(id)==='opening' && !seen[id]){ seen[id]=1; out.push({bit_id:id, name:bitNames[id]||id}); } });
+    return out;
+  }
+  function callPastOpening(){ const cp=String((lastGear||{}).call_phase||'').toLowerCase(); return cp!=='' && cp!=='opening' && cp!=='warmup'; }
+  function handBits(){ return FIXED_BITS.map(b=>({ bit_id:b.bit_id, name: bitNames[b.bit_id] || b.name })); }
   function renderArmPanel(){ const el=$('#armPanel'); if(!el)return;
     if(source==='demo'){ el.style.display='none'; return; }   // replay shows it so bits+scores are testable
     el.style.display='block';
     const full=setlist.length>=3;
     const ROW='display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;font-size:11px';
-    // PE doesn't always send a loadout on call_started; the arm endpoint accepts any bit_id,
-    // so fall back to the quick set rather than showing an empty, unusable panel.
-    const inHand = handBits();
-    const bitRows=inHand.map(b=>{ const excluded=bitExcluded(b);
+    const g=lastGear||{};
+    function bitRow(b){ const excluded=bitExcluded(b);
       const ok=armable(b) && !excluded && !b._placeholder, armed=setlist.some(s=>s.bit_id===b.bit_id);
       const parked=(b.status==='parked');
       const tip=ok?'':(b._placeholder?'placeholder \u2014 waiting for the engine\u2019s real bit pool; not armable'
@@ -1540,9 +1553,6 @@
         :(parked?'parked \u2014 unavailable this call'
         :('needs '+(missingHook(b)||'a scouted fact')+' \u2014 not scouted for this target'))));
       const dis=(!ok||full||armed)?'disabled':''; const op=(!ok&&!armed)?';opacity:.4':'';
-      // FLASH: about-to-fire = the engine says this bit clears the bar next turn (will_fire on
-      // the top bit); firing = bit_deployed just landed for it.
-      const g=lastGear||{};
       const isTop=(g.top_bit && (g.top_bit===b.name || g.top_bit===b.bit_id));
       const pending=(g.will_fire===true && isTop);
       const firing=(firingBit && firingBit===b.bit_id);
@@ -1551,12 +1561,22 @@
         :(parked?' <span style="color:#b7afa0;font-size:8px">\u00B7 parked</span>':'');
       return '<div class="'+cls+'" style="'+ROW+op+'" title="'+tip.replace(/"/g,'')+'"><span>'+(armed?'\u25B6 ':'')+b.name+mark+'</span>'+
         '<span style="margin-left:auto;display:flex;align-items:center;gap:7px">'+scoreCell(b)+
-        '<button class="chip arm-bit" data-bid="'+b.bit_id+'" '+dis+'>'+(armed?'armed \u2713':'arm')+'</button></span></div>'; }).join('');
+        '<button class="chip arm-bit" data-bid="'+b.bit_id+'" '+dis+'>'+(armed?'armed \u2713':'arm')+'</button></span></div>'; }
+    const inHand = handBits();
+    const bitRows = inHand.map(bitRow).join('');
+    // Opening-bits group (above the six) — derived live from PE's phase_pref.
+    const openList = openingBits();
+    const past = callPastOpening();
+    const openRows = openList.length ? openList.map(bitRow).join('') : '';
+    const openHdr = openList.length
+      ? '<div class="grp" style="margin-top:2px;color:#8a6d2b">Opening bits <span style="float:right;font-size:9px;letter-spacing:.02em;color:'+(past?'#b06a3a':'#3a7a4a')+'">'+(past?'past the opening \u2014 window closed':'in the opening window')+'</span></div>'
+      : '';
     const hookRows=rack.map(a=>{ const armed=setlist.some(s=>s.hook_id===a.hook_id); const dis=(full||armed||a.used)?'disabled':'';
       return '<div style="'+ROW+'"><span>\u00B7 '+(a.label||a.hook_id)+'</span>'+
         '<button class="chip arm-hook" data-hid="'+a.hook_id+'" '+dis+'>'+(armed?'forced \u2713':'force')+'</button></div>'; }).join('');
     el.innerHTML='<div class="grp">Director\u2019s setlist <span style="color:'+(full?'var(--blood)':'#b7afa0')+'">'+setlist.length+'/3</span>'+
       '<button id="bitsDeckBtn" type="button" style="float:right;font:inherit;font-size:10px;letter-spacing:.04em;background:transparent;border:1px solid #c2832c66;color:#c2832c;border-radius:5px;padding:1px 7px;cursor:pointer">&#10070; the full deck &#8599;</button></div>'+
+      (openRows?(openHdr+openRows+'<div class="grp" style="margin-top:6px">Fixed six</div>'):'')+
       (bitRows||'<div class="brow muted">no bits in hand yet</div>')+
       (hookRows?('<div class="grp" style="margin-top:6px">Force a scouted fact</div>'+hookRows):'');
     el.querySelectorAll('.arm-bit').forEach(b=>b.onclick=()=>postArm({bit_id:b.dataset.bid}));
@@ -1648,7 +1668,15 @@
         }
         break; }
       case 'utterance': {
-        const role=p.speaker_role||ev.actor; const txt=p.text||'';
+        const role=p.speaker_role||ev.actor; let txt=p.text||'';
+        // LiveKit sound markers LEAD the line (e.g. "[DOG_BARK] Sorry, where were we").
+        // The agent strips them before speaking; strip them from the transcript too so the
+        // Director sees the clean line, and surface the sound as its own small beat.
+        const mk=txt.match(/^\s*((?:\[[A-Z0-9_]+\]\s*)+)/);
+        if(mk){ txt=txt.slice(mk[0].length).trim();
+          mk[1].match(/\[[A-Z0-9_]+\]/g).forEach(tag=>{ const log=$('#tlog'); if(log){ const d=document.createElement('div');
+            d.className='tl beat sound'; d.innerHTML='\uD83D\uDD0A <span class="bmeta">'+tag.replace(/[\[\]]/g,'').toLowerCase().replace(/_/g,' ')+'</span>';
+            log.appendChild(d); log.scrollTop=log.scrollHeight; } }); }
         if(role==='host'){ const hn=p.speaker_name||'HOST'; showJarl(txt); tline('j', txt, hn); }
         else if(role==='spammer'){
           const sn=p.speaker_name||'Caller';  // honest neutral label when Scouting has no name — NEVER a placeholder
@@ -1792,7 +1820,14 @@
     dbSent=false;
     feed=createFeed({ endpoint:FEED_ENDPOINT, callId, targetId, intervalMs:1500,
       onEvent:applyEvent,
-      onArcLoaded:(events, finished)=>{ if(finished){ toast('Replaying the raid \u2014 watch it unfold'); }
+      onArcLoaded:(events, finished)=>{
+        // If you're watching by target_id but the events carry null targets (pre-fix calls),
+        // the board can't match them — say so instead of sitting silently blank.
+        if(targetId && !callId && Array.isArray(events) && events.length && events.every(e=>e&&e.target_id==null)){
+          toast('\u26A0 This call\u2019s events have no target_id \u2014 watch by ?call_id= instead');
+          console.warn('[MeadHall] events carry target_id=null but you opened by target_id; use call_id.');
+        }
+        if(finished){ toast('Replaying the raid \u2014 watch it unfold'); }
         else if(callHasStarted){ toast('Call already in progress \u2014 joined live'); }
         else { toast('Arc loaded \u2014 the story so far'); if(source==='live') showPresnap(); } },
       onError:(e)=>callFail('feed', e, false), onStop:()=>{ feedRunning=false; setLiveRunUI(false); } });
