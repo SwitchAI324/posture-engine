@@ -1,10 +1,10 @@
 // api/_bits_registry.js
 // Source: SpamViking_BitsRegistry.json (140 bits)
 // DO NOT hand-edit. Regenerate from SpamViking_BitsRegistry.json when the Bits Library recompiles.
-// Generated: 2026-07-15
+// Generated: 2026-07-18
 
 export const BITS = [
-  {"id": "BIT-101", "name": "The Echo", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "phrases adopted", "fuel_hooks": ["pitch_claims"], "cooldown": 3, "gear": {"pressure": {"pushing": 1.0, "extracting": 1.0}, "engagement": {"bored": 2.0, "hooked": 1.0, "stunned": -1.0}}, "phase_pref": "pitching"},
+  {"id": "BIT-101", "name": "The Echo", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "phrases adopted", "fuel_hooks": ["pitch_claims"], "cooldown": 3, "gear": {"pressure": {"pushing": 1.0, "extracting": 1.0}, "engagement": {"bored": 2.0, "hooked": 2.0, "stunned": 2.0}}, "phase_pref": "pitching"},
   {"id": "BIT-102", "name": "Old Saws", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"pressure": {"calm": 0.5, "pushing": 1.0, "extracting": 1.0}}},
   {"id": "BIT-103", "name": "The Quotes Bit", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 1.0, "hooked": 1.0, "stunned": 0.0}}},
   {"id": "BIT-104", "name": "Malaprops", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "substitutions", "cooldown": 2, "gear": {"pressure": {"calm": 1.0, "pushing": 1.0, "extracting": 1.0}}},
@@ -40,9 +40,9 @@ export const BITS = [
   {"id": "BIT-133", "name": "Audio Verification", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "audio checks", "cooldown": 3, "gear": {"engagement": {"bored": 2.0}, "pressure": {"calm": 2.0}}, "phase_pref": "opening"},
   {"id": "BIT-134", "name": "Six Degrees", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0}, "pressure": {"calm": 1.0}}, "phase_pref": "opening"},
   {"id": "BIT-135", "name": "The Punctuality", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0}, "pressure": {"calm": 2.0}}, "phase_pref": "opening"},
-  {"id": "BIT-136", "name": "The Commute", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 1.0}, "pressure": {"calm": 1.0}}},
-  {"id": "BIT-137", "name": "The History Lesson", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 2.0, "stunned": 1.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
-  {"id": "BIT-138", "name": "The Hobby", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"engagement": {"hooked": 3.0, "stunned": 2.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
+  {"id": "BIT-136", "name": "The Commute", "status": "parked", "park_reason": "superseded by BIT-326", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 1.0}, "pressure": {"calm": 1.0}}},
+  {"id": "BIT-137", "name": "The History Lesson", "status": "parked", "park_reason": "superseded by BIT-327", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 2.0, "stunned": 1.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
+  {"id": "BIT-138", "name": "The Hobby", "status": "parked", "park_reason": "superseded by BIT-328", "archetypes": "universal", "cooldown": 3, "gear": {"engagement": {"hooked": 3.0, "stunned": 2.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
   {"id": "BIT-139", "name": "Genealogy", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"bored": 2.0, "hooked": 2.0}, "pressure": {"calm": 1.0}}},
   {"id": "BIT-140", "name": "The Bucket List", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"hooked": 2.0, "stunned": 1.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
   {"id": "BIT-141", "name": "Sports Expectations", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0}, "pressure": {"calm": 1.0}}},
@@ -65,7 +65,7 @@ export const BITS = [
   {"id": "BIT-213", "name": "The Accidental Joiner", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"suspicion": {"slipping": -1.0, "foregone": -2.0}, "engagement": {"hooked": 2.0, "stunned": 1.0, "bored": -1.0}}},
   {"id": "BIT-214", "name": "The Two Spammers", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"pressure": {"extracting": 2.0}, "engagement": {"hooked": 2.0, "stunned": 1.0}}},
   {"id": "BIT-215", "name": "No You Go", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "deferrals", "cooldown": 3, "gear": {"pressure": {"calm": 1.0, "pushing": 1.0}, "engagement": {"hooked": 1.0}}},
-  {"id": "BIT-216", "name": "The Questionnaire", "status": "active", "archetypes": ["b2b_saas"], "cooldown": 4, "gear": {"pressure": {"calm": 2.0, "pushing": 1.0, "extracting": -1.0}, "engagement": {"hooked": 2.0, "bored": -1.0, "stunned": -1.0}}, "phase_pref": "probing"},
+  {"id": "BIT-216", "name": "The Questionnaire", "status": "active", "archetypes": ["b2b_saas"], "cooldown": 4, "gear": {"engagement": {"hooked": 2.0, "stunned": 1.0}, "pressure": {"pushing": 2.0, "extracting": 1.0}, "suspicion": {"alive": 1.0, "slipping": 1.0}}, "phase_pref": "probing"},
   {"id": "BIT-217", "name": "The Conrad Bit", "status": "active", "archetypes": "universal", "cooldown": 6, "gear": {"pressure": {"extracting": 1.0}, "engagement": {"bored": -2.0, "hooked": 3.0, "stunned": 2.0}}},
   {"id": "BIT-218", "name": "The Introduction", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"pressure": {"calm": 1.0, "pushing": 1.0}, "engagement": {"bored": 1.0, "hooked": 2.0, "stunned": 1.0}}},
   {"id": "BIT-219", "name": "The Terrible Notes", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 2.0, "stunned": 1.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
