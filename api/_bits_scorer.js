@@ -83,6 +83,35 @@ export const DEPLOY_THRESHOLD = parseFloat(process.env.DEPLOY_THRESHOLD || "1.5"
 // entirely once reader failures are proven rare (see the callread FAILED log).
 export const OPENING_MAX_TURN = parseInt(process.env.OPENING_MAX_TURN || "20", 10);
 
+// TEST-MODE ONLY: bits whose archetype scoping is bypassed so they're scorable
+// on EVERY call regardless of archetype. Comma-separated bit ids in an env var;
+// empty/unset (production default) = normal archetype gating for all bits. This
+// does NOT change any bit's registry entry — BIT-216's real scope stays
+// ["b2b_saas"] for production; this only stops the archetype-mismatch exclusion
+// from dropping the listed ids while evaluating the board's test set.
+const TEST_UNSCOPE_BITS = new Set(
+  (process.env.TEST_UNSCOPE_BITS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+);
+
+// TEST-MODE ONLY: hard-cap the deployable pool to exactly these bit ids. When
+// set, the Host can ONLY fire bits on this list — everything else is excluded
+// from loadout() before any other gate runs, so the autonomous Host is
+// restricted to the board's test set and every bit_deployed has a matching
+// board row (no off-board fires). Comma-separated ids; empty/unset (production
+// default) = NO cap, the Host ranks the whole registry as normal. This changes
+// nothing in the registry and is fully reversible by clearing the env var.
+// Pairs with TEST_UNSCOPE_BITS: cap decides WHICH bits are in play, unscope
+// lets an archetype-scoped one (BIT-216) score on any call once it's in.
+const TEST_POOL_CAP = new Set(
+  (process.env.TEST_POOL_CAP || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+);
+
 // Death blows are the 700-series. Identified by id, not a separate `kind`.
 const isDeathBlow = (b) => /^BIT-7\d\d$/.test(b.id);
 
@@ -132,6 +161,13 @@ function fitScore(bit, state) {
   } else if (Array.isArray(arch) && arch.includes(state.archetype)) {
     s += WEIGHTS.archetypeMatch;
     why.push(`archetype:${state.archetype} +${WEIGHTS.archetypeMatch}`);
+  } else if (TEST_UNSCOPE_BITS.has(bit.id)) {
+    // TEST MODE: this bit's archetype doesn't match, but it's on the unscope
+    // list, so we don't exclude it — score it as a universal-fit bit so it
+    // lands in the pool and gear/score decides its ranking like everything
+    // else. Registry scope is untouched; flip TEST_UNSCOPE_BITS off to restore.
+    s += WEIGHTS.universal;
+    why.push(`test-unscoped (real scope ${JSON.stringify(arch)}) +${WEIGHTS.universal}`);
   } else {
     return { score: -Infinity, why: ["archetype mismatch — excluded"] };
   }
@@ -294,6 +330,9 @@ export function rankBits(state, { pool = BITS, deathBlow = false } = {}) {
 // primary cause of under-firing. Removed: gear now only scores, never gates.
 export function loadout(state, { pool = BITS } = {}) {
   return pool.filter((b) => {
+    // TEST POOL CAP (test-mode only): when set, ONLY these ids are deployable —
+    // exclude everything else before any other gate. Empty = no cap (normal).
+    if (TEST_POOL_CAP.size > 0 && !TEST_POOL_CAP.has(b.id)) return false;
     if (b.status === "parked") return false; // no producer for its fuel yet
     if (isDeathBlow(b)) return false;
     if (!fuelFit(b, state).available) return false; // missing ammo — hard gate
