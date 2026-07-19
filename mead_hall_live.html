@@ -671,21 +671,7 @@
   <!-- BOARD -->
   <div class="board">
     <div class="body">
-      <div id="gearPanel" class="gearpanel">
-        <div class="gptop"><span class="gplab">The engine's read</span><span class="gpturn" id="gpTurn">turn —</span></div>
-        <div class="gaxis"><span class="gname">suspicion</span><span class="gvals" id="gxSusp">
-          <span class="gval" data-v="alive">alive</span><span class="gval" data-v="slipping">slipping</span><span class="gval" data-v="foregone">foregone</span></span>
-          <span class="gslip" id="gxSlip"></span></div>
-        <div class="gaxis"><span class="gname">pressure</span><span class="gvals" id="gxPress">
-          <span class="gval" data-v="calm">calm</span><span class="gval" data-v="pushing">pushing</span><span class="gval" data-v="extracting">extracting</span></span></div>
-        <div class="gaxis"><span class="gname">engagement</span><span class="gvals" id="gxEng">
-          <span class="gval" data-v="bored">bored</span><span class="gval" data-v="hooked">hooked</span><span class="gval" data-v="stunned">stunned</span></span></div>
-        <div class="gfit">
-          <div class="gfitrow"><span class="gname">bit fit</span><span class="gfitnums"><b id="gfScore">—</b> vs bar <span id="gfBar">—</span> · pool <span id="gfPool">—</span></span></div>
-          <div class="fitmeter" id="fitMeter"><div class="fitfill" id="fitFill"></div><div class="fitbar" id="fitThresh"></div></div>
-          <div class="gfitnote" id="gfNote"></div>
-        </div>
-      </div>
+      <!-- gear panel removed from the board; gear DATA still drives bit scores + flash -->
       <div id="armPanel" style="display:none"></div>
       <div class="bp-scope">
 <div class="bench-panel">
@@ -1418,9 +1404,13 @@
   // engagement: bored|hooked|stunned, slip:int, fit_score (bar-scale, not 0-1),
   // deploy_bar (number or "warmup"), pool:int, turn:int. Any field may be absent.
   let lastGear={}, firingBit=null;
-  function renderGear(p){ const pn=$('#gearPanel'); if(!pn)return; pn.style.display='block';
+  function renderGear(p){
+    // Keep the gear DATA flowing even though the visible gear panel is removed — the bit scores,
+    // flash (will_fire/top_bit), and opening-phase logic all read from lastGear.
     lastGear=Object.assign(lastGear,p);
     if(Array.isArray(lastGear.top3)) lastGear.top3.forEach(x=>{ if(x&&x.bit_id&&x.name) bitNames[x.bit_id]=x.name; });
+    const pn=$('#gearPanel'); if(!pn) return;   // panel removed: data's updated, nothing to draw
+    pn.style.display='block';
     const gotData = lastGear.suspicion!=null || lastGear.fit_score!=null;
     if(!gotData){ const t=$('#gpTurn'); if(t) t.textContent='waiting for the engine\u2026'; }
     function setAxis(id,val){ if(val==null)return; const wrap=$(id); if(!wrap)return;
@@ -1512,12 +1502,13 @@
   // library independently; these are the Director's fixed manual handles. Scores update live
   // on each, but the ROWS never move (so you can actually track them). Swap ids freely.
   const FIXED_BITS = [
-    { bit_id:'BIT-216', name:'The Questionnaire' },
-    { bit_id:'BIT-201', name:'The Competitor' },
-    { bit_id:'BIT-118', name:'Negation Drop' },
     { bit_id:'BIT-302', name:'The Dog' },
-    { bit_id:'BIT-308', name:'The Snot-Burst' },
-    { bit_id:'BIT-314', name:'The Unmuted Door' }
+    { bit_id:'BIT-307', name:'The Spill' },
+    { bit_id:'BIT-329', name:'The Environment' },
+    { bit_id:'BIT-231', name:'The Competing Vendor' },
+    { bit_id:'BIT-101', name:'The Echo' },
+    { bit_id:'BIT-113', name:'The Movie Bit' },
+    { bit_id:'BIT-216', name:'The Questionnaire' }   // b2b_saas-scoped: absent/"—" off b2b_saas calls (correct)
   ];
   // Opening bits — shown as their own group ABOVE the six so you can watch whether an
   // opening actually fires during the opening. Which bit_ids are "opening" is PE's to tell us
@@ -1565,7 +1556,9 @@
     const inHand = handBits();
     const bitRows = inHand.map(bitRow).join('');
     // Opening-bits group (above the six) — derived live from PE's phase_pref.
-    const openList = openingBits();
+    // Bits directive: exactly these six in the arm panel, nothing else. Opening group is
+    // suppressed for now (re-enable by dropping the `&& false`) once openings are wanted back.
+    const openList = (false) ? openingBits() : [];
     const past = callPastOpening();
     const openRows = openList.length ? openList.map(bitRow).join('') : '';
     const openHdr = openList.length
