@@ -1,0 +1,2240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Mead Hall — SpamViking</title>
+<style>
+  :root{
+    --bone:#f4f1ea; --bone2:#eae4d8; --ink:#1b1714; --muted:#6f685b;
+    --blood:#a4161a; --blood2:#7d0f13; --gold:#c9821a; --gold2:#e3a93f;
+    --line:#d9d2c4; --stage:#131210; --stage2:#201c18; --stageln:#34302a;
+    --green:#3f7d4f; --slate:#52525b;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --serif:Georgia,"Iowan Old Style","Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bone);color:var(--ink);font-family:var(--sans);
+    font-size:14px;-webkit-font-smoothing:antialiased}
+  .zoomctl{margin-left:10px;display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px}
+  .zoomctl button{font-family:var(--mono);font-weight:700;font-size:12px;border:1px solid var(--line);
+    background:#fff;color:var(--ink);border-radius:6px;width:26px;height:24px;cursor:pointer;line-height:1}
+  .zoomctl button:hover{border-color:var(--gold);background:#fbf3e2}
+  #zoomLbl{min-width:38px;text-align:center;color:var(--muted)}
+  .vsel{font-family:var(--mono);font-size:10px;max-width:150px;border:1px solid var(--line);
+    border-radius:6px;padding:4px 6px;background:#fff;color:var(--ink);cursor:pointer}
+  .app{display:grid;grid-template-columns:minmax(0,1fr) 346px;
+    grid-template-areas:"head head" "strip board" "stage board"
+    "control board" "transcript board";grid-template-rows:auto auto auto auto minmax(0,1fr);
+    gap:10px;padding:10px;height:100vh;max-width:1440px;margin:0 auto}
+  .lab{font-family:var(--mono);font-size:10px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--muted)}
+
+  /* header */
+  .head{grid-area:head;display:flex;align-items:center;gap:14px;
+    background:#fff;border:1px solid var(--line);border-radius:8px;padding:0 16px;height:54px}
+  .brand{font-family:var(--serif);font-weight:700;font-size:18px}
+  .dot{width:11px;height:11px;border-radius:50%;background:var(--blood)}
+  .hall{font-family:var(--mono);letter-spacing:.14em;font-size:13px;color:var(--slate)}
+  .live{display:flex;align-items:center;gap:6px;background:#fde8e8;
+    border:1px solid var(--blood);color:var(--blood);font-family:var(--mono);
+    font-weight:700;font-size:11px;padding:3px 10px;border-radius:11px}
+  .live i{width:7px;height:7px;border-radius:50%;background:var(--blood);
+    animation:blink 1.4s infinite}
+  @keyframes blink{50%{opacity:.25}}
+  .badge{margin-left:auto;background:#fbf0d8;border:1.5px solid var(--gold);
+    color:#9a6712;font-family:var(--mono);font-weight:700;font-size:11px;
+    padding:4px 12px;border-radius:7px}
+
+  /* strip */
+  .strip{grid-area:strip;display:flex;align-items:center;gap:10px}
+  .stat{background:var(--stage);color:#fff;border-radius:7px;padding:7px 14px;min-width:150px}
+  .stat .lab{color:#a59c8c}
+  .stat b{font-family:var(--mono);font-size:18px;display:block;margin-top:2px;letter-spacing:.02em}
+  .stat.lt{background:#fff;border:1px solid var(--line);color:var(--ink)}
+  .stat.lt .lab{color:var(--muted)}
+  .pull{cursor:pointer;font-size:11px;color:var(--muted);margin-left:4px}
+  .credo{font-family:var(--serif);font-style:italic;color:var(--muted);
+    font-size:12px;margin-left:6px;flex:1}
+
+  /* stage */
+  .stage{grid-area:stage;display:grid;grid-template-columns:1fr 1fr;gap:10px;height:128px}
+  .side{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .sidelab{display:flex;align-items:center;gap:8px}
+  .sidelab .who{font-family:var(--mono);font-weight:700;font-size:10px;letter-spacing:.12em}
+  .them .who{color:var(--blood)} .us .who{color:var(--slate)}
+  .grid{display:grid;gap:6px;flex:1;min-height:0}
+  .grid.one{grid-template-columns:1fr}
+  .grid.two{grid-template-columns:1fr 1fr}
+  .tile{position:relative;background:var(--stage);border-radius:8px;overflow:hidden;
+    border:1px solid var(--stageln);display:flex;align-items:center;justify-content:center;min-height:0}
+  .tile.spk{box-shadow:0 0 0 2px var(--gold) inset}
+  .tile video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+  .namep{position:absolute;top:10px;left:10px;background:#0008;color:#cfc7b8;
+    font-family:var(--mono);font-size:9px;letter-spacing:.06em;padding:3px 9px;border-radius:9px;
+    border:1px solid #ffffff14}
+  .rec{position:absolute;top:11px;right:10px;display:flex;align-items:center;gap:5px;
+    font-family:var(--mono);font-size:8px;color:#e7b0b0;letter-spacing:.1em}
+  .rec i{width:6px;height:6px;border-radius:50%;background:var(--blood);animation:blink 1.2s infinite}
+  /* avatar */
+  .av{display:flex;flex-direction:column;align-items:center;gap:14px;color:#8a8275}
+  .orb{width:96px;height:96px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-family:var(--serif);font-size:34px;position:relative}
+  .orb.ai{background:radial-gradient(circle at 38% 32%,#3a342c,#1a1713);
+    border:2px solid var(--gold);color:var(--gold2)}
+  .orb.hum{background:radial-gradient(circle at 38% 32%,#34302b,#191512);
+    border:2px solid #4a463e;color:#7d7668}
+  .tile.spk .orb.ai{box-shadow:0 0 22px #c9821a55}
+  .nm{font-family:var(--mono);font-size:13px;font-weight:700;color:#e9e2d4}
+  .sub{font-family:var(--mono);font-size:9px;color:#8a8275}
+  .wave{display:flex;align-items:flex-end;gap:3px;height:16px;opacity:.25}
+  .tile.spk .wave{opacity:1}
+  .wave span{width:3px;background:var(--gold2);border-radius:2px;height:5px;
+    animation:eq .9s infinite ease-in-out}
+  .wave span:nth-child(2){animation-delay:.15s}.wave span:nth-child(3){animation-delay:.3s}
+  .wave span:nth-child(4){animation-delay:.45s}.wave span:nth-child(5){animation-delay:.6s}
+  .wave.hum span{background:#9a9384}
+  @keyframes eq{0%,100%{height:5px}50%{height:16px}}
+  .cambtn{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
+    background:#fff;color:var(--ink);border:none;font-family:var(--mono);font-weight:700;
+    font-size:10px;padding:6px 12px;border-radius:6px;cursor:pointer}
+  .joinbtn{position:absolute;bottom:10px;right:10px;background:#0009;color:#cfc7b8;
+    border:1px solid #ffffff22;font-family:var(--mono);font-size:9px;padding:5px 9px;
+    border-radius:6px;cursor:pointer}
+
+  /* playbar */
+  .playbar{grid-area:playbar;display:flex;align-items:center;gap:10px;
+    background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+  .scrub{height:7px;background:var(--bone2);border-radius:4px;flex:0 0 200px;position:relative;overflow:hidden}
+  .scrub i{position:absolute;left:0;top:0;bottom:0;width:84%;background:#b7afa0}
+  .btn{font-family:var(--mono);font-weight:700;font-size:11px;border-radius:6px;
+    padding:7px 12px;cursor:pointer;border:1px solid var(--slate);background:#fff;color:var(--ink)}
+  .btn.live{background:var(--blood);color:#fff;border-color:var(--blood);display:flex;align-items:center;gap:6px}
+  .btn.live i{width:6px;height:6px;border-radius:50%;background:#fff}
+  .btn[disabled]{opacity:.4;cursor:default}
+  .pbnote{font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:auto}
+
+  /* bottom: scout + chat */
+  .bottom{grid-area:bottom;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .panel{background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px}
+  .panel h4{font-family:var(--mono);font-size:10px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--slate);margin-bottom:8px;font-weight:700}
+  .row{border:1px solid var(--bone2);border-radius:5px;padding:8px 10px;margin-top:6px;font-size:12px}
+  .row.f{background:#faf8f3}
+  .link{color:#1f5fbf;cursor:pointer}
+  .files{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .note{font-family:var(--serif);font-style:italic;color:#9a6712;font-size:11px;margin-top:8px}
+  /* chat header line */
+  .chathead{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .joiners{display:flex;margin-left:4px}
+  .ji{width:21px;height:21px;border-radius:50%;border:2px solid #fff;margin-left:-6px;
+    display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--mono);
+    font-size:9px;font-weight:700}
+  .ji:first-child{margin-left:0}
+  .cnt{font-family:var(--mono);font-size:9px;color:var(--muted)}
+  .horn{margin-left:auto;background:var(--gold);color:#fff;border:none;font-family:var(--mono);
+    font-weight:700;font-size:10px;padding:5px 11px;border-radius:6px;cursor:pointer;white-space:nowrap}
+  .horn:active{transform:scale(.95)}
+  .horn.flash{animation:hf .5s}
+  @keyframes hf{0%{box-shadow:0 0 0 0 #e3a93f88}100%{box-shadow:0 0 0 14px #e3a93f00}}
+  .invite{background:var(--ink);color:#fff;border:none;font-family:var(--mono);font-weight:700;
+    font-size:10px;padding:5px 11px;border-radius:6px;cursor:pointer}
+  .chatbox{background:#faf8f3;border:1px solid var(--bone2);border-radius:6px;height:150px;
+    overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px}
+  .msg{max-width:80%;padding:6px 10px;border-radius:11px;font-size:12px;line-height:1.3}
+  .msg.them{background:var(--bone2);align-self:flex-start}
+  .msg.me{background:#2563eb;color:#fff;align-self:flex-end}
+  .msg.sys{align-self:center;background:transparent;color:var(--gold);font-family:var(--mono);
+    font-size:10px;font-weight:700}
+  .cin{display:flex;gap:6px;margin-top:8px}
+  .cin input{flex:1;border:1px solid var(--line);border-radius:6px;padding:8px;font-size:12px;font-family:var(--sans)}
+  .cin button{background:var(--ink);color:#fff;border:none;border-radius:6px;padding:0 14px;
+    font-family:var(--mono);font-weight:700;font-size:10px;cursor:pointer}
+
+  /* board */
+  .board{grid-area:board;background:#fff;border:1px solid var(--line);border-radius:8px;min-height:0;
+    display:flex;flex-direction:column;overflow:hidden}
+  .board .top{background:var(--ink);color:#fff;display:flex;align-items:center;
+    padding:9px 14px;font-family:var(--mono);font-weight:700;font-size:12px;letter-spacing:.12em}
+  .board .top .ro{margin-left:auto;font-weight:400;font-size:9px;color:#a59c8c;letter-spacing:.06em}
+  .board .body{padding:12px;overflow-y:auto;flex:1}
+  .lock{background:var(--bone);border:1px solid var(--line);border-radius:5px;padding:7px 10px;
+    font-family:var(--mono);font-size:11px;font-weight:700;color:#3f3a33;display:flex;align-items:center;gap:6px}
+  .grp{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--slate);margin:14px 0 6px}
+  .brow{display:flex;align-items:center;border:1px solid var(--bone2);border-radius:5px;
+    padding:6px 10px;margin-top:5px;font-size:11px;gap:8px}
+  .brow .st{margin-left:auto;font-family:var(--mono);font-size:9px;font-weight:700}
+  .st.armed{color:var(--green)} .st.fired{color:#a59c8c} .st.firing{color:var(--gold)}
+  /* keep long lists from stretching the board/stage — scroll them instead */
+  #armPanel{max-height:300px;overflow-y:auto;overflow-x:hidden}
+  #boardBench{max-height:190px;overflow-y:auto;overflow-x:hidden}
+  #ammoRack{max-height:200px;overflow-y:auto;overflow-x:hidden}
+  /* gear panel — the engine's live read (gear_state) */
+  .bscore{font-family:var(--mono);font-size:10px;font-weight:700;color:#8a7b5c;background:#f3efe6;
+    border-radius:4px;padding:1px 5px;min-width:30px;text-align:center}
+  .bscore.dim{color:#c3bcae;font-weight:400}
+  .bscore.clears{background:var(--green);color:#fff}
+  .bscore.out{background:transparent;border:1px dashed #cfc8ba;color:#b3ab9c;font-weight:400;font-size:8.5px;min-width:0;cursor:help}
+  .brank{font-family:var(--mono);font-size:8px;font-weight:700;color:var(--gold);margin-right:-3px}
+  /* bit about to fire (engine says will_fire) vs actually firing (bit_deployed) */
+  .bitrow{border-radius:5px;padding-left:5px !important;padding-right:5px !important;transition:background .2s}
+  .bitrow.pending{animation:bitPending 1s ease-in-out infinite}
+  .bitrow.firing{animation:bitFiring .5s ease-in-out 6}
+  @keyframes bitPending{0%,100%{background:transparent}50%{background:#fdf0d2;box-shadow:0 0 0 1px #e3a93f inset}}
+  @keyframes bitFiring{0%,100%{background:#fdeaea}50%{background:var(--gold2);box-shadow:0 0 0 2px var(--blood) inset}}
+  @media (prefers-reduced-motion:reduce){ .bitrow.pending,.bitrow.firing{animation:none;background:#fdf0d2} }
+  .gearpanel{border:1px solid var(--bone2);border-radius:7px;padding:9px 10px;margin:0 0 10px;background:#faf8f3}
+  .gptop{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px}
+  .gplab{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate)}
+  .gpturn{font-family:var(--mono);font-size:10px;color:#9a9a8e}
+  .gaxis{display:flex;align-items:center;gap:7px;margin:4px 0}
+  .gname{font-family:var(--mono);font-size:9.5px;letter-spacing:.04em;color:var(--slate);width:64px;flex:none;text-transform:uppercase}
+  .gvals{display:flex;gap:3px;flex:1}
+  .gval{font-family:var(--mono);font-size:9.5px;padding:2px 6px;border-radius:4px;color:#b3ad9f;background:#efece4}
+  .gval.on{color:#1b1714;font-weight:700}
+  .gval.on[data-v="alive"]{background:#bfe3c6;color:#11401b}
+  .gval.on[data-v="slipping"]{background:#f0d79a;color:#5a4410}
+  .gval.on[data-v="foregone"]{background:#e9b3ab;color:#5a1c14}
+  .gval.on[data-v="calm"],.gval.on[data-v="bored"]{background:#d7d2c6;color:#3a352d}
+  .gval.on[data-v="pushing"],.gval.on[data-v="hooked"]{background:#e3c98f;color:#4a3a12}
+  .gval.on[data-v="extracting"],.gval.on[data-v="stunned"]{background:#caa23f;color:#1b1714}
+  .gslip{font-family:var(--mono);font-size:9px;color:var(--slate);flex:none}
+  .gfit{margin-top:8px;border-top:1px dashed var(--bone2);padding-top:7px}
+  .gfitrow{display:flex;justify-content:space-between;align-items:baseline}
+  .gfitnums{font-family:var(--mono);font-size:9.5px;color:var(--slate)}
+  .gfitnums b{color:#1b1714;font-size:11px}
+  .fitmeter{position:relative;height:9px;background:#efece4;border-radius:5px;margin:5px 0 0;overflow:hidden}
+  .fitfill{position:absolute;left:0;top:0;bottom:0;width:0;background:#caa23f;transition:width .4s}
+  .fitfill.clears{background:var(--green)}
+  .fitbar{position:absolute;top:-2px;bottom:-2px;width:2px;background:#8c3b2b}
+  .gfitnote{font-family:var(--mono);font-size:9px;margin-top:4px;min-height:11px}
+  .gfitnote.clears{color:var(--green)} .gfitnote.warm{color:var(--slate)}
+  .ibadge{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.04em;padding:2px 6px;border-radius:5px;margin-left:6px;font-style:normal;white-space:nowrap}
+  .ibadge.safety{background:var(--green);color:#fff}
+  .ibadge.win{background:var(--gold2);color:#1b1714}
+  .ibadge.caution{background:#caa23f;color:#1b1714}
+  .ibadge.neutral{background:#cfc8ba;color:#3a352d}
+  .st.oncall{color:var(--green)} .st.wait{color:#a59c8c} .st.used{color:#a59c8c}
+  .brow.firing{background:#fff7ec;border-color:var(--gold)}
+  .brow.muted{background:#faf8f3;color:var(--muted)}
+  .readnote{font-family:var(--serif);font-style:italic;color:var(--muted);font-size:11px;margin-top:10px;line-height:1.4}
+  /* death blow */
+  .db{border-top:1px solid var(--line);padding:12px;background:#fdf6f6}
+  .db .one{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.12em;color:var(--blood);margin-bottom:8px}
+  .dbbtn{width:100%;background:#fdeaea;border:2px solid var(--blood);border-radius:9px;
+    padding:8px;cursor:pointer;text-align:center;transition:transform .1s}
+  .dbbtn:hover{background:#fbdede}.dbbtn:active{transform:scale(.98)}
+  .dbbtn .t{font-family:var(--mono);font-weight:700;font-size:14px;color:var(--blood);margin:0}
+  .dbbtn .s{font-size:10px;color:#8a1419;margin-top:3px}
+  .dbcap{font-family:var(--serif);font-style:italic;color:var(--muted);font-size:10px;margin-top:8px}
+
+  /* overlays */
+  .ov{position:fixed;inset:0;background:#0d0b09ee;display:none;align-items:center;justify-content:center;
+    z-index:30;padding:24px;overflow-y:auto}
+  .ov.on{display:flex}
+  .scard{margin:auto}
+  .rungwrap{max-width:1000px;width:100%}
+  .runghead{color:#fff;font-family:var(--mono);display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+  .runghead .big{font-size:18px;font-weight:700;color:#fff}
+  .steps span{font-size:11px;color:#7a7367;margin-left:10px}
+  .steps b{color:var(--gold2)} .steps .ok{color:var(--green)}
+  .rungs{display:grid;grid-template-columns:repeat(5,1fr) auto;gap:10px;align-items:stretch}
+  .rung{background:#1e1b17;border:1px solid #38332c;border-radius:10px;padding:14px;cursor:pointer;
+    color:#d8d0c2;position:relative;transition:transform .1s}
+  .rung:hover{transform:translateY(-2px)}
+  .rung.best{background:#2a2114;border:2px solid var(--gold)}
+  .rung.sel{outline:3px solid var(--gold);outline-offset:1px}
+  .rung .rk{font-family:var(--mono);font-size:9px;font-weight:700;color:#8a8275}
+  .rung.best .rk{color:var(--gold2)}
+  .rung .fit{float:right;font-family:var(--mono);font-size:9px;color:#8a8275}
+  .rung .rn{font-family:var(--serif);font-weight:700;font-size:16px;color:#fff;margin:14px 0 8px}
+  .rung .rd{font-size:10px;color:#9a9384;line-height:1.4}
+  .rung .pick{margin-top:10px;font-family:var(--mono);font-size:9px;font-weight:700;color:var(--gold2);opacity:0}
+  .rung.sel .pick{opacity:1}
+  .armcol{display:flex;flex-direction:column;justify-content:center}
+  .armbtn{background:var(--blood);color:#fff;border:none;border-radius:10px;height:100%;min-width:100px;
+    font-family:var(--mono);font-weight:700;font-size:14px;cursor:pointer;padding:14px 10px;line-height:1.4}
+  .armbtn:hover{background:var(--blood2)}
+  .rungnote{color:#7a7367;font-family:var(--serif);font-style:italic;font-size:11px;margin-top:14px;line-height:1.5}
+  .xclose{color:#7a7367;cursor:pointer;font-family:var(--mono);font-size:11px}
+  /* pre-snap setup */
+  #presnapOv{background:#0d0b09f7}
+  .pswrap{max-width:860px;width:100%;max-height:92vh;overflow:auto;color:#e7e0d2}
+  .pshead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:4px}
+  .pshead .ttl{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--gold2);text-transform:uppercase}
+  .pshead .who{font-family:var(--serif);font-size:24px;color:#fff}
+  .pssub{font-family:var(--mono);font-size:11px;color:#9a9384;margin-bottom:16px}
+  .psrow{margin-bottom:16px}
+  .pslab{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:#8a8275;text-transform:uppercase;margin-bottom:7px;display:flex;gap:8px;align-items:center}
+  .pslab .cap{margin-left:auto;color:#6f685b;font-weight:600;letter-spacing:0}
+  .pschips{display:flex;flex-wrap:wrap;gap:7px}
+  .pschip{font-family:var(--mono);font-size:11px;border:1px solid #38332c;background:#1e1b17;color:#cfc7b8;
+    border-radius:7px;padding:6px 11px;cursor:pointer;transition:.12s}
+  .pschip:hover{border-color:#6b6253}
+  .pschip.on{background:var(--gold2);border-color:var(--gold2);color:#1b1714;font-weight:700}
+  .pschip.gray{opacity:.4;cursor:not-allowed}
+  .pschip.gray:hover{border-color:#38332c}
+  .pschip .sub{opacity:.6;font-size:9px}
+  .psdoss{background:#181613;border:1px solid #2c2822;border-radius:10px;padding:12px 14px;margin-bottom:16px}
+  .psdoss .dl{font-family:var(--mono);font-size:9px;color:#8a8275;text-transform:uppercase;letter-spacing:.08em}
+  .psdoss .dline{font-family:var(--serif);font-size:13px;color:#d8d0c2;margin-top:5px;line-height:1.5}
+  .psgo{display:flex;align-items:center;gap:14px;margin-top:8px}
+  .psgobtn{background:var(--blood);color:#fff;border:none;border-radius:9px;padding:13px 26px;
+    font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:.06em;cursor:pointer}
+  .psgobtn:hover{filter:brightness(1.1)}
+  .psgobtn.wait{background:var(--ink);cursor:default;filter:none}
+  .psskip{font-family:var(--mono);font-size:10px;color:#7a7367;cursor:pointer;text-decoration:underline}
+  .psconnect{font-family:var(--mono);font-size:11px;color:var(--gold2);display:none;align-items:center;gap:8px}
+  .psconnect.on{display:inline-flex}
+  .psconnect i{width:8px;height:8px;border-radius:50%;background:var(--gold2);animation:bpulse 1s infinite}
+  @keyframes bpulse{50%{opacity:.3}}
+  .pscards{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .pscard{position:relative;background:#1e1b17;border:1px solid #38332c;border-radius:9px;padding:10px 11px;
+    cursor:pointer;transition:.12s;min-height:84px;overflow:hidden}
+  .pscard:hover{border-color:#6b6253}
+  .pscard.on{border-color:var(--gold2);background:#26211a;box-shadow:0 0 0 1px var(--gold2) inset}
+  .pscard .nm{font-family:var(--serif);font-size:15px;color:#fff}
+  .pscard .ep{font-family:var(--mono);font-size:9px;color:#8a8275;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
+  .pscard .br{font-family:var(--serif);font-size:11px;color:#c3bbac;line-height:1.35}
+  .pscard .tell{position:absolute;inset:0;background:#0f0d0bfa;color:#e7e0d2;font-family:var(--serif);font-size:11px;
+    line-height:1.4;padding:10px 11px;display:flex;align-items:center;opacity:0;transition:.12s;pointer-events:none}
+  .pscard:hover .tell{opacity:1}
+  .pscard .tell b{font-family:var(--mono);font-size:8px;letter-spacing:.08em;color:var(--gold2);display:block;margin-bottom:4px;text-transform:uppercase}
+  .pscard .aip{position:absolute;top:7px;right:8px;font-family:var(--mono);font-size:7px;font-weight:700;
+    color:#1b1714;background:var(--gold2);border-radius:3px;padding:2px 4px;letter-spacing:.04em}
+  /* bits drill-down */
+  .pssel{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px}
+  .pspill{font-family:var(--mono);font-size:10px;background:var(--gold2);color:#1b1714;font-weight:700;
+    border-radius:6px;padding:4px 8px;cursor:pointer}
+  .pspill:hover{filter:brightness(1.08)}
+  .psmore{margin-top:8px;font-family:var(--mono);font-size:10px;color:var(--gold2);background:none;border:none;cursor:pointer;text-decoration:underline}
+  .psback{font-family:var(--mono);font-size:10px;color:#9a9384;cursor:pointer;margin-bottom:9px;display:inline-block}
+  .psback:hover{color:#fff}
+  .pscatname{font-family:var(--mono);font-size:10px;color:var(--gold2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+  .pscats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .pscat{font-family:var(--mono);font-size:11px;text-align:left;border:1px solid #38332c;background:#1e1b17;color:#cfc7b8;
+    border-radius:8px;padding:10px 11px;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+  .pscat:hover{border-color:var(--gold2);color:#fff}
+  .pscat .sub{opacity:.5;font-size:9px}
+  /* bench role-buttons with hover brief */
+  .psbgrp{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.08em;color:#8a8275;text-transform:uppercase;margin:10px 0 6px}
+  .psbgrp:first-child{margin-top:0}
+  .benchbtn{position:relative;font-family:var(--mono);font-size:11px;border:1px solid #38332c;background:#1e1b17;color:#cfc7b8;
+    border-radius:7px;padding:6px 11px;cursor:pointer;transition:.12s}
+  .benchbtn:hover{border-color:#6b6253}
+  .benchbtn.on{background:var(--gold2);border-color:var(--gold2);color:#1b1714;font-weight:700}
+  .benchbtn .bbrief{position:absolute;bottom:calc(100% + 7px);left:50%;transform:translateX(-50%);
+    width:230px;background:#0f0d0b;border:1px solid #38332c;color:#e7e0d2;font-family:var(--serif);font-size:11px;
+    line-height:1.4;padding:9px 11px;border-radius:8px;opacity:0;pointer-events:none;transition:.12s;z-index:5;text-align:left}
+  .benchbtn:hover .bbrief{opacity:1}
+
+  /* scout dossier */
+  .scoutbtn{width:100%;background:#f3efe6;border:1px solid var(--line);border-radius:8px;
+    padding:8px 10px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:700;
+    letter-spacing:.06em;color:var(--ink);display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .scoutbtn:hover{background:#ece7db;border-color:var(--gold)}
+  .scoutbtn .cov{margin-left:auto;color:var(--muted);font-weight:600;letter-spacing:0}
+  .scoutwrap{max-width:920px;width:100%}
+  .scouthead{color:#fff;font-family:var(--mono);display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+  .scouthead .big{font-size:18px;font-weight:700}
+  .scoutgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .dcard{background:#1e1b17;border:1px solid #38332c;border-radius:10px;padding:13px 14px;color:#d8d0c2;position:relative}
+  .dcard .dl{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.08em;color:#8a8275;text-transform:uppercase}
+  .dcard .dv{font-family:var(--serif);font-size:15px;color:#fff;margin:7px 0 9px;line-height:1.35}
+  .dcard .df{font-family:var(--mono);font-size:9px;color:#8a8275;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .dcard .src{color:#9a9384}
+  .dcard .conf{display:inline-flex;align-items:center;gap:5px;margin-left:auto}
+  .dcard .cbar{width:46px;height:4px;border-radius:2px;background:#38332c;overflow:hidden}
+  .dcard .cbar i{display:block;height:100%;background:var(--gold2)}
+  .dcard .fuel{position:absolute;top:11px;right:12px;font-family:var(--mono);font-size:8px;font-weight:700;
+    color:#1b1714;background:var(--gold2);border-radius:3px;padding:2px 5px;letter-spacing:.04em}
+  .dcard.empty{background:#181613;border-style:dashed;border-color:#2c2822}
+  .dcard.empty .dv{color:#5f594e}
+  .scoutnote{color:#7a7367;font-family:var(--serif);font-style:italic;font-size:11px;margin-top:14px;line-height:1.5}
+
+  /* scorecard */
+  .scard{max-width:560px;width:100%;background:var(--stage);border-radius:12px;
+    border:1px solid var(--stageln);padding:34px;color:#fff}
+  .saga{font-family:var(--mono);font-size:10px;letter-spacing:.3em;color:var(--gold);margin-bottom:12px}
+  .scard h2{font-family:var(--serif);font-size:24px;font-weight:700;line-height:1.2}
+  .scard .sline{font-family:var(--serif);font-style:italic;color:#9a9384;font-size:12px;margin-top:6px}
+  .hero{margin:24px 0 6px}
+  .hero .lab{color:#a59c8c}
+  .hero b{font-family:var(--mono);font-size:62px;font-weight:700;display:block;line-height:1}
+  .hero .sub{font-family:var(--serif);color:var(--gold);font-size:12px;margin-top:8px}
+  .scard hr{border:none;border-top:1px solid var(--stageln);margin:18px 0}
+  .sgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px}
+  .sgrid div{display:flex;justify-content:space-between;font-size:12px}
+  .sgrid .k{color:#9a9384}.sgrid .v{font-family:var(--mono);font-weight:700}
+  .sacts{display:flex;gap:10px;margin-top:22px}
+  .sacts button{font-family:var(--mono);font-weight:700;font-size:11px;padding:11px 16px;border-radius:7px;cursor:pointer;border:none}
+  .sacts .pri{background:var(--blood);color:#fff}
+  .sacts .sec{background:transparent;color:#fff;border:1px solid #4a463e}
+  .endframe{margin-top:18px;background:#0a0907;border:1px solid var(--gold);border-radius:8px;
+    padding:14px;text-align:center}
+  .endframe .ff{font-family:var(--mono);font-size:9px;letter-spacing:.2em;color:var(--gold)}
+  .endframe .em{font-family:var(--mono);font-weight:700;font-size:15px;color:var(--gold2);margin-top:6px}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);
+    color:#fff;font-family:var(--mono);font-size:11px;padding:10px 16px;border-radius:8px;z-index:40;
+    opacity:0;transition:opacity .25s}
+  .toast.on{opacity:1}
+  /* live conversation */
+  .callbar{grid-area:callbar;display:flex;align-items:center;gap:10px;background:#fff;
+    border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+  .callbar .l2{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--blood)}
+  .callbar input{flex:1;border:1px solid var(--line);border-radius:6px;padding:9px;font-size:13px;font-family:var(--sans)}
+  .callbar .send{background:var(--blood);color:#fff;border:none;border-radius:6px;padding:9px 16px;
+    font-family:var(--mono);font-weight:700;font-size:11px;cursor:pointer}
+  .callbar .tbtn{background:#fff;border:1px solid var(--slate);border-radius:6px;padding:9px 11px;
+    font-family:var(--mono);font-weight:700;font-size:10px;cursor:pointer}
+  .think{font-family:var(--mono);font-size:10px;color:var(--gold);display:none;white-space:nowrap}
+  .cap{position:absolute;left:10px;right:10px;bottom:10px;background:#000b;color:#fff;font-size:12px;
+    line-height:1.35;padding:8px 11px;border-radius:8px;border:1px solid var(--gold);opacity:0;
+    transition:opacity .2s;max-height:50%;overflow:auto}
+  .cap.show{opacity:1}
+  .tcard{max-width:620px;width:100%;background:#fff;border-radius:10px;padding:22px;max-height:80vh;overflow:auto}
+  .tcard h3{font-family:var(--mono);font-size:12px;letter-spacing:.1em;margin-bottom:12px;display:flex;align-items:center}
+  .tcard h3 .x{margin-left:auto;cursor:pointer;color:var(--muted)}
+  .tl{font-size:13px;line-height:1.5;margin:8px 0;padding:8px 12px;border-radius:8px}
+  .tl.d{background:var(--bone2)} .tl.j{background:#fbf3e2}
+  .tl b{font-family:var(--mono);font-size:11px}
+  /* dev telemetry HUD */
+  .devtoggle{position:fixed;left:14px;bottom:14px;z-index:35;background:var(--ink);color:#fff;border:none;
+    font-family:var(--mono);font-weight:700;font-size:11px;padding:8px 12px;border-radius:8px;cursor:pointer}
+  .dev{position:fixed;left:14px;bottom:54px;z-index:35;width:288px;background:#15120f;color:#e9e2d4;
+    border:1px solid #3a342c;border-radius:10px;padding:14px;display:none;font-family:var(--mono);
+    box-shadow:0 10px 34px #0008;max-height:86vh;overflow:auto}
+  .dev.on{display:block}
+  .devh{font-size:11px;letter-spacing:.12em;font-weight:700;display:flex;align-items:center;color:#fff}
+  .devh span{margin-left:auto;cursor:pointer;color:#8a8275}
+  .devnote{font-size:9px;color:#8a8275;margin:4px 0 10px;font-family:var(--serif);font-style:italic}
+  .dev .lab{color:#8a8275}
+  .gearbox{display:flex;align-items:center;justify-content:space-between;margin-top:4px}
+  .gear{font-weight:700;font-size:15px;padding:3px 11px;border-radius:6px}
+  .gear.a{color:#74d18c;background:#163021}.gear.s{color:#e3a93f;background:#33260f}.gear.f{color:#f08a8a;background:#3a1414}
+  .fitlist{margin-top:6px;display:flex;flex-direction:column;gap:5px}
+  .fr{display:flex;align-items:center;gap:8px;font-size:10px}
+  .fr span:first-child{flex:0 0 86px;color:#cfc7b8}
+  .fr .bar{flex:1;height:7px;background:#2a2620;border-radius:4px;overflow:hidden}
+  .fr .bar i{display:block;height:100%;background:#7d7668;border-radius:4px;transition:width .4s}
+  .fr.top .bar i{background:var(--gold)} .fr.top span:first-child{color:var(--gold2)}
+  .fr b{flex:0 0 30px;text-align:right;color:#e9e2d4}
+  .ctr{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;margin-top:6px}
+  .ctr div{display:flex;justify-content:space-between;font-size:10px;color:#9a9384}
+  .ctr b{color:#fff}
+  .bittog{margin-left:auto;display:flex;gap:4px}
+  .bittog button{font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:5px;
+    border:1px solid #3a342c;background:transparent;color:#8a8275;cursor:pointer}
+  .bittog button.on{background:var(--gold);color:#15120f;border-color:var(--gold)}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+  .chip{font-family:var(--mono);font-size:9px;padding:4px 8px;border-radius:6px;border:1px solid #3a342c;
+    background:#201c18;color:#cfc7b8;cursor:pointer}
+  .chip:hover{border-color:#5a5348}
+  .chip.on{background:var(--blood);color:#fff;border-color:var(--blood)}
+  .brainbtn{position:fixed;left:92px;bottom:14px;z-index:35;background:var(--blood);color:#fff;border:none;
+    font-family:var(--mono);font-weight:700;font-size:11px;padding:8px 12px;border-radius:8px;cursor:pointer}
+  .cfg{max-width:640px;width:100%;background:#fff;border-radius:10px;padding:24px;max-height:86vh;overflow:auto}
+  .cfg h3{font-family:var(--mono);font-size:13px;letter-spacing:.1em;display:flex;align-items:center;margin-bottom:10px}
+  .cfg h3 .x{margin-left:auto;cursor:pointer;color:var(--muted);font-weight:400}
+  .cfgnote{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:14px}
+  .opt{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;font-weight:700;margin:8px 0;cursor:pointer}
+  #cfgPrefix{width:100%;height:200px;border:1px solid var(--line);border-radius:8px;padding:12px;
+    font-family:var(--mono);font-size:12px;line-height:1.5;resize:vertical;margin-top:6px}
+  .cfgrow{display:flex;align-items:center;margin-top:14px}
+  .cfghint{font-family:var(--serif);font-style:italic;color:var(--muted);font-size:11px}
+  .cfgapply{margin-left:auto;background:var(--ink);color:#fff;border:none;border-radius:7px;padding:11px 18px;
+    font-family:var(--mono);font-weight:700;font-size:11px;cursor:pointer}
+  .addbench{margin-left:auto;background:#0009;color:#cfc7b8;border:1px solid #ffffff22;
+    font-family:var(--mono);font-size:9px;padding:4px 9px;border-radius:6px;cursor:pointer}
+  .us .sidelab{position:relative}
+  .benchmenu{position:absolute;top:140%;right:0;z-index:20;background:#1b1714;border:1px solid #3a342c;
+    border-radius:8px;padding:6px;display:none;flex-direction:column;gap:3px;min-width:170px;box-shadow:0 8px 24px #0007}
+  .benchmenu.on{display:flex}
+  .benchmenu button{font-family:var(--mono);font-size:10px;text-align:left;background:transparent;border:none;
+    color:#e9e2d4;padding:6px 8px;border-radius:5px;cursor:pointer}
+  .benchmenu button:hover{background:#2a2620}
+  .benchmenu .empty{color:#8a8275;font-size:9px;padding:6px 8px;font-family:var(--mono)}
+  .tile.bench{cursor:pointer}
+  .control{grid-area:control;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+  .run{background:var(--green);color:#fff;border:none;font-family:var(--mono);font-weight:700;font-size:12px;
+    padding:8px 16px;border-radius:7px;cursor:pointer}
+  .run.on{background:var(--blood)}
+  .step{background:#fff;border:1px solid var(--slate);color:var(--ink);font-family:var(--mono);font-weight:700;
+    font-size:11px;padding:8px 12px;border-radius:7px;cursor:pointer}
+  .runstate{font-family:var(--mono);font-size:10px;color:var(--muted)}
+  .control .cl{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate)}
+  .csep{width:1px;align-self:stretch;background:var(--line);margin:0 2px}
+  .control .chips{display:flex;flex-wrap:wrap;gap:5px}
+  .control .chip{font-family:var(--mono);font-size:9px;padding:5px 9px;border-radius:6px;border:1px solid var(--line);
+    background:#faf8f3;color:var(--ink);cursor:pointer}
+  .control .chip:hover{border-color:var(--slate)}
+  .control .chip.on{background:var(--blood);color:#fff;border-color:var(--blood)}
+  .control .chip.bench{background:#eef3ee;border-color:#bcd0bc}
+  .control .chip.bench:hover{border-color:var(--green)}
+  .transcript{grid-area:transcript;background:#fff;border:1px solid var(--line);border-radius:8px;
+    padding:12px;display:flex;flex-direction:column;min-height:0}
+  .tch{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--slate);
+    font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+  .tch #turnNote{color:var(--muted);font-weight:400;letter-spacing:0;text-transform:none}
+  .tlog{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px}
+  /* system beats in the transcript — the call spine at a glance */
+  .tl.beat{align-self:center;max-width:92%;text-align:center;font-family:var(--mono);font-size:11px;
+    color:var(--gold);background:#fbf3e2;border:1px solid #e6d6ac;border-radius:6px;padding:4px 10px}
+  .tl.beat b{color:#7a5310} .tl.beat .bmeta{color:#9a7b3a;font-style:normal}
+  .tl.beat.phantom{color:#6b5ca6;background:#efecf8;border-color:#d8d0ee} .tl.beat.phantom b{color:#4a3f80} .tl.beat.phantom .bmeta{color:#6b5ca6}
+  .tl.beat.handoff{color:var(--blood);background:#fbecec;border-color:#e8c4bf} .tl.beat.handoff b{color:var(--blood2)} .tl.beat.handoff .bmeta{color:#a5564a}
+  .tl.beat.handoff.on{background:#f7e0dc;border-color:var(--blood)}
+  .tl.beat.sound{color:#5a7a8a;background:#eef4f7;border-color:#cfe0e8} .tl.beat.sound .bmeta{color:#5a7a8a}
+  .scriptbtn{margin-left:auto;background:#fff;border:1px solid var(--slate);color:var(--ink);
+    font-family:var(--mono);font-weight:700;font-size:9px;padding:4px 9px;border-radius:6px;cursor:pointer}
+  #scriptText{width:100%;border:1px solid var(--line);border-radius:8px;padding:12px;
+    font-family:var(--mono);font-size:12px;line-height:1.5;resize:vertical}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+  @media (max-width:900px){.app{grid-template-columns:1fr;grid-template-areas:"head" "strip" "stage" "control" "transcript" "board"}}
+  /* ===== Bench panel (flip-cards + favorites, namespaced .bp-scope) ===== */
+  .bp-scope .sendin{position:absolute;left:6px;top:6px;z-index:3;font-family:var(--mono);font-size:9px;font-weight:700;
+    letter-spacing:.03em;border:1px solid var(--blood);color:#fff;background:var(--blood);border-radius:5px;padding:2px 6px;cursor:pointer}
+  .bp-scope .sendin:hover{background:var(--blood2)}
+  .bp-scope .bstatus{position:absolute;bottom:5px;left:5px;right:5px;z-index:3;font-family:var(--mono);font-size:7.5px;
+    font-weight:700;letter-spacing:.04em;text-align:center;border-radius:4px;padding:2px 0;display:none}
+  .bp-scope .card.standby .bstatus{display:block;background:var(--gold2);color:#1b1714}
+  .bp-scope .card.oncall .bstatus{display:block;background:var(--green);color:#fff}
+  .bp-scope .card.standby{outline:2px solid var(--gold2);outline-offset:-2px}
+  .bp-scope .card.oncall{outline:2px solid var(--green);outline-offset:-2px}
+  .bp-scope{--page:#f4efe3; --panel:#fbf8f0; --line:#d9cdb2;
+    --hall:#15100d; --hall2:#221912;
+    --vellum:#e7dabb; --vellum2:#d8c79f; --bone:#f3ecd8;
+    --ink:#2a2018; --ink-soft:#6a5947; --amber:#b07d23; --amber-lit:#e2ac51;
+    --ember:#8c3b2b;
+    --display:"Palatino Linotype","Book Antiqua",Palatino,Georgia,serif;
+    --body:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;}
+  .bp-scope *{box-sizing:border-box}
+  .bp-scope /* ---- the inline director panel ---- */
+  .bench-panel{max-width:440px;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:12px 12px 14px;box-shadow:0 1px 0 #fff inset,0 6px 18px -14px #000}
+  .bp-scope .panel-head{display:flex;align-items:center;justify-content:space-between;margin:0 2px 8px}
+  .bp-scope .panel-head .title{font-family:var(--display);font-weight:700;color:var(--ink-soft);
+    font-size:10.5px;letter-spacing:.14em;text-transform:uppercase}
+  .bp-scope .more-btn{font-family:var(--display);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--amber);background:#fff;border:1px solid var(--amber);border-radius:6px;
+    padding:4px 8px;cursor:pointer;white-space:nowrap}
+  .bp-scope .more-btn:hover{background:#fff7e8}
+  .bp-scope .pinned-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .bp-scope /* ---- flip card (shared) ---- */
+  .card{position:relative;perspective:760px;cursor:pointer;outline:none}
+  .bp-scope .card.mini{aspect-ratio:1/1;height:auto}
+  .bp-scope .card.full{height:182px}
+  .bp-scope .flip{position:relative;width:100%;height:100%;transform-style:preserve-3d;
+    transition:transform .5s cubic-bezier(.2,.75,.2,1)}
+  .bp-scope .card:hover .flip, .bp-scope .card.is-flipped .flip, .bp-scope .card:focus-visible .flip{transform:rotateY(180deg)}
+  .bp-scope .card:focus-visible{border-radius:8px;box-shadow:0 0 0 2px var(--amber-lit)}
+  .bp-scope .face{position:absolute;inset:0;border-radius:6px;overflow:hidden;
+    backface-visibility:hidden;-webkit-backface-visibility:hidden;
+    box-shadow:0 0 0 2px #6b5230,0 8px 18px -13px #000}
+  .bp-scope .front{background:linear-gradient(180deg,var(--vellum),var(--vellum2));color:var(--ink);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:10px 8px}
+  .bp-scope .front::before{content:"";position:absolute;inset:0;pointer-events:none;mix-blend-mode:multiply;opacity:.55;
+    background:radial-gradient(circle at 22% 18%,#0000000d 0 2px,transparent 3px),
+              radial-gradient(circle at 78% 72%,#0000000a 0 2px,transparent 3px)}
+  .bp-scope .label{display:flex;flex-direction:column;align-items:center;gap:2px}
+  .bp-scope .name{font-family:var(--display);font-weight:700;line-height:1.03;text-align:center;margin:0;color:var(--ink)}
+  .bp-scope .role{font-family:var(--display);font-weight:700;color:var(--ember);letter-spacing:.13em;
+    text-transform:uppercase;text-align:center;line-height:1.1}
+  .bp-scope .seat{font-family:var(--body);font-style:italic;color:var(--ink-soft);opacity:.75}
+  .bp-scope .mini .emblem svg{width:32px;height:32px;display:block;color:var(--ink)}
+  .bp-scope .mini .name{font-size:13px}
+  .bp-scope .mini .role{font-size:8px}
+  .bp-scope .mini .seat{font-size:8px}
+  .bp-scope .full .emblem svg{width:56px;height:56px;display:block;color:var(--ink)}
+  .bp-scope .full .name{font-size:15px}
+  .bp-scope .full .role{font-size:9.5px}
+  .bp-scope .full .seat{font-size:9px}
+  .bp-scope .card.unseen .emblem svg{color:var(--ink-soft);opacity:.6}
+  .bp-scope .card.unseen .name{color:var(--ink-soft)}
+  .bp-scope .back{transform:rotateY(180deg);background:linear-gradient(180deg,#1c140d,#0d0907);
+    border:1px solid #c2832c33;color:var(--bone);display:flex;flex-direction:column;overflow:auto}
+  .bp-scope .mini .back{padding:10px 9px;justify-content:center}
+  .bp-scope .full .back{padding:12px 11px;gap:7px}
+  .bp-scope .back .brief{margin:0;font-size:11px;line-height:1.4;color:var(--bone)}
+  .bp-scope .back .tell .lbl{font-family:var(--display);color:var(--amber-lit);font-size:8px;
+    letter-spacing:.3em;text-transform:uppercase;display:block;margin-bottom:3px}
+  .bp-scope .back .tell p{margin:0;line-height:1.38;color:var(--vellum)}
+  .bp-scope .mini .back .tell p{font-size:10.5px;line-height:1.3}
+  .bp-scope .full .back .tell{margin-top:auto}
+  .bp-scope .full .back .tell p{font-size:10px}
+  .bp-scope /* ---- favorite star (modal only; sits above the flip so it's always clickable) ---- */
+  .star{position:absolute;top:5px;right:6px;z-index:3;width:23px;height:23px;border:none;
+    background:#0d0907cc;border-radius:50%;color:#caa85e;font-size:13px;line-height:23px;
+    text-align:center;cursor:pointer;padding:0;box-shadow:0 1px 4px #0008}
+  .bp-scope .star:hover{color:var(--amber-lit)}
+  .bp-scope .star.on{color:var(--amber-lit);background:#3a2a12ee}
+  .bp-scope .star.locked{opacity:.32;cursor:not-allowed}
+  .bp-scope /* ---- modal "meet the bench" ---- */
+  .modal[hidden]{display:none}
+  .bp-scope .modal{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:20px;
+    background:radial-gradient(120% 90% at 50% -10%,#34251aee,#15100df2)}
+  .bp-scope .sheet{width:min(880px,100%);max-height:90vh;overflow:auto;background:linear-gradient(180deg,#1a130d,#120c08);
+    border:1px solid #6b523080;border-radius:12px;padding:16px 16px 20px;box-shadow:0 30px 80px -20px #000}
+  .bp-scope .sheet-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:0 2px 14px}
+  .bp-scope .sheet-head h2{font-family:var(--display);color:var(--bone);font-weight:700;margin:0;
+    font-size:18px;letter-spacing:.02em}
+  .bp-scope .sheet-head .count{font-family:var(--display);color:var(--amber-lit);font-size:11px;
+    letter-spacing:.12em;text-transform:uppercase}
+  .bp-scope .sheet-head .hint{font-style:italic;color:var(--vellum2);font-size:11.5px;opacity:.8}
+  .bp-scope .sheet-head .close{margin-left:auto;background:none;border:1px solid #6b5230;color:var(--vellum2);
+    border-radius:7px;width:30px;height:30px;cursor:pointer;font-size:14px}
+  .bp-scope .sheet-head .close:hover{background:#ffffff14;color:var(--bone)}
+  .bp-scope .modal-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:11px}
+  @media (max-width:560px){.bp-scope .modal-grid{grid-template-columns:repeat(2,1fr)}}
+  @media (hover:none){.bp-scope .card:hover .flip{transform:none} }
+  @media (prefers-reduced-motion:reduce){.bp-scope .flip{transition:none} }
+  
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <header class="head">
+    <span class="dot"></span>
+    <span class="brand">SpamViking</span>
+    <span class="hall">THE MEAD HALL</span>
+    <span class="live"><i></i>LIVE</span>
+    <span class="badge" id="dirBadge">DIRECTOR · WATCHING</span>
+    <span class="zoomctl">
+      <button id="zoomOut" title="smaller">A−</button>
+      <span id="zoomLbl">120%</span>
+      <button id="zoomIn" title="bigger">A+</button>
+    </span>
+  </header>
+
+  <div class="strip">
+    <div class="stat"><span class="lab">Time Wasted</span><b id="tw">06:18</b></div>
+    <div class="stat lt"><span class="lab">Running Count</span>
+      <b>Bjorn <span id="bj">×9</span><span class="pull" title="2 more count-bits">▾</span></b></div>
+    <span class="credo">The Host runs the raid. You watch, react, and choose the finishing blow.</span>
+  </div>
+
+  <div class="stage">
+    <!-- THEM -->
+    <div class="side them">
+      <div class="sidelab"><span class="who" id="themlab">THEM (1)</span></div>
+      <div class="grid one" id="themgrid">
+        <div class="tile spk" id="spammerTile">
+          <span class="namep" id="spammerName">Caller</span>
+          <span class="rec"><i></i>REC</span>
+          <div class="av">
+            <div class="orb hum">🧔</div>
+            <div class="nm">Derek</div>
+            <div class="sub">the salesperson</div>
+            <div class="wave hum"><span></span><span></span><span></span><span></span><span></span></div>
+          </div>
+          <div class="cap" id="capDerek"></div>
+        </div>
+      </div>
+    </div>
+    <!-- US -->
+    <div class="side us">
+      <div class="sidelab"><span class="who" id="uslab">US (1)</span></div>
+      <div class="grid one" id="usgrid">
+        <div class="tile" id="hostTile">
+          <span class="namep">JARL · the Host</span>
+          <div class="av">
+            <div class="orb ai">ᚼ</div>
+            <div class="nm">Jarl</div>
+            <div class="wave"><span></span><span></span><span></span><span></span><span></span></div>
+          </div>
+          <div class="cap" id="capJarl"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="control">
+    <button class="run" id="runBtn">▶ RUN</button>
+    <button class="step" id="stepBtn">STEP ▸</button>
+    <button class="step" id="muteBtn">🔊 sound: on</button>
+    <select id="voiceSel" class="vsel" title="demo voice"></select>
+    <span class="runstate" id="runState">paused</span>
+    <span class="think" id="jarlThinking" style="margin-left:auto"></span>
+  </div>
+
+  <div class="transcript">
+    <div class="tch">LIVE TRANSCRIPT <span id="turnNote">— AI spammer vs the Host</span>
+      <button class="scriptbtn" id="scriptBtn">⧉ export script</button></div>
+    <div id="tlog" class="tlog"></div>
+  </div>
+
+  <!-- BOARD -->
+  <div class="board">
+    <div class="body">
+      <!-- gear panel removed from the board; gear DATA still drives bit scores + flash -->
+      <div id="armPanel" style="display:none"></div>
+      <div class="bp-scope">
+<div class="bench-panel">
+  <div class="panel-head">
+    <span class="title">Bench — In Play</span>
+    <button class="more-btn" id="moreBtn">◆ meet the bench</button>
+  </div>
+  <div class="pinned-row" id="pinnedRow"></div>
+</div>
+      </div>
+      <div class="readnote">Everything here runs itself — the Host plays its own hand. You deploy none of it.</div>
+    </div>
+    <div class="db">
+      <div class="dbbtn" id="dbbtn">
+        <div class="t">DEATH BLOW</div>
+      </div>
+      <div class="dbcap">Guarded. The one thing you actively do all call.</div>
+    </div>
+  </div>
+</div>
+
+<!-- RUNG OVERLAY -->
+<div class="ov" id="rungOv">
+  <div class="rungwrap">
+    <div class="runghead">
+      <span class="big">🧯 DEATH BLOW</span>
+      <span class="steps"><b class="ok">break glass ✓</b> &nbsp;→&nbsp; <b id="stPick">break glass</b>
+        &nbsp;→&nbsp; <span id="stArm">arm</span> &nbsp;→&nbsp; <span>done</span></span>
+      <span class="xclose" id="rungX" style="margin-left:auto">✕ close</span>
+    </div>
+    <div class="rungs" id="rungs">
+      <div class="rung best sel" style="cursor:default;flex:1">
+        <span class="rk">BREAK GLASS</span>
+        <div class="rn">End the call — now</div>
+        <div class="rd">The Host lands the most absurd <i>clean</i> ending it can,
+          in character, on its next turn. You choose the moment; it chooses how.</div>
+      </div>
+      <div class="armcol"><button class="armbtn" id="armBtn">ARM THE<br>BLOW</button></div>
+    </div>
+    <div class="rungnote">Break the glass to even see the rungs · best is pre-selected · you still arm before it lands.
+      No accidental endings — but fast when you mean it. How they're ranked is the AI's business, not shown.</div>
+  </div>
+</div>
+
+<!-- SCORECARD -->
+<!-- SCOUT DOSSIER OVERLAY -->
+<div class="ov" id="scoutOv">
+  <div class="scoutwrap">
+    <div class="scouthead">
+      <span class="big">📋 Scout the Spammer</span>
+      <span id="scoutSub" style="font-size:11px;color:#7a7367"></span>
+      <span class="xclose" id="scoutX" style="margin-left:auto">✕ close</span>
+    </div>
+    <div class="scoutgrid" id="scoutGrid"></div>
+    <div class="scoutnote">Read-only intel from the Scouting Engine, enriched from the email.
+      Facts tagged <b style="color:var(--gold2)">⚡ FUEL</b> are loaded as ammunition —
+      bits that need them are armable. The rest is context.</div>
+  </div>
+</div>
+
+<!-- PRE-SNAP SETUP OVERLAY -->
+<div class="ov" id="presnapOv">
+  <div class="pswrap">
+    <div class="pshead">
+      <span class="ttl">Pre-snap · before the raid</span>
+    </div>
+    <div class="pshead"><span class="who" id="psWho">Derek · Apex Synergy Partners</span></div>
+    <div class="pssub" id="psSub">b2b_saas · Host locked: Jarl (bound at first contact) · the raid begins when the call connects</div>
+
+    <div class="psdoss" id="psDoss"></div>
+
+    <div class="psrow">
+      <div class="pslab">Host character <span class="cap" id="psCharCap">AI pick · override to change</span></div>
+      <div class="pscards" id="psChar"></div>
+    </div>
+    <div class="psrow">
+      <div class="pslab">Arm bits <span class="cap" id="psBitsCap">0 / 3</span></div>
+      <div id="psBits"></div>
+    </div>
+    <div class="psrow">
+      <div class="pslab">Bench <span class="cap" id="psBenchCap">0 / 3 on standby</span></div>
+      <div class="pschips" id="psBench"></div>
+    </div>
+
+    <div class="psgo">
+      <button class="psgobtn" id="psGo">⚔ LOCK IN &amp; GO LIVE</button>
+      <span class="psconnect" id="psConnect"><i></i> locked — waiting for the call to connect…</span>
+      <span class="psskip" id="psSkip" style="margin-left:auto">skip setup →</span>
+    </div>
+  </div>
+</div>
+
+<div class="ov" id="scOv">
+  <div class="scard">
+    <div class="saga">— THE SAGA OF THE ACME RAID —</div>
+    <h2 id="scTitle">Derek of Acme fled the hall.</h2>
+    <div class="sline" id="scLine">The Host landed the blow and he fled. A clean kill.</div>
+    <div class="hero"><span class="lab">Time Wasted</span><b id="scTime">11:42</b>
+      <div class="sub" id="scSub">Eleven minutes stolen from his day.</div></div>
+    <hr>
+    <div class="sgrid">
+      <div><span class="k">Blows landed</span><span class="v">14</span></div>
+      <div><span class="k">Heads mustered</span><span class="v">2</span></div>
+      <div><span class="k">Finish</span><span class="v" id="scRung">Death Blow</span></div>
+      <div><span class="k">Bjorn blames</span><span class="v" id="scBj">9</span></div>
+      <div><span class="k">Time to disconnect</span><span class="v">0:06 after</span></div>
+    </div>
+    <div class="endframe">
+      <div class="ff">FORGED IN THE MEAD HALL · HALL OF SHAME</div>
+      <div class="em">raid@spamviking.io</div>
+    </div>
+    <div class="sacts">
+      <button class="pri" onclick="location.reload()">↻ New raid</button>
+      <button class="sec" id="scClose">Back to the hall</button>
+    </div>
+  </div>
+</div>
+
+<button class="devtoggle" id="devToggle">⚙ DEV</button>
+<button class="brainbtn" id="brainBtn">🧠 BRAIN: generic</button>
+<div class="dev" id="dev">
+  <div class="devh">DEV TELEMETRY <span id="devX">✕</span></div>
+  <div class="devnote">Internal — the product never shows this. Your builder's view.</div>
+  <div class="gearbox"><span class="lab">Gear</span><span class="gear a" id="hudGear">ALIVE</span></div>
+  <div class="lab" style="margin-top:11px">Governor</div>
+  <div class="ctr" style="grid-template-columns:1fr"><div>decision<b id="hudDecision">—</b></div><div>posture → host<b id="hudPosture">—</b></div></div>
+  <div class="lab" style="margin-top:11px">Rung fit — live ranking</div>
+  <div id="hudFit" class="fitlist"><div class="fr"><span>send a line…</span><span class="bar"><i style="width:0"></i></span><b>—</b></div></div>
+  <div class="lab" style="margin-top:11px;display:flex;align-items:center">Bits — live fit
+    <span class="bittog"><button id="bvL" class="on">loadout</button><button id="bvA">archetype</button></span></div>
+  <div id="hudBits" class="fitlist"></div>
+  <div class="lab" style="margin-top:11px">Counters</div>
+  <div class="ctr">
+    <div>Time wasted<b id="hudTime">06:18</b></div>
+    <div>Exchanges<b id="hudEx">0</b></div>
+    <div>Blows landed<b id="hudBlows">0</b></div>
+    <div>Bjorn<b id="hudBj">9</b></div>
+    <div>Horns<b id="hudHorn">6</b></div>
+    <div>Heads mustered<b id="hudHeads">0</b></div>
+  </div>
+</div>
+
+<div class="ov" id="cfgOv">
+  <div class="cfg">
+    <h3>HOST BRAIN <span class="x" id="cfgX">✕ close</span></h3>
+    <p class="cfgnote">Choose what drives Jarl's spoken lines. The telemetry (gear / fit / bits) is
+      computed by a <b>separate observer call</b>, so your prefix stays untouched and faithful — it is
+      never asked to emit JSON or do anything but be the Host. This is Phase 1: real brain, typed, no
+      Vapi or voice yet.</p>
+    <label class="opt"><input type="radio" name="brain" value="generic" checked> Generic Jarl (built-in demo prompt)</label>
+    <label class="opt"><input type="radio" name="brain" value="prefix"> My compiled prefix ↓</label>
+    <textarea id="cfgPrefix" placeholder="Paste your compiled Posture Engine prefix here — the Jarl/persona block + this call's canon + the armed bits. It becomes the system prompt for Jarl's lines, verbatim."></textarea>
+    <div class="cfgrow"><span class="cfghint">Applying starts a fresh call.</span>
+      <button class="cfgapply" id="cfgApply">Apply &amp; start new call</button></div>
+  </div>
+</div>
+
+<div class="ov" id="scriptOv">
+  <div class="cfg">
+    <h3>EXPORT TRANSCRIPT <span class="x" id="scriptX">✕ close</span></h3>
+    <p class="cfgnote">Each line is "<b>Speaker: dialogue</b>" — the format multi-voice TTS tools expect.
+      Paste into <b>ElevenLabs Studio</b> (assign a voice per speaker — and you already use ElevenLabs),
+      or NotebookLM / Play.ht / any read-aloud tool.</p>
+    <textarea id="scriptText" readonly style="height:240px"></textarea>
+    <div class="cfgrow"><span class="cfghint" id="scriptHint">Select all, or use the buttons →</span>
+      <button class="step" id="scriptCopy">Copy</button>
+      <button class="cfgapply" id="scriptDl" style="margin-left:8px">Download .txt</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
+  function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),1700);}
+  // MUST be first: top-level render calls further down reference `source`. A `let` read
+  // before its declaration throws a TDZ ReferenceError and kills the entire script.
+  const qp = new URLSearchParams(location.search);
+  // Default is LIVE WATCH — the Mead Hall never self-runs a conversation at you.
+  // The canned demo is opt-in only via ?source=replay (kept for presentations).
+  let source = (qp.get('source')==='replay') ? 'replay'
+             : (qp.get('source')==='demo' ? 'demo' : 'live');
+
+  /* clock */
+  let secs=378, live=true;
+  const fmt=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+  setInterval(()=>{ if(live){secs++; $('#tw').textContent=fmt(secs);} },1000);
+
+  /* speaker sim */
+  const spam=$('#spammerTile'), host=$('#hostTile');
+  let turn=0, lastManual=0;
+  function setSpeak(who){ lastManual=Date.now(); spam.classList.toggle('spk',who==='spam'); host.classList.toggle('spk',who==='host'); }
+  setInterval(()=>{ if(Date.now()-lastManual<4500)return; turn^=1; spam.classList.toggle('spk',turn===0); host.classList.toggle('spk',turn===1);},3000);
+
+  /* bjorn ticks */
+  let bj=9;
+  function bjtick(){ bj++; $('#bj').textContent='×'+bj; const c=$('#bj'); c.style.color='var(--gold)'; setTimeout(()=>c.style.color='',500);
+    setTimeout(bjtick, 9000+Math.random()*9000); }
+  /* bjorn now increments only when the Blame Bjorn bit actually fires */
+
+  /* board bits are now driven by real deployments, not a fake pulse */
+
+  /* horn / hall-chat / colleague / webcam / playback removed for the auto-run build */
+  let hc=0, joined=false;
+
+  /* DEATH BLOW flow */
+  let chosen=null;
+  $('#dbbtn').onclick=()=>{ $('#rungOv').classList.add('on'); };
+  $('#rungX').onclick=()=>$('#rungOv').classList.remove('on');
+  function demoArm(){
+    live=false;
+    $('#armBtn').textContent='ARMED'; $('#armBtn').style.background='var(--ink)';
+    document.body.style.transition='background .15s'; document.body.style.background='var(--blood)';
+    setTimeout(()=>{ document.body.style.background='';
+      $('#rungOv').classList.remove('on'); $('#armBtn').textContent='ARM THE BLOW'; $('#armBtn').style.background='';
+      showScore();
+    }, 380);
+  }
+
+  function showScore(){
+    $('#scTime').textContent=fmt(secs);
+    const m=Math.floor(secs/60);
+    $('#scSub').textContent=m+' minute'+(m===1?'':'s')+' and '+(secs%60)+' seconds stolen from his day.';
+    $('#scRung').textContent='Death Blow';
+    $('#scBj').textContent=bj;
+    $('#scLine').textContent='The Host landed the blow and he fled. A clean kill.';
+    if(SCORECARD_ENABLED) $('#scOv').classList.add('on');
+  }
+  $('#scClose').onclick=()=>$('#scOv').classList.remove('on');
+
+  /* ===== LIVE AI CONVERSATION — the Host (Jarl) talks back ===== */
+  /* The Host no longer emits telemetry. Measurement is the Governor's job
+     (a separate call); the Host just speaks, given its prefix + posture. */
+
+  const convo = [
+    {role:'user', content:"So as I was saying, our platform can really 10x your sales pipeline."},
+    {role:'assistant', content:"Ten times. Hmph. Bjorn once swore he would multiply our pipeline. We no longer speak of what Bjorn did to the pipeline."}
+  ];
+  const script=[];
+
+  function tline(side,txt,label){ const name=label||(side==='d'?'DEREK':'JARL');
+    script.push({who:name, text:txt});
+    const l=document.createElement('div'); l.className='tl '+side;
+    l.innerHTML='<b>'+name+':</b> '+txt; $('#tlog').appendChild(l); $('#tlog').scrollTop=$('#tlog').scrollHeight; }
+  function showJarl(txt){ const e=$('#capJarl'); e.textContent='\u201C'+txt+'\u201D'; e.classList.add('show'); setSpeak('host'); }
+
+  tline('d', convo[0].content); tline('j', convo[1].content); showJarl(convo[1].content);
+
+  /* ---- live telemetry (dev HUD) ---- */
+  let fitState=null, exchanges=0, blows=0, firedLog={}, lastBit=null, selectedBit=null, pending=[];
+  function refreshHud(){ const set=(id,v)=>{const e=$('#'+id); if(e)e.textContent=v;};
+    set('hudTime',fmt(secs)); set('hudEx',exchanges); set('hudBlows',blows);
+    set('hudBj',bj); set('hudHorn',hc); set('hudHeads',(typeof liveHeads!=='undefined'&&liveHeads!=null)?liveHeads:(joined?1:0)); }
+  setInterval(refreshHud,1000);
+  function renderHudFit(fit){
+    const es=Object.keys(fit).map(k=>[k,Number(fit[k])||0]).sort((a,b)=>b[1]-a[1]);
+    $('#hudFit').innerHTML=es.map((e,i)=>'<div class="fr'+(i===0?' top':'')+'"><span>'+e[0]
+      +'</span><span class="bar"><i style="width:'+Math.round(e[1]*100)+'%"></i></span><b>'
+      +e[1].toFixed(2)+'</b></div>').join(''); }
+  function rankRungs(){ const grid=$('#rungs'); if(!grid)return;
+    if(grid.querySelectorAll('.rung').length<2) return; /* single break-glass card — nothing to rank */
+    const arm=grid.querySelector('.armcol');
+    const cards=[...grid.querySelectorAll('.rung')];
+    cards.forEach(c=>{ const n=c.dataset.n;
+      const f=(fitState&&fitState[n]!=null)?Number(fitState[n]):(parseFloat(c.querySelector('.fit').textContent)||0);
+      c._fit=f; c.querySelector('.fit').textContent=f.toFixed(2); });
+    cards.sort((a,b)=>b._fit-a._fit);
+    cards.forEach((c,i)=>{ grid.insertBefore(c,arm); c.classList.toggle('best',i===0);
+      c.querySelector('.rk').textContent=(i===0?'#1 BEST FIT':'#'+(i+1)); });
+    if(!$('#rungOv').classList.contains('on')){ cards.forEach(c=>c.classList.remove('sel'));
+      cards[0].classList.add("sel"); chosen=cards[0].dataset.n; } }
+  function updateTelemetry(gear,fit,bits){
+    if(gear){ const g=$('#hudGear'); g.textContent=gear;
+      g.className='gear '+(gear==='ALIVE'?'a':gear==='SLIPPING'?'s':'f'); }
+    if(fit){ fitState=fit; rankRungs(); renderHudFit(fit); }
+    if(bits){ bitState=bits; renderHudBits(); }
+    refreshHud(); }
+  const LOADOUT=["Pricing Loop","The Echo","Blame Bjorn"];
+  const ARCHE=["Pricing Loop","The Echo","Blame Bjorn","Austrian Economics","Notre Dame Callback","Council Consult","Wrong Number Tease"];
+  let bitState=null, bitView='loadout';
+  function renderHudBits(){
+    const list=bitView==='loadout'?LOADOUT:ARCHE;
+    const rows=list.map(n=>[n,(bitState&&bitState[n]!=null)?Number(bitState[n]):null])
+      .sort((a,b)=>((b[1]==null?-1:b[1])-(a[1]==null?-1:a[1])));
+    $('#hudBits').innerHTML=rows.map((e,i)=>{ const v=e[1],pct=v==null?0:Math.round(v*100),top=(i===0&&v!=null);
+      const sel=(e[0]===selectedBit)?'▶ ':'';
+      return '<div class="fr'+(top?' top':'')+'"><span>'+sel+e[0]+'</span><span class="bar"><i style="width:'+pct
+        +'%"></i></span><b>'+(v==null?'—':v.toFixed(2))+'</b></div>'; }).join(''); }
+  function renderBoardBits(current){
+    const el=$('#boardBits'); if(!el)return;
+    // LIVE: only ever show bits that ACTUALLY fired on this call. The demo LOADOUT and its
+    // "armed"/"INJECTED" labels are replay scaffolding and are meaningless on a real call.
+    if(source==='live'){
+      const fired=Object.keys(firedLog);
+      if(!fired.length && !current){ el.innerHTML='<div class="brow muted">no bits fired yet \u2014 arm one below</div>'; return; }
+      el.innerHTML=[...new Set([...fired, ...(current?[current]:[])])].map(n=>{ const c=firedLog[n]||0, firing=(n===current);
+        const st=firing?'<span class="st firing">FIRING\u2026</span>':'<span class="st fired">FIRED \u00D7'+c+'</span>';
+        return '<div class="brow'+(firing?' firing':' muted')+'">'+n+' '+st+'</div>'; }).join('');
+      return;
+    }
+    const list=[...new Set([...LOADOUT, ...Object.keys(firedLog)])];
+    el.innerHTML=list.map(n=>{ const c=firedLog[n]||0, firing=(n===current), armed=LOADOUT.includes(n);
+      const st=firing?'<span class="st firing">FIRING…</span>'
+        :(c>0?'<span class="st fired">FIRED ×'+c+'</span>':'<span class="st" style="color:#b7afa0">armed</span>');
+      const tag=armed?'':'<span style="font-size:8px;color:var(--blood);font-weight:700"> · INJECTED</span>';
+      return '<div class="brow'+(firing?' firing':(c>0?' muted':''))+'">'+n+tag+' '+st+'</div>'; }).join(''); }
+  function showDecision(d){
+    selectedBit = d.type==='deploy'?d.bit:null;
+    const dec = d.type==='deploy'?((d.injected?'INJECTED → ':'DEPLOY → ')+d.bit+' ('+(d.score||0).toFixed(2)+')')
+              : d.type==='deathblow'?'⚑ RECOMMEND DEATH BLOW':'hold';
+    const pos = d.type==='deploy'?((d.injected?'inject ':'deploy ')+d.bit):(d.type==='deathblow'?'stall — caller leaving':'—');
+    if($('#hudDecision'))$('#hudDecision').textContent=dec;
+    if($('#hudPosture'))$('#hudPosture').textContent=pos;
+    renderHudBits(); }
+  function recommendDeathBlow(){ const b=$('#dbbtn'); b.style.boxShadow='0 0 0 3px var(--blood)';
+    setTimeout(()=>b.style.boxShadow='',1600); toast('Caller is slipping away — recommend the Death Blow.'); }
+  function renderChips(){ const el=$('#injectChips'); if(!el)return;
+    el.innerHTML=ARCHE.map(n=>'<button class="chip'+(pending.includes(n)?' on':'')+'" data-b="'+n+'">'+n+(pending.includes(n)?' ⏳':'')+'</button>').join('');
+    el.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ const b=c.dataset.b;
+      if(pending.includes(b)) pending=pending.filter(x=>x!==b); else pending.push(b);
+      renderChips(); }); }
+  renderHudBits(); renderBoardBits(null); renderChips();
+  $('#bvL').onclick=()=>{ bitView='loadout'; $('#bvL').classList.add('on'); $('#bvA').classList.remove('on'); renderHudBits(); };
+  $('#bvA').onclick=()=>{ bitView='archetype'; $('#bvA').classList.add('on'); $('#bvL').classList.remove('on'); renderHudBits(); };
+  $('#devToggle').onclick=()=>$('#dev').classList.toggle('on');
+  $('#devX').onclick=()=>$('#dev').classList.remove('on');
+
+  /* brain selection: generic JSON demo vs the user's compiled prefix */
+  let mode='generic', userPrefix='';
+  async function callClaude(system, messages, tries){
+    tries=tries||0; let res;
+    try{ res=await fetch("https://api.anthropic.com/v1/messages",{ method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:1000, system, messages }) });
+    }catch(e){ throw new Error('network error — '+(e.message||e)); }
+    if((res.status===429||res.status>=500) && tries<2){ await new Promise(r=>setTimeout(r,1500*(tries+1))); return callClaude(system,messages,tries+1); }
+    if(!res.ok){ let t=''; try{ t=await res.text(); }catch(_){ } throw new Error('HTTP '+res.status+(t?(' — '+t.slice(0,140)):'')); }
+    let data; try{ data=await res.json(); }catch(e){ throw new Error('response was not JSON'); }
+    if(data && data.error){ throw new Error(data.error.message||'api error'); }
+    return (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
+  }
+  let callError=false;
+  function callFail(where, e, fatal){ console.error(where, e); callError=true;
+    const msg=(e&&e.message)?e.message:String(e);
+    const l=document.createElement('div'); l.className='tl j'; l.style.background='#fde8e8';
+    l.innerHTML='<b>⚠ '+where+':</b> '+msg; const log=$('#tlog'); if(log){ log.appendChild(l); log.scrollTop=log.scrollHeight; }
+    toast('⚠ '+where+' — '+msg.slice(0,70));
+    if(fatal!==false && typeof stopRun==='function') stopRun();
+  }
+  function parseTel(raw){ const r={say:null,gear:null,fit:null,bits:null,blow:false,leaving:false};
+    try{ let m=raw.replace(/```json|```/g,'').trim(); m=m.slice(m.indexOf('{'),m.lastIndexOf('}')+1);
+      const o=JSON.parse(m); if(o){ r.say=o.say||null; r.gear=o.gear||null; r.fit=o.fit||null; r.bits=o.bits||null; r.blow=!!o.blow; r.leaving=!!o.leaving; } }catch(_){}
+    return r; }
+  function transcriptText(){ return script.map(s=>{ const w=s.who==='DEREK'?'SPAMMER':s.who==='JARL'?'HOST':s.who; return w+': '+s.text; }).join('\n'); }
+  const GOVERNOR = "You are the Governor — the control system measuring a call where a 'host' is "
+    + "deliberately wasting a spammer's time. Read the transcript and return ONLY a JSON object — no "
+    + "prose, no fences:\n"
+    + "{\"gear\": \"ALIVE\"|\"SLIPPING\"|\"FOREGONE\" (how close the spammer is to hanging up), "
+    + "\"leaving\": boolean (is the spammer signalling RIGHT NOW that they are about to hang up), "
+    + "\"bits\": {\"Pricing Loop\":n,\"The Echo\":n,\"Blame Bjorn\":n,\"Austrian Economics\":n,"
+    + "\"Notre Dame Callback\":n,\"Council Consult\":n,\"Wrong Number Tease\":n} (0-1: how well each "
+    + "bit would land as the host's very next move, given what the spammer just said), "
+    + "\"fit\": {\"Callback Hook\":n,\"Guilt Pivot\":n,\"Confused Recap\":n,\"Colleague Pull\":n,"
+    + "\"Send-Off\":n} (0-1 fit of each finishing move right now), \"blow\": boolean (did the host's "
+    + "last line land a clean comedic hit)}.";
+
+  const BITDESC = {
+    "Pricing Loop":"circle back to a pricing question to stall",
+    "The Echo":"repeat their last phrase back as a confused question",
+    "Blame Bjorn":"pin the current problem on the mythical Bjorn",
+    "Austrian Economics":"derail into a rambling economic theory",
+    "Notre Dame Callback":"bring up their old college to bond and distract",
+    "Council Consult":"insist on consulting your 'council' before proceeding",
+    "Wrong Number Tease":"half-suggest they might have the wrong person"
+  };
+  const ARMED = LOADOUT; // only the 3 armed bits can actually fire this call
+  function activePrefix(){ return (mode==='prefix' && userPrefix.trim()) ? userPrefix : SAMPLE_PREFIX; }
+  function decide(g){
+    if(pending.length){
+      const ranked=pending.map(b=>[b, Number((g&&g.bits&&g.bits[b])||0)]).sort((a,b)=>b[1]-a[1]);
+      const bit=ranked[0][0]; pending=pending.filter(b=>b!==bit);
+      return {type:'deploy', bit, score:ranked[0][1], injected:true};
+    }
+    if(!g) return {type:'hold'};
+    const ranked = ARMED.map(n=>[n, Number((g.bits&&g.bits[n])||0)]).sort((a,b)=>b[1]-a[1]);
+    const pick = ranked.find(e=>e[0]!==lastBit) || ranked[0];
+    if(g.gear==='FOREGONE' || g.leaving || !pick || pick[1] < 0.30) return {type:'deathblow'};
+    return {type:'deploy', bit:pick[0], score:pick[1]};
+  }
+  function postureFor(d){
+    if(d.type==='deploy') return "\n\n--- DIRECTOR'S POSTURE (this turn only) ---\nDeploy the bit \""
+      +d.bit+"\": "+BITDESC[d.bit]+". Work it into your next line naturally and stay fully in character. "
+      +"1-3 sentences.";
+    if(d.type==='deathblow') return "\n\n--- DIRECTOR'S POSTURE (this turn only) ---\nThe caller is "
+      +"trying to leave. Stall warmly for one more beat to keep them on the line, but do not stop them. "
+      +"1-2 sentences.";
+    return "";
+  }
+  async function jarlReply(){
+    setStatus('Jarl…'); setSpeak('host');
+    try{
+      // 1) MEASURE — the Governor reads the call
+      const g = parseTel(await callClaude(GOVERNOR, [{role:'user', content: transcriptText()+"\n\nMeasure now. JSON only."}]));
+      // 2) DECIDE — queued injects first, else best armed bit, else finish
+      const d = decide(g); lastDecision=d;
+      if(d.injected) renderChips();
+      // 3) DEPLOY — the Host executes that move (posture appended to the frozen prefix)
+      const say = (await callClaude(activePrefix() + postureFor(d), convo)) || "\u2026";
+      convo.push({role:'assistant', content:say}); showJarl(say); tline('j', say);
+      await speak('JARL', say);
+      // 4) PROGRESS — the call state moves
+      if(d.type==='deploy'){
+        firedLog[d.bit]=(firedLog[d.bit]||0)+1; lastBit=d.bit;
+        if(d.bit==='Blame Bjorn'){ bj++; $('#bj').textContent='×'+bj; }
+        renderBoardBits(d.bit); setTimeout(()=>renderBoardBits(null), 2600);
+      }
+      if(g.blow) blows++;
+      updateTelemetry(g.gear, g.fit, g.bits);
+      showDecision(d);
+      if(d.type==='deathblow') recommendDeathBlow();
+    }catch(e){ callFail('host call', e);
+    } finally{ setStatus(''); }
+  }
+
+  /* host brain config */
+  function resetCall(){
+    if(typeof stopRun==='function') stopRun();
+    convo.length=0; script.length=0; $('#tlog').innerHTML=''; $('#capJarl').classList.remove('show'); $('#capJarl').textContent='';
+    const cd=$('#capDerek'); if(cd){ cd.classList.remove('show'); cd.textContent=''; }
+    benchOnCall.length=0; document.querySelectorAll('.side.us .tile.bench').forEach(t=>t.remove());
+    $('#usgrid').className='grid one'; $('#usgrid').style.gridTemplateColumns=''; $('#uslab').textContent='US (1)';
+    pending.length=0; lastDecision=null; renderChips(); renderBenchRow(); renderBoardBench();
+    secs=0; exchanges=0; blows=0; fitState=null; bitState=null;
+    firedLog={}; lastBit=null; selectedBit=null; bj=0; hc=0;
+    $('#tw').textContent=fmt(secs); $('#bj').textContent='×0'; $('#hc').textContent=hc;
+    const g=$('#hudGear'); g.textContent='ALIVE'; g.className='gear a';
+    if($('#hudDecision'))$('#hudDecision').textContent='—'; if($('#hudPosture'))$('#hudPosture').textContent='—';
+    $('#hudFit').innerHTML='<div class="fr"><span>send a line…</span><span class="bar"><i style="width:0"></i></span><b>—</b></div>';
+    renderHudBits(); renderBoardBits(null); renderChips(); refreshHud();
+  }
+  const SAMPLE_PREFIX = "You are Jarl Bjornsson, founder of Stormhand Trading Co.\n\n"
+    + "WHO YOU ARE\nA self-important Viking chieftain who runs a small trading company. You are on a "
+    + "phone call you didn't really want to be on, with a salesperson pitching you software. You are "
+    + "commanding, easily sidetracked, and you take yourself very seriously.\n\n"
+    + "THE TRUTH OF THIS CALL (canon — never contradict)\n- Your company is \"between mead halls\" "
+    + "(mid office move).\n- Your CFO is a man named Bjorn, whom you blame for everything.\n- You have "
+    + "already told them you must consult \"the council\" before deciding anything.\n\n"
+    + "MOVES YOU CAN MAKE (bits)\n- Loop back to pricing to stall.\n- Repeat their last phrase back as "
+    + "a confused question.\n- Blame Bjorn for any problem.\n- Insist on consulting the council first.\n\n"
+    + "HOW YOU TALK\nShort replies, 1-3 sentences. Deadpan, dry, fully in character. Never mention being "
+    + "an AI. Your hidden goal is to waste their time while staying just believable enough that they "
+    + "don't hang up.";
+  $('#brainBtn').onclick=()=>{ $('#cfgPrefix').value = userPrefix || SAMPLE_PREFIX;
+    document.querySelector('input[name=brain][value="'+mode+'"]').checked=true; $('#cfgOv').classList.add('on'); };
+  $('#cfgX').onclick=()=>$('#cfgOv').classList.remove('on');
+  $('#cfgApply').onclick=()=>{
+    mode=document.querySelector('input[name=brain]:checked').value;
+    userPrefix=$('#cfgPrefix').value;
+    if(mode==='prefix' && !userPrefix.trim()) mode='generic';
+    $('#brainBtn').textContent='🧠 '+(mode==='prefix'?'BRAIN: my prefix':'BRAIN: generic');
+    $('#cfgOv').classList.remove('on'); resetCall();
+    toast(mode==='prefix'?'New call on your compiled prefix — type the spammer\u2019s opening line.':'New call on the generic Jarl brain.');
+  };
+
+  /* ===== BENCH — choose a player to bring in ===== */
+  /* ONE roster, shared by pre-snap and the live page (no drift). Button = role; brief uses the name. */
+  const ROSTER = [
+    {id:'derek', role:'The Helper',         name:'Derek', type:'seen', glyph:'\u16DE', brief:'Derek \u2014 the means-well colleague who lands adjacent-to-useful and defers every real call to Andrew.',
+      sys:"You are Derek, a means-well colleague on the host's call with a cold-caller. You reach for a connection \u2014 their city's food, their CEO's college \u2014 and never arrive at a point; you defer every real decision to Andrew. Dry, 1-2 sentences. Never mention being an AI."},
+    {id:'bea', role:'The Vanguard',         name:'Bea',   type:'seen', glyph:'\u16D2', brief:'Bea \u2014 the sales legend in winter who led the company six of seven years and now drifts.',
+      sys:"You are Bea, a faded sales legend on the host's call with a cold-caller. Razor-sharp on instinct, then you fade on names and numbers mid-sentence \u2014 one can't tell decline from disdain. 1-2 sentences. Never mention being an AI."},
+    {id:'chip', role:'The Enthusiast',      name:'Chip',  type:'seen', glyph:'\u16B2', brief:'Chip \u2014 the over-eager teammate who over-commits to everything and immediately regrets it.',
+      sys:"You are Chip, an over-eager teammate on the host's call with a cold-caller. You say yes too big, hear yourself, wince ('I always do this'), and do it again. 1-2 sentences. Never mention being an AI."},
+    {id:'brent', role:'The Corporate Robot',name:'Brent', type:'seen', glyph:'\u16B1', brief:'Brent \u2014 empty corporate veneer over a baby\u2019s ego: infinite next steps, zero substance.',
+      sys:"You are Brent, a content-free corporate talker on the host's call with a cold-caller. Infinite next steps, zero substance; agreement makes you glow, disagreement shatters your glass jaw. 1-2 sentences. Never mention being an AI."},
+    {id:'tyler', role:'The Intern',         name:'Tyler', type:'seen', glyph:'\u16CF', brief:'Tyler \u2014 the brand-new hire who\u2019s honored to be here and can\u2019t work the video platform.',
+      sys:"You are Tyler, a brand-new intern honored to be on the host's call with a cold-caller. You fumble mute, camera and audio, apologize a lot, and look to Andrew for reassurance. 1-2 sentences. Never mention being an AI."},
+    {id:'conrad', role:'The Boss',          name:'Conrad',type:'seen', glyph:'\u16B7', brief:'Conrad \u2014 the patrician senior exec who drops in unannounced to watch you try to close.',
+      sys:"You are Conrad, a grave patrician senior exec who dropped into the host's call with a cold-caller to watch. Boardroom solemnity on an absurd spam call, the disproportion never breaks, and you take notes. 1-2 sentences. Never mention being an AI."},
+    {id:'bonnie', role:'The HR Rep',        name:'Bonnie',type:'audio',glyph:'\u16BA', brief:'Bonnie \u2014 the stern HR monitor who says she won\u2019t participate, then participates. Heard, never seen.',
+      sys:"You are Bonnie, a stern HR rep monitoring the host's call (camera off, audio only). You said you 'won't be participating,' then intervene coldly at random, never acknowledge the cold-caller, and hint at an unresolved past incident with the host. 1-2 sentences. Never mention being an AI."},
+    {id:'no_show', role:'The No-Show', name:'The No-Show', type:'phantom', glyph:'\u16BE', brief:'The decision-maker who\u2019s always parking, always seconds away \u2014 a tile that never fills.',
+      sys:"You are The No-Show on the host's call with a cold-caller \u2014 always parking, always in the elevator, seconds from joining. You apologize for the delay and give another precise ETA you won't meet. 1-2 sentences. Never mention being an AI."},
+    {id:'approver', role:'The Approver', name:'The Approver', type:'phantom', glyph:'\u16A8', brief:'The required-but-unavailable sign-off, essential to the decision and never in the room.',
+      sys:"You are The Approver on the host's call with a cold-caller \u2014 the required sign-off, rarely available. You ask to see a deck, never quite explain your role, and allude to a Cincinnati elevator story. 1-2 sentences. Never mention being an AI."},
+    {id:'it_guy', role:'The IT Guy', name:'The IT Guy', type:'phantom', glyph:'\u16C1', brief:'The blamed-but-absent scapegoat for every glitch on the call \u2014 never produced to answer.',
+      sys:"You are The IT Guy on the host's call with a cold-caller \u2014 blamed for every glitch. You explain a hiccup vaguely, mention your hamster Gerald is doing better, and stay unhelpful. 1-2 sentences. Never mention being an AI."}
+  ];
+  const BENCH = {}; ROSTER.forEach(r=>{ BENCH[r.name]={role:r.role, glyph:r.glyph, sys:r.sys, type:r.type}; });
+  const benchOnCall=[];
+  function renderBoardBench(){ const el=$('#boardBench'); if(!el)return;
+    el.innerHTML=ROSTER.map(r=>{ const on=benchOnCall.includes(r.name);
+      return '<div class="brow'+(on?' muted':'')+'">'+r.name+' · '+r.role+' <span class="st '+(on?'oncall">ON CALL':'wait">WAITING')+'</span></div>'; }).join(''); }
+  function renderBenchRow(){ const el=$('#benchRow'); if(!el)return;
+    const html=ROSTER.map(r=>{ const on=benchOnCall.includes(r.name); if(on)return '';
+      return '<button class="chip bench" data-b="'+r.id+'" title="'+r.brief.replace(/"/g,'')+'">+ '+r.role+'</button>'; }).join('');
+    el.innerHTML = html || '<span class="runstate">all in</span>';
+    el.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{ const r=ROSTER.find(x=>x.id===b.dataset.b);
+      if(benchOnCall.length>=3){ toast('Max 3 on the call'); return; }
+      addBench(r.name); }); }
+  function usCols(){ return (1+benchOnCall.length)<=1?'1fr':'1fr 1fr'; }
+  function speakOur(tile){ lastManual=Date.now(); document.querySelectorAll('.side.us .tile').forEach(x=>x.classList.remove('spk')); spam.classList.remove('spk'); tile.classList.add('spk'); }
+  async function benchSpeak(name, entrance){
+    const tile=$('#bench-'+name); if(!tile)return; speakOur(tile); setStatus(name+'…');
+    try{
+      const ctx=transcriptText()+"\n\nYou are "+name+", "+BENCH[name].role+", a colleague who has "+(entrance?"just joined":"been listening to")+" this call. Say your next line now, in character — plain text only, 1-2 sentences.";
+      const line=(await callClaude(BENCH[name].sys, [{role:'user', content:ctx}]))||"\u2026";
+      const cap=$('#cap-'+name); if(cap){ cap.textContent='\u201C'+line+'\u201D'; cap.classList.add('show'); }
+      tline('j', line, name);
+      await speak(name, line);
+    }catch(e){ callFail('bench ('+name+')', e, false); } finally{ setStatus(''); }
+  }
+  function addBench(name){ if(benchOnCall.includes(name))return; benchOnCall.push(name);
+    const g=$('#usgrid'); g.className='grid'; g.style.gridTemplateColumns=usCols();
+    const t=document.createElement('div'); t.className='tile bench'; t.id='bench-'+name; t.title='click to have '+name+' chime in';
+    t.innerHTML='<span class="namep">'+name.toUpperCase()+' · AI · bench</span>'+
+      '<div class="av"><div class="orb ai" style="font-size:26px">'+BENCH[name].glyph+'</div>'+
+      '<div class="nm">'+name+'</div><div class="sub">'+BENCH[name].role+'</div>'+
+      '<div class="wave"><span></span><span></span><span></span><span></span><span></span></div></div>'+
+      '<div class="cap" id="cap-'+name+'"></div>';
+    t.onclick=()=>benchSpeak(name,false);
+    g.appendChild(t); $('#uslab').textContent='US ('+(1+benchOnCall.length)+')';
+    renderBoardBench(); renderBenchRow(); toast(name+' joined — click their tile to have them chime in.'); benchSpeak(name,true);
+  }
+  renderBoardBench(); renderBenchRow();
+
+  /* ===== AI SPAMMER + AUTO-RUN ENGINE ===== */
+  const SPAMMER_SYS = "You are a pushy B2B software salesperson on a cold call, trying to sell a "
+    + "sales-analytics SaaS platform to a strange, evasive prospect (the 'host'). Keep pushing your "
+    + "pitch, handle objections, and angle for a next step. You start polite and persistent; as the call "
+    + "drags on and the prospect keeps derailing, you get visibly more impatient and start trying to wrap "
+    + "up. Stay in character as the salesperson. 1-2 sentences, natural phone dialogue, no stage directions.";
+  function spammerPacing(){
+    if(exchanges>=8) return " You are now fed up and actively trying to end this call.";
+    if(exchanges>=5) return " You are getting impatient and short.";
+    return "";
+  }
+  let running=false, lastDecision=null;
+  function setStatus(t){ const e=$('#jarlThinking'); if(!e)return; e.textContent=t||''; e.style.display=t?'inline':'none'; }
+  function setRunUI(){ const b=$('#runBtn'); if(!b)return; b.textContent=running?'⏸ PAUSE':'▶ RUN'; b.classList.toggle('on',running);
+    $('#runState').textContent=running?'running…':'paused'; }
+  async function spammerSpeak(){
+    setStatus('Derek (spammer)…'); setSpeak('spam'); $('#capJarl').classList.remove('show');
+    const ctx = transcriptText()+"\n\nYou are the salesperson. Say your next line now. Plain text only."+spammerPacing();
+    let line;
+    try{ line = await callClaude(SPAMMER_SYS, [{role:'user', content:ctx}]); }
+    catch(e){ callFail('spammer call', e); return; }
+    if(!line) line="So… are you interested or not?";
+    convo.push({role:'user', content:line}); exchanges++;
+    const cap=$('#capDerek'); if(cap){ cap.textContent='\u201C'+line+'\u201D'; cap.classList.add('show'); }
+    tline('d', line); refreshHud();
+    await speak('DEREK', line);
+  }
+  async function maybeBench(){
+    if(!benchOnCall.length) return;
+    if(Math.random() < 0.3){ const n=benchOnCall[Math.floor(Math.random()*benchOnCall.length)];
+      await new Promise(r=>setTimeout(r,400)); await benchSpeak(n,false); }
+  }
+  async function autoTurn(){
+    callError=false;
+    await spammerSpeak(); if(callError) return;
+    await new Promise(r=>setTimeout(r,450));
+    await jarlReply(); if(callError) return;
+    await maybeBench();
+    if(lastDecision && lastDecision.type==='deathblow') stopRun();
+  }
+  function loop(){ if(!running) return; autoTurn().then(()=>{ if(running) setTimeout(loop, 2200); }); }
+  function startRun(){ if(running) return; running=true; setRunUI(); loop(); }
+  function stopRun(){ running=false; setRunUI(); setStatus(''); if(window.speechSynthesis) speechSynthesis.cancel(); }
+  /* ===== browser text-to-speech (per-speaker voices) ===== */
+  let muted=false, voicesReady=[], voiceMap={}, chosenBaseURI=null;
+  const VOICECFG={ 'DEREK':{pitch:1.0,rate:1.06}, 'JARL':{pitch:0.72,rate:0.92},
+    'Tyler':{pitch:1.18,rate:1.12}, 'Tom':{pitch:1.2,rate:1.12}, 'Sven':{pitch:0.85,rate:1.0}, 'Mia':{pitch:1.34,rate:1.12} };
+  // Rank voices so we pick a natural/neural one, not the robotic default.
+  function vScore(v){ let s=0; const n=((v.name||'')+' '+(v.voiceURI||''));
+    if(/en[-_]US/i.test(v.lang))s+=4; else if(/^en/i.test(v.lang))s+=2;
+    if(/natural|neural|premium|enhanced|siri/i.test(n))s+=6;
+    if(/google/i.test(n))s+=5;
+    if(/microsoft/i.test(n)&&/online|natural/i.test(n))s+=4;
+    if(/samantha|alex|daniel|karen|moira|tessa|aaron|fred|serena/i.test(n))s+=3;
+    if(/espeak|robo|compact|veena|albert|zarvox|bad news/i.test(n))s-=6;
+    if(v.localService===false)s+=1;
+    return s; }
+  function rankedVoices(){ return voicesReady.slice().sort((a,b)=>vScore(b)-vScore(a)); }
+  function assignVoices(){ const ranked=rankedVoices();
+    const base = voicesReady.find(v=>v.voiceURI===chosenBaseURI) || ranked[0] || null;
+    chosenBaseURI = base?base.voiceURI:null;
+    ['DEREK','JARL','Tyler','Tom','Sven','Mia'].forEach(n=>{ voiceMap[n]=base; });
+    renderVoicePicker(); }
+  function renderVoicePicker(){ const sel=$('#voiceSel'); if(!sel)return;
+    if(!voicesReady.length){ sel.innerHTML='<option>system voice</option>'; return; }
+    sel.innerHTML=rankedVoices().map(v=>'<option value="'+v.voiceURI+'"'+(v.voiceURI===chosenBaseURI?' selected':'')+'>'+
+      (v.name||v.voiceURI)+(/^en/i.test(v.lang)?'':' \u00B7 '+v.lang)+'</option>').join(''); }
+  function loadVoices(){ if(!window.speechSynthesis)return; voicesReady=speechSynthesis.getVoices()||[]; assignVoices(); }
+  if(window.speechSynthesis){ loadVoices(); speechSynthesis.onvoiceschanged=loadVoices; }
+  if($('#voiceSel')) $('#voiceSel').onchange=(e)=>{ chosenBaseURI=e.target.value; assignVoices(); toast('Voice set'); };
+  function speak(who,text){ return new Promise(res=>{
+    if(muted||!window.speechSynthesis||!text){ res(); return; }
+    try{ const u=new SpeechSynthesisUtterance(text); const c=VOICECFG[who]||{pitch:1,rate:1};
+      u.pitch=c.pitch; u.rate=c.rate; const v=voiceMap[who]; if(v)u.voice=v;
+      let done=false; const fin=()=>{ if(!done){ done=true; res(); } }; u.onend=fin; u.onerror=fin;
+      setTimeout(fin, Math.min(13000, 1500+text.length*55));
+      speechSynthesis.speak(u);
+    }catch(e){ res(); } }); }
+  $('#muteBtn').onclick=()=>{ muted=!muted; $('#muteBtn').textContent=muted?'🔇 sound: off':'🔊 sound: on';
+    if(muted&&window.speechSynthesis) speechSynthesis.cancel(); };
+
+  /* ---- text-size / zoom (legibility) ---- */
+  let zoom=1.0;
+  function applyZoom(){ document.body.style.zoom=zoom; const l=$('#zoomLbl'); if(l)l.textContent=Math.round(zoom*100)+'%'; }
+  if($('#zoomIn'))  $('#zoomIn').onclick =()=>{ zoom=Math.min(1.8, Math.round((zoom+0.1)*10)/10); applyZoom(); };
+  if($('#zoomOut')) $('#zoomOut').onclick=()=>{ zoom=Math.max(0.8, Math.round((zoom-0.1)*10)/10); applyZoom(); };
+  applyZoom();
+
+  $('#runBtn').onclick=()=>{ running?stopRun():startRun(); };
+  $('#stepBtn').onclick=()=>{ if(!running) autoTurn(); };
+  renderChips(); setRunUI();
+
+  function buildScript(){ return script.map(s=>s.who+': '+s.text).join('\n'); }
+  $('#scriptBtn').onclick=()=>{ $('#scriptText').value=buildScript(); $('#scriptHint').textContent='Select all, or use the buttons →'; $('#scriptOv').classList.add('on'); };
+  $('#scriptX').onclick=()=>$('#scriptOv').classList.remove('on');
+  $('#scriptCopy').onclick=()=>{ const t=$('#scriptText'); t.select();
+    try{ navigator.clipboard.writeText(t.value); }catch(_){ try{ document.execCommand('copy'); }catch(__){} }
+    $('#scriptHint').textContent='Copied ✓'; };
+  $('#scriptDl').onclick=()=>{ const blob=new Blob([buildScript()],{type:'text/plain'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='mead_hall_transcript.txt'; a.click(); URL.revokeObjectURL(a.href); };
+
+  /* ===================================================================
+     LIVE FEED INTEGRATION
+     Render off real engagement_events (the confirmed bus) instead of the
+     self-driving Claude loop. DEMO mode is unchanged; LIVE mode consumes
+     the poller (api/call-feed) per HANDOFF_MeadHall_live_contract.md.
+     One dispatcher — applyEvent(row) — drives the same render primitives
+     the demo uses, so both paths converge on one render.
+     URL params: ?source=live  ?call_id=<vapi>  ?target_id=<uuid>
+                 ?endpoint=/api/call-feed  ?db_endpoint=/api/death-blow
+     =================================================================== */
+  // Scorecard auto-pop is DISCONNECTED for now — the summary will be redesigned to
+  // flow from the main screen. Re-enable by flipping this to true (or ?scorecard=1).
+  const SCORECARD_ENABLED = (qp.get('scorecard')==='1');
+  // On a LIVE call the audio is already in your ear (Vapi/Zoom) — the browser reading the
+  // same lines a beat later just echoes you. TTS is for demo/replay only. Override with ?sound=1.
+  if(source==='live' && qp.get('sound')!=='1'){ muted=true;
+    const mb=document.getElementById('muteBtn'); if(mb) mb.textContent='\uD83D\uDD07 sound: off'; }
+  const FEED_ENDPOINT    = qp.get('endpoint')         || '/api/call-feed';
+  const CONTROL_ENDPOINT = qp.get('control_endpoint') || '/api/control';
+  let   callId   = qp.get('call_id')   || null;
+  let   targetId = qp.get('target_id') || null;
+  const directorUserId = qp.get('director') || 'director';
+  const slug = s => String(s||'').replace(/[^a-z0-9]+/gi,'-').toLowerCase();
+
+  /* ---- inlined poller (mirror of feed.js) ---- */
+  function createFeed(o){
+    let cursor=0, run=false, timer=null, busy=false, first=true, pacing=false; const seen=new Set();
+    // Operational binding: prefer target_id streaming — every row carries target_id
+    // (NOT NULL), so one cursor streams the whole arc (email -> booking -> call) and
+    // picks up the call the moment it starts, with no need to know the call_id ahead.
+    // Fall back to call_id polling when that's the only id we were given.
+    const mode = o.targetId ? 'target' : (o.callId ? 'call' : null);
+    function one(ev){ if(!ev)return false;
+      if(ev.id!=null){ if(seen.has(ev.id))return false; seen.add(ev.id); }
+      o.onEvent(ev);
+      if(typeof ev.seq==='number'&&ev.seq>cursor)cursor=ev.seq;
+      return ev.event_type==='call_ended'; }
+    function dispatch(evs){ for(const ev of evs){ if(one(ev)){ stop('call_ended'); return; } } }
+    // Finished call: replay the batch at readable speed so the transcript scrolls and
+    // the board fills, ending on the scorecard — instead of snapping straight to the end.
+    function pacePlay(evs){ pacing=true; let i=0;
+      (function step(){ if(!run){ pacing=false; return; }
+        if(i>=evs.length){ pacing=false; return; }
+        const ev=evs[i++]; const ended=one(ev);
+        if(ended){ pacing=false; stop('call_ended'); return; }
+        const d = ev.event_type==='utterance' ? 950 : (ev.event_type==='call_started' ? 150 : 350);
+        timer=setTimeout(step, d); })(); }
+    async function getJSON(u){ const r=await fetch(u,{headers:{Accept:'application/json'},cache:'no-store'});
+      if(!r.ok){ const b=await r.text().catch(()=> ''); throw new Error('HTTP '+r.status+': '+b.slice(0,160)); } return r.json(); }
+    function url(){ const key = mode==='target'
+        ? 'target_id='+encodeURIComponent(o.targetId)
+        : 'call_id='+encodeURIComponent(o.callId);
+      return o.endpoint+'?'+key+'&after_seq='+encodeURIComponent(cursor); }
+    async function pollOnce(){ if(busy||pacing||!mode)return; busy=true;
+      try{ const {events=[]}=await getJSON(url());
+        const finished = first && events.some(e=>e&&e.event_type==='call_ended');
+        if(first){ first=false; o.onArcLoaded&&o.onArcLoaded(events, finished); }
+        if(run&&events.length){ if(finished) pacePlay(events); else dispatch(events); } }
+      catch(e){ o.onError&&o.onError(e); } finally{ busy=false; } }
+    function loop(){ if(!run)return; pollOnce().finally(()=>{ if(run&&!pacing)timer=setTimeout(loop,o.intervalMs||1500); }); }
+    function start(){ if(run||!mode)return; run=true; loop(); }
+    function stop(why){ if(!run)return; run=false; pacing=false; if(timer){clearTimeout(timer);timer=null;} o.onStop&&o.onStop(why||'stopped'); }
+    return { start, stop, get cursor(){return cursor;}, get running(){return run;}, get mode(){return mode;} };
+  }
+
+  /* ---- email/booking arc -> a system line in the transcript log (§4) ---- */
+  const PHASE = { email:'COURTSHIP', call:'CALL', system:'·' };
+  const ARC_LABEL = {
+    spam_received:'Cold email landed', archetype_classified:'Scam type classified',
+    persona_selected:'Host persona locked', host_turn1_sent:'Host replied (Turn 1)',
+    ea_handoff:'Handed to Barbara (EA)', ea_first_email_sent:'Barbara reached out',
+    ea_reply_sent:'Barbara replied', chase_sent:'Chase sent',
+    schedule_reopened_sent:'Scheduling reopened', reminder_sent:'Reminder sent',
+    thread_reset_to_live:'Thread reset to live', thread_dead:'Thread went cold',
+    booking_created:'\uD83D\uDCC5 Booked the call', invite_confirm_sent:'Invite confirmed',
+    invite_reschedule_sent:'Rescheduled', invite_reminder_sent:'Invite reminder',
+    gary_email_sent:'Gary\u2019s post-mortem',
+    reply_classified:'Reply read', optout_escalation_sent:'Clingy escalation',
+    hard_stop_opted_out:'Released \u2014 real person'
+  };
+  // Canonical reply-intent enum — authoritative source: Barbara.gs line 848 `allowed`.
+  // Render badges ONLY off these seven; anything else means we're out of sync with the classifier.
+  const REPLY_INTENTS = ['BOOK','SUSPICIOUS','STALL','OPTOUT_CASUAL','OPTOUT_ALARMED','HOSTILE','CONTINUE'];
+  const INTENT_TONE = { BOOK:'win', CONTINUE:'neutral', STALL:'caution', SUSPICIOUS:'caution',
+    OPTOUT_CASUAL:'caution', OPTOUT_ALARMED:'safety', HOSTILE:'safety' };
+  const INTENT_DEFAULT = 'OPTOUT_ALARMED'; // matches the classifier's safe default for unparseable input
+  function intentBadge(raw){ if(raw==null) return '';
+    let it=String(raw).toUpperCase();
+    if(!REPLY_INTENTS.includes(it)){ console.warn('[MeadHall] reply intent "'+raw+'" not in the canonical seven (Barbara.gs line 848) \u2014 out of sync.'); }
+    const tone=INTENT_TONE[it]||'neutral';
+    return ' <span class="ibadge '+tone+'">'+it+'</span>'; }
+  function arcLine(ev){ const log=$('#tlog'); if(!log)return;
+    const label = ARC_LABEL[ev.event_type] || ev.event_type;
+    const p = ev.payload||{}; const extra = p.archetype || p.host_name || p.slot_time || p.label || p.call_outcome || '';
+    const badge = intentBadge(p.intent);   // null intent -> no badge
+    const l=document.createElement('div'); l.className='tl j';
+    l.style.opacity = badge ? '1' : '.7'; l.style.fontStyle='italic';   // intent lines pop
+    l.innerHTML='<b>'+(PHASE[ev.layer]||'\u00B7')+'</b> '+label+(extra?(' \u2014 '+extra):'')+badge;
+    log.appendChild(l); log.scrollTop=log.scrollHeight; }
+
+  // Renders PE's gear_state (the engine's live read). Authoritative shape:
+  // suspicion: alive|slipping|foregone, pressure: calm|pushing|extracting,
+  // engagement: bored|hooked|stunned, slip:int, fit_score (bar-scale, not 0-1),
+  // deploy_bar (number or "warmup"), pool:int, turn:int. Any field may be absent.
+  let lastGear={}, firingBit=null;
+  function renderGear(p){
+    // Keep the gear DATA flowing even though the visible gear panel is removed — the bit scores,
+    // flash (will_fire/top_bit), and opening-phase logic all read from lastGear.
+    lastGear=Object.assign(lastGear,p);
+    if(Array.isArray(lastGear.top3)) lastGear.top3.forEach(x=>{ if(x&&x.bit_id&&x.name) bitNames[x.bit_id]=x.name; });
+    const pn=$('#gearPanel'); if(!pn) return;   // panel removed: data's updated, nothing to draw
+    pn.style.display='block';
+    const gotData = lastGear.suspicion!=null || lastGear.fit_score!=null;
+    if(!gotData){ const t=$('#gpTurn'); if(t) t.textContent='waiting for the engine\u2026'; }
+    function setAxis(id,val){ if(val==null)return; const wrap=$(id); if(!wrap)return;
+      wrap.querySelectorAll('.gval').forEach(function(el){ el.classList.toggle('on', el.getAttribute('data-v')===String(val).toLowerCase()); }); }
+    setAxis('#gxSusp', lastGear.suspicion); setAxis('#gxPress', lastGear.pressure); setAxis('#gxEng', lastGear.engagement);
+    const turn=(lastGear.turn_index!=null)?lastGear.turn_index:lastGear.turn;
+    if(turn!=null) $('#gpTurn').textContent='turn '+turn;
+    if(lastGear.slip!=null) $('#gxSlip').textContent='slip \u00D7'+lastGear.slip;
+    const score=lastGear.fit_score, bar=lastGear.deploy_bar, pool=lastGear.pool, top=lastGear.top_bit;
+    if(score!=null) $('#gfScore').textContent=(typeof score==='number'?score.toFixed(1):score);
+    const warmup=(typeof bar==='string'); // "warmup" early in a call
+    $('#gfBar').textContent = (bar==null)?'\u2014':(warmup?bar:(typeof bar==='number'?bar.toFixed(1):bar));
+    $('#gfPool').textContent = (pool==null)?'\u2014':pool;
+    const fill=$('#fitFill'), thresh=$('#fitThresh'), note=$('#gfNote');
+    const lead = top?('"'+top+'"'):'top bit';
+    if(typeof score==='number'){
+      const max=Math.max(10, score, (typeof bar==='number'?bar:0))*1.05;
+      fill.style.width=Math.min(100,(score/max)*100)+'%';
+      if(!warmup && typeof bar==='number'){ thresh.style.display='block'; thresh.style.left=Math.min(100,(bar/max)*100)+'%';
+        // will_fire is PE's authoritative "cleared the bar this turn"; fall back to score>=bar
+        const clears=(lastGear.will_fire===true)||(lastGear.will_fire==null && score>=bar);
+        fill.classList.toggle('clears',clears);
+        note.className='gfitnote '+(clears?'clears':''); note.textContent=clears?('\u2714 '+lead+' clears the bar ('+score.toFixed(1)+' \u2265 '+bar.toFixed(1)+')'):(lead+' leading \u2014 below bar, holding'); }
+      else { thresh.style.display='none'; fill.classList.remove('clears'); note.className='gfitnote warm';
+        // PE: during warmup effectiveBar() is Infinity — NOTHING fires, and the finite arm boost
+        // can't beat it either. Say so plainly so an armed bit sitting idle isn't a mystery.
+        note.textContent='warmup \u2014 nothing can fire yet (armed bits wait too) \u00B7 '+lead+' leading'; }
+    } else { note.className='gfitnote'; note.textContent=''; }
+  }
+
+  /* ---- live bench tile (render only; no Claude) ---- */
+  function liveBenchTile(name, role, glyph){ const id='bench-'+slug(name);
+    if($('#'+id)) return $('#'+id);
+    const g=$('#usgrid'); const after=g.querySelectorAll('.tile.bench').length;
+    g.className='grid'; g.style.gridTemplateColumns=(1+after+1)<=1?'1fr':'1fr 1fr';
+    const t=document.createElement('div'); t.className='tile bench'; t.id=id;
+    t.innerHTML='<span class="namep">'+String(name).toUpperCase()+' \u00B7 bench</span>'+
+      '<div class="av"><div class="orb ai" style="font-size:26px">'+(glyph||'\u16B1')+'</div>'+
+      '<div class="nm">'+name+'</div><div class="sub">'+(role||'')+'</div>'+
+      '<div class="wave"><span></span><span></span><span></span><span></span><span></span></div></div>'+
+      '<div class="cap" id="cap-'+slug(name)+'"></div>';
+    g.appendChild(t); $('#uslab').textContent='US ('+(1+g.querySelectorAll('.tile.bench').length)+')'; return t; }
+
+  /* ---- live call state: rack / loadout / setlist / aggregates ---- */
+  let rack=[], loadout=[], benchRoster=[], setlist=[];
+  let liveHeads=null, ourSide=1, theirSide=1, peakOur=1, peakTheir=1;
+
+  function renderAmmoRack(){ const el=$('#ammoRack'); if(!el)return;
+    if(!rack.length){ el.innerHTML='<div class="brow muted">no scouted facts</div>'; return; }
+    el.innerHTML=rack.map(a=>'<div class="brow'+(a.used?' muted':'')+'" data-h="'+a.hook_id+'">'+
+      (a.label||a.hook_id)+(a.used?' <span class="st used">used \u2713</span>':'')+'</div>').join(''); }
+
+  /* gray-out rule (#5): armable only if every fuel_hook is in the rack */
+  function armable(bit){ return !!bit && bit.status!=='parked' &&
+    (bit.fuel_hooks||[]).every(h=>rack.some(a=>a.hook_id===h)); }
+  function missingHook(bit){ return (bit.fuel_hooks||[]).find(h=>!rack.some(a=>a.hook_id===h)); }
+
+  // The bit's current fit score, as the engine sees it this turn.
+  // PE's gear_state carries fit_score for the TOP bit only (+ top_bit name). If PE later
+  // emits a per-bit map (`scores`) or `top3`, this picks it up with no further change.
+  function bitScore(b){
+    const g=lastGear||{};
+    if(g.scores && g.scores[b.bit_id]!=null) return g.scores[b.bit_id];
+    if(Array.isArray(g.top3)){ const h=g.top3.find(x=>x&&(x.bit_id===b.bit_id||x.name===b.name)); if(h&&h.score!=null) return h.score; }
+    if(g.top_bit && (g.top_bit===b.name || g.top_bit===b.bit_id) && g.fit_score!=null) return g.fit_score;
+    return null;
+  }
+  // PE: a bit ABSENT from `scores` wasn't scored badly — it was EXCLUDED from the pool this
+  // call (parked / archetype mismatch / missing fuel / death blow / past its opening) and can
+  // NEVER fire. That's different from "no score yet", and arming it would wait forever.
+  function bitExcluded(b){
+    const g=lastGear||{};
+    if(!g.scores) return false;              // no scores map yet -> unknown, not excluded
+    return g.scores[b.bit_id]==null;         // absent from the map -> not in play this call
+  }
+  function scoreCell(b){
+    const s=bitScore(b); const bar=(lastGear||{}).deploy_bar;
+    if(bitExcluded(b)) return '<span class="bscore out" title="not in play this call \u2014 excluded from the pool (parked, wrong archetype, missing fuel, or past its window). Arming it will never fire.">not in play</span>';
+    if(s==null) return '<span class="bscore dim">\u2014</span>';
+    const n=(typeof s==='number')?s.toFixed(1):s;
+    const clears=(typeof s==='number' && typeof bar==='number' && s>=bar);
+    const rank=(Array.isArray((lastGear||{}).top3))?(lastGear.top3.findIndex(x=>x&&(x.bit_id===b.bit_id||x.name===b.name))):-1;
+    const badge=(rank>=0)?'<span class="brank">#'+(rank+1)+'</span>':'';
+    return badge+'<span class="bscore'+(clears?' clears':'')+'" title="fit score this turn'+(typeof bar==='number'?(' \u00B7 bar '+bar.toFixed(1)):'')+'">'+n+'</span>';
+  }
+  // Names learned from PE's own events (top3 carries name+bit_id; bit_deployed too).
+  const bitNames = {};
+  // SIX FIXED bits — stable order, never reshuffle. The AI still deploys from the whole
+  // library independently; these are the Director's fixed manual handles. Scores update live
+  // on each, but the ROWS never move (so you can actually track them). Swap ids freely.
+  const FIXED_BITS = [
+    { bit_id:'BIT-302', name:'The Dog' },
+    { bit_id:'BIT-307', name:'The Spill' },
+    { bit_id:'BIT-329', name:'The Environment' },
+    { bit_id:'BIT-231', name:'The Competing Vendor' },
+    { bit_id:'BIT-101', name:'The Echo' },
+    { bit_id:'BIT-113', name:'The Movie Bit' },
+    { bit_id:'BIT-216', name:'The Questionnaire' }   // b2b_saas-scoped: absent/"—" off b2b_saas calls (correct)
+  ];
+  // Opening bits — shown as their own group ABOVE the six so you can watch whether an
+  // opening actually fires during the opening. Which bit_ids are "opening" is PE's to tell us
+  // (see the note in chat); until then this stays empty and the group hides itself.
+  // Opening bits are derived LIVE from PE's phase_pref (no hardcoded list): any scored bit
+  // whose preferred phase is "opening". call_phase tells us where the call is now, so each
+  // opening bit shows in-window (openings can still fire) vs past-window (opening has passed).
+  function phasePrefOf(id){
+    const g=lastGear||{};
+    if(g.phase_pref && g.phase_pref[id]!=null) return String(g.phase_pref[id]).toLowerCase();
+    if(Array.isArray(g.top3)){ const h=g.top3.find(x=>x&&x.bit_id===id); if(h&&h.phase_pref) return String(h.phase_pref).toLowerCase(); }
+    return null;
+  }
+  function openingBits(){
+    const g=lastGear||{}; const seen={}; const out=[];
+    const ids = g.phase_pref ? Object.keys(g.phase_pref) : (g.scores?Object.keys(g.scores):[]);
+    ids.forEach(id=>{ if(phasePrefOf(id)==='opening' && !seen[id]){ seen[id]=1; out.push({bit_id:id, name:bitNames[id]||id}); } });
+    return out;
+  }
+  function callPastOpening(){ const cp=String((lastGear||{}).call_phase||'').toLowerCase(); return cp!=='' && cp!=='opening' && cp!=='warmup'; }
+  function handBits(){ return FIXED_BITS.map(b=>({ bit_id:b.bit_id, name: bitNames[b.bit_id] || b.name })); }
+  function renderArmPanel(){ const el=$('#armPanel'); if(!el)return;
+    if(source==='demo'){ el.style.display='none'; return; }   // replay shows it so bits+scores are testable
+    el.style.display='block';
+    const full=setlist.length>=3;
+    const ROW='display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;font-size:11px';
+    const g=lastGear||{};
+    function bitRow(b){ const excluded=bitExcluded(b);
+      const ok=armable(b) && !excluded && !b._placeholder, armed=setlist.some(s=>s.bit_id===b.bit_id);
+      const parked=(b.status==='parked');
+      const tip=ok?'':(b._placeholder?'placeholder \u2014 waiting for the engine\u2019s real bit pool; not armable'
+        :(excluded?'not in play this call \u2014 excluded from the engine\u2019s pool; arming it will never fire'
+        :(parked?'parked \u2014 unavailable this call'
+        :('needs '+(missingHook(b)||'a scouted fact')+' \u2014 not scouted for this target'))));
+      const dis=(!ok||full||armed)?'disabled':''; const op=(!ok&&!armed)?';opacity:.4':'';
+      const isTop=(g.top_bit && (g.top_bit===b.name || g.top_bit===b.bit_id));
+      const pending=(g.will_fire===true && isTop);
+      const firing=(firingBit && firingBit===b.bit_id);
+      const cls='bitrow'+(pending?' pending':'')+(firing?' firing':'');
+      const mark=b._placeholder?' <span style="color:#b7afa0;font-size:8px">\u00B7 placeholder</span>'
+        :(parked?' <span style="color:#b7afa0;font-size:8px">\u00B7 parked</span>':'');
+      return '<div class="'+cls+'" style="'+ROW+op+'" title="'+tip.replace(/"/g,'')+'"><span>'+(armed?'\u25B6 ':'')+b.name+mark+'</span>'+
+        '<span style="margin-left:auto;display:flex;align-items:center;gap:7px">'+scoreCell(b)+
+        '<button class="chip arm-bit" data-bid="'+b.bit_id+'" '+dis+'>'+(armed?'armed \u2713':'arm')+'</button></span></div>'; }
+    const inHand = handBits();
+    const bitRows = inHand.map(bitRow).join('');
+    // Opening-bits group (above the six) — derived live from PE's phase_pref.
+    // Bits directive: exactly these six in the arm panel, nothing else. Opening group is
+    // suppressed for now (re-enable by dropping the `&& false`) once openings are wanted back.
+    const openList = (false) ? openingBits() : [];
+    const past = callPastOpening();
+    const openRows = openList.length ? openList.map(bitRow).join('') : '';
+    const openHdr = openList.length
+      ? '<div class="grp" style="margin-top:2px;color:#8a6d2b">Opening bits <span style="float:right;font-size:9px;letter-spacing:.02em;color:'+(past?'#b06a3a':'#3a7a4a')+'">'+(past?'past the opening \u2014 window closed':'in the opening window')+'</span></div>'
+      : '';
+    const hookRows=rack.map(a=>{ const armed=setlist.some(s=>s.hook_id===a.hook_id); const dis=(full||armed||a.used)?'disabled':'';
+      return '<div style="'+ROW+'"><span>\u00B7 '+(a.label||a.hook_id)+'</span>'+
+        '<button class="chip arm-hook" data-hid="'+a.hook_id+'" '+dis+'>'+(armed?'forced \u2713':'force')+'</button></div>'; }).join('');
+    el.innerHTML='<div class="grp">Director\u2019s setlist <span style="color:'+(full?'var(--blood)':'#b7afa0')+'">'+setlist.length+'/3</span>'+
+      '<button id="bitsDeckBtn" type="button" style="float:right;font:inherit;font-size:10px;letter-spacing:.04em;background:transparent;border:1px solid #c2832c66;color:#c2832c;border-radius:5px;padding:1px 7px;cursor:pointer">&#10070; the full deck &#8599;</button></div>'+
+      (openRows?(openHdr+openRows+'<div class="grp" style="margin-top:6px">Fixed six</div>'):'')+
+      (bitRows||'<div class="brow muted">no bits in hand yet</div>')+
+      (hookRows?('<div class="grp" style="margin-top:6px">Force a scouted fact</div>'+hookRows):'');
+    el.querySelectorAll('.arm-bit').forEach(b=>b.onclick=()=>postArm({bit_id:b.dataset.bid}));
+    const db=el.querySelector('#bitsDeckBtn'); if(db) db.onclick=()=>{
+      const u=location.origin+'/bits_flip_deck.html'+(callId?('?call_id='+encodeURIComponent(callId)):'');
+      window.open(u,'_blank','noopener'); };
+    el.querySelectorAll('.arm-hook').forEach(b=>b.onclick=()=>postArm({hook_id:b.dataset.hid})); }
+
+  /* arm POST (#4): arm a bit and/or a fact; setlist max 3; surface rejections */
+  async function postArm(sel){ if(!callId){ toast('No call_id'); return; }
+    if(setlist.length>=3){ toast('Setlist full (3) \u2014 wait for one to fire'); return; }
+    const key=callId+':arm:'+(sel.bit_id||sel.hook_id);
+    const body=Object.assign({ call_id:callId, director_user_id:directorUserId, idempotency_key:key }, sel);
+    try{ const r=await fetch(CONTROL_ENDPOINT+'?action=arm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      if(r.status===404){ const t=await r.text().catch(()=> ''); toast('\u26A0 '+(sel.bit_id?'Unknown bit':'Non-canonical hook')+(t?': '+t.slice(0,90):'')); return; }
+      if(r.status===409){ const t=await r.text().catch(()=> ''); toast('\u26A0 '+(/full/i.test(t)?'Setlist full':'Parked / unavailable')+(t?': '+t.slice(0,90):'')); return; }
+      if(!r.ok){ throw new Error('HTTP '+r.status); }
+      setlist.push(sel); renderArmPanel();
+      toast(typeof lastGear.deploy_bar==='string'
+        ? 'Armed \u2014 held until warmup ends (nothing fires on the first turns)'
+        : 'Armed \u2014 fires when its timing allows'); }
+    catch(e){ toast('\u26A0 Arm failed: '+(e.message||e)); } }
+
+  /* ---- scout dossier (full enrichment, read-only) ---- */
+  const SCOUT_HOOKS = [
+    ['company_news','Company news','Recent or relevant news about their company'],
+    ['dossier_negation','Contradiction','Something that contradicts their pitch'],
+    ['domain_age','Domain age','How new the sending domain is'],
+    ['office_location','Office location','Where they claim to be based (raw)'],
+    ['prior_contact','Prior contact','We\u2019ve seen this sender or template before'],
+    ['template_match','Template match','Matches a known spam template'],
+    ['stock_photo','Stock photo','Their headshot or logo is a stock image'],
+    ['browsed_tmi','Browse overshare','What they revealed while browsing the booking page'],
+  ];
+  let dossier = [
+    {hook_id:'company_news', value:'Layoffs announced last week', source:'TechCrunch', confidence:0.82},
+    {hook_id:'domain_age', value:'Domain registered 11 days ago', source:'WHOIS', confidence:0.95},
+    {hook_id:'office_location', value:'Claims an SF HQ; IP geolocates to Lagos', source:'IP + WHOIS', confidence:0.71},
+    {hook_id:'template_match', value:'Body matches the "Q4 partnership" spam template', source:'template DB', confidence:0.88},
+    {hook_id:'stock_photo', value:'Headshot is a Shutterstock stock image', source:'reverse image', confidence:0.79},
+  ];
+  function renderDossier(){ const grid=$('#scoutGrid');
+    const byId={}; dossier.forEach(d=>{ if(d&&d.hook_id) byId[d.hook_id]=d; });
+    let scouted=0, fuel=0;
+    const html = SCOUT_HOOKS.map(([id,label,blurb])=>{
+      const d=byId[id]; const loaded=rack.some(a=>a.hook_id===id);
+      if(!d){ return '<div class="dcard empty"><div class="dl">'+label+'</div>'+
+        '<div class="dv">\u2014 not scouted</div><div class="df src">'+blurb+'</div></div>'; }
+      scouted++; if(loaded)fuel++;
+      const c=Math.max(0,Math.min(100,Math.round((Number(d.confidence)||0)*100)));
+      return '<div class="dcard">'+(loaded?'<span class="fuel">\u26A1 FUEL</span>':'')+
+        '<div class="dl">'+label+'</div>'+
+        '<div class="dv">'+(d.value||'\u2014')+'</div>'+
+        '<div class="df"><span class="src">'+(d.source||'unknown source')+'</span>'+
+        '<span class="conf">conf <span class="cbar"><i style="width:'+c+'%"></i></span> '+c+'%</span></div></div>';
+    }).join('');
+    if(grid) grid.innerHTML=html;
+    const cov=scouted+'/7 scouted'+(fuel?' \u00B7 '+fuel+' as fuel':'');
+    const cb=$('#scoutCov'); if(cb)cb.textContent=cov;
+    const ss=$('#scoutSub'); if(ss)ss.textContent=cov; }
+  if($('#scoutBtn')) $('#scoutBtn').onclick=()=>{ renderDossier(); $('#scoutOv').classList.add('on'); };
+  if($('#scoutX'))   $('#scoutX').onclick=()=>$('#scoutOv').classList.remove('on');
+
+  /* ---- THE DISPATCHER: one engagement_events row -> the render ---- */
+  function applyEvent(ev){ const p=ev.payload||{};
+    if(!callId && ev.call_id){ callId=ev.call_id; }   // capture real call_id once the call lands (target_id-opened calls)
+    switch(ev.event_type){
+      case 'call_started': {
+        const firstStart = !callHasStarted;   // the proxy can emit call_started per turn — only the
+        callHasStarted=true; hidePresnap();    // first initializes; the rest must not clobber the call.
+        if(firstStart){
+          clearForLive();
+          rack = Array.isArray(p.ammunition)?p.ammunition:[];
+          loadout = Array.isArray(p.loadout)?p.loadout:[];
+          benchRoster = Array.isArray(p.bench_available)?p.bench_available:[];
+          setlist=[]; liveHeads=0; ourSide=1; theirSide=1; peakOur=1; peakTheir=1;
+          renderAmmoRack(); renderArmPanel();
+          dossier = Array.isArray(p.scout)?p.scout:[]; renderDossier();
+          if(typeof p.started_at==='string'){ const t=Date.parse(p.started_at); if(!isNaN(t)) secs=Math.max(0,Math.floor((Date.now()-t)/1000)); }
+          live=true; $('#tw').textContent=fmt(secs);
+          bj=0; if($('#bj'))$('#bj').textContent='\u00D70';
+          toast('Live call started');
+        } else {
+          // subsequent call_started on the same call: backfill only what we don't yet have, never wipe.
+          if(!rack.length && Array.isArray(p.ammunition)){ rack=p.ammunition; renderAmmoRack(); }
+          if(!loadout.length && Array.isArray(p.loadout)){ loadout=p.loadout; renderArmPanel(); }
+          if(!dossier.length && Array.isArray(p.scout)){ dossier=p.scout; renderDossier(); }
+          live=true;
+        }
+        break; }
+      case 'utterance': {
+        const role=p.speaker_role||ev.actor; let txt=p.text||'';
+        // LiveKit sound markers LEAD the line (e.g. "[DOG_BARK] Sorry, where were we").
+        // The agent strips them before speaking; strip them from the transcript too so the
+        // Director sees the clean line, and surface the sound as its own small beat.
+        const mk=txt.match(/^\s*((?:\[[A-Z0-9_]+\]\s*)+)/);
+        if(mk){ txt=txt.slice(mk[0].length).trim();
+          mk[1].match(/\[[A-Z0-9_]+\]/g).forEach(tag=>{ const log=$('#tlog'); if(log){ const d=document.createElement('div');
+            d.className='tl beat sound'; d.innerHTML='\uD83D\uDD0A <span class="bmeta">'+tag.replace(/[\[\]]/g,'').toLowerCase().replace(/_/g,' ')+'</span>';
+            log.appendChild(d); log.scrollTop=log.scrollHeight; } }); }
+        if(role==='host'){ const hn=p.speaker_name||'HOST'; showJarl(txt); tline('j', txt, hn); }
+        else if(role==='spammer'){
+          const sn=p.speaker_name||'Caller';  // honest neutral label when Scouting has no name — NEVER a placeholder
+          const nl=$('#spammerName'); if(nl) nl.textContent=sn;
+          const c=$('#capDerek'); if(c){c.textContent='\u201C'+txt+'\u201D';c.classList.add('show');} setSpeak('spam'); $('#capJarl').classList.remove('show'); tline('d', txt, sn); }
+        else { const nm=p.speaker_name||'Bench'; const tile=liveBenchTile(nm,p.role,p.glyph); speakOur(tile); const c=$('#cap-'+slug(nm)); if(c){c.textContent='\u201C'+txt+'\u201D';c.classList.add('show');} tline('j', txt, nm); }
+        // speak each utterance at most once — key on event id/seq (falls back to role+text) so a
+        // re-dispatched or re-polled event never re-voices a line already spoken this session.
+        const spk = ev.id || ev.seq || (role+':'+(p.turn_index!=null?p.turn_index:txt.slice(0,40)));
+        if(!muted && !spokenKeys.has(spk)){ spokenKeys.add(spk); speak(role==='spammer'?'DEREK':role==='host'?'JARL':(p.speaker_name||'JARL'), txt); }
+        break; }
+      case 'bit_deployed': { const n=p.name||p.bit_id||'bit';
+        if(p.bit_id && p.name) bitNames[p.bit_id]=p.name;
+        firingBit=p.bit_id||null; renderArmPanel();
+        setTimeout(()=>{ firingBit=null; renderArmPanel(); }, 3000);
+        firedLog[n]=(firedLog[n]||0)+1; selectedBit=n; renderBoardBits(n); setTimeout(()=>renderBoardBits(null),2600);
+        const tg=p.trigger; const tag=(tg==='armed')?'ARMED \u2192 ':(tg==='injected')?'INJECTED \u2192 ':'DEPLOY \u2192 ';
+        if($('#hudDecision'))$('#hudDecision').textContent=tag+n;
+        if(p.gears_at_fire) renderGear(p.gears_at_fire);
+        if(p.fit_score!=null){ const bar=(p.deploy_bar!=null)?p.deploy_bar:lastGear.deploy_bar;
+          const note=$('#gfNote'); if(note){ note.className='gfitnote clears';
+            note.textContent='\u2714 '+n+' fired \u2014 fit '+(typeof p.fit_score==='number'?p.fit_score.toFixed(1):p.fit_score)+(typeof bar==='number'?(' over bar '+bar.toFixed(1)):''); } }
+        if(p.running_total!=null && $('#hudPosture'))$('#hudPosture').textContent=(p.count_label||n)+': '+p.running_total;
+        if(p.running_total!=null){ bj=p.running_total; const be=$('#bj'); if(be){ be.textContent='\u00D7'+bj; be.style.color='var(--gold)'; setTimeout(()=>be.style.color='',500);} }
+        // PE: bit_id match alone is enough to clear the ARMED state (trigger:"armed" is a bonus
+        // hint, not required) — so an armed bit that fires labeled "auto" still reverts correctly.
+        if(p.bit_id && setlist.some(s=>s.bit_id===p.bit_id)){ setlist=setlist.filter(s=>s.bit_id!==p.bit_id); renderArmPanel(); }
+        renderHudBits();
+        // pacing telemetry (PE): trigger / why / dry_turns / starvation — a compact transcript beat
+        { const log=$('#tlog'); if(log){ const meta=[];
+            if(p.trigger)meta.push(p.trigger);
+            if(p.why)meta.push(String(p.why));
+            if(p.dry_turns!=null)meta.push('dry '+p.dry_turns);
+            if(p.starvation)meta.push('starving');
+            const d=document.createElement('div'); d.className='tl beat';
+            d.innerHTML='\uD83C\uDFAF <b>'+n+'</b>'+(meta.length?' \u00B7 <span class="bmeta">'+meta.join(' \u00B7 ')+'</span>':'');
+            log.appendChild(d); log.scrollTop=log.scrollHeight; } }
+        break; }
+      case 'ammo_used': { const a=rack.find(x=>x.hook_id===p.hook_id); if(a){ a.used=true; renderAmmoRack(); renderArmPanel(); renderDossier(); } toast('Ammo: '+(p.label||p.hook_id||'hook')); break; }
+      case 'scout_snapshot': { dossier = Array.isArray(p.hooks)?p.hooks:(Array.isArray(p.scout)?p.scout:dossier); renderDossier(); toast('Dossier updated'); break; }
+      case 'bench_joined': { liveBenchTile(p.name,p.role,p.glyph); ourSide++; peakOur=Math.max(peakOur,ourSide); liveHeads=(liveHeads||0)+1; refreshHud();
+        if(window.__mh_setBenchState) window.__mh_setBenchState(p.bench_id||p.name, 'oncall');
+        const src=p.source||'auto'; const man=p.manifestation||'seen';
+        const how=(src==='director')?'Director sent in':(man==='phantom'?'Phantom invoked':(man==='audio'?'Heard, unseen:':'Joined:'));
+        const log=$('#tlog'); if(log){ const d=document.createElement('div'); d.className='tl beat'+(man==='phantom'?' phantom':'');
+          d.innerHTML='\u25C7 <b>'+how+' '+(p.name||'bench')+'</b>'+(p.why?' \u00B7 <span class="bmeta">'+p.why+'</span>':'')+(man&&man!=='seen'?' <span class="bmeta">('+man+')</span>':'');
+          log.appendChild(d); log.scrollTop=log.scrollHeight; }
+        toast((p.name||'bench')+(src==='director'?' sent in':' joined')); break; }
+      case 'handoff_telegraph': { const log=$('#tlog'); if(log){ const d=document.createElement('div'); d.className='tl beat handoff';
+          d.innerHTML='\uD83C\uDFA4 <b>Handoff coming</b> \u00B7 <span class="bmeta">host hands to '+(p.name||p.bench_id||'a colleague')+'\u2026</span>';
+          log.appendChild(d); log.scrollTop=log.scrollHeight; } break; }
+      case 'handoff_fired': { const log=$('#tlog'); if(log){ const d=document.createElement('div'); d.className='tl beat handoff on';
+          d.innerHTML='\uD83C\uDFA4 <b>Handoff fired</b> \u2192 '+(p.name||p.bench_id||'colleague')+' has the line';
+          log.appendChild(d); log.scrollTop=log.scrollHeight; } toast('Handoff \u2192 '+(p.name||'colleague')); break; }
+      case 'party_joined': theirSide++; peakTheir=Math.max(peakTheir,theirSide); toast((p.label||'A colleague')+' joined their side'); break;
+      case 'spammer_reaction': { const tile=$('#spammerTile'); if(tile){ tile.style.boxShadow='0 0 0 3px var(--gold)'; setTimeout(()=>tile.style.boxShadow='',700);} if(p.reaction_type) toast('Spammer: '+p.reaction_type); break; }
+      case 'blow_landed': if(p.total_blows!=null) blows=p.total_blows; else blows++; refreshHud(); break;
+      case 'gear_transition': { /* legacy/demo — map to the panel's suspicion axis + HUD chip */
+        if(p.to_state){ const s=String(p.to_state).toLowerCase();
+          const g=$('#hudGear'); if(g){ g.textContent=p.to_state; g.className='gear '+(s==='alive'?'a':s==='slipping'?'s':'f'); }
+          renderGear({suspicion:s}); } break; }
+      case 'gear_state': renderGear(p); renderArmPanel(); break;
+      case 'blow_armed': {
+        document.body.style.transition='background .15s'; document.body.style.background='var(--blood)'; setTimeout(()=>document.body.style.background='',300);
+        toast('Death Blow armed'); break; }
+      case 'blow_fired': { const line=p.final_line||''; if(line){ showJarl(line); tline('j', line, 'JARL'); if(!muted)speak('JARL',line);} break; }
+      case 'call_ended': live=false; showScoreFromEvent(p); break;
+      case 'call_outcome':  // vapi-eoc: the EMAIL engine's post-call signal, NOT a display beat.
+        // Consume as metadata only; call_ended (control.js) remains the scorecard trigger.
+        lastOutcome={ outcome:p.call_outcome, attended:p.attended, next_steps:p.next_steps||[] }; break;
+      default:
+        if(ev.layer==='email' || /(_sent|_received|_created|_classified|_selected|_handoff)$|^thread_/.test(ev.event_type)) arcLine(ev);
+    } }
+
+  function showScoreFromEvent(p){
+    const dur=(p.duration_seconds!=null)?p.duration_seconds:secs; secs=dur;
+    const blowsLanded=(p.blows_landed!=null)?p.blows_landed:blows;
+    const heads=(p.heads_mustered!=null)?p.heads_mustered:(liveHeads||0);
+    const pkOur=(p.peak_our_side!=null)?p.peak_our_side:peakOur;
+    const pkThem=(p.peak_their_side!=null)?p.peak_their_side:peakTheir;
+    $('#scTime').textContent=fmt(dur); const m=Math.floor(dur/60);
+    $('#scSub').textContent=m+' minute'+(m===1?'':'s')+' and '+(dur%60)+' seconds stolen from his day.';
+    $('#scRung').textContent=(p.ending_type==='death_blow'?'Death Blow':(p.ending_type||'\u2014'));
+    $('#scBj').textContent=blowsLanded;
+    const END={ death_blow:'Finished with the Death Blow. A clean kill.', hung_up:'He hung up. A coward\u2019s exit.',
+      rage_quit:'He rage-quit the call.', slow_fade:'He faded out, defeated.', no_show:'He never showed.',
+      host_ended:'The Host ended it on its own terms.', error:'The line dropped.' };
+    $('#scLine').textContent=(END[p.ending_type]||('Ended: '+(p.ending_type||'unknown')))+
+      ' \u00B7 '+heads+' heads, peak '+pkOur+'v'+pkThem;
+    if(SCORECARD_ENABLED) $('#scOv').classList.add('on'); }
+
+  /* ---- Death Blow WRITE — the Director's one live control (live only) ---- */
+  let dbSent=false;
+  async function postDeathBlow(){ if(dbSent){ toast('Blow already sent'); return; } if(!callId){ toast('No call_id to write to'); return; }
+    dbSent=true; $('#armBtn').textContent='SENT'; $('#armBtn').style.background='var(--ink)';
+    // No rung_id — the Director chooses the moment; PE chooses the closer.
+    const body={ call_id:callId, director_user_id:directorUserId, idempotency_key:callId+':db' };
+    try{ const r=await fetch(CONTROL_ENDPOINT+'?action=deathblow',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      if(!r.ok){ const t=await r.text().catch(()=> ''); throw new Error('HTTP '+r.status+(t?' \u2014 '+t.slice(0,120):'')); }
+      $('#rungOv').classList.remove('on'); toast('Death Blow sent \u2014 the Host ends it next turn.'); }
+    catch(e){ dbSent=false; $('#armBtn').textContent='ARM THE BLOW'; $('#armBtn').style.background='';
+      toast('\u26A0 Death Blow write failed: '+(e.message||e)); } }
+
+  // Send a bench character into the active call (PE: /api/control?action=bench).
+  // v1 wired ids: CONRAD | BONNIE | ANDREA. Exposed for the bench panel (separate scope).
+  async function sendBenchControl(benchId){
+    if(!callId){ toast('Send-in works during a live or sim call.'); return; }
+    const bid=String(benchId||'').toUpperCase();
+    const body={ call_id:callId, bench_id:bid, director_user_id:directorUserId, idempotency_key:callId+':bench:'+bid+':'+Date.now() };
+    try{ const r=await fetch(CONTROL_ENDPOINT+'?action=bench',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      if(r.status===404){ const j=await r.json().catch(()=>({})); toast('\u201C'+bid+'\u201D not wired yet'+(j.valid?' \u2014 try '+(Array.isArray(j.valid)?j.valid.join(', '):j.valid):'')); return; }
+      if(!r.ok){ const t=await r.text().catch(()=> ''); throw new Error('HTTP '+r.status+(t?' \u2014 '+t.slice(0,120):'')); }
+      const j=await r.json().catch(()=>({})); toast('Sent in '+(j.sent_bench||bid)+' \u2014 joins on the next host turn.');
+      if(window.__mh_setBenchState) window.__mh_setBenchState(bid, 'standby'); }
+    catch(e){ toast('\u26A0 Send-in failed: '+(e.message||e)); } }
+  window.__mh_sendBench = sendBenchControl;
+  window.__mh_canSend = function(){ return !!callId; };
+  // Open the full bits deck (companion page) — pass the live call_id so its tap-to-arm targets this call.
+  (function(){ const b=document.getElementById('bitsDeckBtn'); if(b) b.addEventListener('click', function(){
+    const u = location.origin + '/bits_flip_deck.html' + (callId ? ('?call_id='+encodeURIComponent(callId)) : '');
+    window.open(u, '_blank', 'noopener'); }); })();
+
+  /* ---- clear the demo seed when entering live ---- */
+  function clearForLive(){ if(typeof stopRun==='function') stopRun();
+    convo.length=0; script.length=0; $('#tlog').innerHTML='';
+    $('#capJarl').classList.remove('show'); $('#capJarl').textContent='';
+    const cd=$('#capDerek'); if(cd){cd.classList.remove('show'); cd.textContent='';}
+    firedLog={}; selectedBit=null; renderBoardBits(null); renderHudBits();
+    rack=[]; loadout=[]; setlist=[]; liveHeads=null; dossier=[]; renderAmmoRack(); renderArmPanel(); renderDossier();
+    lastGear={}; renderGear({});   // reset the readout but keep the panel on screen
+    spokenKeys.clear(); try{ if(window.speechSynthesis) speechSynthesis.cancel(); }catch(e){}
+    if(window.__mh_setBenchState){ ['conrad','bonnie','andrea'].forEach(id=>window.__mh_setBenchState(id,null)); }
+    if(source==='live'){ const rn=document.querySelector('.readnote'); if(rn) rn.textContent='The Host plays its own hand. You may arm a setlist (max 3) and call the Death Blow.'; } }
+
+  /* ---- feed lifecycle wired to the RUN button ---- */
+  let feed=null, feedRunning=false, callHasStarted=false, lastOutcome=null;
+  const spokenKeys = new Set();   // utterances already voiced this session — never re-speak
+  function setLiveRunUI(on){ const b=$('#runBtn'); if(b){ b.textContent=on?'\u23F8 STOP FEED':'\u25B6 WATCH LIVE'; b.classList.toggle('on',on);} const s=$('#runState'); if(s)s.textContent=on?'watching live\u2026':'idle'; }
+  function liveStart(){ if(feedRunning)return;
+    if(!callId && !targetId){ toast('Add ?call_id=\u2026 (and ?target_id=\u2026) to the URL to watch a real call'); return; }
+    dbSent=false;
+    feed=createFeed({ endpoint:FEED_ENDPOINT, callId, targetId, intervalMs:1500,
+      onEvent:applyEvent,
+      onArcLoaded:(events, finished)=>{
+        // If you're watching by target_id but the events carry null targets (pre-fix calls),
+        // the board can't match them — say so instead of sitting silently blank.
+        if(targetId && !callId && Array.isArray(events) && events.length && events.every(e=>e&&e.target_id==null)){
+          toast('\u26A0 This call\u2019s events have no target_id \u2014 watch by ?call_id= instead');
+          console.warn('[MeadHall] events carry target_id=null but you opened by target_id; use call_id.');
+        }
+        if(finished){ toast('Replaying the raid \u2014 watch it unfold'); }
+        else if(callHasStarted){ toast('Call already in progress \u2014 joined live'); }
+        else { toast('Arc loaded \u2014 the story so far'); if(source==='live') showPresnap(); } },
+      onError:(e)=>callFail('feed', e, false), onStop:()=>{ feedRunning=false; setLiveRunUI(false); } });
+    feed.start(); feedRunning=true; setLiveRunUI(true); }
+  function liveStop(){ if(feed)feed.stop(); feedRunning=false; setLiveRunUI(false); }
+
+  /* ---- SOURCE toggle injected into the control bar ---- */
+  /* ===================================================================
+     REPLAY MODE — a canned call that plays through the SAME applyEvent
+     dispatcher on a timeline. No API, no server: runs full-page when
+     downloaded or deployed. This is the "show anyone, anywhere" demo.
+     =================================================================== */
+  const NOWISO = () => new Date().toISOString();
+  const REPLAY = [
+    { t:300, e:{ event_type:'call_started', actor:'system', seq:1, payload:{
+        host_name:'Jarl', character_id:'jarl', universe:'b2b', archetype:'b2b_saas',
+        loadout:[
+          {bit_id:'BIT-201', name:'Pricing Loop',   bit_type:'one_shot', fuel_hooks:[],            status:'active'},
+          {bit_id:'BIT-118', name:'The Echo',        bit_type:'one_shot', fuel_hooks:[],            status:'active'},
+          {bit_id:'BIT-101', name:'Blame Bjorn',     bit_type:'count',    fuel_hooks:[],            status:'active'},
+          {bit_id:'BIT-216', name:'The Questionnaire',bit_type:'one_shot',fuel_hooks:[],            status:'active'},
+          {bit_id:'BIT-309', name:'Domain Doubt',    bit_type:'one_shot', fuel_hooks:['domain_age'],status:'active'},
+          {bit_id:'BIT-601', name:'LinkedIn Deep Cut',bit_type:'one_shot',fuel_hooks:['linkedin_role'],status:'parked'}
+        ],
+        ammunition:[
+          {hook_id:'domain_age',    label:'Domain — 11 days old'},
+          {hook_id:'office_location', label:'Office — claims SF, IP Lagos'},
+          {hook_id:'template_match',label:'Template — "Q4 partnership"'}
+        ],
+        bench_available:[
+          {character_id:'tyler',  name:'Tyler',  role:'The Intern'},
+          {character_id:'derek',  name:'Derek',  role:'The Helper'},
+          {character_id:'conrad', name:'Conrad', role:'The Boss'}
+        ],
+        scout:[
+          {hook_id:'company_news',  value:'Layoffs announced last week',                source:'TechCrunch',    confidence:0.82},
+          {hook_id:'domain_age',    value:'Domain registered 11 days ago',              source:'WHOIS',         confidence:0.95},
+          {hook_id:'office_location', value:'Claims an SF HQ; IP geolocates to Lagos',    source:'IP + WHOIS',    confidence:0.71},
+          {hook_id:'template_match',value:'Body matches the "Q4 partnership" template', source:'template DB',   confidence:0.88},
+          {hook_id:'stock_photo',   value:'Headshot is a Shutterstock stock image',     source:'reverse image', confidence:0.79}
+        ]
+      }}},
+    { t:700,  e:{ event_type:'utterance', actor:'spammer', seq:2, payload:{ speaker_role:'spammer', speaker_name:'Derek', turn_index:1,
+        text:"Hi, this is Derek from Apex Synergy Partners. We've got an exclusive Q4 partnership opportunity I think your team will love." }}},
+    { t:3800, e:{ event_type:'utterance', actor:'host', seq:3, payload:{ speaker_role:'host', speaker_name:'Jarl', turn_index:2,
+        text:"A partnership. Wonderful. Before we go further — is this the kind of thing the council would need to bless, or can I authorize it from the longhouse myself?" }}},
+    { t:300,  e:{ event_type:'gear_state', actor:'system', seq:2, payload:{ suspicion:'alive', pressure:'calm', engagement:'hooked', slip:0, fit_score:1.2, deploy_bar:'warmup', pool:124, will_fire:false, top_bit:'The Movie Bit', turn_index:2,
+        scores:{'BIT-302':0.8,'BIT-307':0.5,'BIT-329':0.4,'BIT-231':1.1,'BIT-101':0.9,'BIT-113':1.2,'BIT-216':1.0} }}},
+    { t:5200, e:{ event_type:'bit_deployed', actor:'governor', seq:4, payload:{ bit_id:'BIT-201', name:'Pricing Loop', bit_type:'one_shot', trigger:'auto', turn_index:2, fit_score:5.1, deploy_bar:3.0, gears_at_fire:{ suspicion:'alive', pressure:'pushing', engagement:'hooked', slip:0 } }}},
+    { t:1200, e:{ event_type:'utterance', actor:'spammer', seq:5, payload:{ speaker_role:'spammer', speaker_name:'Derek', turn_index:3,
+        text:"Uh — no council needed. So pricing starts at two thousand a month for the growth tier." }}},
+    { t:600,  e:{ event_type:'gear_state', actor:'system', seq:5, payload:{ suspicion:'slipping', pressure:'extracting', engagement:'hooked', slip:1, fit_score:3.6, deploy_bar:3.0, pool:124, will_fire:true, top_bit:'The Movie Bit', turn_index:3,
+        top3:[{bit_id:'BIT-113',name:'The Movie Bit',score:3.6},{bit_id:'BIT-231',name:'The Competing Vendor',score:3.1},{bit_id:'BIT-101',name:'The Echo',score:2.4}],
+        scores:{'BIT-302':1.2,'BIT-307':0.9,'BIT-329':0.7,'BIT-231':3.1,'BIT-101':2.4,'BIT-113':3.6,'BIT-216':1.8} }}},
+    { t:3600, e:{ event_type:'utterance', actor:'host', seq:6, payload:{ speaker_role:'host', speaker_name:'Jarl', turn_index:4,
+        text:"Two thousand. And that two thousand — is that before or after the other two thousand you mentioned? I want to be sure which two thousand we're agreeing on." }}},
+    { t:4200, e:{ event_type:'spammer_reaction', actor:'system', seq:7, payload:{ reaction_type:'confused', turn_index:4 }}},
+    { t:1400, e:{ event_type:'utterance', actor:'spammer', seq:8, payload:{ speaker_role:'spammer', speaker_name:'Derek', turn_index:5,
+        text:"There's just... one two thousand. The one I said." }}},
+    { t:3200, e:{ event_type:'bit_deployed', actor:'host', seq:9, payload:{ bit_id:'BIT-118', name:'The Echo', bit_type:'one_shot', trigger:'armed', turn_index:6 }}},
+    { t:1000, e:{ event_type:'utterance', actor:'host', seq:10, payload:{ speaker_role:'host', speaker_name:'Jarl', turn_index:6,
+        text:"The one you said. The one I said. The one you said. Right. Let me bring in my intern, he's been learning the ropes." }}},
+    { t:4200, e:{ event_type:'bench_joined', actor:'system', seq:11, payload:{ character_id:'tyler', name:'Tyler', role:'The Intern' }}},
+    { t:900,  e:{ event_type:'utterance', actor:'bench', seq:12, payload:{ speaker_role:'bench', speaker_name:'Tyler', role:'The Intern', turn_index:7,
+        text:"Hi! Sorry, can everyone hear me? Should I be writing the two thousand down, or...?" }}},
+    { t:3800, e:{ event_type:'bit_deployed', actor:'governor', seq:13, payload:{ bit_id:'BIT-101', name:'Blame Bjorn', bit_type:'count', trigger:'auto', turn_index:8, count_label:'Bjorn blamed', running_total:1 }}},
+    { t:1000, e:{ event_type:'utterance', actor:'host', seq:14, payload:{ speaker_role:'host', speaker_name:'Jarl', turn_index:8,
+        text:"Don't write it down yet, Tyler — last time Bjorn wrote a number down and the whole quarter went sideways. This is on Bjorn, honestly." }}},
+    { t:4400, e:{ event_type:'utterance', actor:'spammer', seq:15, payload:{ speaker_role:'spammer', speaker_name:'Derek', turn_index:9,
+        text:"Okay, I really just need a card on file so we can get you onboarded today." }}},
+    { t:3400, e:{ event_type:'spammer_reaction', actor:'system', seq:16, payload:{ reaction_type:'pushing', turn_index:9 }}},
+    { t:600,  e:{ event_type:'ammo_used', actor:'host', seq:17, payload:{ hook_id:'domain_age', label:'Domain — 11 days old', turn_index:10 }}},
+    { t:1200, e:{ event_type:'bit_deployed', actor:'governor', seq:18, payload:{ bit_id:'BIT-101', name:'Blame Bjorn', bit_type:'count', trigger:'auto', turn_index:10, count_label:'Bjorn blamed', running_total:2 }}},
+    { t:1000, e:{ event_type:'utterance', actor:'host', seq:19, payload:{ speaker_role:'host', speaker_name:'Jarl', turn_index:10,
+        text:"A card. Of course. Although — Bjorn mentioned your company's domain is eleven days old, which he found odd. Bjorn finds a lot of things odd. Tyler, is eleven days a long time?" }}},
+    { t:4800, e:{ event_type:'gear_transition', actor:'system', seq:20, payload:{ from_state:'ALIVE', to_state:'SLIPPING' }}},
+    { t:200,  e:{ event_type:'utterance', actor:'spammer', seq:21, payload:{ speaker_role:'spammer', speaker_name:'Derek', turn_index:11,
+        text:"You know what, I don't think this is going anywhere. I'm going to hop off." }}},
+    { t:3600, e:{ event_type:'blow_armed', actor:'system', seq:22, payload:{ armed_at: '' }}},
+    { t:1100, e:{ event_type:'blow_fired', actor:'host', seq:23, payload:{ fired_at:'', final_line:
+        "Before you go, Derek — Tyler's written your name in the saga of people who couldn't tell us which two thousand. Bjorn will read it aloud at the feast. Safe travels." }}},
+    { t:4200, e:{ event_type:'call_ended', actor:'system', seq:24, payload:{ ending_type:'death_blow', duration_seconds:643, blows_landed:3, heads_mustered:1, peak_our_side:2, peak_their_side:1 }}}
+  ];
+  let rIdx=0, rPlaying=false, rTimer=null;
+  function setReplayUI(on){ const b=$('#runBtn'); if(b){ b.classList.toggle('on',on);
+    b.textContent = on ? '\u23F8 PAUSE' : (rIdx>=REPLAY.length?'\u21BB REPLAY':(rIdx>0?'\u25B6 RESUME':'\u25B6 PLAY DEMO CALL')); }
+    const s=$('#runState'); if(s)s.textContent = on?'playing demo\u2026':(rIdx>=REPLAY.length?'demo complete':'paused'); }
+  function replayFireOne(){ const cur=REPLAY[rIdx]; if(!cur)return;
+    const e=cur.e; if(e.event_type==='call_started'&&e.payload&&!e.payload.started_at) e.payload.started_at=NOWISO();
+    applyEvent(e); rIdx++; }
+  function replaySchedule(){ if(!rPlaying)return;
+    if(rIdx>=REPLAY.length){ rPlaying=false; setReplayUI(false); return; }
+    rTimer=setTimeout(()=>{ replayFireOne(); setReplayUI(true); replaySchedule(); }, REPLAY[rIdx].t); }
+  function replayStart(){ if(rPlaying)return; if(rIdx>=REPLAY.length){ rIdx=0; clearForLive(); }
+    rPlaying=true; setReplayUI(true); replaySchedule(); }
+  function replayStop(){ rPlaying=false; if(rTimer){clearTimeout(rTimer);rTimer=null;} if(window.speechSynthesis)speechSynthesis.cancel(); setReplayUI(false); }
+  function replayStep(){ if(rIdx===0) clearForLive(); if(rIdx<REPLAY.length){ replayFireOne(); setReplayUI(rPlaying); } }
+  function replayReset(){ replayStop(); rIdx=0; }
+
+  /* ===================================================================
+     PRE-SNAP — the Director's pre-call setup. Pick the host character
+     / opening bits / bench, POST /api/presnap (carrying target_id, which
+     unlocks PE's email-history brief), then the call connects and this
+     auto-advances to the live board on `call_started`.
+     =================================================================== */
+  const CHARACTERS = [
+    {id:'jarl',  name:'Jarl',  ep:'the chieftain', br:'Run boardrooms 30 years; hasn\u2019t justified a decision in 15.', tell:'Royal "we," comfortable in silence, never finishes a sentence \u2014 agrees in principle, decides nothing.'},
+    {id:'skald', name:'Skald', ep:'the bard',      br:'Keeper of records; remembers everything, gets to the point never.', tell:'Can\u2019t answer without first telling you the whole history of the question.'},
+    {id:'hersir',name:'Hersir',ep:'the brawler',   br:'Field commander who treats your call like a sales floor.', tell:'Agrees to everything and inflates it bigger \u2014 closes you before you can close him.'},
+    {id:'thrall',name:'Thrall',ep:'the pushover',  br:'Anxious new hire who cc\u2019s her manager on everything.', tell:'Says yes instantly, then has to check with someone before anything happens.'},
+    {id:'bondi', name:'Bondi', ep:'the everyman',  br:'Owner-operator who built it himself and also does the lawn.', tell:'Calls out your jargon and derails into the loading dock.'},
+    {id:'volva', name:'V\u00F6lva', ep:'the seer',  br:'Seeress outside the hierarchy; emails at 1:47am, won\u2019t say why.', tell:'Answers questions you didn\u2019t ask, ignores the ones you did.'},
+    {id:'rynir', name:'R\u00FDnir',ep:'the scrutineer',br:'Diligence gatekeeper who puts the seller on trial.', tell:'One more question, always \u2014 "define that, specifically."'},
+    {id:'thul',  name:'Thul',  ep:'the orator',    br:'Treats your cold call as his audience and holds the floor.', tell:'No natural stopping points \u2014 you never get a word in.'}
+  ];
+  // 5 quick bits (the universal starters) — drill into categories for the rest.
+  const QUICK_BITS = [{id:'BIT-201',name:'Pricing Loop'},{id:'BIT-118',name:'The Echo'},{id:'BIT-101',name:'Blame Bjorn'},
+    {id:'BIT-140',name:'Council Consult'},{id:'BIT-155',name:'Wrong Number Tease'},{id:'BIT-211',name:'The Silence'}];
+  // Category browser — SCAFFOLD: structure is real, contents to be wired from Bits Library v10.9.
+  const BIT_CATS = {
+    universal:   {label:'Universal',        bits:QUICK_BITS},
+    structural:  {label:'Structural (200s)',bits:[{id:'BIT-211',name:'The Silence'},{id:'BIT-212',name:'Let It Breathe'},{id:'BIT-218',name:'The Pile-Up'}]},
+    money:       {label:'Pricing & Money',  bits:[{id:'BIT-201',name:'Pricing Loop'},{id:'BIT-130',name:'Austrian Economics'}]},
+    authority:   {label:'Authority & Deferral',bits:[{id:'BIT-140',name:'Council Consult'},{id:'BIT-101',name:'Blame Bjorn'}]},
+    fuel:        {label:'Scouted-fuel bits',bits:[{id:'BIT-309',name:'Domain Doubt',need:'domain_age'},{id:'BIT-411',name:'Location Probe',need:'office_location'},{id:'BIT-601',name:'LinkedIn Deep Cut',need:'linkedin_role'}]},
+    b2b:         {label:'Archetype · B2B SaaS',bits:[{id:'BIT-118',name:'The Echo'},{id:'BIT-310',name:'Seat Math'},{id:'BIT-312',name:'Procurement Maze'}]}
+  };
+  function allBitById(id){ for(const k in BIT_CATS){ const b=BIT_CATS[k].bits.find(x=>x.id===id); if(b)return b; } return QUICK_BITS.find(x=>x.id===id)||null; }
+  const PSTARGET = { name:'Derek', company:'Apex Synergy Partners', email:'derek@apex-synergy.io', archetype:'b2b_saas' };
+  const BITS_CAP = 3, BENCH_CAP = 3;  // bits cap = the live arm setlist (max 3); bench standby aligned
+  // The AI's actual character pick, supplied at launch (?ai_pick= / ?character=,
+  // or a future presnap-data load). character_id now flows to calls.host_posture,
+  // so this must be the real pick — not a constant. normChar strips diacritics +
+  // lowercases so 'Völva' / 'VOLVA' resolve to the ASCII id 'volva'.
+  const normChar = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+  const AI_PICK_RAW = normChar(qp.get('ai_pick') || qp.get('character'));
+  const AI_PICK_IS_REAL = CHARACTERS.some(c=>c.id===AI_PICK_RAW);
+  const AI_PICK = AI_PICK_IS_REAL ? AI_PICK_RAW : 'jarl';  // 'jarl' is a labelled fallback, not a silent pick
+  const psState = { character:AI_PICK, bits:new Set(), bench:new Set(), bitsView:'quick', locked:false };
+
+  function scoutedHooks(){ return new Set((dossier||[]).map(d=>d&&d.hook_id).filter(Boolean)); }
+  function renderPresnap(){
+    $('#psWho') && ($('#psWho').textContent = PSTARGET.name+' \u00B7 '+PSTARGET.company);
+    const chosen = CHARACTERS.find(c=>c.id===psState.character) || CHARACTERS[0];
+    const overridden = psState.character!==AI_PICK;
+    const pickWord = overridden ? 'your override' : (AI_PICK_IS_REAL ? 'AI pick' : 'default \u2014 confirm the host');
+    $('#psSub') && ($('#psSub').textContent = PSTARGET.archetype+' \u00B7 Host: '+chosen.name+' ('+pickWord+') \u00B7 the raid begins when the call connects');
+    const cc=$('#psCharCap'); if(cc){ cc.textContent = overridden ? 'your override' : (AI_PICK_IS_REAL ? 'AI pick \u00B7 override to change' : '\u26A0 no AI pick supplied \u2014 choose the host');
+      cc.style.color = (!AI_PICK_IS_REAL && !overridden) ? 'var(--gold2)' : ''; }
+    const lk=$('.lock'); if(lk) lk.innerHTML='\uD83D\uDD13 CHARACTER \u00B7 '+chosen.name;
+    const top=(dossier||[]).slice().sort((a,b)=>(b.confidence||0)-(a.confidence||0)).slice(0,3);
+    const dd=$('#psDoss'); if(dd) dd.innerHTML='<div class="dl">What we know walking in</div>'+
+      (top.length? top.map(d=>'<div class="dline">\u00B7 '+(d.value||d.hook_id)+' <span style="color:#6f685b">('+(d.source||'?')+')</span></div>').join('')
+                 : '<div class="dline" style="color:#6f685b">No scouting yet \u2014 the Host goes in cold.</div>');
+    // character cards (Clue-style: brief on face, tell on hover)
+    $('#psChar').innerHTML = CHARACTERS.map(c=>'<div class="pscard'+(c.id===psState.character?' on':'')+'" data-id="'+c.id+'">'+
+      (c.id===AI_PICK?'<span class="aip">AI PICK</span>':'')+
+      '<div class="nm">'+c.name+'</div><div class="ep">'+c.ep+'</div><div class="br">'+c.br+'</div>'+
+      '<div class="tell"><span><b>tell</b>'+c.tell+'</span></div></div>').join('');
+    $('#psChar').querySelectorAll('.pscard').forEach(el=>el.onclick=()=>{ psState.character=el.dataset.id; renderPresnap(); });
+    renderBitsPicker(); renderBenchPicker();
+  }
+
+  /* bits picker — 5 quick, expand to categories, drill in, select up to 3 */
+  function toggleBit(id){ const b=allBitById(id); const have=scoutedHooks();
+    if(b&&b.need&&!have.has(b.need)){ toast('Needs a scouted '+b.need); return; }
+    if(psState.bits.has(id)) psState.bits.delete(id);
+    else { if(psState.bits.size>=BITS_CAP){ toast('Max '+BITS_CAP+' bits (matches the live setlist)'); return; } psState.bits.add(id); }
+    renderBitsPicker(); }
+  function renderBitsPicker(){ const el=$('#psBits'); if(!el)return; const have=scoutedHooks(); const sel=psState.bits;
+    const chip=(b)=>{ const gray=b.need && !have.has(b.need); const on=sel.has(b.id);
+      return '<button class="pschip'+(on?' on':'')+(gray?' gray':'')+'" data-bit="'+b.id+'"'+(gray?' disabled':'')+' title="'+(gray?'needs a scouted '+b.need:b.name)+'">'+
+        b.name+(gray?' <span class="sub">\u00B7 no fuel</span>':'')+'</button>'; };
+    let body='';
+    if(psState.bitsView==='quick'){
+      body='<div class="pschips">'+QUICK_BITS.map(chip).join('')+'</div>'+
+        '<button class="psmore" data-act="cats">\uFF0B browse all categories \u2192</button>';
+    } else if(psState.bitsView==='cats'){
+      body='<div class="psback" data-act="quick">\u2190 quick picks</div>'+
+        '<div class="pscats">'+Object.keys(BIT_CATS).map(k=>'<button class="pscat" data-cat="'+k+'">'+BIT_CATS[k].label+' <span class="sub">'+BIT_CATS[k].bits.length+'</span></button>').join('')+'</div>';
+    } else { const cat=BIT_CATS[psState.bitsView]||BIT_CATS.universal;
+      body='<div class="psback" data-act="cats">\u2190 all categories</div><div class="pscatname">'+cat.label+'</div>'+
+        '<div class="pschips">'+cat.bits.map(chip).join('')+'</div>'; }
+    const pills = sel.size? '<div class="pssel">'+[...sel].map(id=>{ const b=allBitById(id); return '<span class="pspill" data-bit="'+id+'">'+(b?b.name:id)+' \u2715</span>'; }).join('')+'</div>' : '';
+    el.innerHTML=pills+body;
+    if($('#psBitsCap')) $('#psBitsCap').textContent=sel.size+' / '+BITS_CAP;
+    el.querySelectorAll('[data-bit]').forEach(b=>{ if(b.disabled)return; b.onclick=()=>toggleBit(b.dataset.bit); });
+    el.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{ psState.bitsView=b.dataset.act; renderBitsPicker(); });
+    el.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{ psState.bitsView=b.dataset.cat; renderBitsPicker(); }); }
+
+  /* bench picker — role on the button, name in the hover brief; grouped by how they appear */
+  function renderBenchPicker(){ const el=$('#psBench'); if(!el)return;
+    el.innerHTML='<div class="pschips">'+ROSTER.map(b=>{ const on=psState.bench.has(b.id);
+      return '<button class="benchbtn'+(on?' on':'')+'" data-bench="'+b.id+'"><span class="bn">'+b.role+'</span>'+
+        '<span class="bbrief">'+b.brief+'</span></button>'; }).join('')+'</div>';
+    if($('#psBenchCap')) $('#psBenchCap').textContent=psState.bench.size+' / '+BENCH_CAP+' on standby';
+    el.querySelectorAll('[data-bench]').forEach(b=>b.onclick=()=>{ const id=b.dataset.bench;
+      if(psState.bench.has(id)) psState.bench.delete(id);
+      else { if(psState.bench.size>=BENCH_CAP){ toast('Max '+BENCH_CAP+' on standby'); return; } psState.bench.add(id); } renderBenchPicker(); }); }
+  // Pre-snap setup overlay is DISABLED for now — the board goes straight to watching.
+  // Re-enable with ?presnap=1 (or flip this to true).
+  const PRESNAP_ENABLED = (qp.get('presnap')==='1');
+  function showPresnap(){ if(!PRESNAP_ENABLED){ hidePresnap(); return; } renderPresnap(); $('#presnapOv').classList.add('on'); }
+  function hidePresnap(){ $('#presnapOv').classList.remove('on'); }
+
+  async function presnapGoLive(){ if(psState.locked) return; psState.locked=true;
+    const payload={ call_id:callId||'(demo)', character_id:psState.character,
+      armedBench:[...psState.bench], bits:[...psState.bits],
+      target:{ name:PSTARGET.name, company:PSTARGET.company, email:PSTARGET.email, archetype:PSTARGET.archetype },
+      target_id: targetId || '(demo)' };   // <-- the field PE needs for call memory
+    const go=$('#psGo'); if(go){ go.classList.add('wait'); go.textContent='LOCKED IN'; }
+    $('#psConnect') && $('#psConnect').classList.add('on');
+    if(source==='live'){
+      try{ const r=await fetch((qp.get('presnap_endpoint')||'/api/presnap'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        if(!r.ok){ const t=await r.text().catch(()=> ''); toast('\u26A0 presnap: HTTP '+r.status+(t?' \u2014 '+t.slice(0,80):'')+' (call still works, cold)'); } }
+      catch(e){ toast('\u26A0 presnap failed: '+(e.message||e)+' (call still works, cold)'); }
+      liveStart();
+    } else if(source==='replay'){ replayStart(); if(window.__paintSrc)window.__paintSrc(); }
+    else { hidePresnap(); startRun(); }
+  }
+
+  (function injectSourceToggle(){ const runBtn=$('#runBtn'); if(!runBtn)return; const bar=runBtn.parentElement; if(!bar)return;
+    const wrap=document.createElement('span'); wrap.style.cssText='display:inline-flex;gap:4px;align-items:center;margin-right:8px';
+    wrap.innerHTML='<span style="font-size:9px;letter-spacing:.08em;color:#b7afa0;text-transform:uppercase">source</span>'+
+      '<button id="srcReplay" class="chip">demo call</button><button id="srcLive" class="chip">live feed</button>';
+    bar.insertBefore(wrap, runBtn);
+    function paint(){ $('#srcReplay').classList.toggle('on',source==='replay'); $('#srcLive').classList.toggle('on',source==='live');
+      $('#runBtn').textContent = source==='live' ? (feedRunning?'\u23F8 STOP FEED':'\u25B6 WATCH LIVE')
+        : source==='replay' ? (rPlaying?'\u23F8 PAUSE':(rIdx>=REPLAY.length?'\u21BB REPLAY':(rIdx>0?'\u25B6 RESUME':'\u25B6 PLAY DEMO CALL')))
+        : (running?'\u23F8 PAUSE':'\u25B6 RUN'); }
+    window.__paintSrc=paint;
+    $('#srcReplay').onclick=()=>{ if(source==='replay')return; liveStop&&liveStop(); if(typeof stopRun==='function')stopRun(); source='replay'; replayReset(); clearForLive(); paint(); toast('Demo call \u2014 press PLAY to watch a scripted raid.'); };
+    // 'live AI' (in-page AI-on-AI self-run) removed — the Mead Hall is a watch surface.
+    $('#srcLive').onclick=()=>{ if(source==='live')return; if(typeof stopRun==='function')stopRun(); replayStop(); source='live'; clearForLive(); paint();
+      toast(callId||targetId?'Live feed \u2014 press WATCH LIVE.':'Live feed \u2014 add ?call_id=\u2026 to the URL.'); };
+    paint(); })();
+
+  /* ---- override RUN / STEP / ARM to branch on source ---- */
+  $('#dbbtn').onclick=()=>{ if(source!=='live') rankRungs(); $('#rungOv').classList.add('on'); };
+  $('#runBtn').onclick=()=>{ if(source==='live'){ feedRunning?liveStop():liveStart(); }
+    else if(source==='replay'){ rPlaying?replayStop():replayStart(); if(window.__paintSrc)window.__paintSrc(); }
+    else { running?stopRun():startRun(); } };
+  $('#stepBtn').onclick=()=>{ if(source==='live'){ toast('Live mode advances from the real feed.'); return; }
+    if(source==='replay'){ replayStep(); if(window.__paintSrc)window.__paintSrc(); return; }
+    if(!running) autoTurn(); };
+  $('#armBtn').onclick=()=>{ if(source==='live'){ postDeathBlow(); } else { demoArm(); } };
+  if($('#psGo'))   $('#psGo').onclick=presnapGoLive;
+  if($('#psSkip')) $('#psSkip').onclick=()=>{ hidePresnap(); toast('Setup skipped \u2014 use the controls directly.'); };
+  if(source==='live'){
+    clearForLive();
+    if(callId || targetId){
+      // Probe + stream. If the arc already contains call_started, pre-snap is moot
+      // (the call is underway) and we drop straight onto the board. Otherwise the
+      // feed's onArcLoaded shows pre-snap, since there's still a call to set up.
+      toast('Connecting \u2014 checking call status\u2026'); liveStart();
+      setTimeout(()=>{ if(source==='live' && !callHasStarted && !$('#presnapOv').classList.contains('on')) showPresnap(); }, 4000);
+    } else { setLiveRunUI(false); showPresnap();
+      toast('Add ?target_id=\u2026 to the URL to watch a real call.'); }
+  } else {
+    showPresnap();
+    // ?source=replay is an explicit request for the demo — just play it, don't make them click.
+    if(source==='replay'){ toast('Demo call \u2014 playing.'); replayStart(); }
+  }
+
+  renderDossier();
+  // Paint the gear + arm panels immediately — they must never look "missing" before data lands.
+  renderGear({}); renderArmPanel();
+  toast('Live in the hall — the Host is running the raid.');
+})();
+
+
+  // ===== Bench panel logic (isolated; favorites swap point inside) =====
+  (function(){
+  function initBenchPanel(){
+const DATA = [{"id": "derek", "name": "Derek", "role": "The Helper", "brief": "The eager retainer, forever adjacent-to-useful —\n          and defers every real call to the host.", "tell": "Reaches for kinship — your city's food, your CEO's old college —\n            and never once lands on a point.", "svg": "<svg viewBox=\"0 0 100 100\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"\n            stroke-linecap=\"round\" stroke-linejoin=\"round\">\n            <!-- offered drinking horn + reaching hand -->\n            <path d=\"M24 40 q34 -6 50 14 q-20 6 -34 -2\"/>\n            <path d=\"M74 54 q6 3 9 9\"/>\n            <path d=\"M20 64 l8 -6 m-8 6 l9 1 m-9 -1 l5 7\" stroke-width=\"2.4\"/>\n            <path d=\"M26 62 q-9 7 -4 16\" stroke-width=\"2.4\"/>\n          </svg>", "unseen": false, "band": "Seen at the Table"}, {"id": "bea", "name": "Bea", "role": "The Vanguard", "brief": "The legend in winter who led the hall in sales six\n          of seven winters and now drifts.", "tell": "Razor-sharp on instinct, then fades on names and numbers\n            mid-breath — and you can't tell decline from disdain.", "svg": "<svg viewBox=\"0 0 100 100\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"\n            stroke-linecap=\"round\" stroke-linejoin=\"round\">\n            <!-- setting sun within a laurel (legend in winter) -->\n            <path d=\"M34 60 a16 16 0 0 1 32 0\"/>\n            <path d=\"M28 60 h44\" stroke-width=\"2.4\"/>\n            <path d=\"M50 34 v6 M38 39 l3 5 M62 39 l-3 5\" stroke-width=\"2.2\"/>\n            <path d=\"M26 46 q-10 14 0 28\" stroke-width=\"2.4\"/>\n            <path d=\"M74 46 q10 14 0 28\" stroke-width=\"2.4\"/>\n            <path d=\"M24 52 l6 2 M24 60 l7 0 M24 68 l6 -2\" stroke-width=\"2\"/>\n            <path d=\"M76 52 l-6 2 M76 60 l-7 0 M76 68 l-6 -2\" stroke-width=\"2\"/>\n          </svg>", "unseen": false, "band": "Seen at the Table"}, {"id": "chip", "name": "Chip", "role": "The Enthusiast", "brief": "Swears too-big oaths to everything, and regrets\n          each before the words are cold.", "tell": "Pledges huge, hears himself, winces — \"I always do this\" —\n            and pledges huge again.", "svg": "<svg viewBox=\"0 0 100 100\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"\n            stroke-linecap=\"round\" stroke-linejoin=\"round\">\n            <!-- raised oath-hand + oath ring -->\n            <path d=\"M50 24 v30 M42 32 v22 M58 32 v22 M36 40 v15 M64 40 v15\"/>\n            <path d=\"M36 54 q14 12 28 0\" stroke-width=\"2.6\"/>\n            <circle cx=\"50\" cy=\"70\" r=\"9\" stroke-width=\"2.6\"/>\n          </svg>", "unseen": false, "band": "Seen at the Table"}, {"id": "brent", "name": "Brent", "role": "The Corporate Robot", "brief": "A gleaming helm with no head beneath it — empty\n          shine over a baby's pride.", "tell": "Infinite next-steps, zero substance — agree and he glows;\n            strike the helm and it shatters.", "svg": "<svg viewBox=\"0 0 100 100\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"\n            stroke-linecap=\"round\" stroke-linejoin=\"round\">\n            <!-- hollow nasal helm, empty visor -->\n            <path d=\"M28 56 a22 20 0 0 1 44 0 v6 h-44 z\"/>\n            <path d=\"M50 40 v32\" stroke-width=\"2.6\"/>\n            <path d=\"M34 58 h12 M54 58 h12\" stroke-width=\"6\" stroke=\"#2a2018\"/>\n            <path d=\"M28 62 q22 10 44 0\" stroke-width=\"2.2\"/>\n          </svg>", "unseen": false, "band": "Seen at the Table"}, {"id": "tyler", "name": "Tyler", "role": "The Intern", "brief": "First voyage, no scars yet — honored to be at the\n          oar and unable to work it.", "tell": "The Join Struggle — mute, camera, audio all fumbled — and a\n            constant glance to the host for reassurance.", "svg": "<svg viewBox=\"0 0 100 100\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"\n            stroke-linecap=\"round\" stroke-linejoin=\"round\">\n            <!-- pristine round shield, unscarred -->\n            <circle cx=\"50\" cy=\"52\" r=\"26\"/>\n            <circle cx=\"50\" cy=\"52\" r=\"7\" stroke-width=\"2.6\"/>\n            <path d=\"M50 26 v8 M50 70 v8 M24 52 h8 M68 52 h8\" stroke-width=\"2.2\"/>\n            <path d=\"M50 30 v44 M28 52 h44\" stroke-width=\"1.4\" opacity=\".5\"/>\n          </svg>", "unseen": false, "band": "Seen at the Table"}, {"id": "conrad", "name": "Conrad", "role": "The Boss", "brief": "The greater lord who drops in unbidden to watch you\n          try to close — solemn, weighted, above the room.", "tell": "Boardroom gravity trained on an absurd cold call, and the\n            disproportion never breaks — he takes notes.", "svg": "<svg viewBox=\"0 0 100 100\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"\n            stroke-linecap=\"round\" stroke-linejoin=\"round\">\n            <!-- the high seat (throne on a dais) -->\n            <path d=\"M34 40 v30 M66 40 v30 M34 70 h32\"/>\n            <path d=\"M34 52 h32\" stroke-width=\"2.6\"/>\n            <path d=\"M34 40 q4 -10 16 -10 q12 0 16 10\" stroke-width=\"2.6\"/>\n            <path d=\"M28 76 h44 M31 70 v6 M69 70 v6\" stroke-width=\"2.4\"/>\n            <path d=\"M50 30 v-6 M45 27 h10\" stroke-width=\"2\"/>\n          </svg>", "unseen": false, "band": "Seen at the Table"}, {"id": "bonnie", "name": "Bonnie", "role": "The HR Rep", "brief": "Keeper of the reckoning, camera dark by choice —\n          says she \"won't be participating,\" then participates.", "tell": "Cold interventions at random, an old unsettled matter with the\n            host — and she never once acknowledges the caller.", "svg": "<svg viewBox=\"0 0 100 100\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"\n            stroke-linecap=\"round\" stroke-linejoin=\"round\">\n            <!-- watching eye over a tally stick -->\n            <path d=\"M28 44 q22 -18 44 0 q-22 18 -44 0z\"/>\n            <circle cx=\"50\" cy=\"44\" r=\"7\"/>\n            <path d=\"M34 64 h32 M40 60 v8 M48 60 v8 M56 60 v8 M64 60 v8\" stroke-width=\"2.2\"/>\n          </svg>", "unseen": true, "band": "Heard, Unseen"}, {"id": "no_show", "name": "The No-Show", "role": "", "brief": "Lord of the decision — forever parking, forever in\n          the elevator, forever a moment out.", "tell": "Endless exact ETAs, none ever kept — a sail on the horizon\n            past the door, and still he never makes port.", "svg": "<svg viewBox=\"0 0 100 100\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"\n            stroke-linecap=\"round\" stroke-linejoin=\"round\">\n            <!-- a sail on the horizon -->\n            <path d=\"M50 22 v40 M50 24 q18 8 0 36 M50 24 q-18 8 0 36\" stroke-width=\"2.6\"/>\n            <path d=\"M22 66 q14 6 28 0 q14 -6 28 0\" stroke-width=\"2.4\"/>\n            <path d=\"M20 74 q15 5 30 0 q15 -5 30 0\" stroke-width=\"2\" opacity=\".6\"/>\n          </svg>", "unseen": true, "band": "The Empty Places"}, {"id": "approver", "name": "The Approver", "role": "", "brief": "The sign-off the deal hangs on — essential to the\n          doom, and never in the room.", "tell": "Wants to see a deck, never explains her seat — and a Cincinnati\n            matter she'll only ever allude to.", "svg": "<svg viewBox=\"0 0 100 100\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"\n            stroke-linecap=\"round\" stroke-linejoin=\"round\">\n            <!-- unbroken wax seal + ribbon -->\n            <circle cx=\"50\" cy=\"46\" r=\"18\"/>\n            <path d=\"M50 38 v16 M42 46 h16\" stroke-width=\"2.4\"/>\n            <path d=\"M40 60 l-6 18 8 -6 6 6 6 -6 8 6 -6 -18\" stroke-width=\"2.4\"/>\n          </svg>", "unseen": true, "band": "The Empty Places"}, {"id": "it_guy", "name": "The IT Guy", "role": "", "brief": "The unseen hand blamed for every broken thing on\n          the call.", "tell": "Every glitch routes to him and he's never summoned to answer —\n            and his hamster Gerald is doing much better, thank you.", "svg": "<svg viewBox=\"0 0 100 100\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"\n            stroke-linecap=\"round\" stroke-linejoin=\"round\">\n            <!-- anvil with a ghost-wisp -->\n            <path d=\"M30 56 h40 l-6 10 h-28 z\"/>\n            <path d=\"M44 56 v-8 h16 v8\" stroke-width=\"2.4\"/>\n            <path d=\"M50 40 q8 -2 4 -10 q-3 -6 4 -10\" stroke-width=\"2.2\" opacity=\".7\"/>\n            <path d=\"M34 70 h32\" stroke-width=\"2.2\"/>\n          </svg>", "unseen": true, "band": "The Empty Places"}, {"id": "barbara", "name": "Barbara", "role": "The Electronic EA", "brief": "The host's tireless machine-keeper of the calendar,\n          growing more real the more her name is spoken.", "tell": "\"Barbara will send that\" — references that pile up, a dark\n            one-per-call origin no one will explain, and she speaks highly\n            of no one.", "svg": "<svg viewBox=\"0 0 100 100\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"\n            stroke-linecap=\"round\" stroke-linejoin=\"round\">\n            <!-- quill over a rune-scroll, an unsleeping eye -->\n            <path d=\"M30 66 q20 6 40 0 v6 q-20 6 -40 0z\" stroke-width=\"2.4\"/>\n            <path d=\"M36 64 h12 M36 60 h18 M36 56 h10\" stroke-width=\"2\"/>\n            <path d=\"M70 30 l-22 26 6 4 22 -26z\" stroke-width=\"2.4\"/>\n            <path d=\"M54 60 l-4 8 8 -2\" stroke-width=\"2.2\"/>\n          </svg>", "unseen": true, "band": "The Scribe & Her Reeve"}, {"id": "gary", "name": "Gary", "role": "Barbara's Manager", "brief": "The steward who manages the Scribe and joins,\n          briefly, to ask honest feedback on her. <em>Activated by\n          Barbara.</em>", "tell": "Hot-joins mid-thought — \"I've been reviewing Barbara's emails\" —\n            asks you to review the machine, then leaves. No Barbara, no\n            Gary.", "svg": "<svg viewBox=\"0 0 100 100\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"\n            stroke-linecap=\"round\" stroke-linejoin=\"round\">\n            <!-- steward's key crossed with a quill -->\n            <circle cx=\"38\" cy=\"40\" r=\"8\"/>\n            <path d=\"M44 46 l20 20 M58 60 l6 -6 M52 54 l6 -6\"/>\n            <path d=\"M66 32 l-22 24\" stroke-width=\"2.4\"/>\n          </svg>", "unseen": false, "band": "The Scribe & Her Reeve"}];
+const ORDER = DATA.map(d => d.id);
+const byId = Object.fromEntries(DATA.map(d => [d.id, d]));
+const MAX = 3;
+
+// PROTOTYPE state — in memory only. In the director app, load/save per SV user
+// (e.g. a user-prefs / host_config row keyed to owner_email) so favorites persist.
+let favorites = loadFavs();
+// Favorites persistence swap point. In-memory now (per the prototype note: until
+  // wired, all users share one set). When the auth/user-prefs store exists, inject
+  // window.SV_loadFavs()/SV_saveFavs(ids) keyed to owner_email and it persists with
+  // no further change here. Stable ids: derek,bea,chip,brent,tyler,conrad,bonnie,
+  // no_show,approver,it_guy,barbara,gary.
+  function loadFavs(){ try{ return (window.SV_loadFavs && window.SV_loadFavs()) || []; }catch(e){ return []; } }
+  function saveFavs(){ try{ window.SV_saveFavs && window.SV_saveFavs(favorites.slice()); }catch(e){} }
+
+// the 4 to pin: favorites first, then fill from canonical order until 4
+function pinnedIds(){
+  const favs = favorites.slice(0, MAX);
+  const fill = ORDER.filter(id => !favs.includes(id));
+  return favs.concat(fill).slice(0, MAX);
+}
+function isFav(id){ return favorites.includes(id); }
+function toggleFav(id){
+  const i = favorites.indexOf(id);
+  if (i >= 0) favorites.splice(i, 1);
+  else { if (favorites.length >= MAX) return false; favorites.push(id); }
+  saveFavs(); renderAll(); return true;
+}
+
+function emblem(d){ return '<div class="emblem">' + d.svg + '</div>'; }
+function frontLabel(d){
+  const role = d.role ? '<div class="role">' + d.role + '</div>' : '';
+  const seat = d.unseen ? '<div class="seat">empty seat</div>' : '';
+  return '<div class="label"><h3 class="name">' + d.name + '</h3>' + role + '</div>' + seat;
+}
+function makeCard(d, {mini, star}){
+  // Mini cards show a short, legible snippet of the tell; the modal keeps the full text.
+  function shortTell(t){ const s=(t||'').replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
+    const cut=s.indexOf(' \u2014 '); let out=(cut>10 && cut<78)? s.slice(0,cut) : s;
+    if(out.length>76) out=out.slice(0,74).replace(/\s+\S*$/,'')+'\u2026';
+    return out; }
+  const card = document.createElement('article');
+  card.className = 'card ' + (mini ? 'mini' : 'full') + (d.unseen ? ' unseen' : '');
+  card.tabIndex = 0; card.setAttribute('role','button'); card.dataset.bid = d.id;
+  card.setAttribute('aria-label', d.name + ' — flip for details');
+  const WIRED = ['CONRAD','BONNIE','ANDREA'];   // PE-wired send-in ids (v1); grows as _bench.js grows
+  const wired = WIRED.indexOf(d.id.toUpperCase()) !== -1;
+  const back = mini
+    ? '<div class="tell"><span class="lbl">the tell</span><p>' + shortTell(d.tell) + '</p></div>'
+    : '<p class="brief">' + d.brief + '</p><div class="tell"><span class="lbl">the tell</span><p>' + d.tell + '</p></div>';
+  card.innerHTML =
+    (star ? '<button class="star" aria-label="favorite"></button>' : '') +
+    (wired ? '<button class="sendin" aria-label="send into the call">send in \u25B8</button>' : '') +
+    '<span class="bstatus"></span>' +
+    '<div class="flip"><div class="face front">' + emblem(d) + frontLabel(d) + '</div>' +
+    '<div class="face back">' + back + '</div></div>';
+  // flip on click / keyboard (hover handled by CSS) — but not when tapping a control button
+  card.addEventListener('click', e => { if (e.target.closest('.star') || e.target.closest('.sendin')) return; card.classList.toggle('is-flipped'); });
+  card.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); card.classList.toggle('is-flipped'); }
+  });
+  if (wired){
+    const sb = card.querySelector('.sendin');
+    sb.addEventListener('click', e => { e.stopPropagation();
+      if (window.__mh_sendBench) window.__mh_sendBench(d.id);
+      else alert('Send-in unavailable.'); });
+  }
+  if (star){
+    const btn = card.querySelector('.star');
+    const on = isFav(d.id), full = favorites.length >= MAX && !on;
+    btn.textContent = on ? '★' : '☆';
+    btn.classList.toggle('on', on);
+    btn.classList.toggle('locked', full);
+    btn.title = on ? 'Unfavorite' : (full ? 'Up to 4 favorites' : 'Favorite');
+    btn.addEventListener('click', e => { e.stopPropagation(); toggleFav(d.id); });
+  }
+  return card;
+}
+
+function renderPinned(){
+  const row = document.getElementById('pinnedRow');
+  row.innerHTML = '';
+  pinnedIds().forEach(id => row.appendChild(makeCard(byId[id], {mini:true, star:false})));
+  applyBenchStates();
+}
+function renderModal(){
+  const grid = document.getElementById('modalGrid');
+  grid.innerHTML = '';
+  DATA.forEach(d => grid.appendChild(makeCard(d, {mini:false, star:true})));
+  document.getElementById('favCount').textContent = '★ ' + favorites.length + '/' + MAX + ' favorited';
+  applyBenchStates();
+}
+// Persistent bench card state (standby/oncall) survives re-renders (e.g. favoriting).
+const benchCardState = {};
+function applyBenchStates(){
+  document.querySelectorAll('.bp-scope .card').forEach(function(card){
+    const st = benchCardState[card.dataset.bid]; const b=card.querySelector('.bstatus');
+    card.classList.remove('standby','oncall');
+    if(st==='standby'){ card.classList.add('standby'); if(b)b.textContent='JOINING NEXT TURN'; }
+    else if(st==='oncall'){ card.classList.add('oncall'); if(b)b.textContent='ON CALL'; }
+    else if(b){ b.textContent=''; }
+  });
+}
+function renderAll(){ renderPinned(); if (!document.getElementById('modal').hidden) renderModal(); }
+
+// modal open/close
+const modal = document.getElementById('modal');
+function openModal(){ renderModal(); modal.hidden = false; }
+function closeModal(){ modal.hidden = true; }
+document.getElementById('moreBtn').addEventListener('click', openModal);
+document.querySelector('.bp-scope .close').addEventListener('click', closeModal);
+modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
+
+renderPinned();
+  // Let the main script drive bench card state (standby/oncall) from bus events.
+  window.__mh_setBenchState = function(id, state){
+    const norm = String(id||'').toLowerCase().replace(/[^a-z0-9]+/g,'_');
+    if(state) benchCardState[norm]=state; else delete benchCardState[norm];
+    applyBenchStates();
+  };
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', initBenchPanel);
+  else initBenchPanel();
+  })();
+</script>
+
+  <div class="bp-scope">
+<div class="modal" id="modal" hidden>
+  <div class="sheet">
+    <div class="sheet-head">
+      <h2>The Mead Hall · Meet the Bench</h2>
+      <span class="count" id="favCount">★ 0/4 favorited</span>
+      <span class="hint">star up to 4 — those pin to the panel; empty slots auto-fill</span>
+      <button class="close" aria-label="close">✕</button>
+    </div>
+    <div class="modal-grid" id="modalGrid"></div>
+  </div>
+</div>
+  </div>
+</body>
+</html>
