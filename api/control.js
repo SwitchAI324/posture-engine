@@ -15,6 +15,24 @@
 //     -> Director sends in a specific bench character; the next host turn
 //        weaves them in (overrides the auto inject schedule). idempotent.
 //
+//   POST /api/control?action=arm
+//     body: { call_id, bit_id?, hook_id?, director_user_id?, idempotency_key? }
+//     -> accumulates a setlist, max 3, 409 "setlist full" on the 4th.
+//
+//   POST /api/control?action=unarm
+//     body: { call_id, bit_id, director_user_id?, idempotency_key? }
+//     -> remove bit_id from the setlist, free a slot. 200 idempotent.
+//
+//   POST /api/control?action=force
+//     body: { call_id, bit_id, director_user_id?, idempotency_key? }
+//     -> fire THIS bit on the next host turn, bypassing the score/deploy-bar
+//        gate. One-shot: after it fires, it auto-disarms (drops from the
+//        setlist) and won't re-fire. Static-validated here (unknown/parked bit
+//        -> 4xx now); a per-call reason it can't land is surfaced at fire time.
+//        Composes with preemptive generation: the forced bit is carried into
+//        the WINNING generation next turn (like the re-injection path), so the
+//        button should say "firing next turn," not "fired."
+//
 //   GET  /api/control?call_id=...   -> current pending status (to confirm)
 //
 // final_line is OPTIONAL but recommended: Mead Hall already has the rung's
@@ -24,12 +42,10 @@
 // Note: the engine detects the FOREGONE death blow (Trigger B) itself — this
 // endpoint is ONLY the Director's manual Trigger A.
 // ----------------------------------------------------------------------
-
-import { getControls, setDeathBlow, addArm, setBench } from "./_store.js";
+import { getControls, setDeathBlow, addArm, setBench, removeArm, forceBit } from "./_store.js";
 import { makeTrace } from "./_trace.js";
 import { BITS } from "./_bits_registry.js";
 import { benchIds } from "./_bench_v2.js";
-
 // Hooks a Director may arm. Kept in sync with what the Scouting lanes actually
 // produce + register today (see api/scout/_hooks.js GATES and _dissect.js /
 // _calldissect.js outputs). The old "canonical seven" was stale — it still
@@ -48,19 +64,15 @@ const CANON_HOOKS = new Set([
   // booking-side browsed-calendar TMI (Fiji week) callback
   "browsed_tmi",
 ]);
-
 export const config = { runtime: "edge" };
-
 function jsonRes(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
     status,
     headers: { "content-type": "application/json; charset=utf-8" },
   });
 }
-
 export default async function handler(req) {
   const u = new URL(req.url);
-
   if (req.method === "GET") {
     const callId = u.searchParams.get("call_id");
     if (!callId) return jsonRes({ error: "missing call_id" }, 400);
@@ -75,7 +87,6 @@ export default async function handler(req) {
       idempotency_key: db.idem || null,
     });
   }
-
   if (req.method === "POST" && u.searchParams.get("action") === "deathblow") {
     let b;
     try { b = await req.json(); } catch { return jsonRes({ error: "bad json" }, 400); }
@@ -100,7 +111,6 @@ export default async function handler(req) {
     }
     return jsonRes({ ok: true, call_id: callId, status: "pending" });
   }
-
   if (req.method === "POST" && u.searchParams.get("action") === "callend") {
     let b;
     try { b = await req.json(); } catch { return jsonRes({ error: "bad json" }, 400); }
@@ -131,7 +141,6 @@ export default async function handler(req) {
     );
     return jsonRes({ ok: true, call_id: callId, ending_type });
   }
-
   if (req.method === "POST" && u.searchParams.get("action") === "arm") {
     let b;
     try { b = await req.json(); } catch { return jsonRes({ error: "bad json" }, 400); }
@@ -140,7 +149,6 @@ export default async function handler(req) {
     const bitId = b.bit_id ? String(b.bit_id).trim() : null;
     const hookId = b.hook_id ? String(b.hook_id).trim() : null;
     if (!bitId && !hookId) return jsonRes({ error: "arm needs bit_id and/or hook_id" }, 400);
-
     // visible-failure validation (static checks; fuel/scout presence is per-call,
     // surfaced at fire time if the armed item can't land).
     if (bitId) {
@@ -151,7 +159,6 @@ export default async function handler(req) {
     if (hookId && !CANON_HOOKS.has(hookId)) {
       return jsonRes({ error: `unknown hook ${hookId} — not a known scout hook` }, 404);
     }
-
     const cur = await getControls(callId).catch(() => null);
     const armed = (cur && Array.isArray(cur.armed) ? cur.armed : []).slice();
     const idem = b.idempotency_key ? String(b.idempotency_key) : null;
@@ -159,12 +166,49 @@ export default async function handler(req) {
       return jsonRes({ ok: true, idempotent: true, armed }); // already queued
     }
     if (armed.length >= 3) return jsonRes({ error: "setlist full (max 3) — wait for one to fire" }, 409);
-
     try { await addArm(callId, { bitId, hookId, idem, director: b.director_user_id || null }); }
     catch (e) { return jsonRes({ error: "arm write failed", detail: String(e).slice(0, 200) }, 502); }
     return jsonRes({ ok: true, armed: [...armed, { bit_id: bitId, hook_id: hookId, idem }] });
   }
-
+  if (req.method === "POST" && u.searchParams.get("action") === "unarm") {
+    let b;
+    try { b = await req.json(); } catch { return jsonRes({ error: "bad json" }, 400); }
+    const callId = String(b.call_id || "").trim();
+    if (!callId) return jsonRes({ error: "call_id required" }, 400);
+    const bitId = b.bit_id ? String(b.bit_id).trim() : null;
+    if (!bitId) return jsonRes({ error: "unarm needs bit_id" }, 400);
+    // Idempotent: removeArm flips only live (pending/armed) arm rows for this
+    // call+bit to "disarmed", freeing the slot. If none match (already
+    // disarmed / fired / never armed) it's a no-op success — "make sure this
+    // bit is not armed," not "there must have been an arm."
+    try { await removeArm(callId, { bitId }); }
+    catch (e) { return jsonRes({ error: "unarm write failed", detail: String(e).slice(0, 200) }, 502); }
+    return jsonRes({ ok: true, action: "unarm", call_id: callId, bit_id: bitId });
+  }
+  if (req.method === "POST" && u.searchParams.get("action") === "force") {
+    let b;
+    try { b = await req.json(); } catch { return jsonRes({ error: "bad json" }, 400); }
+    const callId = String(b.call_id || "").trim();
+    if (!callId) return jsonRes({ error: "call_id required" }, 400);
+    const bitId = b.bit_id ? String(b.bit_id).trim() : null;
+    if (!bitId) return jsonRes({ error: "force needs bit_id" }, 400);
+    // visible-failure validation, same static checks as arm (a per-call reason
+    // it can't land — archetype/fuel — is surfaced by the turn loop at fire
+    // time via the forced-bit result).
+    const bit = BITS.find((x) => x.id === bitId);
+    if (!bit) return jsonRes({ error: `unknown bit ${bitId}` }, 404);
+    if (bit.status === "parked") return jsonRes({ error: `can't force ${bitId} — parked (${bit.park_reason || "inactive"})` }, 409);
+    const idem = b.idempotency_key ? String(b.idempotency_key) : null;
+    const cur = await getControls(callId).catch(() => null);
+    if (idem && cur && cur.forced && cur.forced.idem === idem) {
+      return jsonRes({ ok: true, idempotent: true, forced: cur.forced }); // already queued
+    }
+    try { await forceBit(callId, { bitId, idem, director: b.director_user_id || null }); }
+    catch (e) { return jsonRes({ error: "force write failed", detail: String(e).slice(0, 200) }, 502); }
+    // "firing next turn" — the forced bit fires on the NEXT host turn (carried
+    // into the winning generation), not this instant. Honest for the button.
+    return jsonRes({ ok: true, action: "force", call_id: callId, bit_id: bitId, when: "next_turn" });
+  }
   if (req.method === "POST" && u.searchParams.get("action") === "bench") {
     let b;
     try { b = await req.json(); } catch { return jsonRes({ error: "bad json" }, 400); }
@@ -172,23 +216,19 @@ export default async function handler(req) {
     if (!callId) return jsonRes({ error: "call_id required" }, 400);
     const benchId = b.bench_id ? String(b.bench_id).trim().toUpperCase() : null;
     if (!benchId) return jsonRes({ error: "bench needs bench_id" }, 400);
-
     // visible-failure validation: bench_id must be a known character.
     const valid = benchIds(); // uppercase tags, e.g. CONRAD/BONNIE/ANDREA
     if (!valid.includes(benchId)) {
       return jsonRes({ error: `unknown bench ${benchId} — valid: ${valid.join(", ")}` }, 404);
     }
-
     const cur = await getControls(callId).catch(() => null);
     const idem = b.idempotency_key ? String(b.idempotency_key) : null;
     if (cur && cur.sentBench && idem && cur.sentBench.idem === idem) {
       return jsonRes({ ok: true, idempotent: true, sentBench: cur.sentBench }); // already queued
     }
-
     try { await setBench(callId, { benchId, idem, director: b.director_user_id || null }); }
     catch (e) { return jsonRes({ error: "bench write failed", detail: String(e).slice(0, 200) }, 502); }
     return jsonRes({ ok: true, call_id: callId, sent_bench: benchId });
   }
-
   return jsonRes({ error: "method not allowed" }, 405);
 }

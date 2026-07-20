@@ -131,7 +131,7 @@ export async function setCall(
 // concurrently with getCall, so no added hot-path latency). Only pending/armed
 // rows are "live"; fired/cleared drop.
 export async function getControls(callId) {
-  const empty = { deathBlow: null, armed: [], sentBench: null };
+  const empty = { deathBlow: null, armed: [], sentBench: null, forced: null };
   if (!isConfigured() || !callId) return empty;
   const r = await fetch(
     `${URL}/rest/v1/${CONTROLS}?call_id=eq.${encodeURIComponent(callId)}` +
@@ -145,6 +145,7 @@ export async function getControls(callId) {
   let deathBlow = null;
   const armed = [];
   let sentBench = null;
+  let forced = null;
   for (const row of rows) {
     const p = row.payload || {};
     if (row.control_type === "death_blow") {
@@ -166,9 +167,15 @@ export async function getControls(callId) {
         id: row.id, bench_id: p.bench_id ?? null,
         sent_turn: p.sent_turn ?? null, idem: row.idempotency_key || null,
       };
+    } else if (row.control_type === "force" && row.status === "pending") {
+      // Director forced a bit to fire next turn. Last pending one wins.
+      forced = {
+        id: row.id, bit_id: p.bit_id ?? null,
+        forced_turn: p.forced_turn ?? null, idem: row.idempotency_key || null,
+      };
     }
   }
-  return { deathBlow, armed, sentBench };
+  return { deathBlow, armed, sentBench, forced };
 }
 
 // DEATH BLOW (Trigger A) — insert one pending death_blow row. The partial unique
@@ -240,6 +247,88 @@ export async function addArm(callId, { bitId, hookId, idem, director }) {
   });
   if (r.status === 409) return true; // duplicate idem — idempotent
   if (!r.ok) throw new Error(`arm set failed: ${r.status} ${await r.text()}`);
+  return true;
+}
+
+// UNARM / DISARM — free a setlist slot. getControls counts an arm as live only
+// while status is "pending" or "armed"; setting it to "disarmed" drops it from
+// the live count immediately, so a stuck Director (3 armed, none firing) can
+// re-choose. We PATCH the arm rows for this call+bit that are still live
+// (status in pending,armed) to status "disarmed". Idempotent: if no live arm
+// matches (already disarmed, already fired, or never armed) it's a no-op that
+// still returns ok — disarm is "make sure this bit is not armed", not "there
+// must have been an arm". Fired arms are left alone (they already happened); we
+// only clear ones that never landed, which is exactly the stuck case.
+export async function removeArm(callId, { bitId }) {
+  if (!isConfigured() || !callId) throw new Error("store not configured");
+  const q =
+    `${URL}/rest/v1/${CONTROLS}` +
+    `?call_id=eq.${encodeURIComponent(callId)}` +
+    `&control_type=eq.arm` +
+    `&status=in.(pending,armed)` +
+    `&payload->>bit_id=eq.${encodeURIComponent(bitId)}`;
+  const r = await fetch(q, {
+    method: "PATCH",
+    headers: {
+      apikey: KEY, authorization: `Bearer ${KEY}`,
+      "content-type": "application/json", prefer: "return=minimal",
+    },
+    body: JSON.stringify({ status: "disarmed" }),
+  });
+  // 200/204 = patched (or matched zero rows, still ok — idempotent no-op).
+  if (!r.ok) throw new Error(`unarm failed: ${r.status} ${await r.text()}`);
+  return true;
+}
+
+// FORCE — Director forces ONE bit to fire on the next host turn, bypassing the
+// score/deploy-bar gate (the pick is stuck because it never clears the bar).
+// One row, control_type "force"; payload carries bit_id. getControls surfaces
+// it as `forced` while status is pending. completions.js reads it next turn,
+// fires the bit bypassing the bar (like the gag-open path), then calls
+// fireForce to mark it fired (one-shot — never re-fires). Mirrors setBench.
+export async function forceBit(callId, { bitId, idem, director }) {
+  if (!isConfigured() || !callId) throw new Error("store not configured");
+  const row = {
+    call_id: callId,
+    control_type: "force",
+    director_user_id: director ?? null,
+    idempotency_key: idem ?? null,
+    status: "pending",
+    payload: { bit_id: bitId ?? null, forced_turn: null },
+  };
+  const r = await fetch(`${URL}/rest/v1/${CONTROLS}`, {
+    method: "POST",
+    headers: {
+      apikey: KEY, authorization: `Bearer ${KEY}`,
+      "content-type": "application/json", prefer: "return=minimal",
+    },
+    body: JSON.stringify(row),
+  });
+  if (r.status === 409) return true; // duplicate idem — idempotent
+  if (!r.ok) throw new Error(`force set failed: ${r.status} ${await r.text()}`);
+  return true;
+}
+
+// Mark a force row fired (one-shot). completions.js calls this the turn it
+// fires the forced bit, so it can't fire again. PATCHes the live force row for
+// this call+bit to status "fired".
+export async function fireForce(callId, { bitId }) {
+  if (!isConfigured() || !callId) throw new Error("store not configured");
+  const q =
+    `${URL}/rest/v1/${CONTROLS}` +
+    `?call_id=eq.${encodeURIComponent(callId)}` +
+    `&control_type=eq.force` +
+    `&status=eq.pending` +
+    `&payload->>bit_id=eq.${encodeURIComponent(bitId)}`;
+  const r = await fetch(q, {
+    method: "PATCH",
+    headers: {
+      apikey: KEY, authorization: `Bearer ${KEY}`,
+      "content-type": "application/json", prefer: "return=minimal",
+    },
+    body: JSON.stringify({ status: "fired" }),
+  });
+  if (!r.ok) throw new Error(`fireForce failed: ${r.status} ${await r.text()}`);
   return true;
 }
 
