@@ -1507,8 +1507,8 @@
     { bit_id:'BIT-329', name:'The Environment' },
     { bit_id:'BIT-231', name:'The Competing Vendor' },
     { bit_id:'BIT-101', name:'The Echo' },
-    { bit_id:'BIT-113', name:'The Movie Bit' },
-    { bit_id:'BIT-216', name:'The Questionnaire' }   // b2b_saas-scoped: absent/"—" off b2b_saas calls (correct)
+    { bit_id:'BIT-216', name:'The Questionnaire' },   // b2b_saas-scoped: absent/"—" off b2b_saas calls (correct)
+    { bit_id:'BIT-330', name:'The Sound-Flub Open' }
   ];
   // Opening bits — shown as their own group ABOVE the six so you can watch whether an
   // opening actually fires during the opening. Which bit_ids are "opening" is PE's to tell us
@@ -1552,7 +1552,10 @@
         :(parked?' <span style="color:#b7afa0;font-size:8px">\u00B7 parked</span>':'');
       return '<div class="'+cls+'" style="'+ROW+op+'" title="'+tip.replace(/"/g,'')+'"><span>'+(armed?'\u25B6 ':'')+b.name+mark+'</span>'+
         '<span style="margin-left:auto;display:flex;align-items:center;gap:7px">'+scoreCell(b)+
-        '<button class="chip arm-bit" data-bid="'+b.bit_id+'" '+dis+'>'+(armed?'armed \u2713':'arm')+'</button></span></div>'; }
+        (armed
+          ? '<button class="chip disarm-bit" data-bid="'+b.bit_id+'" title="remove from the setlist">disarm \u2715</button>'
+          : '<button class="chip arm-bit" data-bid="'+b.bit_id+'" '+dis+'>arm</button>')+
+        '</span></div>'; }
     const inHand = handBits();
     const bitRows = inHand.map(bitRow).join('');
     // Opening-bits group (above the six) — derived live from PE's phase_pref.
@@ -1573,19 +1576,31 @@
       (bitRows||'<div class="brow muted">no bits in hand yet</div>')+
       (hookRows?('<div class="grp" style="margin-top:6px">Force a scouted fact</div>'+hookRows):'');
     el.querySelectorAll('.arm-bit').forEach(b=>b.onclick=()=>postArm({bit_id:b.dataset.bid}));
+    el.querySelectorAll('.disarm-bit').forEach(b=>b.onclick=()=>postDisarm(b.dataset.bid));
     const db=el.querySelector('#bitsDeckBtn'); if(db) db.onclick=()=>{
       const u=location.origin+'/bits_flip_deck.html'+(callId?('?call_id='+encodeURIComponent(callId)):'');
       window.open(u,'_blank','noopener'); };
     el.querySelectorAll('.arm-hook').forEach(b=>b.onclick=()=>postArm({hook_id:b.dataset.hid})); }
 
   /* arm POST (#4): arm a bit and/or a fact; setlist max 3; surface rejections */
+  // Remove an armed bit from the setlist. MUST hit PE — clearing only locally would leave the
+  // slot occupied server-side, so the next arm would still 409. Honest if PE lacks the action.
+  async function postDisarm(bitId){ if(!callId){ toast('No call_id'); return; }
+    if(!setlist.some(s=>s.bit_id===bitId)) return;
+    const body={ call_id:callId, bit_id:bitId, director_user_id:directorUserId, idempotency_key:callId+':unarm:'+bitId+':'+Date.now() };
+    try{ const r=await fetch(CONTROL_ENDPOINT+'?action=unarm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      if(r.status===404){ toast('\u26A0 Disarm isn\u2019t wired on the engine yet \u2014 flagged to PE'); return; }
+      if(!r.ok){ throw new Error('HTTP '+r.status); }
+      setlist=setlist.filter(s=>s.bit_id!==bitId); renderArmPanel(); toast('Disarmed \u2014 slot freed'); }
+    catch(e){ toast('\u26A0 Disarm failed: '+(e.message||e)); } }
+
   async function postArm(sel){ if(!callId){ toast('No call_id'); return; }
     if(setlist.length>=3){ toast('Setlist full (3) \u2014 wait for one to fire'); return; }
     const key=callId+':arm:'+(sel.bit_id||sel.hook_id);
     const body=Object.assign({ call_id:callId, director_user_id:directorUserId, idempotency_key:key }, sel);
     try{ const r=await fetch(CONTROL_ENDPOINT+'?action=arm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-      if(r.status===404){ const t=await r.text().catch(()=> ''); toast('\u26A0 '+(sel.bit_id?'Unknown bit':'Non-canonical hook')+(t?': '+t.slice(0,90):'')); return; }
-      if(r.status===409){ const t=await r.text().catch(()=> ''); toast('\u26A0 '+(/full/i.test(t)?'Setlist full':'Parked / unavailable')+(t?': '+t.slice(0,90):'')); return; }
+      if(r.status===404){ toast('\u26A0 '+(sel.bit_id?'That bit isn\u2019t in the engine\u2019s pool right now':'Non-canonical hook')); return; }
+      if(r.status===409){ const t=await r.text().catch(()=> ''); toast(/full/i.test(t)?'Setlist full (3 armed) \u2014 wait for one to fire':'\u26A0 That bit is parked / unavailable this call'); return; }
       if(!r.ok){ throw new Error('HTTP '+r.status); }
       setlist.push(sel); renderArmPanel();
       toast(typeof lastGear.deploy_bar==='string'
@@ -1867,13 +1882,14 @@
         text:"Hi, this is Derek from Apex Synergy Partners. We've got an exclusive Q4 partnership opportunity I think your team will love." }}},
     { t:3800, e:{ event_type:'utterance', actor:'host', seq:3, payload:{ speaker_role:'host', speaker_name:'Jarl', turn_index:2,
         text:"A partnership. Wonderful. Before we go further — is this the kind of thing the council would need to bless, or can I authorize it from the longhouse myself?" }}},
-    { t:300,  e:{ event_type:'gear_state', actor:'system', seq:2, payload:{ suspicion:'alive', pressure:'calm', engagement:'hooked', slip:0, fit_score:1.2, deploy_bar:'warmup', pool:41, will_fire:false, top_bit:'Pricing Loop', turn_index:2 }}},
+    { t:300,  e:{ event_type:'gear_state', actor:'system', seq:2, payload:{ suspicion:'alive', pressure:'calm', engagement:'hooked', slip:0, fit_score:1.2, deploy_bar:'warmup', pool:124, will_fire:false, top_bit:'The Movie Bit', turn_index:2,
+        scores:{'BIT-302':0.8,'BIT-307':0.5,'BIT-329':0.4,'BIT-231':1.1,'BIT-101':0.9,'BIT-113':1.2,'BIT-216':1.0} }}},
     { t:5200, e:{ event_type:'bit_deployed', actor:'governor', seq:4, payload:{ bit_id:'BIT-201', name:'Pricing Loop', bit_type:'one_shot', trigger:'auto', turn_index:2, fit_score:5.1, deploy_bar:3.0, gears_at_fire:{ suspicion:'alive', pressure:'pushing', engagement:'hooked', slip:0 } }}},
     { t:1200, e:{ event_type:'utterance', actor:'spammer', seq:5, payload:{ speaker_role:'spammer', speaker_name:'Derek', turn_index:3,
         text:"Uh — no council needed. So pricing starts at two thousand a month for the growth tier." }}},
-    { t:600,  e:{ event_type:'gear_state', actor:'system', seq:5, payload:{ suspicion:'slipping', pressure:'extracting', engagement:'hooked', slip:1, fit_score:2.4, deploy_bar:3.0, pool:38, will_fire:false, top_bit:'The Questionnaire', turn_index:3,
-        top3:[{bit_id:'BIT-216',name:'The Questionnaire',score:2.4},{bit_id:'BIT-118',name:'The Echo',score:2.1},{bit_id:'BIT-101',name:'Blame Bjorn',score:1.9}],
-        scores:{'BIT-201':1.4,'BIT-118':2.1,'BIT-101':1.9,'BIT-140':0.8,'BIT-216':2.4} }}},
+    { t:600,  e:{ event_type:'gear_state', actor:'system', seq:5, payload:{ suspicion:'slipping', pressure:'extracting', engagement:'hooked', slip:1, fit_score:3.6, deploy_bar:3.0, pool:124, will_fire:true, top_bit:'The Movie Bit', turn_index:3,
+        top3:[{bit_id:'BIT-113',name:'The Movie Bit',score:3.6},{bit_id:'BIT-231',name:'The Competing Vendor',score:3.1},{bit_id:'BIT-101',name:'The Echo',score:2.4}],
+        scores:{'BIT-302':1.2,'BIT-307':0.9,'BIT-329':0.7,'BIT-231':3.1,'BIT-101':2.4,'BIT-113':3.6,'BIT-216':1.8} }}},
     { t:3600, e:{ event_type:'utterance', actor:'host', seq:6, payload:{ speaker_role:'host', speaker_name:'Jarl', turn_index:4,
         text:"Two thousand. And that two thousand — is that before or after the other two thousand you mentioned? I want to be sure which two thousand we're agreeing on." }}},
     { t:4200, e:{ event_type:'spammer_reaction', actor:'system', seq:7, payload:{ reaction_type:'confused', turn_index:4 }}},
