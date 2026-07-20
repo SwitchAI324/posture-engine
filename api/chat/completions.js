@@ -39,6 +39,15 @@ const BIT_PHASE = Object.fromEntries(
   (Array.isArray(BITS) ? BITS : []).map((b) => [b.id, b.phase_pref || "any"])
 );
 const phaseOf = (id) => BIT_PHASE[id] || "any";
+
+// LANE LOOKUP — parallel to BIT_PHASE. "gag" bits (coffee cup, dog, door, etc.)
+// belong to the puncture-comedy lane and fire on a SEPARATE clock that bypasses
+// warmup/MIN_GAP/deploy-bar (see the turn-1 gag-open path below). Untagged bits
+// are the normal slow-burn lane -> "slow".
+const BIT_LANE = Object.fromEntries(
+  (Array.isArray(BITS) ? BITS : []).map((b) => [b.id, b.lane || "slow"])
+);
+const laneOf = (id) => BIT_LANE[id] || "slow";
 import { waitUntil } from "@vercel/functions";
 
 // FULL BIT DIRECTIVES (id -> directive prose), same source providers.js
@@ -412,6 +421,14 @@ function blendRead(keywordState, read) {
 // low, so the bar is modest and the gap keeps Andrew from spamming beats.
 const INJECT_BAR = parseFloat(process.env.INJECT_BAR || "3.0");
 const MIN_GAP = parseInt(process.env.MIN_GAP || "3", 10);
+
+// GAG_OPEN_RATE — Call Design's tuning knob for the text-open vs sound-open
+// ratio on TURN ONE. 0.0 = always text-open (the HOST prompt's messy open);
+// 1.0 = always sound-open (a turn-1 gag bit like BIT-330) whenever one is
+// eligible. Default LOW — the messy text-open stays the baseline; a sound-open
+// is the occasional variant. This is the ONE control that decides how often the
+// gag lane grabs turn 1. Env-tunable, no deploy. Only consulted on turn 1.
+const GAG_OPEN_RATE = parseFloat(process.env.GAG_OPEN_RATE || "0.25");
 // PHASE: warm up before throwing any bit, then get mildly more willing to fire
 // as the call goes (they're invested — swing a little more).
 const WARMUP_TURNS = parseInt(process.env.WARMUP_TURNS || "2", 10);
@@ -1197,6 +1214,38 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // engagement data.
     let fire = !isSilenceNudge && !!(top && top.score >= bar && gap >= MIN_GAP);
 
+    // TURN-1 GAG-OPEN — the narrow first slice of the gag lane.
+    // The messy text-open (HOST prompt) is the baseline for turn 1. But a
+    // "sound-open" gag bit (BIT-330: cup/dog/door, lane:"gag" + phase_pref:
+    // "opening" + turn-one-only) can OPEN the call instead — a puncture in the
+    // first breath. It CANNOT fire through the normal path: effectiveBar(1) is
+    // Infinity (warmup) so `fire` above is always false on turn 1. This is the
+    // gag lane's whole point — a SEPARATE clock that bypasses warmup/MIN_GAP/
+    // deploy-bar. Scope kept deliberately tiny here (turn 1 only, no suspend/
+    // resume, no slow-burn thread to pause — nothing is running yet on turn 1):
+    //   - only on turn === 1, and only if the normal path didn't already fire
+    //   - find an eligible gag+opening bit in the ranked pool (it's IN the pool;
+    //     the opening gate admits phase_pref "opening", the pool cap admits it
+    //     if listed — it just can't clear the warmup BAR, which we bypass here)
+    //   - roll GAG_OPEN_RATE (Call Design's text-vs-sound ratio knob)
+    //   - on a hit, fire it, bypassing bar + MIN_GAP
+    // A miss (or no eligible gag) leaves `fire` false -> the text-open runs.
+    let gagOpen = false;
+    if (!fire && !isSilenceNudge && turn === 1) {
+      const gagBit = ranked.find(
+        (r) =>
+          !r.excluded &&
+          r.score > -Infinity &&
+          laneOf(r.id) === "gag" &&
+          phaseOf(r.id) === "opening"
+      );
+      if (gagBit && Math.random() < GAG_OPEN_RATE) {
+        top = gagBit;
+        fire = true;
+        gagOpen = true;
+      }
+    }
+
     // SAME-TURN RE-INJECTION — the fix for "bits never landed".
     // gap === 0 means a bit already fired on THIS turn. That is NOT a spacing
     // violation: LiveKit runs PREEMPTIVE GENERATION — it starts an LLM call on
@@ -1358,7 +1407,13 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         bit_id: top.id,
         name: top.name,
         bit_type: top.bit_type || top.type || null,
-        trigger: starvationFired ? "starvation" : (firedArmedBit ? "armed" : "auto"),
+        trigger: gagOpen
+          ? "gag_open"
+          : starvationFired
+          ? "starvation"
+          : firedArmedBit
+          ? "armed"
+          : "auto",
         turn_index: turn,
         // TELEMETRY: dry_turns = turns since the last discrete bit before this
         // fire (the gap the guard watches). Lets the bus compute firing rate and
@@ -1522,6 +1577,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
             // opening-bit gate in _bits_scorer.js loadout().
             turn,
             phase,
+            ...(gagOpen ? { gag_open: true } : {}),
             top3: ranked.slice(0, 3).map((r) => r.name + ":" + r.score.toFixed(1)),
           })
       );
