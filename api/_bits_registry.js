@@ -1,5 +1,5 @@
 // api/_bits_registry.js
-// Source: SpamViking_BitsRegistry.json (141 bits)
+// Source: SpamViking_BitsRegistry.json (142 bits)
 // DO NOT hand-edit. Regenerate from SpamViking_BitsRegistry.json.
 // Generated: 2026-07-18
 
@@ -110,6 +110,7 @@ export const BITS = [
   {"id": "BIT-327", "name": "The History Lesson", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 2.0, "stunned": 1.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
   {"id": "BIT-328", "name": "The Hobby", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"engagement": {"hooked": 3.0, "stunned": 2.0}, "pressure": {"calm": 1.0, "pushing": 1.0}}},
   {"id": "BIT-329", "name": "The Environment", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"bored": 2.0, "hooked": 1.0}, "pressure": {"calm": 2.0, "pushing": 1.0}}, "lane": "gag"},
+  {"id": "BIT-330", "name": "The Sound-Flub Open", "status": "active", "archetypes": "universal", "cooldown": 999, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0}, "pressure": {"calm": 2.0}}, "phase_pref": "opening", "lane": "gag"},
   {"id": "BIT-401", "name": "The Wrong Window Bit", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"pressure": {"pushing": 2.0, "extracting": 2.0}, "suspicion": {"slipping": 1.0}}},
   {"id": "BIT-402", "name": "Chat Injection Bit", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"pressure": {"calm": 1.0, "pushing": 2.0}, "engagement": {"hooked": 1.0}}},
   {"id": "BIT-403", "name": "Ai Reacting To Spammer Chat", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"suspicion": {"alive": 0.0, "slipping": 2.0, "foregone": 1.0}}},
