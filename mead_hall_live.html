@@ -183,6 +183,9 @@
   .bitrow{border-radius:5px;padding-left:5px !important;padding-right:5px !important;transition:background .2s}
   .bitrow.pending{animation:bitPending 1s ease-in-out infinite}
   .bitrow.firing{animation:bitFiring .5s ease-in-out 6}
+  .bitrow.forcing{background:#fbecec;box-shadow:0 0 0 1px var(--blood) inset;border-radius:5px}
+  .chip.force-bit{border-color:var(--blood);color:var(--blood)} .chip.force-bit:hover{background:#fbecec}
+  .chip.disarm-bit{border-color:#b7afa0;color:#8a8175} .chip.disarm-bit:hover{background:#f3f0ea}
   @keyframes bitPending{0%,100%{background:transparent}50%{background:#fdf0d2;box-shadow:0 0 0 1px #e3a93f inset}}
   @keyframes bitFiring{0%,100%{background:#fdeaea}50%{background:var(--gold2);box-shadow:0 0 0 2px var(--blood) inset}}
   @media (prefers-reduced-motion:reduce){ .bitrow.pending,.bitrow.firing{animation:none;background:#fdf0d2} }
@@ -1403,7 +1406,7 @@
   // suspicion: alive|slipping|foregone, pressure: calm|pushing|extracting,
   // engagement: bored|hooked|stunned, slip:int, fit_score (bar-scale, not 0-1),
   // deploy_bar (number or "warmup"), pool:int, turn:int. Any field may be absent.
-  let lastGear={}, firingBit=null;
+  let lastGear={}, firingBit=null, forcedBit=null;
   function renderGear(p){
     // Keep the gear DATA flowing even though the visible gear panel is removed — the bit scores,
     // flash (will_fire/top_bit), and opening-phase logic all read from lastGear.
@@ -1547,13 +1550,16 @@
       const isTop=(g.top_bit && (g.top_bit===b.name || g.top_bit===b.bit_id));
       const pending=(g.will_fire===true && isTop);
       const firing=(firingBit && firingBit===b.bit_id);
-      const cls='bitrow'+(pending?' pending':'')+(firing?' firing':'');
+      const forcing=(forcedBit && forcedBit===b.bit_id);
+      const cls='bitrow'+(pending?' pending':'')+(forcing?' forcing':'')+(firing?' firing':'');
       const mark=b._placeholder?' <span style="color:#b7afa0;font-size:8px">\u00B7 placeholder</span>'
-        :(parked?' <span style="color:#b7afa0;font-size:8px">\u00B7 parked</span>':'');
+        :(forcing?' <span style="color:var(--blood);font-size:8px;font-weight:700">\u00B7 firing next turn</span>'
+        :(parked?' <span style="color:#b7afa0;font-size:8px">\u00B7 parked</span>':''));
       return '<div class="'+cls+'" style="'+ROW+op+'" title="'+tip.replace(/"/g,'')+'"><span>'+(armed?'\u25B6 ':'')+b.name+mark+'</span>'+
         '<span style="margin-left:auto;display:flex;align-items:center;gap:7px">'+scoreCell(b)+
         (armed
-          ? '<button class="chip disarm-bit" data-bid="'+b.bit_id+'" title="remove from the setlist">disarm \u2715</button>'
+          ? '<button class="chip force-bit" data-bid="'+b.bit_id+'" title="fire this bit on the next turn, bypassing the score gate">force \u2726</button>'+
+            '<button class="chip disarm-bit" data-bid="'+b.bit_id+'" title="remove from the setlist">disarm \u2715</button>'
           : '<button class="chip arm-bit" data-bid="'+b.bit_id+'" '+dis+'>arm</button>')+
         '</span></div>'; }
     const inHand = handBits();
@@ -1577,6 +1583,7 @@
       (hookRows?('<div class="grp" style="margin-top:6px">Force a scouted fact</div>'+hookRows):'');
     el.querySelectorAll('.arm-bit').forEach(b=>b.onclick=()=>postArm({bit_id:b.dataset.bid}));
     el.querySelectorAll('.disarm-bit').forEach(b=>b.onclick=()=>postDisarm(b.dataset.bid));
+    el.querySelectorAll('.force-bit').forEach(b=>b.onclick=()=>postForce(b.dataset.bid));
     const db=el.querySelector('#bitsDeckBtn'); if(db) db.onclick=()=>{
       const u=location.origin+'/bits_flip_deck.html'+(callId?('?call_id='+encodeURIComponent(callId)):'');
       window.open(u,'_blank','noopener'); };
@@ -1585,11 +1592,25 @@
   /* arm POST (#4): arm a bit and/or a fact; setlist max 3; surface rejections */
   // Remove an armed bit from the setlist. MUST hit PE — clearing only locally would leave the
   // slot occupied server-side, so the next arm would still 409. Honest if PE lacks the action.
+  // Force a bit to fire next turn, bypassing the score gate (PE: one-shot, auto-disarms after
+  // it fires, returns a reason if it can't). The Director's "fire THIS now" lever.
+  async function postForce(bitId){ if(!callId){ toast('No call_id'); return; }
+    const body={ call_id:callId, bit_id:bitId, director_user_id:directorUserId, idempotency_key:callId+':force:'+bitId+':'+Date.now() };
+    try{ const r=await fetch(CONTROL_ENDPOINT+'?action=force',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      if(r.status===404||r.status===405){ toast('\u26A0 Force isn\u2019t wired on the engine yet \u2014 flagged to PE'); return; }
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok || j.ok===false){ toast('Can\u2019t force it: '+(j.reason||j.error||('HTTP '+r.status))); return; }
+      // Endpoint is live and returns when:"next_turn"; actual firing waits on the gag-open fix,
+      // so state it plainly rather than implying it's already firing.
+      forcedBit=bitId; renderArmPanel();
+      toast((bitNames[bitId]||bitId)+' \u2014 firing next turn'); }
+    catch(e){ toast('\u26A0 Force failed: '+(e.message||e)); } }
+
   async function postDisarm(bitId){ if(!callId){ toast('No call_id'); return; }
     if(!setlist.some(s=>s.bit_id===bitId)) return;
     const body={ call_id:callId, bit_id:bitId, director_user_id:directorUserId, idempotency_key:callId+':unarm:'+bitId+':'+Date.now() };
     try{ const r=await fetch(CONTROL_ENDPOINT+'?action=unarm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-      if(r.status===404){ toast('\u26A0 Disarm isn\u2019t wired on the engine yet \u2014 flagged to PE'); return; }
+      if(r.status===404||r.status===405){ toast('\u26A0 Disarm isn\u2019t wired on the engine yet \u2014 flagged to PE'); return; }
       if(!r.ok){ throw new Error('HTTP '+r.status); }
       setlist=setlist.filter(s=>s.bit_id!==bitId); renderArmPanel(); toast('Disarmed \u2014 slot freed'); }
     catch(e){ toast('\u26A0 Disarm failed: '+(e.message||e)); } }
@@ -1698,7 +1719,7 @@
         break; }
       case 'bit_deployed': { const n=p.name||p.bit_id||'bit';
         if(p.bit_id && p.name) bitNames[p.bit_id]=p.name;
-        firingBit=p.bit_id||null; renderArmPanel();
+        firingBit=p.bit_id||null; if(forcedBit===p.bit_id) forcedBit=null; renderArmPanel();
         setTimeout(()=>{ firingBit=null; renderArmPanel(); }, 3000);
         firedLog[n]=(firedLog[n]||0)+1; selectedBit=n; renderBoardBits(n); setTimeout(()=>renderBoardBits(null),2600);
         const tg=p.trigger; const tag=(tg==='armed')?'ARMED \u2192 ':(tg==='injected')?'INJECTED \u2192 ':'DEPLOY \u2192 ';
