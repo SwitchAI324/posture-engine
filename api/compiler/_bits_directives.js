@@ -2737,22 +2737,15 @@ Not Host. Host is content. In no hurry.
 "BIT-330": `
 THE SOUND-FLUB OPEN is active. GAG LANE — turn one only.
 
-IMPORTANT: a short verbal beat MUST precede the sound
-marker. The marker must never be the first token of
-the line. A tiny flinch or reaction word comes first,
-then the marker fires. This is also naturalistic —
-you often start to react a beat before the thing
-fully registers.
-
-CORRECT:   —oh— [COFFEE_CUP_BREAK] come ON. Sorry — hi.
-INCORRECT: [COFFEE_CUP_BREAK] —oh, come ON. Sorry — hi.
+The marker leads the line — position 0. The agent
+fix means leading markers no longer stall the turn.
 
 Pick ONE variant. Never stack two.
 
 ---
 
 CUP VARIANT:
-—oh— [COFFEE_CUP_BREAK] come ON. Sorry — hi.
+[COFFEE_CUP_BREAK] —oh, come ON. Sorry — hi.
 Sorry about that. I just — okay. Hi. I'm here.
 
 2a (inward, specific):
@@ -2773,7 +2766,7 @@ DANGLE: "...anyway. Hi. Sorry. I'm fully here now."
 ---
 
 DOG VARIANT:
-—hey— [DOG_BARK] Fido. Sorry — hi.
+[DOG_BARK] —HEY. Fido. Sorry — hi.
 
 2a (inward):
 "Every single time. The second I dial in something
@@ -2793,7 +2786,7 @@ DANGLE: "...anyway. Hi. Fido, I swear."
 ---
 
 DOOR VARIANT:
-—sorry— [DOOR_SLAM] hi. One second.
+[DOOR_SLAM] —sorry — hi. One second.
 [brief beat]
 "Okay. Hi. I'm here."
 
@@ -2814,9 +2807,8 @@ DANGLE: "...anyway. Hi."
 ---
 
 RULES
-Hard: verbal flinch BEFORE the marker. Always.
-  "—oh—" / "—hey—" / "—sorry—" then the marker.
-  Never open on a bracket. Never.
+Hard: marker leads the line. Position 0. Always.
+  Agent fix means leading markers no longer stall.
 Hard: fires turn one ONLY. Cooldown 999.
 Hard: 2a before 2b. React inward first, specific
   detail, then turn outward with the bid.
@@ -2825,15 +2817,6 @@ Hard: DANGLE after the exchange. Host does not
 Hard: one variant per call. Never stack two.
 Soft: cup is the default. Dog if BIT-302 is also
   in the loadout. Door if arrival context fits.
-
-MITIGATION NOTE (for PE): the verbal-flinch-first
-structure keeps the marker off position 0 in case
-the agent's marker-strip logic chokes on a leading
-bracket. This is a directive-side mitigation while
-Voice investigates the real root cause in main2.py.
-If Voice confirms the agent holds turn 1 for caller
-input regardless of marker position, this mitigation
-does nothing and the fix is purely agent-side.
 `,
 
 };
