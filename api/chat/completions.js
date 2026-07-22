@@ -394,6 +394,14 @@ function blendRead(keywordState, read) {
   const rank = { alive: 0, slipping: 1, foregone: 2 };
   const out = {};
   if (read.phase) out.phase = read.phase;
+  // ONE-WAY BUSINESS LATCH (phase-overlay split): the first turn the call is
+  // read as non-"opening", latch businessLatched=true so completions serves the
+  // BUSINESS overlay for the rest of the call — even if a later phase read
+  // wobbles back to "opening". Monotonic: only ever set true here, never unset,
+  // so the opener machinery can't return on turn 20. Rides the same setCall
+  // that persists the blended state (no extra write). Fail-safe: if no phase was
+  // read this turn, we don't latch (stays opener until a real non-opening read).
+  if (out.phase && out.phase !== "opening") out.businessLatched = true;
   // suspicion: take the MORE suspicious of keyword vs async (one-way ratchet).
   // IMPORTANT: suspicion is persisted under the store key "gear" (read back as
   // stored.gear next turn), so we write out.gear — not out.suspicion.
@@ -668,6 +676,25 @@ export default async function handler(req) {
   // Vapi's own prompt (Stage 1/2 — keeps Andrew sounding exactly as he is).
   // The doubt-gears layer on top of whichever base is in play.
   let baseSystem = stored && stored.prefix ? stored.prefix : vapiSystem;
+  // PHASE-OVERLAY SPLIT (Option B): append the phase-selected overlay to the
+  // END of the cached host block. stored.openerOverlay / stored.businessOverlay
+  // are the two swappable blocks written by hydrate. Selection:
+  //   - business once the call has left "opening" (businessLatched sticky, or
+  //     the current phase read is non-opening) — one-way, never flips back.
+  //   - opener otherwise (the default while phase is "opening").
+  // The breakpoint sits on block 0 (below), so putting the overlay here places
+  // it just before the breakpoint — business rules land at the end of the
+  // cached host material, highest adherence. FALLBACK: if the overlays aren't
+  // stored (a prefix hydrated before this shipped, mid-deploy), skip the append
+  // entirely — baseSystem stays the whole-prompt prefix = current behavior, no
+  // crash. This is what makes the deploy transition safe for in-flight calls.
+  if (stored && stored.prefix && (stored.openerOverlay || stored.businessOverlay)) {
+    const phase = stored.phase || "opening";
+    const useBusiness =
+      !!stored.businessLatched || (phase && phase !== "opening");
+    const overlay = useBusiness ? stored.businessOverlay : stored.openerOverlay;
+    if (overlay) baseSystem = baseSystem + "\n\n" + overlay;
+  }
   // Telegraph beat: fold the host's "someone's joining" warning into its prompt.
   if (telegraphAnnounce) baseSystem = (baseSystem || "") + "\n\n" + telegraphAnnounce;
   // Phantom send-in: fold the invoke/dangle directive into the host's own prompt
