@@ -211,6 +211,11 @@ module.exports = async function handler(req, res) {
         openerOverlay,
         businessOverlay,
         postureLine: initialPosture,
+        // target_id — resolved from booking_tokens by slug at call start. The
+        // agent needs it to write a calls row on a silence/bail close (Barbara
+        // keys her follow-up ladder off target_id). Returned here so the agent
+        // reads it from the same hydrate payload, no separate query.
+        target_id: cfg.target || null,
         // Per-slug voice config (optional). Sourced from booking_tokens.voice
         // (jsonb), shape: { voice_id, model, stability, similarity }. The agent
         // merges this over its code defaults and falls back safely if null —

@@ -19,6 +19,7 @@ const URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const TABLE = "call_prefix";
 const CONTROLS = "call_controls"; // canonical home for death_blow + arm + bench controls
+const CALLS = "calls"; // post-call outcome rows (Barbara's follow-up ladder keys off these)
 const EVENTS = "gear_events";
 
 export function isConfigured() {
@@ -476,4 +477,52 @@ export async function saveTranscript(callId, slug, messages) {
     body: JSON.stringify(row),
   });
   return r.ok;
+}
+
+// INSERT CALL OUTCOME — Barbara's post-call follow-up ladder keys off a `calls`
+// row's call_outcome. Written on a silence/bail/hangup close by the agent, via
+// POST /api/calls?action=close (the agent has no DB access; PE writes the row).
+// Schema (confirmed): calls requires only target_id (NOT NULL FK to targets.id);
+// id auto-defaults; every other column is nullable. call_outcome is plain text
+// with NO check constraint, so any value inserts (canonical set:
+// completed|dropped|no_show|hung_up). We write ONLY the fields provided — a
+// minimal write is just { target_id, call_outcome }. targetId is REQUIRED here;
+// without it the insert fails the FK/NOT NULL (the real 400 risk, not the
+// outcome value). Mirrors the addArm POST shape.
+export async function insertCallOutcome({
+  targetId,
+  callOutcome,
+  vapiCallId,
+  startedAt,
+  endedAt,
+  durationSeconds,
+  nextSteps,
+  hostPosture,
+  transcript,
+  status,
+}) {
+  if (!isConfigured()) throw new Error("store not configured");
+  if (!targetId) throw new Error("target_id required");
+  // Build the row from ONLY the provided fields — omit undefined so we never
+  // send a null that overwrites a column default (e.g. next_steps default []).
+  const row = { target_id: targetId };
+  if (callOutcome !== undefined) row.call_outcome = callOutcome;
+  if (vapiCallId !== undefined) row.vapi_call_id = vapiCallId;
+  if (startedAt !== undefined) row.started_at = startedAt;
+  if (endedAt !== undefined) row.ended_at = endedAt;
+  if (durationSeconds !== undefined) row.duration_seconds = durationSeconds;
+  if (nextSteps !== undefined) row.next_steps = nextSteps;
+  if (hostPosture !== undefined) row.host_posture = hostPosture;
+  if (transcript !== undefined) row.transcript = transcript;
+  if (status !== undefined) row.status = status;
+  const r = await fetch(`${URL}/rest/v1/${CALLS}`, {
+    method: "POST",
+    headers: {
+      apikey: KEY, authorization: `Bearer ${KEY}`,
+      "content-type": "application/json", prefer: "return=minimal",
+    },
+    body: JSON.stringify(row),
+  });
+  if (!r.ok) throw new Error(`calls insert failed: ${r.status} ${await r.text()}`);
+  return true;
 }
