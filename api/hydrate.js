@@ -76,14 +76,24 @@ async function readToken(slug) {
 // Write the compiled prefix to call_prefix via the store. setCall handles the
 // upsert; we pass prefix + archetype (+ the initial posture line so turn 1 has
 // one before the engine sets its own).
-async function writePrefix(callId, prefix, archetype, postureLine, targetId) {
+async function writePrefix(callId, prefix, archetype, postureLine, targetId, overlays) {
   const { setCall } = require("./_store.js");
   // targetId rides the same path archetype does: resolved once here from the
   // booking token, frozen on the call_prefix row, read back by completions on
   // every turn. Mead Hall stamps it on each event so the Director can open the
   // watch surface BEFORE the call — target is knowable in advance, the call_id
   // (the LiveKit room name) is not.
-  await setCall(callId, { prefix, archetype, postureLine, targetId: targetId ?? null });
+  // overlays = { openerOverlay, businessOverlay } — the two swappable phase
+  // blocks, stored frozen on the row; completions reads them and appends the
+  // phase-selected one at send time. Optional (older callers omit -> null).
+  await setCall(callId, {
+    prefix,
+    archetype,
+    postureLine,
+    targetId: targetId ?? null,
+    openerOverlay: (overlays && overlays.openerOverlay) ?? null,
+    businessOverlay: (overlays && overlays.businessOverlay) ?? null,
+  });
 }
 
 module.exports = async function handler(req, res) {
@@ -130,6 +140,11 @@ module.exports = async function handler(req, res) {
 
     const assembled = assemblePrefix(cfg);
     let prefix = assembled.stablePrefix;
+    // PHASE OVERLAYS — the two swappable blocks carried alongside the frozen
+    // prefix (assemble.js returns them separately; NOT baked into stablePrefix).
+    // completions.js appends the phase-selected one after the cached region.
+    let openerOverlay = assembled.openerOverlay || "";
+    let businessOverlay = assembled.businessOverlay || "";
 
     // [HOST NAME] substitution: the Master Host Prompt uses [HOST NAME] as a
     // placeholder token. It MUST be replaced with the real host name (from the
@@ -138,6 +153,11 @@ module.exports = async function handler(req, res) {
     // hydrate time, where host_name is in hand.
     const hostName = (cfg.host_name && String(cfg.host_name).trim()) || "Andrew";
     prefix = prefix.split("[HOST NAME]").join(hostName);
+    // The token also appears in the OPENER overlay's empty-open example (the
+    // BUSINESS overlay has none — the sub is a safe no-op there). Substitute in
+    // both so no raw placeholder ships in an overlay either.
+    openerOverlay = openerOverlay.split("[HOST NAME]").join(hostName);
+    businessOverlay = businessOverlay.split("[HOST NAME]").join(hostName);
     // Remove the ENTIRE dual-identity section (the "YOUR IDENTITY" header through
     // the ANDREA description) and replace with a single clear line, so the model
     // is never told it could be Andrew OR Andrea and never sees the name "Andrea"
@@ -156,9 +176,10 @@ module.exports = async function handler(req, res) {
 
     // ALWAYS write the slug key (pre-call safe, removes the race). Also write
     // the call_id row if we have it (the direct hit).
-    await writePrefix("slug:" + slug, prefix, cfg.tactic, initialPosture, cfg.target);
+    const overlays = { openerOverlay, businessOverlay };
+    await writePrefix("slug:" + slug, prefix, cfg.tactic, initialPosture, cfg.target, overlays);
     if (callId) {
-      await writePrefix(callId, prefix, cfg.tactic, initialPosture, cfg.target);
+      await writePrefix(callId, prefix, cfg.tactic, initialPosture, cfg.target, overlays);
     }
 
     console.log(
@@ -183,6 +204,12 @@ module.exports = async function handler(req, res) {
         // the session's system instructions — LiveKit holds no per-request call
         // identity, so it must receive the prompt text here at call start.
         prefix,
+        // PHASE OVERLAYS — the two swappable blocks. The agent/engine appends
+        // the phase-selected one after the cached prefix at send time (Option B).
+        // Returned here so the LiveKit agent, which reads the prompt from this
+        // response at call start, has them alongside the prefix.
+        openerOverlay,
+        businessOverlay,
         postureLine: initialPosture,
         // Per-slug voice config (optional). Sourced from booking_tokens.voice
         // (jsonb), shape: { voice_id, model, stability, similarity }. The agent
