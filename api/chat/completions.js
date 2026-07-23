@@ -430,6 +430,13 @@ function blendRead(keywordState, read) {
 const INJECT_BAR = parseFloat(process.env.INJECT_BAR || "3.0");
 const MIN_GAP = parseInt(process.env.MIN_GAP || "3", 10);
 
+// OPENER_MAX_TURNS — hard ceiling on how long the OPENER overlay can stay
+// loaded, independent of the phase reader. The reader is an LLM call and CAN
+// fail persistently; without this a failed read pins phase at "opening" and the
+// business rules never load for the entire call. Past this many caller turns we
+// serve BUSINESS no matter what phase says. 0 disables the backstop.
+const OPENER_MAX_TURNS = parseInt(process.env.OPENER_MAX_TURNS || "4", 10);
+
 // GAG_OPEN_RATE — Call Design's tuning knob for the text-open vs sound-open
 // ratio on TURN ONE. 0.0 = always text-open (the HOST prompt's messy open);
 // 1.0 = always sound-open (a turn-1 gag bit like BIT-330) whenever one is
@@ -489,39 +496,29 @@ export default async function handler(req) {
   // so it must NOT be treated as a silence nudge. The probe logs which case it
   // is so the one test can't confuse the two.
   let isSilenceNudge = false; // hoisted: needed later to skip bit injection
-  try {
-    const lastUser = lastUserText(messages);
-    const noFreshLine = !lastUser || !String(lastUser).trim();
-    const priorCallerTurns = countUserTurns(messages);
-    const isOpener = priorCallerTurns === 0;               // turn 0 = opener, NOT silence
-    const rawStr = JSON.stringify(body).slice(0, 1200);
-    // hookish: the say.prompt nudge text is present in the body — the RELIABLE
-    // signal that this turn was fired by the silence hook (not a real caller
-    // line). We check it BEFORE isSilenceNudge because the hook injects its own
-    // prompt as a user message, which makes noFreshLine=false and would
-    // otherwise hide the nudge. So: a hook-originated turn (turn>0) IS a silence
-    // nudge regardless of noFreshLine.
-    const hookish = /timeout|silence|say\.prompt|re-?engage|gone quiet|hook/i.test(rawStr);
-    isSilenceNudge =
-      !isOpener && (hookish || noFreshLine); // mid-call hook OR genuinely no new line
-    if (isSilenceNudge || hookish) {
-      console.log("SILENCE_PROBE inbound: isSilenceNudge=" + isSilenceNudge +
-        " hookish=" + hookish + " priorCallerTurns=" + priorCallerTurns +
-        " isOpener=" + isOpener + " body=" + rawStr);
-    }
-    // RESUME DIAGNOSTIC: log the shape of any turn that reads as the opener
-    // (priorCallerTurns===0) but is NOT hook-originated — this is the post-nudge
-    // "resume" turn we suspect is falsely re-greeting. One line tells us whether
-    // Vapi really sends an empty message[] after nudges (=> opened-flag fix) or
-    // something else.
-    if (isOpener && !hookish) {
-      try {
-        const roles = (messages || []).map(m => m && m.role).join(",");
-        console.log("RESUME_CHECK priorCallerTurns=0 isOpener=true msgCount=" +
-          (messages ? messages.length : 0) + " roles=[" + roles + "]");
-      } catch { /* never break */ }
-    }
-  } catch (e) { /* probe must never break a turn */ }
+  // SILENCE-NUDGE DETECTION: RETIRED (2026-07-23). This whole path was VAPI-
+  // shaped — the trigger was a Vapi say.prompt hook (never fires on LiveKit)
+  // and delivery went to body.call.monitor.controlUrl (null on LiveKit). On
+  // LiveKit, silence is handled AGENT-side: the agent fires a bare
+  // session.generate_reply() and the standing prompt's "IF THEY GO QUIET"
+  // section covers it. No PE nudge treatment, no marker.
+  //
+  // WHY IT'S FORCED FALSE RATHER THAN LEFT TO SNIFF: `hookish` tested the FIRST
+  // 1200 CHARS OF THE REQUEST BODY for /timeout|silence|.../ — and the body
+  // starts with the system prompt. The v0.8 CORE reorder moved "Garbled,
+  // crosstalk, a long silence, a fragment" (WHEN YOU CAN'T MAKE OUT WHAT THEY
+  // SAID) to char ~1045, INSIDE that window. So hookish went true on EVERY
+  // turn -> isSilenceNudge true on every non-opener turn -> `fire =
+  // !isSilenceNudge && ...` false forever -> NO BIT COULD EVER FIRE (the
+  // Jul-23 call: gag scored 6.5 but fired:false, and the SILENCE_PROBE logged
+  // on normal turns). A prompt edit must never be able to disable bit firing.
+  // Forcing false restores correct LiveKit behavior and removes the coupling.
+  // The rest of the dead apparatus (controlUrl capture, OPTION B driver,
+  // variableValues/assistantOverrides, the bare-body 2nd nudge, SSE teardown)
+  // comes out in the deliberate expunge pass; this is the surgical unblock.
+  // (RESUME_CHECK diagnostic removed with the silence probe — it referenced the
+  // probe's isOpener/hookish locals and only existed to study Vapi's post-nudge
+  // resume turn, which does not exist on LiveKit.)
 
   // BENCH: decide if a character barges in THIS turn. If so, the engine appends
   // their tagged line to the stream itself (the model won't emit the tag, so we
@@ -690,8 +687,20 @@ export default async function handler(req) {
   // crash. This is what makes the deploy transition safe for in-flight calls.
   if (stored && stored.prefix && (stored.openerOverlay || stored.businessOverlay)) {
     const phase = stored.phase || "opening";
+    // BACKSTOP (added 2026-07-23 after the first live test): the phase reader
+    // can FAIL persistently ("callread FAILED — phase/gears unchanged"), which
+    // leaves phase pinned at its "opening" default forever. Pre-split that was
+    // survivable (the whole prompt was loaded anyway); post-split it means the
+    // BUSINESS overlay NEVER loads and the host runs opener rules for the whole
+    // call — which is exactly the repetitive "can you hear me okay / clear line
+    // for once" failure, since those are the opener's own register examples.
+    // So: force business past OPENER_MAX_TURNS regardless of what phase says.
+    // A stuck reader can no longer strand the host in opener mode.
+    const turnNow = countUserTurns(messages);
     const useBusiness =
-      !!stored.businessLatched || (phase && phase !== "opening");
+      !!stored.businessLatched ||
+      (phase && phase !== "opening") ||
+      (OPENER_MAX_TURNS > 0 && turnNow > OPENER_MAX_TURNS);
     const overlay = useBusiness ? stored.businessOverlay : stored.openerOverlay;
     if (overlay) baseSystem = baseSystem + "\n\n" + overlay;
   }
