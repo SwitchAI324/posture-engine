@@ -1267,7 +1267,19 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     //   - on a hit, fire it, bypassing bar + MIN_GAP
     // A miss (or no eligible gag) leaves `fire` false -> the text-open runs.
     let gagOpen = false;
-    if (!fire && !isSilenceNudge && turn === 1) {
+    // ONCE-PER-CALL GUARD (added 2026-07-23 after the live test): the agent
+    // fires a BARE TURN on silence, resending the same minimal message array —
+    // so countUserTurns still returns 1 and this block re-entered on EVERY
+    // silence nudge, re-firing the gag with the same directive and emitting the
+    // identical line three times ~25s apart (the "totally repetitive talk
+    // track"). turn===1 is NOT sufficient on its own because turn is derived
+    // from the caller-turn count, which a bare turn does not advance. Gate on
+    // whether ANY bit has already fired this call: stored.lastBitId is set the
+    // moment one does, so a second pass can never re-open. BIT-330's
+    // cooldown:999 does not help here — the gag-open path deliberately bypasses
+    // the scorer, so it bypasses cooldown too.
+    const alreadyFiredThisCall = !!(stored && stored.lastBitId);
+    if (!fire && !isSilenceNudge && turn === 1 && !alreadyFiredThisCall) {
       const gagBit = ranked.find(
         (r) =>
           !r.excluded &&
