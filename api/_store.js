@@ -44,7 +44,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-   `&select=prefix,posture_line,gear,pressure,engagement,slip,accuse_floor,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,archetype,character_id`;
+   `&select=prefix,posture_line,gear,pressure,engagement,slip,accuse_floor,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id`;
   const r = await fetch(url, {
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
@@ -72,6 +72,12 @@ export async function getCall(callId) {
     stallCount: rows[0].stall_count ?? 0, // turns_since_pitch_or_ask (extended_stall)
     lastBitId: rows[0].last_bit_id || null,
     lastBitTurn: rows[0].last_bit_turn ?? null,
+    // Number() because PostgREST can hand bigint back as a string; the
+    // re-injection window does arithmetic on it.
+    lastBitAt: rows[0].last_bit_at != null ? Number(rows[0].last_bit_at) : null,
+    businessLatched: rows[0].business_latched ?? false,
+    openerOverlay: rows[0].opener_overlay ?? null,
+    businessOverlay: rows[0].business_overlay ?? null,
     archetype: rows[0].archetype || null,
     characterId: rows[0].character_id || null, // host_posture for the calls record
   };
@@ -81,7 +87,7 @@ export async function getCall(callId) {
 // posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, archetype, characterId }
+  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -106,6 +112,19 @@ export async function setCall(
   if (stallCount !== undefined) row.stall_count = stallCount; // extended_stall counter
   if (lastBitId !== undefined) row.last_bit_id = lastBitId;
   if (lastBitTurn !== undefined) row.last_bit_turn = lastBitTurn;
+  // lastBitAt: ms-epoch of the last REAL bit fire. Powers REINJECT_WINDOW_MS in
+  // completions — re-injection is only valid for a preemptive regeneration
+  // (sub-second), never for a silence bare-turn (tens of seconds later).
+  if (lastBitAt !== undefined) row.last_bit_at = lastBitAt;
+  // businessLatched: one-way phase-overlay latch. Once the call leaves
+  // "opening" this pins the BUSINESS overlay for the rest of the call so a
+  // wobbling phase read can't drag the opener machinery back on turn 20.
+  if (businessLatched !== undefined) row.business_latched = businessLatched;
+  // opener/business overlays: the two swappable phase blocks, written once at
+  // hydrate. completions appends the phase-selected one after the cached
+  // prefix. WITHOUT THESE PERSISTED THE SPLIT SILENTLY FALLS BACK TO CORE-ONLY.
+  if (openerOverlay !== undefined) row.opener_overlay = openerOverlay;
+  if (businessOverlay !== undefined) row.business_overlay = businessOverlay;
   if (archetype !== undefined) row.archetype = archetype;
   if (characterId !== undefined) row.character_id = characterId; // host_posture source
 
