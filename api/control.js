@@ -42,7 +42,7 @@
 // Note: the engine detects the FOREGONE death blow (Trigger B) itself — this
 // endpoint is ONLY the Director's manual Trigger A.
 // ----------------------------------------------------------------------
-import { getControls, setDeathBlow, addArm, setBench, removeArm, forceBit } from "./_store.js";
+import { getControls, setDeathBlow, addArm, setBench, removeArm, forceBit, cancelForce } from "./_store.js";
 import { makeTrace } from "./_trace.js";
 import { BITS } from "./_bits_registry.js";
 import { benchIds } from "./_bench_v2.js";
@@ -209,6 +209,30 @@ export default async function handler(req) {
     // into the winning generation), not this instant. Honest for the button.
     return jsonRes({ ok: true, action: "force", call_id: callId, bit_id: bitId, when: "next_turn" });
   }
+  // POST ?action=cancel — the Director's in-flight UN-FIRE (Smart Fire).
+  // Clears a PENDING force row so the consumer never picks it up. bit_id is
+  // OPTIONAL: under the one-in-flight model there is at most one pending force
+  // per call, so an omitted bit_id cancels whatever is in flight.
+  // Idempotent: cancelling nothing still returns 200 — "make sure nothing is in
+  // flight", not "there must have been something".
+  // RACE: if the bit fires in the same instant, fireForce wins and this matches
+  // zero rows. That is correct and still 200 — the UI should jump to the fired
+  // state rather than show an error. Nothing can be un-fired once spoken.
+  if (req.method === "POST" && u.searchParams.get("action") === "cancel") {
+    let b;
+    try { b = await req.json(); } catch { return jsonRes({ error: "bad json" }, 400); }
+    const callId = String(b.call_id || "").trim();
+    if (!callId) return jsonRes({ error: "call_id required" }, 400);
+    const bitId = b.bit_id ? String(b.bit_id).trim() : null;
+    const before = await getControls(callId).catch(() => null);
+    const wasInFlight = !!(before && before.forced && before.forced.bit_id);
+    try { await cancelForce(callId, { bitId }); }
+    catch (e) { return jsonRes({ error: "cancel write failed", detail: String(e).slice(0, 200) }, 502); }
+    // was_in_flight lets Mead Hall tell "cancelled it" from "nothing to cancel /
+    // already fired" without a second round-trip.
+    return jsonRes({ ok: true, action: "cancel", call_id: callId, bit_id: bitId, was_in_flight: wasInFlight });
+  }
+
   if (req.method === "POST" && u.searchParams.get("action") === "bench") {
     let b;
     try { b = await req.json(); } catch { return jsonRes({ error: "bad json" }, 400); }

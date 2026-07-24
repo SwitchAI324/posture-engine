@@ -526,3 +526,36 @@ export async function insertCallOutcome({
   if (!r.ok) throw new Error(`calls insert failed: ${r.status} ${await r.text()}`);
   return true;
 }
+
+// CANCEL a pending force — the Director's in-flight un-fire. Same shape as
+// fireForce but the terminal status is "cancelled" rather than "fired", so the
+// two are distinguishable in the control history (did it land, or did the
+// Director pull it?). getControls only surfaces PENDING force rows, so once
+// this lands the consumer can never pick the bit up.
+// Idempotent: if no pending force matches (already fired, already cancelled,
+// or never forced) it PATCHes zero rows and still returns ok — cancel means
+// "make sure this is not in flight", not "there must have been one".
+// NOTE ON THE RACE: if the bit fires in the same instant, fireForce may win and
+// set "fired" first; this then matches nothing and no-ops. That is correct —
+// the endpoint reports already-fired and the UI jumps to the fired state.
+export async function cancelForce(callId, { bitId } = {}) {
+  if (!isConfigured() || !callId) throw new Error("store not configured");
+  let q =
+    `${URL}/rest/v1/${CONTROLS}` +
+    `?call_id=eq.${encodeURIComponent(callId)}` +
+    `&control_type=eq.force` +
+    `&status=eq.pending`;
+  // bitId optional: omit to cancel whatever is in flight for this call (the
+  // one-in-flight model means there is at most one).
+  if (bitId) q += `&payload->>bit_id=eq.${encodeURIComponent(bitId)}`;
+  const r = await fetch(q, {
+    method: "PATCH",
+    headers: {
+      apikey: KEY, authorization: `Bearer ${KEY}`,
+      "content-type": "application/json", prefer: "return=minimal",
+    },
+    body: JSON.stringify({ status: "cancelled" }),
+  });
+  if (!r.ok) throw new Error(`cancelForce failed: ${r.status} ${await r.text()}`);
+  return true;
+}
