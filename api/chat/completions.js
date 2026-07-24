@@ -623,6 +623,19 @@ export default async function handler(req) {
               // target=NULL for the rest of every call. Same shape as
               // archetype/controlUrl: prefer live state, else the slug row.
               targetId: stored.targetId || bySlug.targetId,
+              // PHASE OVERLAYS — same trap as targetId above, same fix.
+              // hydrate writes them ONLY on the "slug:<slug>" row (it runs
+              // before any call_id exists). PE's first per-turn state write
+              // then CREATES the call_id row without them, so from turn 2 on
+              // getCall hits that row, this merge runs, and the overlays were
+              // silently dropped: the split loaded the OPENER overlay on turn 1
+              // (stored was null -> we took bySlug wholesale) and NOTHING from
+              // turn 2 onward. Symptom was exact: turn 1 = 944 input + 5640
+              // cache_creation (~6584 = prefix + overlay), turns 2+ = 3507 with
+              // no cache at all (~prefix alone, and a different block 0 so the
+              // cache never hit). Prefer live state, else the slug row.
+              openerOverlay: stored.openerOverlay || bySlug.openerOverlay,
+              businessOverlay: stored.businessOverlay || bySlug.businessOverlay,
               archetype: stored.archetype || bySlug.archetype }
           : bySlug;
       }
