@@ -16,7 +16,7 @@
 
 export const config = { runtime: "edge" };
 
-import { getCall, getCallBySlug, setCall, isConfigured, appendGearEvent, appendBitEvent, clearDeathBlow, getControls, stampArm, fireArm, saveTranscript } from "../_store.js";
+import { getCall, getCallBySlug, setCall, isConfigured, appendGearEvent, appendBitEvent, clearDeathBlow, getControls, stampArm, fireArm, fireForce, saveTranscript } from "../_store.js";
 import { applyForceAll, postureBlock, defaultState, detectAccusation } from "../_gears.js";
 import { selectBit, rankBits, DEPLOY_THRESHOLD } from "../_bits_scorer.js";
 import { archetypeFromBody } from "../_archetype.js";
@@ -437,6 +437,12 @@ const MIN_GAP = parseInt(process.env.MIN_GAP || "3", 10);
 // serve BUSINESS no matter what phase says. 0 disables the backstop.
 const OPENER_MAX_TURNS = parseInt(process.env.OPENER_MAX_TURNS || "4", 10);
 
+// REINJECT_WINDOW_MS — how long after a bit fires a same-turn re-injection is
+// still considered a PREEMPTIVE REGENERATION rather than a new (silence) turn.
+// Regenerations land in well under a second; the silence watchdog fires tens of
+// seconds later. 12s is comfortably between the two.
+const REINJECT_WINDOW_MS = parseInt(process.env.REINJECT_WINDOW_MS || "12000", 10);
+
 // GAG_OPEN_RATE — Call Design's tuning knob for the text-open vs sound-open
 // ratio on TURN ONE. 0.0 = always text-open (the HOST prompt's messy open);
 // 1.0 = always sound-open (a turn-1 gag bit like BIT-330) whenever one is
@@ -566,7 +572,7 @@ export default async function handler(req) {
   }
   let stored = null;
   let ammo = { ammunition: [], byHook: {} };
-  let controls = { deathBlow: null, armed: [], sentBench: null };
+  let controls = { deathBlow: null, armed: [], sentBench: null, forced: null };
   // TRANSCRIPT: persist the full conversation-so-far on every turn, keyed by
   // callId (room name), slug alongside. Runs after the sv_slug tag strip so
   // the stored transcript is clean. Last write = the complete transcript when
@@ -1250,6 +1256,58 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // engagement data.
     let fire = !isSilenceNudge && !!(top && top.score >= bar && gap >= MIN_GAP);
 
+    // ── FORCE CONSUMER ────────────────────────────────────────────────────
+    // The Director's "fire THIS bit now" override, from Mead Hall via
+    // POST /api/control?action=force. The endpoint writes a pending
+    // control_type:"force" row; getControls surfaces it as controls.forced.
+    // This is the half that ACTS on it — without this the button writes a note
+    // nobody reads.
+    //
+    // WHY IT SITS HERE: placed right after the normal fire decision and BEFORE
+    // the gag-open and re-injection blocks — both of those are gated on
+    // `!fire`, so a forced fire naturally suppresses them. The Director's
+    // explicit pick outranks an auto-pick, a turn-1 gag, and a re-injection.
+    //
+    // ONE-SHOT: fireForce() PATCHes the row to status "fired", and getControls
+    // only surfaces PENDING force rows — so it cannot fire twice. That also
+    // covers the silence-bare-turn trap that bit the gag-open and re-injection
+    // paths (a bare turn does not advance the turn counter, so anything keyed
+    // on turn/gap sameness re-fires): force is keyed on the ROW's status, not
+    // on turn or gap, so a bare turn re-entering here finds nothing pending.
+    //
+    // BYPASSES the deploy bar and MIN_GAP by design — that IS the feature; the
+    // bit was stuck precisely because it never cleared the bar.
+    //
+    // UNFIRABLE CASE: the bit must still be a real candidate in THIS call's
+    // ranked pool. If it's archetype-excluded, capped out, or phase-gated, we
+    // do NOT fire and we do NOT consume the force — it stays pending so it can
+    // land on a later turn when the pool shifts, and we log the reason so Mead
+    // Hall can surface "couldn't fire yet" instead of the Director waiting
+    // blind. (The endpoint already static-checks unknown/parked ids; this is
+    // the per-call reason that can only be known at fire time.)
+    let forcedFire = false;
+    const forcedCtl = controls && controls.forced ? controls.forced : null;
+    if (!isSilenceNudge && forcedCtl && forcedCtl.bit_id) {
+      const forcedBit = ranked.find(
+        (r) => r.id === forcedCtl.bit_id && !r.excluded && r.score > -Infinity
+      );
+      if (forcedBit) {
+        top = forcedBit;
+        fire = true;
+        forcedFire = true;
+        console.log(
+          "force FIRING bit=" + forcedCtl.bit_id + " turn=" + turn +
+          " (bypassing bar=" + bar + " gap=" + gap + ")"
+        );
+      } else {
+        console.log(
+          "force UNFIRABLE bit=" + forcedCtl.bit_id + " turn=" + turn +
+          " — not an eligible candidate in this call's pool " +
+          "(archetype/cap/phase gate); force stays pending"
+        );
+      }
+    }
+
     // TURN-1 GAG-OPEN — the narrow first slice of the gag lane.
     // The messy text-open (HOST prompt) is the baseline for turn 1. But a
     // "sound-open" gag bit (BIT-330: cup/dog/door, lane:"gag" + phase_pref:
@@ -1308,7 +1366,26 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // current one. So: re-inject the same bit, and let whichever generation
     // survives perform it.
     let sameTurnReinject = false;
-    if (!fire && !isSilenceNudge && gap === 0 && stored && stored.lastBitId) {
+    // TIME-BOUND (added 2026-07-24): re-injection is for a PREEMPTIVE REGENERATION
+    // — the same user turn re-rolled MILLISECONDS later as more speech arrives.
+    // It is NOT for a silence bare-turn. The agent's silence watchdog fires a
+    // bare session.generate_reply() ~20-30s later with the SAME message array,
+    // so countUserTurns is unchanged, gap is still 0, and stored.lastBitId is
+    // still set — which made this block re-hand the SAME bit and replay the
+    // IDENTICAL line (the Jul-24 call: [COFFEE_CUP_BREAK] + the same mug speech
+    // three times, 30s apart). The gag-open guard did NOT catch it because this
+    // is a different path. Distinguish them by ELAPSED TIME: a regeneration is
+    // near-instant, a silence nudge is tens of seconds. If we have no timestamp
+    // (a row written before this shipped), allow — preserves prior behavior for
+    // in-flight calls; new calls get stamped on the first fire.
+    const sinceLastBitMs =
+      stored && stored.lastBitAt ? Date.now() - stored.lastBitAt : null;
+    const withinReinjectWindow =
+      sinceLastBitMs === null || sinceLastBitMs <= REINJECT_WINDOW_MS;
+    if (
+      !fire && !isSilenceNudge && gap === 0 &&
+      stored && stored.lastBitId && withinReinjectWindow
+    ) {
       const same = ranked.find((r) => r.id === stored.lastBitId);
       if (same) {
         top = same;
@@ -1333,6 +1410,16 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         fire = true;
         starvationFired = true;
       }
+    }
+
+    // FORCE one-shot consume: the Director's forced bit actually fired this
+    // turn, so close its row (status -> "fired"). getControls only surfaces
+    // PENDING force rows, so this is what makes it fire exactly once — and it's
+    // why a silence bare-turn can't replay it (the guard is the row's status,
+    // not the turn counter). Left pending if it never fired, so an unfirable
+    // force can still land on a later turn when the pool shifts.
+    if (forcedFire && fire && forcedCtl && forcedCtl.bit_id) {
+      waitUntil(fireForce(callId, { bitId: forcedCtl.bit_id }).catch(() => {}));
     }
 
     // ARM resolution: reconcile the setlist with this turn's outcome. Each arm is
@@ -1455,7 +1542,9 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         bit_id: top.id,
         name: top.name,
         bit_type: top.bit_type || top.type || null,
-        trigger: gagOpen
+        trigger: forcedFire
+          ? "force"
+          : gagOpen
           ? "gag_open"
           : starvationFired
           ? "starvation"
@@ -1641,7 +1730,9 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           slip: state.slip,
           accuseFloor: state.accuseFloor, // STICKY: persist the accusation floor
           stallCount, // extended_stall streak (resets on pitch/ask)
-          ...(fire && !sameTurnReinject ? { lastBitId: top.id, lastBitTurn: turn } : {}),
+          ...(fire && !sameTurnReinject
+            ? { lastBitId: top.id, lastBitTurn: turn, lastBitAt: Date.now() }
+            : {}),
           ...(archetypeNew ? { archetype } : {}),
         }).catch(() => {})
       ); // never awaited
