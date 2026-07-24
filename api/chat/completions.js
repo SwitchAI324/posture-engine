@@ -579,6 +579,28 @@ export default async function handler(req) {
   // the call ends — no end-of-call event needed, survives mid-call crashes.
   // Fire-and-forget via waitUntil; never blocks the voice, never throws.
   if (callId && isConfigured()) {
+    // RX PROBE (added 2026-07-24): logs the SHAPE of the incoming request array
+    // so the "is the agent sending conversation history?" question can be
+    // settled from PE's own logs, with no agent-side instrumentation.
+    //   msgs   = total non-system messages received
+    //   user   = countUserTurns (this is what `turn` in the fit line derives from)
+    //   asst   = assistant turns present (history flowing = this grows)
+    //   last   = role of the final message
+    // READ IT LIKE THIS: on a healthy multi-turn call these GROW every turn
+    // (msgs 2,4,6…). If they stay pinned at 1-2 while the caller is actively
+    // speaking, the agent is sending only the latest utterance and history is
+    // genuinely broken. If they grow normally and only DIP on a turn where the
+    // caller said nothing, that dip is a silence bare-turn behaving correctly.
+    try {
+      const nonSys = (messages || []).filter((m) => m && m.role !== "system");
+      const asst = nonSys.filter((m) => m.role === "assistant").length;
+      console.log(
+        "RX msgs=" + nonSys.length +
+        " user=" + countUserTurns(messages) +
+        " asst=" + asst +
+        " last=" + (nonSys.length ? nonSys[nonSys.length - 1].role : "none")
+      );
+    } catch { /* probe must never break a turn */ }
     waitUntil(saveTranscript(callId, slug, messages).catch(() => {}));
   }
   try {
