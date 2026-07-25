@@ -832,11 +832,39 @@ export default async function handler(req) {
     if (typeof waitUntil === "function") waitUntil(drive);
   }
 
+  // SILENCE BARE-TURN → the Anthropic API treats a messages array whose LAST
+  // entry is an assistant message as a PREFILL: it tries to CONTINUE that line
+  // rather than start a new turn. The host's prior line is already complete
+  // (ends in punctuation), so the model emits end-of-turn immediately and
+  // returns EMPTY (OUT len=0). That is the "no reaction to silence" failure —
+  // and it is why the system-prompt directive alone could not fix it: the
+  // directive says "speak", but the message STRUCTURE says "continue this
+  // finished line", and structure wins.
+  // FIX: on a bare silence turn (caller has spoken before, last message is the
+  // host's own line), append a synthetic USER turn so the array ends in "user"
+  // and the model generates a FRESH assistant line. Keyed on last-message role,
+  // NOT turn/gap counting. The synthetic turn goes ONLY to the model — the real
+  // `messages` array (already saved to the transcript above) is untouched.
+  let messagesForModel = messages;
+  {
+    const lastRole =
+      messages && messages.length
+        ? messages[messages.length - 1] && messages[messages.length - 1].role
+        : null;
+    const callerHasSpoken =
+      messages && messages.filter((m) => m && m.role === "user").length > 0;
+    if (lastRole === "assistant" && callerHasSpoken) {
+      messagesForModel = messages.concat([
+        { role: "user", content: "[The caller has gone quiet on the line.]" },
+      ]);
+    }
+  }
+
   const anthropicReq = {
     model: MODEL(),
     max_tokens: MAX_TOKENS(),
     stream: true,
-    messages,
+    messages: messagesForModel,
     // Spike creativity on the Death Blow turn only — the comedy is in the
     // surprise. Every other turn stays at the model's default for consistency.
     ...(deathBlowFiring ? { temperature: 1 } : {}),
