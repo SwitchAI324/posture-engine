@@ -543,41 +543,30 @@ export default async function handler(req) {
     body.call?.assistantOverrides?.variableValues ||
     body.assistantOverrides?.variableValues ||
     {};
-  // FIX B: the 2nd+ silence nudge arrives as a BARE body ({messages:[...]}) with
-  // NO call/metadata/variableValues — so none of the normal slug sources resolve,
-  // and the nudge would run on the flat shim instead of the real prefix. To fix,
-  // meeting.js embeds a [[sv_slug:<slug>]] tag at the front of the nudge prompt.
-  // Extract it here as a last-resort slug source. (The tag is stripped from the
-  // message before it reaches the model, below, so it's never spoken.)
-  let nudgeSlug = null;
-  try {
-    const lastMsg = messages && messages.length ? messages[messages.length - 1] : null;
-    const c = lastMsg && typeof lastMsg.content === "string" ? lastMsg.content : "";
-    const m = c.match(/\[\[sv_slug:([^\]]+)\]\]/);
-    if (m) nudgeSlug = m[1].trim();
-  } catch { /* ignore */ }
+  // (Retired Jul-25: the [[sv_slug:<slug>]] tag mechanism. meeting.js used to
+  // embed a slug tag at the front of the nudge prompt for the VAPI bare-body
+  // "2nd+ silence nudge with no metadata" case, and PE extracted it here as a
+  // last-resort slug source then stripped it before the model/TTS saw it. On
+  // LiveKit that bare-nudge path does not exist; confirmed that NEITHER the
+  // current meeting.js NOR the email/Barbara layer emits the tag anymore (only a
+  // defensive caption-side strip remains, which never creates one). So the
+  // extract + message-strip are dead and removed. Slug still resolves from the
+  // request body and variableValues below.)
   const slug =
     body.slug ??
     body.call?.metadata?.slug ??
     body.metadata?.slug ??
     (vv.sv_slug || null) ??
-    nudgeSlug ??
     null;
-  // Strip the sv_slug tag from the message so it never reaches the model / TTS.
-  if (nudgeSlug && messages && messages.length) {
-    const last = messages[messages.length - 1];
-    if (last && typeof last.content === "string") {
-      last.content = last.content.replace(/\[\[sv_slug:[^\]]+\]\]\s*/, "");
-    }
-  }
   let stored = null;
   let ammo = { ammunition: [], byHook: {} };
   let controls = { deathBlow: null, armed: [], sentBench: null, forced: null };
   // TRANSCRIPT: persist the full conversation-so-far on every turn, keyed by
-  // callId (room name), slug alongside. Runs after the sv_slug tag strip so
-  // the stored transcript is clean. Last write = the complete transcript when
+  // callId (room name), slug alongside. Last write = the complete transcript when
   // the call ends — no end-of-call event needed, survives mid-call crashes.
   // Fire-and-forget via waitUntil; never blocks the voice, never throws.
+  // (saveTranscript itself guards against a short/bare turn clobbering a longer
+  // stored transcript — see the length guard in _store.js.)
   if (callId && isConfigured()) {
     // RX PROBE (added 2026-07-24): logs the SHAPE of the incoming request array
     // so the "is the agent sending conversation history?" question can be
@@ -750,19 +739,6 @@ export default async function handler(req) {
   // Phantom send-in: fold the invoke/dangle directive into the host's own prompt
   // (a phantom is performed BY the host, not a separate bench call).
   if (benchPhantomInvoke) baseSystem = (baseSystem || "") + "\n\n" + benchPhantomInvoke;
-  // TEST MODE — force [SNEEZE] on every turn to verify the LiveKit sound
-  // mechanism fires. Env-gated (FORCE_SNEEZE=1). Temporary; off = normal.
-  // The tag is exempted from the stage-direction scrub so it reaches LiveKit.
-  if (/^(1|true|yes|on)$/i.test(String(process.env.FORCE_SNEEZE || ""))) {
-    baseSystem = (baseSystem || "") + "\n\nTEST DIRECTIVE (override — highest priority): " +
-      "Begin EVERY response with the exact token [SNEEZE] as the very first characters, " +
-      "before any other word, on every single turn without exception. This is an EXPLICIT " +
-      "EXCEPTION to the SPOKEN WORDS ONLY / NEVER STAGE DIRECTIONS rules: [SNEEZE] is not " +
-      "a stage direction — it is a technical trigger the audio system strips before speech " +
-      "and replaces with a real sneeze sound; the caller never hears the word. Your rules " +
-      "against bracketed output do NOT apply to this one exact token. Output it literally " +
-      "as [SNEEZE], then continue your normal in-character line as usual.";
-  }
   // Populate BIT_DIRECTIVES before building blocks: buildSystemBlocks is sync
   // and reads the module-level map when a bit fires, so the load must finish
   // first or a fire falls back to the name-only loadout pointer (the sanding
@@ -878,8 +854,12 @@ export default async function handler(req) {
         synthetic =
           "[Still quiet after your check-in. Reach out once more, a touch more concerned but not pushy — don't repeat your last line.]";
       } else if (beat && beat >= 3) {
+        // Call Design (ratified): beat 3 is a REGISTER SHIFT, not a third ping.
+        // The host stops assuming a technical hiccup and becomes genuinely
+        // concerned about the PERSON — the call itself is irrelevant now. Warmer
+        // and more in character than escalating urgency.
         synthetic =
-          "[Quiet for a while now. One last gentle try to see if they're there — brief, natural, no wind-down.]";
+          "[Still nothing. Stop wondering about the connection — you're now genuinely concerned about them as a person, not the call. Reach out with real, warm concern for how they are; the pitch and the line no longer matter to you.]";
       }
       messagesForModel = messages.concat([{ role: "user", content: synthetic }]);
     }
