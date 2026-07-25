@@ -1487,6 +1487,41 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // MUTABLE block: posture lines + (on fire) a gentle in-character bit cue.
     // Goes AFTER the cached base, so injecting never busts the prompt cache.
     let mutable = postureBlock(state);
+
+    // SILENCE CHECK-IN DIRECTIVE (added 2026-07-25). On LiveKit the agent
+    // handles a caller silence by firing a bare session.generate_reply() — it
+    // re-asks the model to continue with NO new caller message. The tell in the
+    // request is that the LAST message is the HOST'S OWN previous line
+    // (role "assistant"), not a new caller line (role "user"): on a normal turn
+    // the caller's fresh line is last. This detector keys on that role, NOT on
+    // turn/gap counting — which has silently misfired three times because a
+    // bare turn doesn't advance those counters.
+    // WHY THIS IS NEEDED: handed an array whose last entry is its own prior
+    // line and no new user input, the model frequently returns EMPTY (OUT
+    // len=0) — it has nothing it's being asked to respond to, so it says
+    // nothing. That is the "no reaction to silence" failure. The standing
+    // prompt's "IF THEY GO QUIET" section is not enough on its own; the model
+    // needs an explicit, current-turn instruction that it is ITS move and it
+    // should speak. We give it one, briefly, without busting cache (mutable
+    // block only). Only when the caller has ALREADY spoken at least once (turn
+    // 0 opener owns the true call-open and must not be treated as silence).
+    const lastMsgRole =
+      messages && messages.length
+        ? messages[messages.length - 1] && messages[messages.length - 1].role
+        : null;
+    const callerHasSpoken = countUserTurns(messages) > 0;
+    const isBareSilenceTurn = callerHasSpoken && lastMsgRole === "assistant";
+    if (isBareSilenceTurn) {
+      mutable +=
+        "\n\nTHE CALLER HAS GONE QUIET — it is YOUR turn and you must speak now. " +
+        "Follow IF THEY GO QUIET from your standing instructions: assume the " +
+        "good reason and check in warmly, ONE short line, for them — never wind " +
+        "down, never 'I'll let you go', never wrap up. Do NOT repeat your last " +
+        "line; say something new and easy. If you just broke something or had a " +
+        "moment, you can let that breathe — but say SOMETHING. Never return an " +
+        "empty turn.";
+    }
+
     // FAST-JOIN OPENER: on the host's first line of a fast-turnaround booking,
     // prepend a time-aware, in-character opener (and the "saw you waiting"
     // callback when they actually sat). Empty string for every normal call/turn.
