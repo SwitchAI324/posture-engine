@@ -845,6 +845,13 @@ export default async function handler(req) {
   // and the model generates a FRESH assistant line. Keyed on last-message role,
   // NOT turn/gap counting. The synthetic turn goes ONLY to the model — the real
   // `messages` array (already saved to the transcript above) is untouched.
+  // ESCALATION (Voice stamps metadata.silence_beat=N per nudge): when present,
+  // the synthetic line escalates by beat so successive pokes don't all read as
+  // the same "you there?" — beat 1 warm and easy, beat 2 a touch more concerned,
+  // beat 3 the last gentle try. The beat lands at extra_body, so it surfaces on
+  // the request body; read it defensively from the spots PE already reads
+  // metadata, and FALL BACK to the plain line if it's absent (older agent, or a
+  // bare turn PE inferred from role alone). Never a hard dependency.
   let messagesForModel = messages;
   {
     const lastRole =
@@ -854,9 +861,27 @@ export default async function handler(req) {
     const callerHasSpoken =
       messages && messages.filter((m) => m && m.role === "user").length > 0;
     if (lastRole === "assistant" && callerHasSpoken) {
-      messagesForModel = messages.concat([
-        { role: "user", content: "[The caller has gone quiet on the line.]" },
-      ]);
+      const beatRaw =
+        body?.metadata?.silence_beat ??
+        body?.extra_body?.metadata?.silence_beat ??
+        body?.call?.metadata?.silence_beat ??
+        null;
+      const beat = Number.isFinite(Number(beatRaw)) ? Number(beatRaw) : null;
+      // The bracketed line is a STAGE DIRECTION to the model, not spoken text —
+      // it shapes the fresh line the model writes. Escalation is in the
+      // direction's urgency, not in dictating words (the host stays in voice).
+      let synthetic = "[The caller has gone quiet on the line.]";
+      if (beat === 1) {
+        synthetic =
+          "[The caller has gone quiet. Check in once, warm and easy — assume the good reason.]";
+      } else if (beat === 2) {
+        synthetic =
+          "[Still quiet after your check-in. Reach out once more, a touch more concerned but not pushy — don't repeat your last line.]";
+      } else if (beat && beat >= 3) {
+        synthetic =
+          "[Quiet for a while now. One last gentle try to see if they're there — brief, natural, no wind-down.]";
+      }
+      messagesForModel = messages.concat([{ role: "user", content: synthetic }]);
     }
   }
 
