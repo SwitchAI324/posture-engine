@@ -441,7 +441,7 @@ const OPENER_MAX_TURNS = parseInt(process.env.OPENER_MAX_TURNS || "4", 10);
 // still considered a PREEMPTIVE REGENERATION rather than a new (silence) turn.
 // Regenerations land in well under a second; the silence watchdog fires tens of
 // seconds later. 12s is comfortably between the two.
-const REINJECT_WINDOW_MS = parseInt(process.env.REINJECT_WINDOW_MS || "12000", 10);
+const REINJECT_WINDOW_MS = parseInt(process.env.REINJECT_WINDOW_MS || "3000", 10);
 
 // GAG_OPEN_RATE — Call Design's tuning knob for the text-open vs sound-open
 // ratio on TURN ONE. 0.0 = always text-open (the HOST prompt's messy open);
@@ -1417,8 +1417,20 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       stored && stored.lastBitAt ? Date.now() - stored.lastBitAt : null;
     const withinReinjectWindow =
       sinceLastBitMs === null || sinceLastBitMs <= REINJECT_WINDOW_MS;
+    // BELT-AND-SUSPENDERS with the time window: a true same-turn regeneration
+    // always ends with the CALLER's line (role "user") — the model is being
+    // re-asked to answer the same user turn. A silence bare-turn ends with the
+    // HOST's own prior line (role "assistant"). So if the last message is
+    // assistant, this is NOT a regeneration and must never re-inject, regardless
+    // of timing. This catches the case the 3s window can't (a silence poke that
+    // happens to land within a few seconds — the Jul-25 call re-injected at 11s).
+    const reinjectLastRole =
+      messages && messages.length
+        ? messages[messages.length - 1] && messages[messages.length - 1].role
+        : null;
+    const lastIsCallerLine = reinjectLastRole === "user";
     if (
-      !fire && !isSilenceNudge && gap === 0 &&
+      !fire && !isSilenceNudge && gap === 0 && lastIsCallerLine &&
       stored && stored.lastBitId && withinReinjectWindow
     ) {
       const same = ranked.find((r) => r.id === stored.lastBitId);
