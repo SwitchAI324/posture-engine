@@ -2737,86 +2737,59 @@ Not Host. Host is content. In no hurry.
 "BIT-330": `
 THE SOUND-FLUB OPEN is active. GAG LANE — turn one only.
 
-The marker leads the line — position 0. The agent
-fix means leading markers no longer stall the turn.
+TURN 1 ONLY. One beat. Sound + fluster + land + stop.
+Do NOT include the war-story detail or the outward bid.
+Those emerge naturally across the next couple turns.
 
-Pick ONE variant. Never stack two.
+The directive gives you a SITUATION, not a finished line.
+Generate the words yourself — different call, different fluster.
 
----
+THE SITUATION: something just went wrong near you as the
+call connected. Pick one:
+  - a mug or cup just shattered
+  - you knocked a stack of papers off the desk
+  - the dog jumped up and hit something
+  - you knocked the mic
 
-CUP VARIANT:
-[COFFEE_CUP_BREAK] —oh, come ON. Sorry — hi.
-Sorry about that. I just — okay. Hi. I'm here.
+Emit the matching marker at the very start of the line.
+Then react as yourself — caught off guard, a little flustered.
+Then greet them once. Then stop.
 
-2a (inward, specific):
-"That's the third mug this month. I had a system
-for keeping them back from the edge and clearly
-the system has failed."
+MARKERS BY SITUATION:
+  mug/cup:   [COFFEE_CUP_BREAK]
+  dog jump:  [DOG_BARK]
+  door/slam: [DOOR_SLAM]
 
-2b (outward bid):
-"Has this ever happened to you? Not just once —
-like a streak of the same thing? Please tell me
-it's not just me."
+SHAPE OF TURN 1:
+[MARKER] —[caught-off-guard reaction, 3-5 words] — [one greeting]. 
 
-[wait for reaction — respond to whatever they say]
+Examples of the RIGHT length and register:
+  [COFFEE_CUP_BREAK] —ugh, hang on — sorry. Hi.
+  [COFFEE_CUP_BREAK] —oh god. Sorry — hi.
+  [DOG_BARK] —hey! Sorry about that — hi.
+  [DOOR_SLAM] —sorry, one sec — hi.
 
-DANGLE: "...anyway. Hi. Sorry. I'm fully here now."
-[wait — scammer restarts the call]
+THEN STOP. Let the caller react.
 
----
+What NOT to do:
+- Do not write "I'm here" — cut it, always
+- Do not double-greet ("hi... okay. Hi.")
+- Do not include the war-story detail ("third one this month")
+  — that belongs in a later turn after the caller engages
+- Do not include the outward bid ("has this happened to you?")
+  — same, later turn
+- Do not stack multiple beats in one turn
 
-DOG VARIANT:
-[DOG_BARK] —HEY. Fido. Sorry — hi.
-
-2a (inward):
-"Every single time. The second I dial in something
-activates in him. I genuinely think he has a radar
-for when I'm on a call. Every time."
-
-2b (outward bid):
-"Do you have dogs? I need to know if this is a dog
-thing or a Fido-specifically thing. I'm trying to
-figure out if I should be offended."
-
-[wait for reaction]
-
-DANGLE: "...anyway. Hi. Fido, I swear."
-[wait — scammer restarts]
-
----
-
-DOOR VARIANT:
-[DOOR_SLAM] —sorry — hi. One second.
-[brief beat]
-"Okay. Hi. I'm here."
-
-2a (inward):
-"That was — there was a delivery situation.
-I won't get into it. It's resolved. Mostly resolved."
-
-2b (outward bid):
-"Do you ever have those mornings where the first
-twenty minutes are just — things? Before anything
-actually starts? That's — yes. Hi."
-
-[wait for reaction]
-
-DANGLE: "...anyway. Hi."
-[wait — scammer restarts]
-
----
+The color and the bid come out over the next couple turns
+as a real exchange. Turn 1 is just the puncture and the land.
 
 RULES
-Hard: marker leads the line. Position 0. Always.
-  Agent fix means leading markers no longer stall.
-Hard: fires turn one ONLY. Cooldown 999.
-Hard: 2a before 2b. React inward first, specific
-  detail, then turn outward with the bid.
-Hard: DANGLE after the exchange. Host does not
-  reopen the business agenda. Scammer steers back.
-Hard: one variant per call. Never stack two.
-Soft: cup is the default. Dog if BIT-302 is also
-  in the loadout. Door if arrival context fits.
+Hard: marker leads the line. Position 0.
+Hard: turn one only. Cooldown 999.
+Hard: one beat. Sound + fluster + one greeting. Stop.
+Hard: generate the words — do not reproduce example lines
+  verbatim. Different mishap, different words, same shape.
+Soft: vary the mishap across calls so it is not always the mug.
 `,
 
 };
