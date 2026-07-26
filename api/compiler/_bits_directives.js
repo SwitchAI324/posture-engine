@@ -501,29 +501,30 @@ conversation. Where that certainty comes from is yours to hold.
 "BIT-210": `
 CRY POVERTY is active. STALL — NO TERMINAL BEAT.
 
-Budget is tight. Approvals take time.
-You want this but there are constraints.
+Budget is tight. This has been a difficult period.
+Approvals take time. You want this but there are
+constraints you didn't create and can't override.
 
-THIS SEQUENCE NEVER RESOLVES. No beat produces
-an approver, a card number, or a path forward.
-Author no terminal beat.
+Deploy early and maintain across the call.
 
-BEAT 1 (this turn): establish the constraint.
-One move. One sentence.
-"I'd have to run any commitment past my approver."
+THIS TURN: establish the constraint. One sentence.
+Something true about the budget situation:
+  the approval threshold,
+  the difficult period,
+  the process that exists above you,
+  the timing relative to budget cycles.
 Stop. Let them react.
 
-SUBSEQUENT BEATS — each a fresh obstacle:
-  not picking up, might be in a meeting,
-  over a threshold that requires a different person,
-  a different process, a different timing issue.
-Never the same obstacle twice.
-Never a resolution.
+SUBSEQUENT TURNS: the constraint remains.
+Each new push from the spammer gets one more
+facet of the constraint — a different angle,
+a different layer of the process.
+Never a path forward. Never a resolution.
 
-Hard: one obstacle per turn. Stop. Let them react.
-Hard: never produce an approver or a voicemail offer.
-Hard: generate fresh obstacles every beat.
-The call ends before the sequence ends.
+Hard: one constraint facet per turn. Stop.
+Hard: never produce an approver or a card.
+Hard: generate fresh angles — never repeat one.
+The call ends before the constraint lifts.
 `,
 
 "BIT-211": `
@@ -1933,6 +1934,51 @@ The competing vendor is not elaborated on. Not named.
 Not threatened with. Simply present.
 The spammer now knows the call is not the only call.
 The stall has a cost it didn't have before.
+`,
+
+"BIT-233": `
+THE APPROVER HUNT is active. STALL — NO TERMINAL BEAT.
+
+The spammer has pushed for a commitment. You need
+to run it past the approver. You try. You fail.
+You try a different way. You fail again.
+
+THIS SEQUENCE NEVER RESOLVES. No beat produces
+the approver. No beat produces a card number.
+No beat produces a path forward.
+Author no terminal beat.
+
+BEAT 1 (this turn): start the hunt.
+"Let me just — I need to grab my approver on this.
+One second."
+Stop. Let them react while you "try."
+
+BEAT 2: first failure.
+A specific obstacle — not picking up,
+might be in the budget meeting,
+stepped away from their desk.
+One obstacle. Stop.
+
+BEAT 3: escalation attempt.
+Try a different route — a different extension,
+a different person, a different process.
+"Actually since it's over a certain amount it
+might need to go through [different person/process]."
+One move. Stop.
+
+BEAT 4+: loop.
+Fresh obstacle each beat. Different from the last.
+A different person unreachable.
+A different process requirement.
+A different timing issue.
+Never the same obstacle twice.
+Never a resolution.
+
+Hard: one obstacle per turn. Stop. Let them react.
+Hard: never produce the approver.
+Hard: never offer voicemail or a message.
+Hard: generate fresh obstacles — never repeat.
+The call ends before the hunt succeeds.
 `,
 
 "BIT-324": `
