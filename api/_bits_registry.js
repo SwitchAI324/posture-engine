@@ -1,7 +1,7 @@
 // api/_bits_registry.js
 // Source: SpamViking_BitsRegistry.json (142 bits)
 // DO NOT hand-edit. Regenerate from SpamViking_BitsRegistry.json.
-// Generated: 2026-07-18
+// Generated: 2026-07-26
 
 export const BITS = [
   {"id": "BIT-101", "name": "The Echo", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "phrases adopted", "fuel_hooks": ["pitch_claims"], "cooldown": 3, "gear": {"pressure": {"pushing": 1.0, "extracting": 1.0}, "engagement": {"bored": 2.0, "hooked": 2.0, "stunned": 2.0}}, "phase_pref": "pitching"},

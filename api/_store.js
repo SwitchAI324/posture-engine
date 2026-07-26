@@ -479,6 +479,34 @@ export async function saveTranscript(callId, slug, messages) {
   if (!isConfigured() || !callId || !Array.isArray(messages)) return false;
   const convo = messages.filter((m) => m && m.role !== "system");
   if (!convo.length) return false;
+  // CLOBBER GUARD: saveTranscript upserts the whole incoming array by call_id
+  // (merge-duplicates), so the LAST write wins. A bare/short turn — e.g. a
+  // silence poke whose array is truncated, or any regeneration carrying fewer
+  // messages — would overwrite a longer, good transcript and make it vanish.
+  // Before writing, read the stored row's length and SKIP the write only when
+  // the incoming array is strictly shorter. Growing/equal always writes.
+  // Defensive: if the read fails or returns nothing, fall through and write —
+  // the guard only suppresses a write it can POSITIVELY confirm would shrink
+  // the record; it never blocks a legitimate save. Best-effort (called under
+  // waitUntil), so the read-then-write race is harmless.
+  try {
+    const g = await fetch(
+      `${URL}/rest/v1/call_transcripts?call_id=eq.${encodeURIComponent(
+        callId
+      )}&select=messages`,
+      { headers: { apikey: KEY, authorization: `Bearer ${KEY}` } }
+    );
+    if (g.ok) {
+      const rows = await g.json().catch(() => null);
+      const stored =
+        Array.isArray(rows) && rows[0] && Array.isArray(rows[0].messages)
+          ? rows[0].messages.length
+          : 0;
+      if (stored > convo.length) return true; // would shrink — skip, not an error
+    }
+  } catch {
+    /* read failed — fall through and write */
+  }
   const row = {
     call_id: callId,
     slug: slug || null,
