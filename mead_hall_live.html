@@ -190,10 +190,14 @@
     0%{background:#fbecec} 8%{background:#f6d9d6} 16%{background:#fbecec}
     24%{background:#f6d9d6} 34%{background:#fbecec} 100%{background:#fbecec} }
   .fsub{font-size:8px;color:var(--blood);font-weight:600;letter-spacing:.02em;margin-left:4px}
-  .chip.fire-bit{border-color:var(--blood);color:var(--blood);font-weight:700}
-  .chip.fire-bit:hover:not(:disabled){background:#fbecec}
-  .chip.cancel-fire{border-color:var(--blood);background:var(--blood);color:#fff;font-weight:700}
-  .chip.fired-tag{border-color:var(--green);background:var(--green);color:#fff;font-weight:700;opacity:1}
+  #armPanel .chip{background:#fff;color:var(--ink);border-color:#d8d2c6}
+  #armPanel .chip:hover:not(:disabled){border-color:#b7afa0}
+  #armPanel .chip.fire-bit{background:#fff;border-color:var(--blood);color:var(--blood);font-weight:700}
+  #armPanel .chip.fire-bit:hover:not(:disabled){background:var(--blood);color:#fff}
+  #armPanel .chip.fire-bit:disabled{background:#f2efe9;border-color:#d8d2c6;color:#a49c8e;cursor:default}
+  #armPanel .chip.fire-bit.retry{background:#fff;border-color:#c2832c;color:#a5641a}
+  #armPanel .chip.cancel-fire{border-color:var(--blood);background:var(--blood);color:#fff;font-weight:700}
+  #armPanel .chip.fired-tag{border-color:var(--green);background:var(--green);color:#fff;font-weight:700;opacity:1}
   @media (prefers-reduced-motion:reduce){ .bitrow.inflight{animation:none} }
   @keyframes bitPending{0%,100%{background:transparent}50%{background:#fdf0d2;box-shadow:0 0 0 1px #e3a93f inset}}
   @keyframes bitFiring{0%,100%{background:#fdeaea}50%{background:var(--gold2);box-shadow:0 0 0 2px var(--blood) inset}}
@@ -1569,7 +1573,10 @@
         :(parked?'parked \u2014 unavailable this call'
         :('needs '+(missingHook(b)||'a scouted fact')+' \u2014 not scouted for this target'))));
       const blocked=(busy && !flying) || (coolLeft>0);
-      const dis=(!ok||blocked)?'disabled':'';
+      // Only DISABLE for transient states (one in flight elsewhere, cooling). Excluded/parked
+      // bits stay clickable — the click POSTs and the engine returns the reason, so pressing
+      // Fire ALWAYS does something visible instead of being a silent dead click.
+      const dis=(blocked||b._placeholder)?'disabled':'';
       const op=(!ok&&!flying)?';opacity:.4':'';
       const isTop=(g.top_bit && (g.top_bit===b.name || g.top_bit===b.bit_id));
       const pending=(g.will_fire===true && isTop);
@@ -1622,8 +1629,13 @@
   // FIRE — one in flight at a time. Wire protocol stays action=force (PE relabel only).
   // PE built Fire-Now: it lands on the NEXT turn, always. FIRE_WINDOW / FIRE_MIN_GAP /
   // expiry / beat-finding are NOT built, so there is no cooling or expired state yet.
-  async function postFire(bitId){ if(!callId){ toast('No call_id'); return; }
+  async function postFire(bitId){
+    if(!callId){ toast('\u26A0 No call to fire into yet \u2014 waiting for the call to start'); console.warn('[MeadHall] Fire pressed but callId is null'); return; }
     if(inFlight){ toast('One already in flight \u2014 cancel it first'); return; }
+    // If the engine has scored this call and this bit isn't in the pool, firing can't land —
+    // say so plainly rather than sending a POST the engine will just reject.
+    const bObj={bit_id:bitId, name:bitNames[bitId]||bitId};
+    if(bitExcluded(bObj)){ toast((bitNames[bitId]||bitId)+' isn\u2019t in the engine\u2019s pool this call \u2014 it can\u2019t fire'); return; }
     if(expiredBit===bitId) expiredBit=null;
     const body={ call_id:callId, bit_id:bitId, director_user_id:directorUserId, idempotency_key:callId+':force:'+bitId+':'+Date.now() };
     try{ const r=await fetch(CONTROL_ENDPOINT+'?action=force',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
