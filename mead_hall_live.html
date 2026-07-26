@@ -1339,6 +1339,14 @@
   const CONTROL_ENDPOINT = qp.get('control_endpoint') || '/api/control';
   let   callId   = qp.get('call_id')   || null;
   let   targetId = qp.get('target_id') || null;
+  // A UUID in ?call_id= is almost always a target_id in the wrong slot — real LiveKit call_ids
+  // are room names, not UUIDs. Treat it as a target_id so the feed finds the rows instead of
+  // querying call_id=<uuid> and coming up empty (the exact trap PE flagged).
+  const UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if(callId && UUID_RE.test(callId) && !targetId){
+    targetId=callId; callId=null;
+    setTimeout(()=>toast('That id is a target_id (UUID) \u2014 watching by target_id'), 400);
+  }
   const directorUserId = qp.get('director') || 'director';
   const slug = s => String(s||'').replace(/[^a-z0-9]+/gi,'-').toLowerCase();
 
@@ -1365,7 +1373,9 @@
         if(ended){ pacing=false; stop('call_ended'); return; }
         const d = ev.event_type==='utterance' ? 950 : (ev.event_type==='call_started' ? 150 : 350);
         timer=setTimeout(step, d); })(); }
-    async function getJSON(u){ const r=await fetch(u,{headers:{Accept:'application/json'},cache:'no-store'});
+    async function getJSON(u){
+      let r; try{ r=await fetch(u,{headers:{Accept:'application/json'},cache:'no-store'}); }
+      catch(netErr){ throw new Error('couldn\u2019t reach the feed ('+(netErr.message||netErr)+') \u2014 check the deploy is live and the id is right'); }
       if(!r.ok){ const b=await r.text().catch(()=> ''); throw new Error('HTTP '+r.status+': '+b.slice(0,160)); } return r.json(); }
     function url(){ const key = mode==='target'
         ? 'target_id='+encodeURIComponent(o.targetId)
