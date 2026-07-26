@@ -1629,21 +1629,41 @@
   // FIRE — one in flight at a time. Wire protocol stays action=force (PE relabel only).
   // PE built Fire-Now: it lands on the NEXT turn, always. FIRE_WINDOW / FIRE_MIN_GAP /
   // expiry / beat-finding are NOT built, so there is no cooling or expired state yet.
+  // Fire watchdog: PE returns ok:true even when a bit is UNFIRABLE (reason lives in the
+  // completions log, not the response). If PE's timing layer (fire_window_remaining) is live,
+  // it drives expiry; this is the fallback for Fire-Now, so a stuck "Firing…" self-clears.
+  let fireWatch=null;
+  function startFireWatchdog(bitId){ clearTimeout(fireWatch);
+    fireWatch=setTimeout(()=>{
+      if(inFlight!==bitId) return;                        // it landed or was cancelled — fine
+      if((lastGear||{}).fire_window_remaining!=null) return; // timing layer owns expiry
+      expiredBit=bitId; inFlight=null; renderArmPanel();
+      toast((bitNames[bitId]||bitId)+' didn\u2019t fire \u2014 likely not eligible this call (archetype, cap, or phase gate). Retry, or check the engine.');
+    }, 30000); }
+  function clearFireWatchdog(){ clearTimeout(fireWatch); fireWatch=null; }
+
   async function postFire(bitId){
     if(!callId){ toast('\u26A0 No call to fire into yet \u2014 waiting for the call to start'); console.warn('[MeadHall] Fire pressed but callId is null'); return; }
     if(inFlight){ toast('One already in flight \u2014 cancel it first'); return; }
-    // If the engine has scored this call and this bit isn't in the pool, firing can't land —
-    // say so plainly rather than sending a POST the engine will just reject.
-    const bObj={bit_id:bitId, name:bitNames[bitId]||bitId};
-    if(bitExcluded(bObj)){ toast((bitNames[bitId]||bitId)+' isn\u2019t in the engine\u2019s pool this call \u2014 it can\u2019t fire'); return; }
     if(expiredBit===bitId) expiredBit=null;
+    // Always POST — the ENGINE decides eligibility and returns a reason if it can't fire.
+    // (No client-side exclusion pre-check; that silently swallowed the request.)
     const body={ call_id:callId, bit_id:bitId, director_user_id:directorUserId, idempotency_key:callId+':force:'+bitId+':'+Date.now() };
     try{ const r=await fetch(CONTROL_ENDPOINT+'?action=force',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       if(r.status===404||r.status===405){ toast('\u26A0 Fire isn\u2019t wired on the engine yet \u2014 deploy completions.js'); return; }
       const j=await r.json().catch(()=>({}));
-      if(!r.ok || j.ok===false){ toast('Can\u2019t fire it: '+(j.reason||j.error||('HTTP '+r.status))); return; }
+      if(!r.ok){ toast('Can\u2019t fire it: '+(j.reason||j.error||('HTTP '+r.status))); return; }
+      // PE: endpoint returns {ok:true, when:"next_turn"} even for an INELIGIBLE bit — it stays
+      // pending and the "UNFIRABLE" reason goes to the completions LOG, not this response. So a
+      // 200 is NOT a guarantee it'll land. If we can see the bit isn't in the pool, say so; and
+      // start a watchdog so a stuck "Firing…" doesn't hang forever with no explanation.
       inFlight=bitId; renderArmPanel();
-      toast((bitNames[bitId]||bitId)+' \u2014 firing next turn'); }
+      if(bitExcluded({bit_id:bitId})){
+        toast((bitNames[bitId]||bitId)+' \u2014 sent, but it\u2019s not in the engine\u2019s pool this call, so it may not land');
+      } else {
+        toast((bitNames[bitId]||bitId)+' \u2014 firing next turn');
+      }
+      startFireWatchdog(bitId); }
     catch(e){ toast('\u26A0 Fire failed: '+(e.message||e)); } }
 
   // CANCEL — in flight only. PE: bit_id optional (one in flight), idempotent, returns
@@ -1655,10 +1675,10 @@
       if(r.status===404||r.status===405){ toast('\u26A0 Cancel isn\u2019t wired on the engine yet \u2014 deploy completions.js'); return; }
       const j=await r.json().catch(()=>({}));
       if(j.was_in_flight===false){ showFired(inFlight); toast('Already fired \u2014 too late to pull it'); return; }
-      inFlight=null; renderArmPanel(); toast('Cancelled \u2014 nothing fired'); }
+      inFlight=null; clearFireWatchdog(); renderArmPanel(); toast('Cancelled \u2014 nothing fired'); }
     catch(e){ toast('\u26A0 Cancel failed: '+(e.message||e)); } }
 
-  function showFired(bitId){ inFlight=null; firedFlash=bitId; renderArmPanel();
+  function showFired(bitId){ clearFireWatchdog(); inFlight=null; firedFlash=bitId; renderArmPanel();
     setTimeout(()=>{ if(firedFlash===bitId){ firedFlash=null; renderArmPanel(); } }, 2000); }
 
   async function postDisarm(bitId){ if(!callId){ toast('No call_id'); return; }
