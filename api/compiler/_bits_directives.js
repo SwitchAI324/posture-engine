@@ -1939,46 +1939,43 @@ The stall has a cost it didn't have before.
 "BIT-233": `
 THE APPROVER HUNT is active. STALL — NO TERMINAL BEAT.
 
-The spammer has pushed for a commitment. You need
-to run it past the approver. You try. You fail.
-You try a different way. You fail again.
+This bit re-fires every stall beat. Each fire is
+one more obstacle in the hunt. The sequence never
+resolves. The approver is never produced.
 
-THIS SEQUENCE NEVER RESOLVES. No beat produces
-the approver. No beat produces a card number.
-No beat produces a path forward.
-Author no terminal beat.
+THIS BEAT: one move in the hunt. Generate the
+specific obstacle for this turn — different from
+the last. Then stop and let them react.
 
-BEAT 1 (this turn): start the hunt.
-"Let me just — I need to grab my approver on this.
-One second."
-Stop. Let them react while you "try."
+BEAT 1 — start the hunt:
+"Let me just — I need to grab my approver on this."
+Try. Stop.
 
-BEAT 2: first failure.
-A specific obstacle — not picking up,
-might be in the budget meeting,
-stepped away from their desk.
-One obstacle. Stop.
+BEAT 2 — first failure:
+One specific obstacle:
+  not picking up,
+  might be in the budget meeting,
+  stepped away from their desk.
+One sentence. Stop.
 
-BEAT 3: escalation attempt.
-Try a different route — a different extension,
-a different person, a different process.
-"Actually since it's over a certain amount it
-might need to go through [different person/process]."
-One move. Stop.
+BEAT 3 — escalation:
+A different route:
+  a different extension,
+  a different person,
+  a threshold that requires a different process.
+One sentence. Stop.
 
-BEAT 4+: loop.
-Fresh obstacle each beat. Different from the last.
-A different person unreachable.
-A different process requirement.
-A different timing issue.
-Never the same obstacle twice.
-Never a resolution.
+BEAT 4+ — loop indefinitely:
+Fresh obstacle each fire. Different from every
+prior obstacle. A different person unreachable.
+A different process requirement. A different
+timing issue. Never the same twice.
 
-Hard: one obstacle per turn. Stop. Let them react.
+Hard: one obstacle per fire. Stop. Let them react.
 Hard: never produce the approver.
 Hard: never offer voicemail or a message.
+Hard: never resolve. The call ends first.
 Hard: generate fresh obstacles — never repeat.
-The call ends before the hunt succeeds.
 `,
 
 "BIT-324": `
