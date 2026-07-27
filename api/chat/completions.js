@@ -248,6 +248,12 @@ function pickFlubTier() {
 // assistant uses today. Haiku is the low-latency default for voice; bump
 // to a Sonnet if the bait character needs more wit and the latency holds.
 const MODEL = () => process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
+// STEP 1: live-event detector (commitment_push). OFF by default. When on,
+// readCall ALSO reports whether the caller just demanded payment. This is
+// OBSERVATION-ONLY until Step 2 wires it to the stall — no bit reads it yet.
+// Flag off = readCall asks exactly what it asks today (byte-for-byte).
+const EVENT_DETECT =
+  /^(1|true|yes|on)$/i.test(String(process.env.EVENT_DETECT || ""));
 const MAX_TOKENS = () => parseInt(process.env.MAX_TOKENS || "1024", 10);
 
 // Generate a bench character's barge-in line, in character, reacting to the
@@ -345,7 +351,20 @@ async function readCall(messages, prior) {
       (p.suspicion || "alive") + " pressure=" + (p.pressure || "calm") +
       " engagement=" + (p.engagement || "hooked") + ". Only change a value if the " +
       "recent turns clearly warrant it (avoid flip-flopping).\n" +
-      'Reply EXACTLY: {"phase":"..","suspicion":"..","pressure":"..","engagement":".."}';
+      // STEP 1 (flag-gated): ask for the commitment_push live event. High-
+      // precision wording — true ONLY on an unambiguous demand to transact
+      // now; when unsure, false. Cheap misses, rare false-fires.
+      (EVENT_DETECT
+        ? "commitment_push — did the caller, IN THEIR MOST RECENT turn, make " +
+          "a CLEAR demand to pay / hand over a card / send money / put a " +
+          "deposit down / sign up RIGHT NOW? Report true ONLY if it is an " +
+          "unambiguous push to transact now. A general question about " +
+          "pricing, a vague 'how would payment work', or merely mentioning " +
+          "cost is NOT a push — report false. When unsure, report false.\n"
+        : "") +
+      (EVENT_DETECT
+        ? 'Reply EXACTLY: {"phase":"..","suspicion":"..","pressure":"..","engagement":"..","commitment_push":true|false}'
+        : 'Reply EXACTLY: {"phase":"..","suspicion":"..","pressure":"..","engagement":".."}');
     const r = await fetch(ANTHROPIC_URL, {
       method: "POST",
       headers: {
@@ -379,6 +398,11 @@ async function readCall(messages, prior) {
       const v = typeof parsed[k] === "string" ? parsed[k].toLowerCase().trim() : null;
       if (v && legal[k].includes(v)) out[k] = v;
     }
+    // STEP 1 (flag-gated): carry the commitment_push live-event boolean.
+    // Strict boolean, defaults false. Never present when the flag is off.
+    if (EVENT_DETECT) {
+      out.commitment_push = parsed.commitment_push === true;
+    }
     return Object.keys(out).length ? out : null;
   } catch {
     return null;
@@ -394,6 +418,12 @@ function blendRead(keywordState, read) {
   const rank = { alive: 0, slipping: 1, foregone: 2 };
   const out = {};
   if (read.phase) out.phase = read.phase;
+  // STEP 1: carry the live-event flag into stored state, only when the reader
+  // reported it (flag on). NOT one-way, NOT latched — a momentary per-turn
+  // event, true only on the turn the demand happened. Rides the same setCall.
+  if (typeof read.commitment_push === "boolean") {
+    out.commitment_push = read.commitment_push;
+  }
   // ONE-WAY BUSINESS LATCH (phase-overlay split): the first turn the call is
   // read as non-"opening", latch businessLatched=true so completions serves the
   // BUSINESS overlay for the rest of the call — even if a later phase read
@@ -1300,7 +1330,10 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
                   "callread phase=" + (merged.phase || phase) +
                     " susp=" + (merged.gear || state.suspicion) +
                     " press=" + (merged.pressure || state.pressure) +
-                    " eng=" + (merged.engagement || state.engagement)
+                    " eng=" + (merged.engagement || state.engagement) +
+                    // STEP 1: log the observed event flag so precision can be
+                    // watched BEFORE anything fires off it.
+                    (EVENT_DETECT ? " cpush=" + (merged.commitment_push ? "Y" : "n") : "")
                 );
               });
             }
