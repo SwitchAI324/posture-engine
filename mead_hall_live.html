@@ -1409,14 +1409,15 @@
     hard_stop_opted_out:'Released \u2014 real person'
   };
   // Canonical reply-intent enum — authoritative source: Barbara.gs line 848 `allowed`.
-  // Render badges ONLY off these seven; anything else means we're out of sync with the classifier.
-  const REPLY_INTENTS = ['BOOK','SUSPICIOUS','STALL','OPTOUT_CASUAL','OPTOUT_ALARMED','HOSTILE','CONTINUE'];
+  // Render badges ONLY off these eight; anything else means we're out of sync with the classifier.
+  const REPLY_INTENTS = ['BOOK','SUSPICIOUS','DEMAND_PRINCIPAL','STALL','OPTOUT_CASUAL','OPTOUT_ALARMED','HOSTILE','CONTINUE'];
   const INTENT_TONE = { BOOK:'win', CONTINUE:'neutral', STALL:'caution', SUSPICIOUS:'caution',
+    DEMAND_PRINCIPAL:'caution',   // spammer demands a human / doubts the assistant is real
     OPTOUT_CASUAL:'caution', OPTOUT_ALARMED:'safety', HOSTILE:'safety' };
   const INTENT_DEFAULT = 'OPTOUT_ALARMED'; // matches the classifier's safe default for unparseable input
   function intentBadge(raw){ if(raw==null) return '';
     let it=String(raw).toUpperCase();
-    if(!REPLY_INTENTS.includes(it)){ console.warn('[MeadHall] reply intent "'+raw+'" not in the canonical seven (Barbara.gs line 848) \u2014 out of sync.'); }
+    if(!REPLY_INTENTS.includes(it)){ console.warn('[MeadHall] reply intent "'+raw+'" not in the canonical eight (Barbara.gs line 848) \u2014 out of sync.'); }
     const tone=INTENT_TONE[it]||'neutral';
     return ' <span class="ibadge '+tone+'">'+it+'</span>'; }
   function arcLine(ev){ const log=$('#tlog'); if(!log)return;
