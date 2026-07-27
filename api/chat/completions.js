@@ -1109,6 +1109,7 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
 function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil, isSilenceNudge) {
   ammo = ammo || { ammunition: [], byHook: {} };
   let deathBlowFiring = false; // set true on the turn a Death Blow lands
+  let firedBitId = null; // fired bit id, set inside the scoring block (where top/fire live); returned for the pe_stall flag
   const blocks = [
     { type: "text", text: baseSystem, cache_control: { type: "ephemeral" } },
   ];
@@ -1911,12 +1912,17 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         }).catch(() => {})
       );
     }
+    // Capture the fired bit id HERE, inside the block where top/fire are live,
+    // so the function-level return can surface it (top/fire are block-scoped and
+    // not visible at the outer return). Reflects all fire/top mutations above
+    // (force consumer etc.). null when nothing fired.
+    firedBitId = fire && top ? top.id : null;
   }
   // firedBitId: the bit that actually fired this turn (or null). Surfaced so the
   // handler can set the pe_stall SSE flag when it's a stall-lane bit — the agent
   // reads that to hold its re-engage nudge for a cycle. Keyed off the fired bit's
   // LANE downstream, never the host's text (isSilenceNudge scar).
-  return { blocks, deathBlowFiring, firedBitId: fire && top ? top.id : null };
+  return { blocks, deathBlowFiring, firedBitId };
 }
 
 function lastUserText(messages) {
