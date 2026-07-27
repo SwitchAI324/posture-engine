@@ -749,6 +749,12 @@ export default async function handler(req) {
     : null;
   const systemBlocks = built ? built.blocks : null;
   const deathBlowFiring = built ? built.deathBlowFiring : false;
+  // STALL FLAG for the agent (Spot 1: top-level pe_stall on the first SSE chunk).
+  // True when the bit that fired THIS turn is a stall-lane bit (BIT-233 et al.),
+  // i.e. this host turn is a stall beat and the pause after it is intended. The
+  // agent reads pe_stall to hold its re-engage nudge one cycle so a real pause
+  // lands. Lane-keyed (state), never the host's text.
+  const turnIsStall = !!(built && built.firedBitId && laneOf(built.firedBitId) === "stall");
 
   // ===== OPTION B (INDEPENDENT DRIVER) — SILENCE NUDGE say.exact =============
   // On a silence nudge, Vapi's say.prompt hook opens the SSE stream but tears it
@@ -843,11 +849,34 @@ export default async function handler(req) {
         body?.call?.metadata?.silence_beat ??
         null;
       const beat = Number.isFinite(Number(beatRaw)) ? Number(beatRaw) : null;
+      // STALL-LANE GUARD (the silence/stall collision, Jul 26). If the last bit
+      // that fired is a STALL-lane bit (e.g. BIT-233 The Approver Hunt), the
+      // quiet is the host's OWN intended pause mid-stall — he just said he's
+      // "off looking" (trying an extension, checking down the hall), so a beat
+      // of silence is him being occupied, NOT the caller leaving. Firing the
+      // normal "you still there?" here undercuts his stall and collapses the
+      // open loop he was meant to leave hanging. So on a stall beat we do NOT
+      // emit the caller-check; we direct him to CONTINUE the stall (next small
+      // step, or just hold), staying in character.
+      // Keyed off the bit LANE (state: laneOf(stored.lastBitId)), NEVER the
+      // host's text — per the isSilenceNudge scar, engine logic never sniffs the
+      // prompt body for stall words. NOTE: the real fix is agent-side (the
+      // watchdog shouldn't fire a re-engage into a stall pause at all); this is
+      // PE's backstop for when a nudge does arrive — the response becomes a
+      // stall continuation, not a caller check. Still ends the array in "user",
+      // so the trailing-assistant PREFILL bug can't return empty.
+      const lastBitStall = !!(
+        stored && stored.lastBitId && laneOf(stored.lastBitId) === "stall"
+      );
       // The bracketed line is a STAGE DIRECTION to the model, not spoken text —
       // it shapes the fresh line the model writes. Escalation is in the
       // direction's urgency, not in dictating words (the host stays in voice).
       let synthetic = "[The caller has gone quiet on the line.]";
-      if (beat === 1) {
+      if (lastBitStall) {
+        // Stall in progress — hold the loop open, never break to the caller.
+        synthetic =
+          "[You're in the middle of a stall — you just played a beat where you're momentarily occupied (looking something up, trying to reach someone, checking on a step). The quiet is YOU being busy, not the caller leaving. Do NOT ask if they're still there, do NOT check the line, do NOT break off to address them. Stay in the stall: play the next small step of it — one step, then stop — or just hold the beat. Keep the loop open.]";
+      } else if (beat === 1) {
         synthetic =
           "[The caller has gone quiet. Check in once, warm and easy — assume the good reason.]";
       } else if (beat === 2) {
@@ -904,6 +933,8 @@ export default async function handler(req) {
     // so Mead Hall can watch by target (the SSE transform has no `stored`).
     targetId: stored?.targetId ?? null,
     deathBlowFiring, // finishUp emits blow_fired + call_ended with the real line
+    stall: turnIsStall, // -> delta.extra.pe_stall on the first chunk (agent holds re-engage)
+    stallBit: turnIsStall && built ? built.firedBitId : null, // -> pe_stall_bit (agent logging)
   };
 
   return new Response(anthropicToOpenAISSE(upstream.body, meta, benchAppend), {
@@ -1881,7 +1912,11 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       );
     }
   }
-  return { blocks, deathBlowFiring };
+  // firedBitId: the bit that actually fired this turn (or null). Surfaced so the
+  // handler can set the pe_stall SSE flag when it's a stall-lane bit — the agent
+  // reads that to hold its re-engage nudge for a cycle. Keyed off the fired bit's
+  // LANE downstream, never the host's text (isSilenceNudge scar).
+  return { blocks, deathBlowFiring, firedBitId: fire && top ? top.id : null };
 }
 
 function lastUserText(messages) {
@@ -1950,16 +1985,28 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
 
-  const chunkStr = (delta, finish_reason = null) =>
-    "data: " +
-    JSON.stringify({
+  const chunkStr = (delta, finish_reason = null) => {
+    // pe_stall (survives the LiveKit plugin): a TOP-LEVEL chunk field is dropped
+    // by the plugin before the agent sees it, and so is a delta-level `extra`. The
+    // surviving wire key is `extra_content` — the plugin maps extra_content ->
+    // delta.extra, which is what the agent reads. So stamp the flag as
+    // delta.extra_content, on the FIRST chunk only (the role delta, identified by
+    // delta.role), when this turn is a stall beat. Absent on every other chunk and
+    // every non-stall turn. Agent reads delta.extra.pe_stall once at turn start to
+    // hold its re-engage nudge one cycle so a real pause lands.
+    let outDelta = delta;
+    if (meta.stall && delta && delta.role) {
+      outDelta = { ...delta, extra_content: { pe_stall: true, pe_stall_bit: meta.stallBit || null } };
+    }
+    const chunk = {
       id: meta.id,
       object: "chat.completion.chunk",
       created: meta.created,
       model: meta.model,
-      choices: [{ index: 0, delta, finish_reason }],
-    }) +
-    "\n\n";
+      choices: [{ index: 0, delta: outDelta, finish_reason }],
+    };
+    return "data: " + JSON.stringify(chunk) + "\n\n";
+  };
 
   return new ReadableStream({
     async start(controller) {
