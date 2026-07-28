@@ -44,7 +44,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-   `&select=prefix,posture_line,gear,pressure,engagement,slip,accuse_floor,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id`;
+   `&select=prefix,posture_line,gear,pressure,engagement,slip,accuse_floor,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push`;
   const r = await fetch(url, {
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
@@ -80,6 +80,11 @@ export async function getCall(callId) {
     businessOverlay: rows[0].business_overlay ?? null,
     archetype: rows[0].archetype || null,
     characterId: rows[0].character_id || null, // host_posture for the calls record
+    // STEP 1 live-event flag (commitment_push). Persisted per turn so the
+    // completions consumer can read the PRIOR turn's detector result. Defaults
+    // false when the column is absent/null — a call that never saw a payment
+    // demand reads false, same as the detector-off case.
+    commitmentPush: rows[0].commitment_push ?? false,
   };
 }
 
@@ -87,7 +92,7 @@ export async function getCall(callId) {
 // posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId }
+  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -127,6 +132,12 @@ export async function setCall(
   if (businessOverlay !== undefined) row.business_overlay = businessOverlay;
   if (archetype !== undefined) row.archetype = archetype;
   if (characterId !== undefined) row.character_id = characterId; // host_posture source
+  // commitmentPush: STEP 1 live-event flag. Only written when provided (the
+  // detector-off case never passes it, so the column stays at its default).
+  // Persisting it is what lets the NEXT turn's consumer read the demand — the
+  // field was previously dropped here, so stored.commitmentPush was always
+  // undefined and the consumer guard never passed.
+  if (commitmentPush !== undefined) row.commitment_push = commitmentPush;
 
   const r = await fetch(`${URL}/rest/v1/${TABLE}`, {
     method: "POST",
