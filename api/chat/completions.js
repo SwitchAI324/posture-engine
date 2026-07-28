@@ -254,6 +254,12 @@ const MODEL = () => process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
 // Flag off = readCall asks exactly what it asks today (byte-for-byte).
 const EVENT_DETECT =
   /^(1|true|yes|on)$/i.test(String(process.env.EVENT_DETECT || ""));
+// STEP 2: fire the stall (BIT-233) when the detector reads a commitment_push.
+// OFF by default. Requires EVENT_DETECT on to have a signal. Independently
+// reversible — EVENT_FIRE off leaves the Step-1 detector fully intact.
+const EVENT_FIRE =
+  /^(1|true|yes|on)$/i.test(String(process.env.EVENT_FIRE || ""));
+const CPUSH_BIT = process.env.CPUSH_BIT || "BIT-233";
 const MAX_TOKENS = () => parseInt(process.env.MAX_TOKENS || "1024", 10);
 
 // Generate a bench character's barge-in line, in character, reacting to the
@@ -1437,6 +1443,79 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           "force UNFIRABLE bit=" + forcedCtl.bit_id + " turn=" + turn +
           " — not an eligible candidate in this call's pool " +
           "(archetype/cap/phase gate); force stays pending"
+        );
+      }
+    }
+
+    // ── COMMITMENT-PUSH CONSUMER (STEP 2) ─────────────────────────────────
+    // The live-event equivalent of the force consumer: when the detector read
+    // a commitment_push for this turn, fire the stall bit (BIT-233) directly,
+    // bypassing the gear score that never ranks it high enough to win. This is
+    // the event->scenario path — the bit fires because a THING happened, not
+    // because a mood scored. Same one-shot / eligibility discipline as force:
+    // a Director force this turn wins over it (!forcedFire); the bit must be a
+    // real candidate in THIS call's ranked pool or we fall back to the normal
+    // pick; bypasses bar + MIN_GAP by design. Behind EVENT_FIRE — off = the
+    // Step-1 detector runs but fires nothing.
+    let cpushFire = false;
+    const cpush = !!(stored && stored.commitment_push);
+    if (EVENT_FIRE && !isSilenceNudge && !forcedFire && cpush) {
+      // FIRST try the ranked pool (bit is eligible this phase -> use its live
+      // scored entry, keeps breakdown/why for the trace).
+      let cpushBit = ranked.find(
+        (r) => r.id === CPUSH_BIT && !r.excluded && r.score > -Infinity
+      );
+      // EVENT OVERRIDE OF PHASE GATE: a commitment_push is a live event, not a
+      // mood — it must be answerable even when the phase loadout dropped the
+      // stall bit from the ranked pool (BIT-233 is not phase_pref:probing, so on
+      // a probing-phase demand it can be gated out and never reach `ranked`).
+      // Force conceptually has the same need; here we make the event path robust
+      // by falling back to the registry entry directly. We still refuse to fire
+      // a bit that is genuinely parked/retired (status !== "active") — the gate
+      // we bypass is PHASE eligibility, not the kill switch.
+      if (!cpushBit) {
+        const reg = (Array.isArray(BITS) ? BITS : []).find(
+          (b) => b && b.id === CPUSH_BIT && (b.status == null || b.status === "active")
+        );
+        if (reg) {
+          // Synthesize a minimal fire-able entry. score is a sentinel above the
+          // bar so any downstream `top.score` read is sane; the fire itself
+          // bypasses bar+gap so the value is not compared, only surfaced.
+          cpushBit = {
+            id: reg.id,
+            name: reg.name || reg.id,
+            // sentinel score: the fire bypasses bar+gap so this is never
+            // compared, only surfaced in logs. Kept above DEPLOY_THRESHOLD so any
+            // `top.score >= X` read downstream stays truthy for a fired bit.
+            score: 999,
+            excluded: false,
+            // carry the keys the gear-log emit reads (fit/gearBias/recency/why)
+            // so the synthesized entry serializes honestly rather than as a
+            // phantom scored bit. null = "not scored, event-fired".
+            breakdown: { fit: null, gearBias: null, recency: null, why: ["cpush event override (phase-gated)"] },
+          };
+          console.log(
+            "cpush POOL-GATED bit=" + CPUSH_BIT + " turn=" + turn +
+            " — not in ranked pool (phase gate); firing via registry override"
+          );
+        }
+      }
+      if (cpushBit) {
+        // EVENT WINS THE TURN: overwrite whatever the normal path picked. On the
+        // continuation turns a normal bit (e.g. Competing Vendor) can already be
+        // firing through the bar; the event must outrank it, not merely set fire
+        // true. top/fire are overwritten unconditionally here.
+        top = cpushBit;
+        fire = true;
+        cpushFire = true;
+        console.log(
+          "cpush FIRING bit=" + CPUSH_BIT + " turn=" + turn +
+          " (bypassing bar=" + bar + " gap=" + gap + ", over normal pick)"
+        );
+      } else {
+        console.log(
+          "cpush UNFIRABLE bit=" + CPUSH_BIT + " turn=" + turn +
+          " — not in registry or parked/retired; falling back to normal pick"
         );
       }
     }
