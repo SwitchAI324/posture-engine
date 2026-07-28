@@ -407,7 +407,7 @@ async function readCall(messages, prior) {
     // STEP 1 (flag-gated): carry the commitment_push live-event boolean.
     // Strict boolean, defaults false. Never present when the flag is off.
     if (EVENT_DETECT) {
-      out.commitment_push = parsed.commitment_push === true;
+      out.commitmentPush = parsed.commitment_push === true;
     }
     return Object.keys(out).length ? out : null;
   } catch {
@@ -427,8 +427,8 @@ function blendRead(keywordState, read) {
   // STEP 1: carry the live-event flag into stored state, only when the reader
   // reported it (flag on). NOT one-way, NOT latched — a momentary per-turn
   // event, true only on the turn the demand happened. Rides the same setCall.
-  if (typeof read.commitment_push === "boolean") {
-    out.commitment_push = read.commitment_push;
+  if (typeof read.commitmentPush === "boolean") {
+    out.commitmentPush = read.commitmentPush;
   }
   // ONE-WAY BUSINESS LATCH (phase-overlay split): the first turn the call is
   // read as non-"opening", latch businessLatched=true so completions serves the
@@ -1339,7 +1339,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
                     " eng=" + (merged.engagement || state.engagement) +
                     // STEP 1: log the observed event flag so precision can be
                     // watched BEFORE anything fires off it.
-                    (EVENT_DETECT ? " cpush=" + (merged.commitment_push ? "Y" : "n") : "")
+                    (EVENT_DETECT ? " cpush=" + (merged.commitmentPush ? "Y" : "n") : "")
                 );
               });
             }
@@ -1458,7 +1458,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // pick; bypasses bar + MIN_GAP by design. Behind EVENT_FIRE — off = the
     // Step-1 detector runs but fires nothing.
     let cpushFire = false;
-    const cpush = !!(stored && stored.commitment_push);
+    const cpush = !!(stored && stored.commitmentPush);
     if (EVENT_FIRE && !isSilenceNudge && !forcedFire && cpush) {
       // FIRST try the ranked pool (bit is eligible this phase -> use its live
       // scored entry, keeps breakdown/why for the trace).
