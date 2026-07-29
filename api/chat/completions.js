@@ -260,6 +260,19 @@ const EVENT_DETECT =
 const EVENT_FIRE =
   /^(1|true|yes|on)$/i.test(String(process.env.EVENT_FIRE || ""));
 const CPUSH_BIT = process.env.CPUSH_BIT || "BIT-233";
+// STEP 3: beat controller. When BIT-233 fires (a commitment-push scenario
+// opened), hold the floor for a few turns so the approver-hunt plays as one
+// sustained beat instead of trailing off into undriven host improv or getting
+// crashed by a stray bit. Derived from the ALREADY-PERSISTED lastBitId/
+// lastBitTurn (no new store column): the window is "the last fired bit was
+// CPUSH_BIT and it fired within HUNT_WINDOW_TURNS turns ago." Total floor — no
+// OTHER automatic bit fires in the window — but Director force and death-blow
+// are checked after and bypass it (human/ending override always wins). Behind
+// HUNT_WINDOW; off = today's behavior. Cap-only for v1 (no early-out on hunt
+// resolution — that needs a resolution detector we haven't built).
+const HUNT_WINDOW =
+  /^(1|true|yes|on)$/i.test(String(process.env.HUNT_WINDOW || ""));
+const HUNT_WINDOW_TURNS = parseInt(process.env.HUNT_WINDOW_TURNS || "3", 10);
 const MAX_TOKENS = () => parseInt(process.env.MAX_TOKENS || "1024", 10);
 
 // Generate a bench character's barge-in line, in character, reacting to the
@@ -1395,6 +1408,49 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // engagement data.
     let fire = !isSilenceNudge && !!(top && top.score >= bar && gap >= MIN_GAP);
 
+    // ── HUNT-WINDOW FLOOR (STEP 3 beat controller) ────────────────────────
+    // If BIT-233 opened a commitment-push scenario in the last few turns, keep
+    // it holding the floor so the approver-hunt plays as one sustained beat.
+    // The window is derived from persisted state — the last fired bit was
+    // CPUSH_BIT and it fired within HUNT_WINDOW_TURNS. Rather than merely
+    // BLOCKING other bits (which would also strip the hunt directive at the
+    // BIT-ACTIVE injection below, gated on `fire`, and silence the hunt), the
+    // window RE-FIRES BIT-233 itself: it becomes `top` and `fire` every window
+    // turn, so (a) no other auto-bit can be top = floor held, and (b) BIT-233's
+    // directive is re-injected each turn = hunt sustained. Runs BEFORE the force
+    // + cpush consumers: a fresh cpush this turn or a Director force runs after
+    // and overrides (both re-point top themselves); a death-blow also wins
+    // (checked at its own branch). Cap-only for v1 — no early-out on resolution.
+    // Skipped on silence-nudge turns (isSilenceNudge is forced false today, but
+    // keep the guard consistent with the other fire paths).
+    let inHuntWindow = false;
+    if (HUNT_WINDOW && !isSilenceNudge && stored &&
+        stored.lastBitId === CPUSH_BIT && stored.lastBitTurn != null &&
+        (turn - stored.lastBitTurn) >= 1 &&
+        (turn - stored.lastBitTurn) <= HUNT_WINDOW_TURNS) {
+      // Synthesize BIT-233's fire-able entry the same way the cpush consumer
+      // does (it's phase-gated out of `ranked`, so ranked.find won't have it).
+      // Only if it's still active in the registry — a parked/retired bit must
+      // not be sustained.
+      const reg = (Array.isArray(BITS) ? BITS : []).find(
+        (b) => b && b.id === CPUSH_BIT && (b.status == null || b.status === "active")
+      );
+      if (reg) {
+        const heldName = top ? top.name : null;
+        top = {
+          id: reg.id, name: reg.name || reg.id, score: 999, excluded: false,
+          breakdown: { fit: null, gearBias: null, recency: null, why: ["hunt-window sustain (BIT-233 holds floor)"] },
+        };
+        fire = true;
+        inHuntWindow = true;
+        console.log(
+          "hunt-window SUSTAIN turn=" + turn + " — BIT-233 holds floor (" +
+          (turn - stored.lastBitTurn) + "/" + HUNT_WINDOW_TURNS + " turns)" +
+          (heldName && heldName !== reg.name ? ", over normal pick '" + heldName + "'" : "")
+        );
+      }
+    }
+
     // ── FORCE CONSUMER ────────────────────────────────────────────────────
     // The Director's "fire THIS bit now" override, from Mead Hall via
     // POST /api/control?action=force. The endpoint writes a pending
@@ -1784,8 +1840,24 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
             "beats, its required moves, its sequence. Do NOT produce behavior " +
             "that is merely consistent with the bit's tone — that is a failed " +
             "performance. ") +
-        "If the bit has sequenced beats, start beat one now and carry the " +
-        "sequence across turns as its directive specifies. Still in force: " +
+        (inHuntWindow
+          ? // WINDOW SUSTAIN: this bit already opened on an earlier turn and is
+            // being HELD across the beat. Override the default "start beat one"
+            // framing — starting over would loop the host back to the opening
+            // move ("oh, I'd need an approver") every turn. Tell it explicitly
+            // where it is and to ADVANCE, using the conversation history as its
+            // record of what it has already done.
+            "This routine is ALREADY IN PROGRESS — you opened it " +
+            (turn - stored.lastBitTurn) + " turn(s) ago and are now on beat " +
+            ((turn - stored.lastBitTurn) + 1) + " of it. Do NOT restart it or " +
+            "repeat the opening move; you have already done that. Look at what " +
+            "you have already said in this thread and ADVANCE the beat from " +
+            "there — escalate the effort (a new extension, a new excuse, a " +
+            "further step in the search), don't reset it. Keep it fresh and " +
+            "moving. "
+          : "If the bit has sequenced beats, start beat one now and carry the " +
+            "sequence across turns as its directive specifies. ") +
+        "Still in force: " +
         "never name the bit, never break character, and stay in the live " +
         "thread — the caller's last line still gets a real response woven " +
         "through the performance.\n[END BIT]";
@@ -1989,7 +2061,13 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           slip: state.slip,
           accuseFloor: state.accuseFloor, // STICKY: persist the accusation floor
           stallCount, // extended_stall streak (resets on pitch/ask)
-          ...(fire && !sameTurnReinject
+          // lastBit is NOT re-stamped on a hunt-window SUSTAIN. The window is
+          // measured as (turn - lastBitTurn) against the ORIGINAL BIT-233 fire;
+          // if the sustain re-stamped lastBitTurn=turn every turn, the window
+          // start would slide forward and never hit the cap — fire-forever. So
+          // the sustain re-fires the bit for the prompt but leaves lastBitTurn
+          // pinned to the real demand turn, letting the cap count up and close.
+          ...(fire && !sameTurnReinject && !inHuntWindow
             ? { lastBitId: top.id, lastBitTurn: turn, lastBitAt: Date.now() }
             : {}),
           ...(archetypeNew ? { archetype } : {}),
