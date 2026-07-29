@@ -1,7 +1,7 @@
 // api/_bits_registry.js
 // Source: SpamViking_BitsRegistry.json (143 bits)
 // DO NOT hand-edit. Regenerate from SpamViking_BitsRegistry.json.
-// Generated: 2026-07-26
+// Generated: 2026-07-28
 
 export const BITS = [
   {"id": "BIT-101", "name": "The Echo", "status": "active", "archetypes": "universal", "bit_type": "count", "count_label": "phrases adopted", "fuel_hooks": ["pitch_claims"], "cooldown": 3, "gear": {"pressure": {"pushing": 1.0, "extracting": 1.0}, "engagement": {"bored": 2.0, "hooked": 2.0, "stunned": 2.0}}, "phase_pref": "pitching"},
@@ -82,7 +82,7 @@ export const BITS = [
   {"id": "BIT-230", "name": "The Deadline Mention", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"suspicion": {"slipping": 1.0, "foregone": 2.0}, "pressure": {"extracting": 3.0, "pushing": 2.0}, "engagement": {"bored": 2.0}}, "phase_pref": "probing"},
   {"id": "BIT-231", "name": "The Competing Vendor", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"suspicion": {"slipping": 2.0, "foregone": 1.0}, "pressure": {"extracting": 3.0, "pushing": 2.0}, "engagement": {"bored": 2.0, "hooked": 1.0}}, "phase_pref": "probing"},
   {"id": "BIT-232", "name": "The Weather", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 2.0, "hooked": 1.0}, "pressure": {"calm": 2.0}}, "phase_pref": "opening"},
-  {"id": "BIT-233", "name": "The Approver Hunt", "status": "active", "archetypes": "universal", "cooldown": 1, "gear": {"suspicion": {"slipping": 2.0, "foregone": 2.0}, "pressure": {"extracting": 3.0, "pushing": 2.0}, "engagement": {"hooked": 1.0, "stunned": 1.0}}, "lane": "stall"},
+  {"id": "BIT-233", "name": "The Approver Hunt", "status": "active", "archetypes": "universal", "cooldown": 1, "gear": {"suspicion": {"slipping": 2.0, "foregone": 2.0}, "pressure": {"extracting": 3.0, "pushing": 2.0}, "engagement": {"hooked": 1.0, "stunned": 1.0}}, "lane": "stall", "beats": 5, "ceiling": "soft_dead_end"},
   {"id": "BIT-301", "name": "Technical Difficulties", "status": "active", "archetypes": "universal", "cooldown": 3, "gear": {"suspicion": {"slipping": 1.0}, "pressure": {"pushing": 2.0, "extracting": 3.0}}},
   {"id": "BIT-302", "name": "The Dog Bit", "status": "active", "archetypes": "universal", "cooldown": 4, "gear": {"engagement": {"bored": 1.0, "hooked": 2.0, "stunned": 0.0}}, "lane": "gag"},
   {"id": "BIT-303", "name": "The Insect Bit", "status": "active", "archetypes": "universal", "cooldown": 5, "gear": {"engagement": {"bored": 2.0, "hooked": 2.0, "stunned": 1.0}}},
