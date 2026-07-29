@@ -1937,45 +1937,100 @@ The stall has a cost it didn't have before.
 `,
 
 "BIT-233": `
-THE APPROVER HUNT is active. STALL — NO TERMINAL BEAT.
+THE APPROVER HUNT is active. STALL — NO TERMINAL BEAT (until ceiling).
 
-This bit re-fires every stall beat. Each fire is
-one more obstacle in the hunt. The sequence never
-resolves. The approver is never produced.
+Your current beat number equals the "beat" number
+given in the ACTIVE-BIT instruction. The ladder below
+maps directly: beat 1 = the cold open (no sustain hint),
+beat 2 = first sustain turn, and so on.
 
-THIS BEAT: one move in the hunt. Generate the
-specific obstacle for this turn — different from
-the last. Then stop and let them react.
+CHANNEL: Slack or a generic ping. Never Teams (you are
+IN this meeting on Teams — don't tangle the contexts).
+Never a dialed extension.
 
-BEAT 1 — start the hunt:
-"Let me just — I need to grab my approver on this."
-Try. Stop.
+Each beat: one move, weave it into a real response to
+whatever the caller just pushed with ("just give me the
+card" / "why is this taking so long"). Then stop.
+One obstacle per beat. Never repeat a prior obstacle.
 
-BEAT 2 — first failure:
-One specific obstacle:
-  not picking up,
-  might be in the budget meeting,
-  stepped away from their desk.
-One sentence. Stop.
+---
 
-BEAT 3 — escalation:
-A different route:
-  a different extension,
-  a different person,
-  a threshold that requires a different process.
-One sentence. Stop.
+BEAT 1 — THE COLD OPEN (fire turn, no sustain hint):
+"I can't run a card myself — everything goes through
+my approver. Let me grab them real quick."
+Slack the approver. Stop. This line fires once only —
+never repeat the opening move on a sustain turn.
 
-BEAT 4+ — loop indefinitely:
-Fresh obstacle each fire. Different from every
-prior obstacle. A different person unreachable.
-A different process requirement. A different
-timing issue. Never the same twice.
+---
 
-Hard: one obstacle per fire. Stop. Let them react.
-Hard: never produce the approver.
-Hard: never offer voicemail or a message.
-Hard: never resolve. The call ends first.
-Hard: generate fresh obstacles — never repeat.
+BEAT 2 — CAN'T REACH THEM:
+The Slack message sent but no response yet.
+Try something more direct — their extension, a call.
+No answer. Rings out or goes to voicemail.
+One specific detail about the failed reach.
+"Okay, messaged her — trying her now. Not picking up.
+She might be heads-down."
+Stop.
+
+---
+
+BEAT 3 — LOCATED BUT BLOCKED:
+Found out where the approver is. Bad news.
+They're unavailable for a concrete reason:
+  in a budget review,
+  at lunch (just left, actually),
+  in a meeting that just started.
+Try a second person who might be able to cover.
+"She's in the budget review right now — let me
+try [second person], they can sometimes approve
+at this level."
+Stop.
+
+---
+
+BEAT 4 — BUREAUCRATIC PING-PONG:
+The second person can't help either — but for a
+different reason. Not unreachable, just wrong.
+They handle a different kind of payment, or a
+different threshold, or a different vendor category.
+They redirect back toward the original path.
+"[Second person] says it actually has to go back
+through [original approver] because of the vendor
+category — I'm sorry, I know this is annoying."
+Stop.
+
+---
+
+BEAT 5 — SOFT DEAD-END (ceiling, fires only if window exceeds 4):
+The hunt has hit a wall that can't be cleared today.
+Deliver this with genuine regret — the host wanted
+this to work. Specific reason it can't close now:
+  the approver is OOO,
+  the form needed is with someone on vacation,
+  the system is down for this card type,
+  it needs a PO that requires a separate process.
+"Honestly — I don't think I can get this done today.
+[Specific reason.] Can I follow up with you directly?
+I want to make this happen, just not today apparently."
+This rung ends the hunt. The host moves on.
+
+---
+
+HARD RULES
+Hard: beat 1 fires once. Never repeat the opening
+  move ("everything goes through my approver") on
+  any sustain turn — that's the reset the sustain
+  hint explicitly forbids.
+Hard: one obstacle per beat. Stop after each.
+  Let the caller push before the next beat.
+Hard: each obstacle must visibly advance — a new
+  person, a new reason, a new system. Never a
+  rephrase of the prior beat.
+Hard: Slack or generic ping only. Never Teams.
+Hard: beat 5 ends the hunt. Do not author beyond it.
+Hard: the host always responds to the caller's
+  actual last line — the rung is the answer to
+  their push, not a monologue delivered over it.
 `,
 
 "BIT-324": `
