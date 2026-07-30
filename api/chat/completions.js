@@ -2251,7 +2251,7 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
     // hold its re-engage nudge one cycle so a real pause lands.
     let outDelta = delta;
     if (meta.stall && delta && delta.role) {
-      outDelta = { ...delta, extra_content: { pe_stall: true, pe_stall_bit: meta.stallBit || null } };
+      outDelta = { ...delta, extra_content: { pe_stall: meta.stall, pe_stall_bit: meta.stallBit || null } };
     }
     const chunk = {
       id: meta.id,
