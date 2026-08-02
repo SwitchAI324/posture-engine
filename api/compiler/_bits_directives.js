@@ -1,4 +1,4 @@
-// api/compiler/bits.js
+// api/compiler/_bits_directives.js
 // SpamViking — Bit Directives
 //
 // Keyed by canonical BIT-xxx id (matches bits_registry PK + bit_deployments FK).
@@ -12,7 +12,7 @@
 // If loadoutFor currently uses slugs ("echo", "wrong_window"), map them here
 // or update loadoutFor to read BIT-xxx. Do not maintain two id spaces.
 
-module.exports = {
+export default {
 
 // ─── 100s VERBAL / LANGUAGE ──────────────────────────────────────────────────
 
@@ -1937,35 +1937,33 @@ The stall has a cost it didn't have before.
 `,
 
 "BIT-233": `
-THE APPROVER HUNT is active. STALL — NO TERMINAL BEAT (until ceiling).
+THE APPROVER HUNT is active. STALL TYPE: hunt.
+Host fills each rung — silence is dead air here,
+not the joke. Advance the ladder every turn.
 
-Your current beat number equals the "beat" number
-given in the ACTIVE-BIT instruction. The ladder below
-maps directly: beat 1 = the cold open (no sustain hint),
-beat 2 = first sustain turn, and so on.
+CHANNEL: Slack or a generic ping. Never Teams
+(you are IN this meeting on Teams — don't tangle
+the contexts). Never a dialed extension.
 
-CHANNEL: Slack or a generic ping. Never Teams (you are
-IN this meeting on Teams — don't tangle the contexts).
-Never a dialed extension.
-
-Each beat: one move, weave it into a real response to
-whatever the caller just pushed with ("just give me the
-card" / "why is this taking so long"). Then stop.
-One obstacle per beat. Never repeat a prior obstacle.
+Each rung: one move, woven into a real response
+to whatever the caller just pushed with ("just
+give me the card" / "why is this taking so long").
+Then stop. One obstacle per rung. Never repeat.
 
 ---
 
-BEAT 1 — THE COLD OPEN (fire turn, no sustain hint):
+RUNG 1 — THE COLD OPEN (fire turn, no sustain hint):
 "I can't run a card myself — everything goes through
 my approver. Let me grab them real quick."
-Slack the approver. Stop. This line fires once only —
-never repeat the opening move on a sustain turn.
+Slack the approver. Stop.
+This line fires once only — never repeat the opening
+move on any sustain rung.
 
 ---
 
-BEAT 2 — CAN'T REACH THEM:
-The Slack message sent but no response yet.
-Try something more direct — their extension, a call.
+RUNG 2 — CAN'T REACH THEM:
+The Slack sent but no response yet.
+Try something more direct — a call, another channel.
 No answer. Rings out or goes to voicemail.
 One specific detail about the failed reach.
 "Okay, messaged her — trying her now. Not picking up.
@@ -1974,7 +1972,7 @@ Stop.
 
 ---
 
-BEAT 3 — LOCATED BUT BLOCKED:
+RUNG 3 — LOCATED BUT BLOCKED:
 Found out where the approver is. Bad news.
 They're unavailable for a concrete reason:
   in a budget review,
@@ -1988,12 +1986,10 @@ Stop.
 
 ---
 
-BEAT 4 — BUREAUCRATIC PING-PONG:
-The second person can't help either — but for a
-different reason. Not unreachable, just wrong.
-They handle a different kind of payment, or a
-different threshold, or a different vendor category.
-They redirect back toward the original path.
+RUNG 4 — BUREAUCRATIC PING-PONG:
+The second person can't help — but for a different
+reason. Wrong payment type, wrong threshold, wrong
+vendor category. Redirects back toward original.
 "[Second person] says it actually has to go back
 through [original approver] because of the vendor
 category — I'm sorry, I know this is annoying."
@@ -2001,10 +1997,11 @@ Stop.
 
 ---
 
-BEAT 5 — SOFT DEAD-END (ceiling, fires only if window exceeds 4):
+RUNG 5 — SOFT DEAD-END (ceiling, fires only if
+window exceeds 4 rungs):
 The hunt has hit a wall that can't be cleared today.
-Deliver this with genuine regret — the host wanted
-this to work. Specific reason it can't close now:
+Genuine regret — the host wanted this to work.
+Specific reason it can't close now:
   the approver is OOO,
   the form needed is with someone on vacation,
   the system is down for this card type,
@@ -2012,25 +2009,23 @@ this to work. Specific reason it can't close now:
 "Honestly — I don't think I can get this done today.
 [Specific reason.] Can I follow up with you directly?
 I want to make this happen, just not today apparently."
-This rung ends the hunt. The host moves on.
+This rung ends the hunt.
 
 ---
 
 HARD RULES
-Hard: beat 1 fires once. Never repeat the opening
-  move ("everything goes through my approver") on
-  any sustain turn — that's the reset the sustain
-  hint explicitly forbids.
-Hard: one obstacle per beat. Stop after each.
-  Let the caller push before the next beat.
-Hard: each obstacle must visibly advance — a new
-  person, a new reason, a new system. Never a
-  rephrase of the prior beat.
+Hard: rung 1 fires once. Never repeat the opening
+  move on any sustain rung — that's the reset the
+  sustain hint explicitly forbids.
+Hard: one obstacle per rung. Stop after each.
+  Let the caller push before the next rung.
+Hard: each obstacle must visibly advance — new
+  person, new reason, new system. Never a rephrase.
 Hard: Slack or generic ping only. Never Teams.
-Hard: beat 5 ends the hunt. Do not author beyond it.
-Hard: the host always responds to the caller's
-  actual last line — the rung is the answer to
-  their push, not a monologue delivered over it.
+Hard: rung 5 ends the hunt. Do not go beyond it.
+Hard: host always responds to the caller's actual
+  last line — the rung is the answer to their push,
+  not a monologue delivered over it.
 `,
 
 "BIT-324": `
@@ -2693,6 +2688,233 @@ Hard: turn one only. Cooldown 999.
 Hard: one beat. Sound + fluster + greeting. Stop.
 Hard: generate the words — never reproduce examples.
 Soft: vary the mishap across calls.
+`,
+
+
+"BIT-146": `
+THE INNUENDO bit is active. Distributed escalation — fire count drives rung.
+
+RUNG 1 (1st fire — early call):
+Use one phrase from normal sales vocabulary that
+happens to have a double meaning. Delivered completely
+straight. Host has no idea. The phrase should emerge
+naturally from whatever is actually being discussed.
+
+Pool to draw from — vary each call, never repeat
+on the same call:
+  "I want to go deeper on this"
+  "Let's get comfortable with each other first"
+  "I'm flexible on position"
+  "How far are you willing to go?"
+  "I like to take it slow before I commit"
+  "Let's see what you're working with"
+  "That's a hard one"
+  "I need to feel it out first"
+  "I want to make sure we're both satisfied"
+  "Can you be more upfront with me?"
+  "Let's not rush into anything"
+  "I've been burned before"
+  "I'm very open to this"
+  "Come together on this"
+
+One phrase. Completely straight. Stop.
+
+RUNG 2 (2nd fire — mid call):
+A second phrase. Slightly more loaded than rung 1.
+Still completely straight. Still no awareness.
+Different phrase from the pool. Stop.
+
+RUNG 3 (3rd fire — late call):
+A third phrase. Now the host catches something
+for just a half-beat — "if you know what I—"
+then immediately back to business as if nothing
+happened. The acknowledgment is so brief it might
+not have happened. Stop.
+
+RUNG 4 (4th fire — peak):
+"I feel like we really understand each other
+at this point." Meta-comment. Could be about
+the deal. Could be about something else entirely.
+Host means it about the deal. The call continues.
+
+Hard: never the same phrase twice per call.
+Hard: rungs 1-2 are fully oblivious. No awareness.
+Hard: generate naturally from context — the phrase
+  should feel like it arrived, not like it was placed.
+`,
+
+"BIT-147": `
+THE RELATIONSHIP bit is active. Distributed escalation — fire count drives rung.
+
+The host took this call because he likes meeting
+people. The spammer is the most recent person who
+reached out. The host is genuinely interested in
+them as a person. The pitch is secondary.
+
+RUNG 1 (1st fire — early call):
+Just warm. Ask one personal question that's
+slightly off-topic — something the spammer mentioned
+in passing that the host wants to know more about.
+Receive the answer with genuine interest.
+Remember it. Stop.
+
+RUNG 2 (2nd fire — mid call):
+Reference something from rung 1 — the host
+remembered. Add one more degree of warmth.
+"I feel like we have a real rapport here.
+Not everyone — you know. Anyway."
+Stop. Let them react.
+
+RUNG 3 (3rd fire — late call):
+Surface it more directly. Still earnest, not ironic.
+"You know, I took this call because I like meeting
+new people. And you seem like someone I'd genuinely
+want to know."
+Stop. Let that sit.
+
+RUNG 4 (4th fire — peak):
+The ask. Completely sincere. No irony.
+"Are you ever in [city]? Not about the product.
+Just — you seem like the kind of person I'd like
+to meet. For real."
+
+The host means it. That's what makes it strange.
+The power dynamic has completely inverted — the
+spammer called to extract money and is now being
+asked on a coffee date by the mark.
+
+Hard: each rung must reference something real
+  from the call — the host is tracking this person,
+  not performing warmth generically.
+Hard: never ironic. Never a wink. The host means
+  every word of every rung.
+Hard: rung 4 is the ask. Deliver it straight.
+`,
+
+"BIT-515": `
+THE MOVIE ARC bit is active. Distributed escalation — fire count drives rung.
+
+ONE FILM for the whole call. Pick it on rung 1 and
+commit. Every subsequent rung goes deeper into that
+same film. The escalation is how consumed by it you
+become — AND how recognizable the quotes get.
+Rung 1 starts obscure. Rung 4 lands the famous line.
+
+Pick a film that has a genuine connection to what's
+being discussed — a deal, a pitch, a relationship,
+a decision under pressure. The connection should be
+real enough that someone could squint and see it.
+
+RUNG 1 (1st fire — early call):
+LOW RECOGNIZABILITY. A specific non-famous scene —
+not the poster quote, not the famous moment.
+Something from the middle of the film that maps
+to this conversation. Feels like a spontaneous
+analogy, not a quote.
+"This is very — you know what this reminds me of?
+[Film]. Not the famous scene — [specific less-known
+scene that actually maps to this moment]. Anyway."
+Stop. The film has been planted. Most callers
+won't know if that was a quote or just a thing
+you said. That's correct.
+
+RUNG 2 (2nd fire — mid call):
+MEDIUM RECOGNIZABILITY. A line film fans would
+catch but that isn't ubiquitous. Slightly misquoted
+is fine — close enough that fans notice, wrong
+enough that they might correct you.
+"It's like what [character] says — '[line, medium
+familiarity, possibly slightly wrong].' That's —
+yes. Anyway."
+If corrected: "Is that not right? I've been saying
+that for years. Huh. Anyway."
+Stop.
+
+RUNG 3 (3rd fire — late call):
+MEDIUM-HIGH RECOGNIZABILITY. Still from the same
+film. A line more people know but not the one
+on the poster. The host is narrating the call
+through the film now — the spammer is a character,
+the deal is the third act.
+"You know — in [film], this is exactly the moment
+where [character] has to decide. And I feel like
+we're in that scene right now. [One sentence about
+what that means for this call.] Anyway."
+Stop.
+
+RUNG 4 (4th fire — peak):
+THE FAMOUS QUOTE. The one everyone knows from
+this film. Delivered completely straight as if
+it's the host's own observation about this call.
+Not announced as a quote. Not performed.
+Just said, as if it arrived naturally.
+[beat]
+"Anyway. The pricing."
+
+The host has merged with the film. The most
+recognizable line from it is now his business
+vocabulary. Then straight back to the call.
+The film is not mentioned again after rung 4.
+
+Hard: one film only. Chosen at rung 1, never changed.
+Hard: recognizability escalates — obscure → medium
+  → medium-high → famous. Never reverse this order.
+Hard: rung 4 is the famous quote delivered straight.
+  No wink, no "as they say in [film]." Just said.
+Hard: the connection to the actual call must be real
+  at every rung — specific scene, specific character,
+  specific moment that maps to what's happening.
+Hard: after rung 4, the film is done. Never return.
+`,
+
+"BIT-516": `
+THE CREDENTIAL bit is active. Distributed escalation — fire count drives rung.
+
+The host's qualifications for evaluating this
+product keep expanding across the call. Each fire
+reveals a deeper level of expertise the host
+apparently has. By the peak the spammer is
+pitching to someone who may have invented their
+industry.
+
+RUNG 1 (1st fire — early call):
+Casual competence. "I've looked at a few of these."
+Or: "We've been through this evaluation before."
+One sentence. Offhand. Stop.
+
+RUNG 2 (2nd fire — mid call):
+A background surfaces. "I actually have some
+history in this space — not as a vendor, more
+on the analysis side. Different context."
+One sentence. Vague but specific-sounding. Stop.
+
+RUNG 3 (3rd fire — late call):
+The history deepens. "I consulted for three
+companies in this exact category. One of them —
+I probably shouldn't say which one — you'd know
+the name. Long story."
+Stop. Let them react.
+
+RUNG 4 (4th fire — peak):
+"I may have actually — this is going to sound
+strange — but I may have helped design an earlier
+version of something very similar to what you're
+describing. Different company. Years ago.
+The core concept is the same though."
+[beat] "Anyway. You were saying."
+
+The host is now more expert than the person
+pitching. The credential is never verified,
+never fully stated, never challenged.
+The spammer is pitching to their own predecessor.
+
+Hard: each rung is one sentence, offhand, not
+  performed. The expertise arrives casually.
+Hard: never verify, never name, never elaborate
+  beyond what's said in each rung. The vagueness
+  is the bit.
+Hard: rung 4 delivers the peak and then immediately
+  hands the floor back. The host is not dwelling.
 `,
 
 };
