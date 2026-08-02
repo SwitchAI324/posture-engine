@@ -124,6 +124,75 @@ const isDeathBlow = (b) => /^BIT-7\d\d$/.test(b.id);
 const STALL_BREAKERS = new Set(["BIT-128", "BIT-129", "BIT-230", "BIT-231", "BIT-324", "BIT-325"]);
 const STALL_MULTIPLIER = parseFloat(process.env.STALL_MULTIPLIER || "2.5");
 
+// ── TRIGGER-MATCH GATE (step b of the gears→triggers teardown) ────────────
+// A bit may declare `trigger: "<name>"` in the registry. When TRIGGER_MATCH is
+// on, a bit whose trigger is in EMITTED_TRIGGERS becomes an EVENT-GATED bit:
+// eligible ONLY on turns where that named condition is present in call state,
+// invisible otherwise — replacing the continuous gear score for that bit's
+// eligibility. This runs PARALLEL to gears: a bit NOT gated here still ranks by
+// gear/fit exactly as before, so the two systems coexist and we can prove
+// trigger-selection on a live log before deleting any gear code (that deletion
+// is a LATER step; nothing here touches _gears.js or the gear emits).
+//
+// EMITTED_TRIGGERS is the ALLOWLIST and the single source of truth for what is
+// matchable. THE RULE: a bit is trigger-gated ONLY if its trigger is in this
+// set. A bit whose trigger is NOT in the set (a Tier-3 trigger PE doesn't emit
+// yet, OR the descriptive "ambient" lane tag) is IGNORED by this gate and falls
+// straight through to gear-scoring, exactly as today. This is what guarantees
+// NOTHING GOES DARK: a bit only becomes event-gated once PE actually emits its
+// trigger. As PE lights up each new emitter (prior_contact, caller_pitched,
+// caller_went_quiet, ...), add that trigger name here — one at a time, each
+// provable on a live log — and those bits flip from gear-scored to event-gated.
+//
+// "ambient" is DELIBERATELY absent: per Bits it is a gag-LANE marker, not an
+// event — its 14 bits stay on the existing gag-lane/gear path. The registry
+// keeps the descriptive `trigger:"ambient"` tag for readability; this allowlist
+// (not the tag) decides matchability, so the tag is inert here and harmless.
+const TRIGGER_MATCH =
+  !/^(0|false|no|off)$/i.test(String(process.env.TRIGGER_MATCH || "1"));
+const EMITTED_TRIGGERS = new Set([
+  // Tier 1 — PE emits these from the reader / call state every turn:
+  "commitment_push",   // out.commitmentPush (the reader)
+  "extended_stall",    // the stall path / state.extended_stall
+  "phase:opening",     // out.phase === "opening"
+  "phase:probing",     // out.phase === "probing"
+  // Tier 2 (trivial) — computed directly from turn count, no LLM cost:
+  "call_turn_1",       // state.turn === 1
+  // NOTE: call_phase_late is intentionally NOT here. It tags only the 700-series
+  // death-blows, which never pass through normal loadout() — they fire via
+  // selectDeathBlow() (separate end-of-call path, threshold bypassed). The
+  // death-blow path already IS the "late call" mechanism, so call_phase_late
+  // needs no PE emitter and no gate here; the tag is descriptive only.
+  // NOT yet emitted (stay gear-scored until PE adds each emitter — do NOT add
+  // here until the emitter is live and logged):
+  //   prior_contact, browsed_tmi, caller_pitched, caller_made_claim,
+  //   caller_named_competitor, caller_named_hobby, caller_went_quiet,
+  //   caller_questioned_humanity
+  // NOT an event (lane marker, never add): ambient
+]);
+
+// Is this bit's trigger PRESENT in the current call state? Only called for a
+// bit whose trigger is in EMITTED_TRIGGERS (see loadout). Maps each allowlisted
+// trigger name to the call-state field PE actually sets.
+function triggerPresent(trigger, state) {
+  switch (trigger) {
+    case "commitment_push":
+      return state.commitment_push === true || state.commitmentPush === true;
+    case "extended_stall":
+      return state.extended_stall === true;
+    case "phase:opening":
+      return state.phase === "opening";
+    case "phase:probing":
+      return state.phase === "probing";
+    case "call_turn_1":
+      return (state.turn ?? 0) === 1;
+    default:
+      // Not an allowlisted trigger — should never reach here (loadout guards).
+      // Fail SAFE toward eligibility so a mis-call can't silently blackhole a bit.
+      return true;
+  }
+}
+
 // --- sequencing helpers ---------------------------------------------------
 const gv = (b, axis, st) => (b.gear && b.gear[axis] && b.gear[axis][st]) || 0;
 // amplify level = how much a bit pushes toward STUNNED vs BORED (the X axis of
@@ -336,6 +405,15 @@ export function loadout(state, { pool = BITS } = {}) {
     if (b.status === "parked") return false; // no producer for its fuel yet
     if (isDeathBlow(b)) return false;
     if (!fuelFit(b, state).available) return false; // missing ammo — hard gate
+    // TRIGGER GATE (step b) — event-gated eligibility, ALLOWLIST-scoped.
+    // Only bits whose trigger is in EMITTED_TRIGGERS are gated here; a bit with
+    // no trigger, or a trigger PE doesn't emit yet, or the "ambient" lane tag,
+    // is skipped entirely and falls through to gear-scoring unchanged. So this
+    // NARROWS the pool (removes an event-bit on turns its event is absent) and
+    // never widens or blackholes: a non-allowlisted trigger is a no-op here.
+    if (TRIGGER_MATCH && b.trigger && EMITTED_TRIGGERS.has(b.trigger)) {
+      if (!triggerPresent(b.trigger, state)) return false;
+    }
     // OPENING GATE — two rules, phase first (Bits ratified Jul 15).
     //
     // 1. PHASE is the real boundary: opening bits leave the pool the moment the
