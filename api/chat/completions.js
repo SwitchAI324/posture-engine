@@ -1482,10 +1482,28 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // (checked at its own branch). Cap-only for v1 — no early-out on resolution.
     // Skipped on silence-nudge turns (isSilenceNudge is forced false today, but
     // keep the guard consistent with the other fire paths).
+    // STAMP-TIGHTEN (2026-08-02): the FIRST silence beat after the BIT-233
+    // demand re-runs with the SAME message array (host's own line last, no new
+    // caller turn), so countUserTurns is unchanged and (turn - lastBitTurn) == 0
+    // on that beat. With the gate at >= 1 the sustain skipped it, BIT-233 didn't
+    // re-fire, meta.stall came back false, and the agent ran its generic
+    // "you still there?" poke — THEN advanced correctly once a real caller turn
+    // bumped the count. Allow the window to open at 0 ONLY on a silence beat
+    // (last message is the host's own assistant line). A normal turn keeps the
+    // >= 1 floor. SAFE re: the eager-stamp tradeoff Voice flagged: the sustain
+    // already keys on stored.lastBitId === CPUSH_BIT, so it only ever holds the
+    // floor for a BIT-233 that ACTUALLY fired — a non-hunt silence has no
+    // BIT-233 in the store and cannot be mis-stamped as a hunt.
+    const sustainLastRole =
+      messages && messages.length
+        ? messages[messages.length - 1] && messages[messages.length - 1].role
+        : null;
+    const isSilenceBeat = sustainLastRole === "assistant";
+    const huntFloor = isSilenceBeat ? 0 : 1; // silence beat may open the window at gap 0
     let inHuntWindow = false;
     if (HUNT_WINDOW && !isSilenceNudge && stored &&
         stored.lastBitId === CPUSH_BIT && stored.lastBitTurn != null &&
-        (turn - stored.lastBitTurn) >= 1 &&
+        (turn - stored.lastBitTurn) >= huntFloor &&
         (turn - stored.lastBitTurn) <= HUNT_WINDOW_TURNS) {
       // Synthesize BIT-233's fire-able entry the same way the cpush consumer
       // does (it's phase-gated out of `ranked`, so ranked.find won't have it).
@@ -1505,6 +1523,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         console.log(
           "hunt-window SUSTAIN turn=" + turn + " — BIT-233 holds floor (" +
           (turn - stored.lastBitTurn) + "/" + HUNT_WINDOW_TURNS + " turns)" +
+          (isSilenceBeat && (turn - stored.lastBitTurn) === 0 ? " [same-turn silence beat: hunt stamped before first poke]" : "") +
           (heldName && heldName !== reg.name ? ", over normal pick '" + heldName + "'" : "")
         );
       }
