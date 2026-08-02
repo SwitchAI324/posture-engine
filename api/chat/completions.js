@@ -282,6 +282,43 @@ const EVENT_DETECT =
 const EVENT_FIRE =
   /^(1|true|yes|on)$/i.test(String(process.env.EVENT_FIRE || ""));
 const CPUSH_BIT = process.env.CPUSH_BIT || "BIT-233";
+// ── SYNCHRONOUS CARD-ASK TRIGGER (card_ask) ──────────────────────────────
+// FIRST BRICK OF THE TRIGGER ARCHITECTURE (replacing gears). The async reader
+// detects commitment_push, but it runs in waitUntil and persists for the NEXT
+// turn — so on the actual demand turn stored.commitmentPush is still last turn's
+// value (false), the cpush override doesn't fire, and the fit-scored questionnaire
+// wins the card-ask turn. BIT-233 then fires a turn LATE, which ALSO produces the
+// stray "you still there?" (the late first-fire lands on a real caller turn and
+// the model opens the hunt as filler before stall-suppression is established).
+// Both symptoms are the SAME one-turn lag.
+//
+// FIX: detect the card-ask SYNCHRONOUSLY from the caller's current turn — a named
+// present/not trigger on call state, exactly the trigger-architecture model — so
+// the hunt fires the INSTANT the demand lands, not a turn later. This is the
+// engine reading caller text for a NAMED trigger, which is the new design (the
+// old "engine never sniffs text" rule was gear-era and is superseded here).
+//
+// HIGH-PRECISION by construction: requires BOTH a transact-intent verb (pay /
+// card / sign up / deposit / etc.) AND a now-signal (today / right now / on this
+// call / to get started), so a mere price question ("how much is it?") or a vague
+// "how would billing work" does NOT trigger. Mirrors the reader's own strict
+// wording. Cheap misses (reader still catches it next turn), rare false-fires.
+// Behind CARD_ASK_TRIGGER (default ON); set to 0 to fall back to reader-only.
+const CARD_ASK_TRIGGER =
+  !/^(0|false|no|off)$/i.test(String(process.env.CARD_ASK_TRIGGER || "1"));
+// Transact-intent: the caller wants money/commitment to move.
+const CARD_ASK_INTENT =
+  /\b(credit\s*card|debit\s*card|card\s*(?:number|details|info)|pay(?:ment)?|deposit|wir(?:e|ing)|sign\s*(?:up|me\s*up)|sign(?:ing)?\s*(?:the\s*)?(?:contract|paperwork|up)|put\s*(?:you\s*)?down|lock\s*(?:it|this)\s*in|get\s*you\s*(?:signed|set)\s*up|process\s*(?:your|the)\s*(?:payment|card)|charge\s*(?:your|the)\s*card|billing\s*(?:info|details)|routing\s*number|account\s*number)\b/i;
+// Now-signal: it must be a demand to transact NOW, not a general description.
+const CARD_ASK_NOW =
+  /\b(today|right\s*now|now|this\s*call|on\s*the\s*(?:phone|call)|to\s*get\s*started|to\s*lock\s*(?:it|this)\s*in|go\s*ahead\s*and|if\s*you\s*(?:can\s*)?(?:just\s*)?(?:give|provide)|just\s*need\s*(?:your|the))\b/i;
+// True only when BOTH fire on the caller's most recent line.
+function cardAskNow(callerText) {
+  if (!CARD_ASK_TRIGGER) return false;
+  const t = String(callerText || "");
+  if (!t) return false;
+  return CARD_ASK_INTENT.test(t) && CARD_ASK_NOW.test(t);
+}
 // STEP 3: beat controller. When BIT-233 fires (a commitment-push scenario
 // opened), hold the floor for a few turns so the approver-hunt plays as one
 // sustained beat instead of trailing off into undriven host improv or getting
@@ -1592,7 +1629,23 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // pick; bypasses bar + MIN_GAP by design. Behind EVENT_FIRE — off = the
     // Step-1 detector runs but fires nothing.
     let cpushFire = false;
-    const cpush = !!(stored && stored.commitmentPush);
+    // stored.commitmentPush = the async reader's LAST-turn value (lags one turn).
+    // cardAskNow(...) = the SYNCHRONOUS current-turn card-ask trigger. OR-ing it
+    // in makes the hunt fire the INSTANT the demand lands instead of a turn later
+    // — closing BOTH the questionnaire-steps-on-the-hunt bug AND the stray
+    // "you still there?" poke (both were downstream of the one-turn lag). The
+    // reader path stays as a backstop: if the sync trigger's strict pattern
+    // misses a phrasing, stored.commitmentPush still catches it next turn exactly
+    // as before. Logged distinctly so we can watch which path fired.
+    const cardAsk = cardAskNow(lastUserText(messages));
+    const cpush = !!(stored && stored.commitmentPush) || cardAsk;
+    if (cardAsk) {
+      console.log(
+        "card_ask TRIGGER (synchronous) turn=" + turn +
+        " — firing hunt on the demand turn (stored.cpush=" +
+        (!!(stored && stored.commitmentPush)) + ")"
+      );
+    }
     if (EVENT_FIRE && !isSilenceNudge && !forcedFire && cpush) {
       // FIRST try the ranked pool (bit is eligible this phase -> use its live
       // scored entry, keeps breakdown/why for the trace).
