@@ -23,7 +23,6 @@
 // hand-authored here (see api/_bits_registry.js).
 // ----------------------------------------------------------------------
 import { BITS } from "./_bits_registry.js";
-
 export const WEIGHTS = {
   archetypeMatch: 3.0,
   universal: 1.0,
@@ -39,13 +38,11 @@ export const WEIGHTS = {
                   // async phase reader) scores higher. Phase-neutral bits (no
                   // phase_pref) are unaffected. Bias, not a gate.
 };
-
 // Mid-call deploy bar: a bit fires only if its top score clears this (it must
 // beat "just keep talking"). Death blows bypass it. Env-tunable (DEPLOY_THRESHOLD)
 // so it can be dialed live from Vercel without a deploy — the third pacing dial
 // alongside MIN_GAP and WARMUP_TURNS.
 export const DEPLOY_THRESHOLD = parseFloat(process.env.DEPLOY_THRESHOLD || "1.5");
-
 // OPENING GATE (Bits chat spec, Jul 15) — the last caller-turn on which an
 // opening-only bit may still fire. Opening bits are about ARRIVING ("how are
 // you", the commute, camera-off, the late arrival); at turn 12 they are
@@ -82,7 +79,6 @@ export const DEPLOY_THRESHOLD = parseFloat(process.env.DEPLOY_THRESHOLD || "1.5"
 // state. 20 is deliberately far past any real opening. Set to 0 to disable
 // entirely once reader failures are proven rare (see the callread FAILED log).
 export const OPENING_MAX_TURN = parseInt(process.env.OPENING_MAX_TURN || "20", 10);
-
 // TEST-MODE ONLY: bits whose archetype scoping is bypassed so they're scorable
 // on EVERY call regardless of archetype. Comma-separated bit ids in an env var;
 // empty/unset (production default) = normal archetype gating for all bits. This
@@ -95,7 +91,6 @@ const TEST_UNSCOPE_BITS = new Set(
     .map((s) => s.trim())
     .filter(Boolean)
 );
-
 // TEST-MODE ONLY: hard-cap the deployable pool to exactly these bit ids. When
 // set, the Host can ONLY fire bits on this list — everything else is excluded
 // from loadout() before any other gate runs, so the autonomous Host is
@@ -111,10 +106,8 @@ const TEST_POOL_CAP = new Set(
     .map((s) => s.trim())
     .filter(Boolean)
 );
-
 // Death blows are the 700-series. Identified by id, not a separate `kind`.
 const isDeathBlow = (b) => /^BIT-7\d\d$/.test(b.id);
-
 // STALL-BREAKER family (per the Bits chat): these bits break an extended
 // content-less/social stretch. When state.extended_stall is set, their score
 // is multiplied so one lifts above the general pool. Add future stall-breakers
@@ -123,7 +116,6 @@ const isDeathBlow = (b) => /^BIT-7\d\d$/.test(b.id);
 // this whole family is a no-op until the Bits Library recompiles _bits_registry.js.
 const STALL_BREAKERS = new Set(["BIT-128", "BIT-129", "BIT-230", "BIT-231", "BIT-324", "BIT-325"]);
 const STALL_MULTIPLIER = parseFloat(process.env.STALL_MULTIPLIER || "2.5");
-
 // ── TRIGGER-MATCH GATE (step b of the gears→triggers teardown) ────────────
 // A bit may declare `trigger: "<name>"` in the registry. When TRIGGER_MATCH is
 // on, a bit whose trigger is in EMITTED_TRIGGERS becomes an EVENT-GATED bit:
@@ -170,7 +162,6 @@ const EMITTED_TRIGGERS = new Set([
   //   caller_questioned_humanity
   // NOT an event (lane marker, never add): ambient
 ]);
-
 // Is this bit's trigger PRESENT in the current call state? Only called for a
 // bit whose trigger is in EMITTED_TRIGGERS (see loadout). Maps each allowlisted
 // trigger name to the call-state field PE actually sets.
@@ -192,7 +183,90 @@ function triggerPresent(trigger, state) {
       return true;
   }
 }
-
+// ── TEXTURE ROTATION (step d of the gears→triggers teardown) ─────────────
+// Bits' spec (Aug 3): replace continuous gear-scoring for the TEXTURE bits
+// (the general-purpose filler pool — everything that isn't an event-triggered
+// scenario bit and isn't a gag/stall-lane bit) with deterministic phase+
+// cooldown LRU rotation. Behind TEXTURE_ROTATION, default OFF — until the flag
+// is on and completions.js is wired to call selectTextureBit() below, this
+// whole section is inert: loadout() includes texture bits in the gear-scored
+// pool EXACTLY as it does today (see the one flag-gated line added there).
+//
+// TEXTURE BIT = the registry's IMPLICIT definition, no explicit marker needed:
+// active AND no `trigger` field AND no `lane` field. A bit with BOTH a
+// `trigger` and a `pool` is a SCENARIO bit (trigger wins, per Bits' ruling) —
+// checking `!b.trigger` alone correctly excludes it here. `lane`-owned bits
+// (gag/stall) keep their own separate mechanisms in completions.js untouched.
+const TEXTURE_ROTATION =
+  /^(1|true|yes|on)$/i.test(String(process.env.TEXTURE_ROTATION || ""));
+const isTextureBit = (b) =>
+  b.status !== "parked" && !isDeathBlow(b) && !b.trigger && !b.lane;
+// PHASE -> which pool(s) are eligible this turn. No grace on a phase flip: a
+// bit whose pool falls out of this set is immediately ineligible, per spec.
+// An unrecognized/absent state.phase falls back to ["middle"] so nothing goes
+// dark on a stuck or unfamiliar phase reading.
+const POOL_FOR_PHASE = {
+  opening: ["early"],
+  pitching: ["middle"],
+  probing: ["middle", "late"],
+  drifting: ["middle", "late"],
+};
+// bit.pool default, per spec: absent -> "middle".
+const bitPool = (b) => b.pool || "middle";
+// bit.cooldown default for TEXTURE rotation specifically, per spec: absent ->
+// 4 turns. (Separate from recencyPenalty's gear-era cooldown default above —
+// that one still governs gear-scored bits; this is the rotation's own knob.)
+const bitCooldown = (b) => b.cooldown ?? 4;
+// Pick the next texture bit to fire this turn, or null. LRU within the
+// phase's eligible pool(s): the bit that fired LONGEST ago wins; never-fired
+// (last_fire_turn 0 or absent) always sorts first. No weights, no randomness
+// — fully deterministic, per spec.
+//
+// EXPECTS (new state fields completions.js must supply once wired):
+//   state.textureLastFire — { [bit.id]: <turn it last ACTUALLY fired> },
+//     0 or absent = never fired.
+//   state.turn  — current caller turn (already used elsewhere in this file).
+//   state.phase — current call phase (already used elsewhere in this file).
+//
+// COOLDOWN IS NOT RESET HERE — this function only SELECTS. Per spec, when a
+// scenario bit also wants the turn, the caller injects the scenario bit and
+// suppresses texture for that turn WITHOUT touching textureLastFire, so the
+// caller (completions.js) must stamp textureLastFire[bit.id] = turn ONLY on
+// turns this pick was actually performed, never on a turn it was merely
+// selected then suppressed.
+//
+// EDGE CASES (per spec, all handled here or explicitly left alone):
+//   - no eligible bit -> null (the starvation guard elsewhere handles a dry
+//     call; this function does not starve-fire on its own).
+//   - phase flip -> handled by POOL_FOR_PHASE above; no grace turn.
+//   - trigger + pool both present -> excluded (isTextureBit requires !b.trigger).
+//   - escalation bits (BIT-117/138/146/147/515/516) get NO special casing —
+//     they rotate through LRU like any other texture bit; which rung they
+//     perform is a directive-side (prompt) decision, not a scorer one.
+export function selectTextureBit(state, { pool = BITS } = {}) {
+  if (!TEXTURE_ROTATION) return null;
+  const eligiblePools = POOL_FOR_PHASE[state.phase] || ["middle"];
+  const lastFire = state.textureLastFire || {};
+  const turn = state.turn ?? 0;
+  const candidates = pool.filter((b) => {
+    if (!isTextureBit(b)) return false;
+    if (!fuelFit(b, state).available) return false; // still needs its ammo if fueled
+    if (!eligiblePools.includes(bitPool(b))) return false; // phase gate, no grace
+    const last = lastFire[b.id] || 0;
+    if (last > 0 && turn - last < bitCooldown(b)) return false; // still cooling down
+    return true;
+  });
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => (lastFire[a.id] || 0) - (lastFire[b.id] || 0));
+  return candidates[0];
+}
+// Debug/proof helper (same discipline as steps a-c: prove on a live log before
+// flipping TEXTURE_ROTATION on). Not called by production selection — a quick
+// way to confirm the registry's implicit texture set still matches Bits'
+// count (73 at spec time) after any future registry recompile.
+export function textureBitIds(pool = BITS) {
+  return pool.filter(isTextureBit).map((b) => b.id);
+}
 // --- sequencing helpers ---------------------------------------------------
 const gv = (b, axis, st) => (b.gear && b.gear[axis] && b.gear[axis][st]) || 0;
 // amplify level = how much a bit pushes toward STUNNED vs BORED (the X axis of
@@ -200,7 +274,6 @@ const gv = (b, axis, st) => (b.gear && b.gear[axis] && b.gear[axis][st]) || 0;
 const amplifyLevel = (b) => gv(b, "engagement", "stunned") - gv(b, "engagement", "bored");
 // category = the id hundreds digit (1xx Verbal, 2xx Structural, ...).
 const category = (b) => b.id.split("-")[1][0];
-
 // --- fuel as fit (the ammo system, graded) -------------------------------
 // A bit with fuel_hooks needs those dossier fields populated for THIS call.
 // Missing any -> unavailable (still excluded; can't joke about company_news
@@ -218,7 +291,6 @@ function fuelFit(bit, state) {
   const boost = WEIGHTS.fuelBoost + WEIGHTS.fuelExtraHook * (have.length - 1);
   return { available: true, boost, count: have.length };
 }
-
 // --- scoring --------------------------------------------------------------
 function fitScore(bit, state) {
   const why = [];
@@ -251,7 +323,6 @@ function fitScore(bit, state) {
   }
   return { score: s, why };
 }
-
 function gearBias(bit, state) {
   const why = [];
   let b = 0;
@@ -266,7 +337,6 @@ function gearBias(bit, state) {
   }
   return { bias: b, why };
 }
-
 function recencyPenalty(bit, state) {
   const since = state.recency?.[bit.id];
   if (since == null) return { pen: 0, why: [] };
@@ -278,7 +348,6 @@ function recencyPenalty(bit, state) {
   const pen = WEIGHTS.recencyBase * Math.max(0, 1 - since / cd);
   return { pen, why: pen > 0 ? [`used ${since} call(s) ago -${pen.toFixed(1)}`] : [] };
 }
-
 // Score one bit -> full auditable breakdown. Death blows add their intensity
 // as a mild ranking term (gear vitality still dominates soft-vs-scorched).
 export function scoreBit(bit, state) {
@@ -371,7 +440,6 @@ export function scoreBit(bit, state) {
     },
   };
 }
-
 // Rank a pool (default the whole registry) high to low, dropping excluded.
 export function rankBits(state, { pool = BITS, deathBlow = false } = {}) {
   return pool
@@ -380,7 +448,6 @@ export function rankBits(state, { pool = BITS, deathBlow = false } = {}) {
     .filter((r) => r.score !== -Infinity)
     .sort((a, b) => b.score - a.score);
 }
-
 // --- LOADOUT: per-turn candidacy ----------------------------------------
 // GEAR IS A SCORING SIGNAL, NOT AN ELIGIBILITY GATE (per the Bits chat's
 // pacing audit). Every active bit stays in the eligible pool; gear_bias
@@ -404,6 +471,11 @@ export function loadout(state, { pool = BITS } = {}) {
     if (TEST_POOL_CAP.size > 0 && !TEST_POOL_CAP.has(b.id)) return false;
     if (b.status === "parked") return false; // no producer for its fuel yet
     if (isDeathBlow(b)) return false;
+    // TEXTURE ROTATION (step d): once on, the texture bits are OWNED by
+    // selectTextureBit()'s phase+cooldown LRU rotation, not gear-scored here
+    // anymore. Off (default) -> this line is a no-op and loadout is byte-for-
+    // byte the same pool it was before this feature existed.
+    if (TEXTURE_ROTATION && isTextureBit(b)) return false;
     if (!fuelFit(b, state).available) return false; // missing ammo — hard gate
     // TRIGGER GATE (step b) — event-gated eligibility, ALLOWLIST-scoped.
     // Only bits whose trigger is in EMITTED_TRIGGERS are gated here; a bit with
@@ -432,7 +504,6 @@ export function loadout(state, { pool = BITS } = {}) {
     return true; // everything else is eligible; gear/score decides ranking
   });
 }
-
 // Mid-call pick: rank the LOADOUT (not the whole registry) and take the top if
 // it clears the deploy bar; else null ("just keep talking").
 export function selectBit(state, { threshold = DEPLOY_THRESHOLD } = {}) {
@@ -444,7 +515,6 @@ export function selectBit(state, { threshold = DEPLOY_THRESHOLD } = {}) {
   }
   return { bit: top, reason: "fires", ranked, pool: pool.length };
 }
-
 // Death Blow: the top 700-series finisher, always thrown (threshold bypassed).
 // Special rules from the Bits handoff: BIT-704 (Colleague Pull) overrides all
 // others when two spammers are present (+5); BIT-705 (Send-Off) is the natural

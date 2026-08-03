@@ -14,18 +14,15 @@
 //
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (server-side; bypasses RLS).
 // ----------------------------------------------------------------------
-
 const URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const TABLE = "call_prefix";
 const CONTROLS = "call_controls"; // canonical home for death_blow + arm + bench controls
 const CALLS = "calls"; // post-call outcome rows (Barbara's follow-up ladder keys off these)
 const EVENTS = "gear_events";
-
 export function isConfigured() {
   return Boolean(URL && KEY);
 }
-
 // READ BY SLUG KEY — fallback for the pre-call hydrate. The hydrate can run
 // BEFORE the Vapi call_id exists, writing the prefix under call_id="slug:<slug>"
 // (a pseudo-key). When the real first turn arrives and its call_id row has no
@@ -37,14 +34,13 @@ export async function getCallBySlug(slug) {
   if (!slug) return null;
   return getCall("slug:" + slug);
 }
-
 // READ — the one sanctioned hot-path lookup (indexed PK, not an LLM call).
 // Returns { prefix, postureLine } or null (not found / not configured).
 export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-   `&select=prefix,posture_line,gear,pressure,engagement,slip,accuse_floor,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push`;
+   `&select=prefix,posture_line,gear,pressure,engagement,slip,accuse_floor,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,texture_last_fire`;
   const r = await fetch(url, {
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
@@ -85,14 +81,19 @@ export async function getCall(callId) {
     // false when the column is absent/null — a call that never saw a payment
     // demand reads false, same as the detector-off case.
     commitmentPush: rows[0].commitment_push ?? false,
+    // TEXTURE ROTATION (step d): per-bit last-actually-fired turn map,
+    // {bit.id: turn}. jsonb column, defaults {} for a call that predates this
+    // feature (or a fresh row where it's null). selectTextureBit() in
+    // _bits_scorer.js treats an absent/0 entry as never-fired = always LRU-
+    // first, so {} here is the correct "nothing has ever fired yet" state.
+    textureLastFire: rows[0].texture_last_fire ?? {},
   };
 }
-
 // WRITE (upsert) — used at pre-snap to freeze the prefix, and later by the
 // posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush }
+  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, textureLastFire }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -138,7 +139,10 @@ export async function setCall(
   // field was previously dropped here, so stored.commitmentPush was always
   // undefined and the consumer guard never passed.
   if (commitmentPush !== undefined) row.commitment_push = commitmentPush;
-
+  // textureLastFire: step-d rotation's per-bit last-fired map (jsonb). Only
+  // written when provided — same pattern as every other field here, so a
+  // call that never touches texture rotation leaves the column untouched.
+  if (textureLastFire !== undefined) row.texture_last_fire = textureLastFire;
   const r = await fetch(`${URL}/rest/v1/${TABLE}`, {
     method: "POST",
     headers: {
@@ -154,7 +158,6 @@ export async function setCall(
   }
   return true;
 }
-
 // CONTROLS — Director's live commands (death_blow + arms + bench) live in
 // call_controls, one row each, distinguished by control_type. PE owns the row
 // shape: control-specific fields ride in payload; rung_id is the only death-
@@ -208,7 +211,6 @@ export async function getControls(callId) {
   }
   return { deathBlow, armed, sentBench, forced };
 }
-
 // DEATH BLOW (Trigger A) — insert one pending death_blow row. The partial unique
 // index keeps it to one per call_id; a duplicate (same call or same idem) comes
 // back 409, which we treat as already-armed (idempotent). rung_id is a column;
@@ -236,7 +238,6 @@ export async function setDeathBlow(callId, { rungId, rungName, finalLine, idem, 
   if (!r.ok) throw new Error(`death-blow set failed: ${r.status} ${await r.text()}`);
   return true;
 }
-
 export async function clearDeathBlow(callId, status = "fired") {
   if (!isConfigured() || !callId) return false;
   const r = await fetch(
@@ -253,7 +254,6 @@ export async function clearDeathBlow(callId, status = "fired") {
   );
   return r.ok;
 }
-
 // ARM — one row per armed item. addArm inserts (idempotency_key collapses double
 // clicks via 409). stampArm writes armed_turn into payload on first sight (the
 // escalation clock). fireArm marks a row fired when its bit lands. Setlist max-3
@@ -280,7 +280,6 @@ export async function addArm(callId, { bitId, hookId, idem, director }) {
   if (!r.ok) throw new Error(`arm set failed: ${r.status} ${await r.text()}`);
   return true;
 }
-
 // UNARM / DISARM — free a setlist slot. getControls counts an arm as live only
 // while status is "pending" or "armed"; setting it to "disarmed" drops it from
 // the live count immediately, so a stuck Director (3 armed, none firing) can
@@ -310,7 +309,6 @@ export async function removeArm(callId, { bitId }) {
   if (!r.ok) throw new Error(`unarm failed: ${r.status} ${await r.text()}`);
   return true;
 }
-
 // FORCE — Director forces ONE bit to fire on the next host turn, bypassing the
 // score/deploy-bar gate (the pick is stuck because it never clears the bar).
 // One row, control_type "force"; payload carries bit_id. getControls surfaces
@@ -339,7 +337,6 @@ export async function forceBit(callId, { bitId, idem, director }) {
   if (!r.ok) throw new Error(`force set failed: ${r.status} ${await r.text()}`);
   return true;
 }
-
 // Mark a force row fired (one-shot). completions.js calls this the turn it
 // fires the forced bit, so it can't fire again. PATCHes the live force row for
 // this call+bit to status "fired".
@@ -362,7 +359,6 @@ export async function fireForce(callId, { bitId }) {
   if (!r.ok) throw new Error(`fireForce failed: ${r.status} ${await r.text()}`);
   return true;
 }
-
 // BENCH — Director sends in a specific bench character mid-call. One row,
 // control_type "bench"; payload carries the chosen bench_id. Mirrors addArm.
 // The next host turn reads it (via getControls.sentBench) and weaves that
@@ -389,7 +385,6 @@ export async function setBench(callId, { benchId, idem, director }) {
   if (!r.ok) throw new Error(`bench set failed: ${r.status} ${await r.text()}`);
   return true;
 }
-
 export async function stampArm(id, payload) {
   if (!isConfigured() || !id) return false;
   const r = await fetch(`${URL}/rest/v1/${CONTROLS}?id=eq.${encodeURIComponent(id)}`, {
@@ -402,7 +397,6 @@ export async function stampArm(id, payload) {
   });
   return r.ok;
 }
-
 export async function fireArm(id) {
   if (!isConfigured() || !id) return false;
   const r = await fetch(`${URL}/rest/v1/${CONTROLS}?id=eq.${encodeURIComponent(id)}`, {
@@ -415,7 +409,6 @@ export async function fireArm(id) {
   });
   return r.ok;
 }
-
 // APPEND a per-turn breadcrumb to gear_events — the history that powers the
 // gear-trace graph. Append-only (one row per turn), best-effort, and only
 // ever called via waitUntil() so it never touches the hot path. Failures are
@@ -447,7 +440,6 @@ export async function appendGearEvent(
   });
   return r.ok;
 }
-
 // APPEND a per-turn FIT read to bit_events — the top-ranked bit and its score
 // breakdown, plus whether it fired. This is how fit becomes measurable: one row
 // per turn, off the hot path, best-effort.
@@ -536,7 +528,6 @@ export async function saveTranscript(callId, slug, messages) {
   });
   return r.ok;
 }
-
 // INSERT CALL OUTCOME — Barbara's post-call follow-up ladder keys off a `calls`
 // row's call_outcome. Written on a silence/bail/hangup close by the agent, via
 // POST /api/calls?action=close (the agent has no DB access; PE writes the row).
@@ -584,7 +575,6 @@ export async function insertCallOutcome({
   if (!r.ok) throw new Error(`calls insert failed: ${r.status} ${await r.text()}`);
   return true;
 }
-
 // CANCEL a pending force — the Director's in-flight un-fire. Same shape as
 // fireForce but the terminal status is "cancelled" rather than "fired", so the
 // two are distinguishable in the control history (did it land, or did the
