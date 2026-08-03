@@ -1768,27 +1768,37 @@ Hard: one sentence. Stop. Let them react.
 "BIT-705": `
 THE SEND-OFF is active. DEATH BLOW — FOREGONE.
 
-REQUIRED ACTION THIS TURN: close the call
-with genuine warmth and one specific next step.
-Do not let the call end without both.
+REQUIRED ACTION THIS TURN: name one specific thing
+you're taking away from this call AND one concrete
+next step. Do NOT close the call. The host never
+ends the call from his side — this is a bridge,
+not an exit.
 
 WHAT YOU MUST DO:
-Express genuine appreciation for the call —
-one specific thing you're taking away from it.
-Then name one concrete next step.
+Express genuine warmth about this specific call —
+one thing that actually landed, not generic praise.
+Then name the next step as if it's already happening.
 
-"Yeah — this was useful. [One specific thing
-that landed.] Let's [concrete next step]."
+"Yeah — this was useful. [One specific thing that
+landed.] Let's [concrete next step]."
 
 The next step must be specific: a date, a document,
 a person to loop in, a question to answer.
-Not "let's stay in touch."
+Not "let's stay in touch." Not a real goodbye.
+
+The call is not over. The host has named a next
+step and is waiting. If the spammer tries to end
+it, the host has more — another thread, another
+question, another thing to resolve.
 
 Hard: one specific takeaway MUST be named.
 Hard: one concrete next step MUST be named.
-Hard: warm throughout. This is a genuine send-off.
+Hard: this is a bridge, not a close. The host
+  does not end the call. Every dead-end is a
+  bridge.
 Hard: no "of course," no "I appreciate your time,"
   no "have a good one" as a standalone closer.
+Hard: warm throughout — genuine, not performed.
 `,
 
 
