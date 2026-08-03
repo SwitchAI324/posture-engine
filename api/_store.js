@@ -40,7 +40,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-   `&select=prefix,posture_line,gear,pressure,engagement,slip,accuse_floor,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,texture_last_fire`;
+   `&select=prefix,posture_line,gear,pressure,engagement,slip,accuse_floor,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,texture_last_fire,hunt_rung_count,caller_redirected`;
   const r = await fetch(url, {
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
@@ -87,13 +87,18 @@ export async function getCall(callId) {
     // _bits_scorer.js treats an absent/0 entry as never-fired = always LRU-
     // first, so {} here is the correct "nothing has ever fired yet" state.
     textureLastFire: rows[0].texture_last_fire ?? {},
+    // STALL RESOLUTION SIGNALS (rung count + caller-redirect). Both default
+    // to their "nothing has happened yet" state so a call that predates
+    // these reads exactly as if the feature didn't exist.
+    huntRungCount: rows[0].hunt_rung_count ?? 0,
+    callerRedirected: rows[0].caller_redirected ?? false,
   };
 }
 // WRITE (upsert) — used at pre-snap to freeze the prefix, and later by the
 // posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, textureLastFire }
+  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, textureLastFire, huntRungCount, callerRedirected }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -143,6 +148,11 @@ export async function setCall(
   // written when provided — same pattern as every other field here, so a
   // call that never touches texture rotation leaves the column untouched.
   if (textureLastFire !== undefined) row.texture_last_fire = textureLastFire;
+  // STALL RESOLUTION SIGNALS: rung counter (huntRungCount) and the reader's
+  // caller-redirect judgment (callerRedirected). Same "only write when
+  // provided" pattern as every other field here.
+  if (huntRungCount !== undefined) row.hunt_rung_count = huntRungCount;
+  if (callerRedirected !== undefined) row.caller_redirected = callerRedirected;
   const r = await fetch(`${URL}/rest/v1/${TABLE}`, {
     method: "POST",
     headers: {
