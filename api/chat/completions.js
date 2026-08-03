@@ -1,24 +1,28 @@
 // SpamViking — Posture Engine
-// PHASE 1: DUMB PROXY
 //
-// Sits between Vapi and Claude as an OpenAI-compatible /chat/completions
-// endpoint. Vapi POSTs the conversation every turn (OpenAI format); we
-// forward it to Anthropic's Messages API with streaming, translate the
-// Anthropic SSE stream into OpenAI-style SSE deltas, and stream it back.
+// Sits between the LiveKit voice agent and Claude as an OpenAI-compatible
+// /chat/completions endpoint. The agent POSTs the conversation every turn
+// (OpenAI format); we forward it to Anthropic's Messages API with streaming,
+// translate the Anthropic SSE stream into OpenAI-style SSE deltas, and stream
+// it back.
 //
-// Goal of this phase: the call sounds IDENTICAL to today, but the brain
-// is now ours. No posture, no store, no rules yet — that's Phase 2+.
+// This is the full engine, not a thin relay: PE compiles the host prompt,
+// tracks call state, decides which comedy bit fires, and streams the host's
+// line back. (HISTORICAL: this file started life as a "Phase 1: dumb proxy"
+// that only forwarded turns with no posture/store/rules — that phase is long
+// over; the banner describing it as a dumb proxy has been retired along with
+// the Vapi runtime it originally fronted.)
 //
-// THE INVARIANT (carried from the BUILD plan): the voice never waits on a
-// slow decision. The only LLM the speech path awaits is this Host line.
-// Phase 4's Governor will run via waitUntil() (see note at bottom) so it
-// never blocks this stream.
+// THE INVARIANT (carried from the original build plan): the voice never
+// waits on a slow decision. The only LLM the speech path awaits is this Host
+// line. The Governor runs via waitUntil() (see note at bottom) so it never
+// blocks this stream.
 
 export const config = { runtime: "edge" };
 
 import { getCall, getCallBySlug, setCall, isConfigured, appendGearEvent, appendBitEvent, clearDeathBlow, getControls, stampArm, fireArm, fireForce, saveTranscript } from "../_store.js";
 import { applyForceAll, postureBlock, defaultState, detectAccusation } from "../_gears.js";
-import { selectBit, rankBits, DEPLOY_THRESHOLD } from "../_bits_scorer.js";
+import { selectBit, rankBits, DEPLOY_THRESHOLD, selectTextureBit } from "../_bits_scorer.js";
 import { archetypeFromBody } from "../_archetype.js";
 import { readAmmunition } from "../_read.js";
 import { beginArrival, advanceArrival, generateBenchBeat, isPhantom, phantomInvokeDirective, autoArrivalId, benchEntry, BENCH } from "../_bench_v2.js";
@@ -266,9 +270,10 @@ function pickFlubTier() {
 }
 
 
-// Set ANTHROPIC_MODEL in Vercel to match (or beat) whatever the Vapi
-// assistant uses today. Haiku is the low-latency default for voice; bump
-// to a Sonnet if the bait character needs more wit and the latency holds.
+// Set ANTHROPIC_MODEL in Vercel to whatever gives the best latency/wit
+// tradeoff for the live voice. Haiku is the low-latency default for voice;
+// bump to a Sonnet if the bait character needs more wit and the latency
+// holds.
 const MODEL = () => process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
 // STEP 1: live-event detector (commitment_push). OFF by default. When on,
 // readCall ALSO reports whether the caller just demanded payment. This is
@@ -575,9 +580,9 @@ export default async function handler(req) {
     return new Response("Method Not Allowed", { status: 405 });
   }
 
-  // Optional shared secret. If PROXY_SHARED_SECRET is set, Vapi must send
-  // it as `Authorization: Bearer <secret>`. Leave unset to skip auth while
-  // first wiring things up.
+  // Optional shared secret. If PROXY_SHARED_SECRET is set, the caller must
+  // send it as `Authorization: Bearer <secret>`. Leave unset to skip auth
+  // while first wiring things up.
   const secret = process.env.PROXY_SHARED_SECRET;
   if (secret) {
     const auth = req.headers.get("authorization") || "";
@@ -595,45 +600,6 @@ export default async function handler(req) {
 
   const { system: vapiSystem, messages } = splitMessages(body.messages || []);
 
-  // SILENCE-TURN PROBE (verification instrument, per the Voice chat's ask).
-  // The Vapi `hooks` say.prompt on customer.speech.timeout MAY route a turn to
-  // this endpoint. We don't yet know (a) whether it actually hits PE or falls
-  // back to a Vapi-internal model, or (b) the payload shape.
-  //
-  // COLLISION NOTE (Voice flagged this): the OPENER (speaks-first-model-
-  // generated, turn 0) and a SILENCE NUDGE are BOTH "PE speaks with no fresh
-  // caller line." We distinguish them by CALLER-TURN COUNT, not by emptiness:
-  //   - opener        = zero caller turns have ever happened (turn 0).
-  //   - silence nudge = caller HAS spoken before (turn > 0) but there's no new
-  //                     caller line this trigger.
-  // The opener path (fastJoinOpener / turn===0 blocks below) already owns turn 0,
-  // so it must NOT be treated as a silence nudge. The probe logs which case it
-  // is so the one test can't confuse the two.
-  let isSilenceNudge = false; // hoisted: needed later to skip bit injection
-  // SILENCE-NUDGE DETECTION: RETIRED (2026-07-23). This whole path was VAPI-
-  // shaped — the trigger was a Vapi say.prompt hook (never fires on LiveKit)
-  // and delivery went to body.call.monitor.controlUrl (null on LiveKit). On
-  // LiveKit, silence is handled AGENT-side: the agent fires a bare
-  // session.generate_reply() and the standing prompt's "IF THEY GO QUIET"
-  // section covers it. No PE nudge treatment, no marker.
-  //
-  // WHY IT'S FORCED FALSE RATHER THAN LEFT TO SNIFF: `hookish` tested the FIRST
-  // 1200 CHARS OF THE REQUEST BODY for /timeout|silence|.../ — and the body
-  // starts with the system prompt. The v0.8 CORE reorder moved "Garbled,
-  // crosstalk, a long silence, a fragment" (WHEN YOU CAN'T MAKE OUT WHAT THEY
-  // SAID) to char ~1045, INSIDE that window. So hookish went true on EVERY
-  // turn -> isSilenceNudge true on every non-opener turn -> `fire =
-  // !isSilenceNudge && ...` false forever -> NO BIT COULD EVER FIRE (the
-  // Jul-23 call: gag scored 6.5 but fired:false, and the SILENCE_PROBE logged
-  // on normal turns). A prompt edit must never be able to disable bit firing.
-  // Forcing false restores correct LiveKit behavior and removes the coupling.
-  // The rest of the dead apparatus (controlUrl capture, OPTION B driver,
-  // variableValues/assistantOverrides, the bare-body 2nd nudge, SSE teardown)
-  // comes out in the deliberate expunge pass; this is the surgical unblock.
-  // (RESUME_CHECK diagnostic removed with the silence probe — it referenced the
-  // probe's isOpener/hookish locals and only existed to study Vapi's post-nudge
-  // resume turn, which does not exist on LiveKit.)
-
   // BENCH: decide if a character barges in THIS turn. If so, the engine appends
   // their tagged line to the stream itself (the model won't emit the tag, so we
   // guarantee it). The line is generated in character from the live call, in
@@ -643,10 +609,11 @@ export default async function handler(req) {
   const callId = body.call?.id ?? body.metadata?.callId ?? body.call_id;
   const benchTurn = countUserTurns(messages);
 
-  // slug: Vapi does NOT reliably surface call.metadata on WEB calls, but it DOES
-  // surface call.assistantOverrides.variableValues (sv_slug). Read both — the
-  // variableValues path is what actually survives on web calls, and without slug
-  // the pre-call slug-keyed prefix fallback can't fire (host runs flat fallback).
+  // slug: the LiveKit web-call path does NOT reliably surface call.metadata,
+  // but it DOES surface call.assistantOverrides.variableValues (sv_slug). Read
+  // both — the variableValues path is what actually survives on web calls, and
+  // without slug the pre-call slug-keyed prefix fallback can't fire (host runs
+  // flat fallback).
   const vv =
     body.call?.assistantOverrides?.variableValues ||
     body.assistantOverrides?.variableValues ||
@@ -714,10 +681,10 @@ export default async function handler(req) {
   }
 
   // RACE FALLBACK: the pre-call hydrate writes the compiled prefix under a slug
-  // key ("slug:<slug>") before the Vapi call_id exists. If the call_id row is
+  // key ("slug:<slug>") before the call_id row exists. If the call_id row is
   // missing or has no prefix yet (first turn beat the call_id write), pull the
   // slug-keyed prefix so the opener still runs the REAL compiled prompt instead
-  // of the flat Vapi fallback. Best-effort; never throws.
+  // of the flat fallback. Best-effort; never throws.
   if (slug && (!stored || !stored.prefix)) {
     try {
       const bySlug = await getCallBySlug(slug);
@@ -728,10 +695,6 @@ export default async function handler(req) {
           ? { ...stored,
               prefix: bySlug.prefix,
               postureLine: stored.postureLine || bySlug.postureLine,
-              // Carry controlUrl from the slug row — silence nudges need it for
-              // the say.exact control POST, and the bare nudge's own `stored`
-              // (if any) won't have it. Prefer an existing value, else the row's.
-              controlUrl: stored.controlUrl || bySlug.controlUrl,
               // Carry targetId the same way. On LiveKit, hydrate only ever
               // writes the "slug:<slug>" row (the agent calls /api/hydrate
               // ?slug=... before any call_id exists), so the target lives ONLY
@@ -740,7 +703,7 @@ export default async function handler(req) {
               // that row, this merge runs, and target_id was silently dropped:
               // Mead Hall saw target=<uuid> for the first turn or two and
               // target=NULL for the rest of every call. Same shape as
-              // archetype/controlUrl: prefer live state, else the slug row.
+              // archetype above, prefer live state, else the slug row.
               targetId: stored.targetId || bySlug.targetId,
               // PHASE OVERLAYS — same trap as targetId above, same fix.
               // hydrate writes them ONLY on the "slug:<slug>" row (it runs
@@ -758,24 +721,12 @@ export default async function handler(req) {
               archetype: stored.archetype || bySlug.archetype }
           : bySlug;
       }
-    } catch { /* fall through to vapi fallback */ }
-  }
-
-  // CAPTURE the Vapi per-call monitor.controlUrl (handoff target). It rides on
-  // the call object every turn but we only need to store it once. Persist on
-  // first sight (or if it changed). Best-effort, off the hot path.
-  const controlUrl = body.call?.monitor?.controlUrl ?? null;
-  if (controlUrl && callId && isConfigured() && (!stored || stored.controlUrl !== controlUrl)) {
-    waitUntil(setCall(callId, { controlUrl }).catch(() => {}));
-    // Also stamp it on the SLUG row, so silence nudges (which load by slug, not
-    // callId — the bare nudge body has no call object) can read the controlUrl
-    // to POST say.exact lines over the control channel.
-    if (slug) waitUntil(setCall("slug:" + slug, { controlUrl }).catch(() => {}));
+    } catch { /* fall through to the flat fallback */ }
   }
 
   // ===== BENCH v2: STAGED ARRIVAL MACHINE ================================
-  // Shared by handler (Vapi) AND runHostTurn (sim) so both paths weave the bench
-  // in identically. See runBenchArrival() below.
+  // Shared by handler (the live call) AND runHostTurn (sim) so both paths weave
+  // the bench in identically. See runBenchArrival() below.
   const benchResult = await runBenchArrival({ stored, controls, messages, callId, benchTurn, waitUntil });
   const benchAppend = benchResult.benchAppend;
   const benchPhantomInvoke = benchResult.benchPhantomInvoke;
@@ -783,7 +734,7 @@ export default async function handler(req) {
   // ===== TELEGRAPHED HANDOFF (two-beat) =================================
   // Beat 1 (stage "announce"): host warns the caller a distinct-voice bench
   //   character is joining, then we advance the state to "fire".
-  // Beat 2 (stage "fire"): the actual Vapi handoff fires (distinct voice), and
+  // Beat 2 (stage "fire"): the actual distinct-voice handoff fires, and
   //   we clear the pending state.
   // Requested via POST /api/handoff?action=request (AI-volition or director).
   let telegraphAnnounce = null;
@@ -808,8 +759,10 @@ export default async function handler(req) {
     }
   }
 
-  // Vapi's own prompt (Stage 1/2 — keeps Andrew sounding exactly as he is).
-  // The doubt-gears layer on top of whichever base is in play.
+  // Whatever system prompt the caller itself sent, as a last-resort fallback
+  // when no compiled prefix is stored yet (Stage 1/2 — keeps Andrew sounding
+  // exactly as he is). The doubt-gears layer on top of whichever base is in
+  // play.
   let baseSystem = stored && stored.prefix ? stored.prefix : vapiSystem;
   // PHASE-OVERLAY SPLIT (Option B): append the phase-selected overlay to the
   // END of the cached host block. stored.openerOverlay / stored.businessOverlay
@@ -853,7 +806,7 @@ export default async function handler(req) {
   // bug). Cached after the first call — later turns don't re-import.
   if (baseSystem) await loadBitDirectives();
   const built = baseSystem
-    ? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil, isSilenceNudge)
+    ? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil)
     : null;
   const systemBlocks = built ? built.blocks : null;
   const deathBlowFiring = built ? built.deathBlowFiring : false;
@@ -863,64 +816,6 @@ export default async function handler(req) {
   // agent reads pe_stall to hold its re-engage nudge one cycle so a real pause
   // lands. Lane-keyed (state), never the host's text.
   const turnIsStall = !!(built && built.firedBitId && laneOf(built.firedBitId) === "stall");
-
-  // ===== OPTION B (INDEPENDENT DRIVER) — SILENCE NUDGE say.exact =============
-  // On a silence nudge, Vapi's say.prompt hook opens the SSE stream but tears it
-  // down early — so the stream's finishUp NEVER runs, and a POST placed there
-  // never fires (proven live: no cache/OUT/NUDGE_FINISH lines on nudge turns).
-  // Fix: here, BEFORE returning the stream, do a SEPARATE non-streaming
-  // completion and POST the line to the control URL ourselves. This does not
-  // depend on the stream surviving. Fire-and-forget via waitUntil.
-  if (isSilenceNudge && stored && stored.controlUrl) {
-    const controlU = stored.controlUrl;
-    const sysForNudge = systemBlocks;
-    const drive = (async () => {
-      try {
-        const r = await fetch(ANTHROPIC_URL, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-api-key": process.env.ANTHROPIC_API_KEY,
-            "anthropic-version": ANTHROPIC_VERSION,
-          },
-          body: JSON.stringify({
-            model: MODEL(),
-            max_tokens: 120,
-            stream: false,               // non-streaming: we need the whole line
-            messages,
-            ...(sysForNudge ? { system: sysForNudge } : {}),
-          }),
-        });
-        const data = await r.json().catch(() => null);
-        let line = "";
-        if (data && Array.isArray(data.content)) {
-          line = data.content.filter(b => b && b.type === "text").map(b => b.text).join(" ");
-        }
-        line = String(line || "")
-          .replace(/\[\[[^\]]*\]\]/g, "")
-          .replace(/\*[^*\n]{0,60}\*/g, "")
-          .replace(/\[[^\]\n]{0,60}\]/g, "")
-          .replace(/^\s*["'“”]+|["'“”]+\s*$/g, "")
-          .replace(/\s+/g, " ")
-          .trim();
-        console.log("NUDGE_DRIVE genStatus=" + r.status + " lineLen=" + line.length + " line=" + JSON.stringify(line.slice(0, 80)));
-        if (line) {
-          const lastUserText2 = (messages && messages.length)
-            ? String(messages[messages.length - 1]?.content || "") : "";
-          const endAfter = /wrapping up|drifting/i.test(lastUserText2);
-          const pr = await fetch(controlU, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ type: "say", content: line, endCallAfterSpoken: endAfter }),
-          });
-          console.log("SAY_EXACT status=" + pr.status + " end=" + endAfter);
-        }
-      } catch (e) {
-        console.log("NUDGE_DRIVE failed: " + String(e && e.message));
-      }
-    })();
-    if (typeof waitUntil === "function") waitUntil(drive);
-  }
 
   // SILENCE BARE-TURN → the Anthropic API treats a messages array whose LAST
   // entry is an assistant message as a PREFILL: it tries to CONTINUE that line
@@ -1068,7 +963,7 @@ export default async function handler(req) {
 // with no two consecutive same-role turns.
 // --- gears / posture (Phase 3 FORCE-SET, three axes) ----------------------
 // Build the system blocks for the call:
-//   [0] the base prompt (Vapi's, or an assembled prefix) — cached
+//   [0] the base prompt (the caller's own, or an assembled prefix) — cached
 //   [1] the MUTABLE posture block — three gear lines (suspicion / pressure /
 //       engagement), the only thing that changes turn to turn.
 // The gear layer runs only when the store is configured (so we can track the
@@ -1095,10 +990,11 @@ function factHint(bit, byHook) {
 }
 
 // ===== BENCH v2: shared staged-arrival logic ============================
-// Called by BOTH handler (Vapi) and runHostTurn (sim) so both paths weave the
-// bench in identically. Reads arrival state from `stored`, advances an in-flight
-// arrival OR begins a new one (Director send-in, gated by turn-floor), invokes
-// phantoms, persists arrival state, emits bench events. Returns the per-turn
+// Called by BOTH handler (the live call) and runHostTurn (sim) so both paths
+// weave the bench in identically. Reads arrival state from `stored`, advances
+// an in-flight arrival OR begins a new one (Director send-in, gated by
+// turn-floor), invokes phantoms, persists arrival state, emits bench events.
+// Returns the per-turn
 // { benchAppend (promise->tagged line | null), benchPhantomInvoke (directive|null) }.
 async function runBenchArrival({ stored, controls, messages, callId, benchTurn, waitUntil }) {
   let arrival = stored && stored.arrivalState ? stored.arrivalState : null;
@@ -1222,7 +1118,7 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
   return { benchAppend, benchPhantomInvoke };
 }
 
-function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil, isSilenceNudge) {
+function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil) {
   ammo = ammo || { ammunition: [], byHook: {} };
   let deathBlowFiring = false; // set true on the turn a Death Blow lands
   let firedBitId = null; // fired bit id, set inside the scoring block (where top/fire live); returned for the pe_stall flag
@@ -1457,6 +1353,11 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       // bias, not an exclusion). The scorer previously received NO turn
       // number, so no turn gate was implementable there at all.
       turn,
+      // TEXTURE ROTATION (step d, TEXTURE_ROTATION flag) — per-bit last-
+      // ACTUALLY-fired turn map, {bit.id: turn}. Absent/0 = never fired, which
+      // selectTextureBit() treats as always-LRU-first. Read from stored state;
+      // defaults to {} for a call that predates this feature or a fresh call.
+      textureLastFire: (stored && stored.textureLastFire) || {},
     };
     // LOADOUT then rank: selectBit narrows to the bits that fit this moment,
     // then ranks that focused set (not all 71). threshold:0 so we apply our own
@@ -1467,13 +1368,8 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     const poolSize = sel.pool;
     const gap = stored && stored.lastBitTurn != null ? turn - stored.lastBitTurn : 99;
     const bar = effectiveBar(turn);
-    // SILENCE NUDGE: on a hook-fired silence turn, do NOT inject a bit. The
-    // caller has gone quiet; this turn should be a short in-character re-engage
-    // line (driven by the hook's say.prompt), not a comedy beat. Gating fire
-    // here also blocks the starvation guard below (it only runs when !fire, but
-    // we belt-and-suspenders it too). The gear read still runs — silence is
-    // engagement data.
-    let fire = !isSilenceNudge && !!(top && top.score >= bar && gap >= MIN_GAP);
+    // fire: whether a bit clears the bar this turn.
+    let fire = !!(top && top.score >= bar && gap >= MIN_GAP);
 
     // ── SOLO_BIT (TEST HARNESS) ───────────────────────────────────────────
     // When SOLO_BIT is set, bypass the normal pick entirely: suppress whatever
@@ -1483,7 +1379,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // behavior; those still layer on (the hunt-window will re-fire BIT-233 as
     // normal once cpush has fired, which is fine). Throwaway — env-gated off in
     // production.
-    if (SOLO_BIT && !isSilenceNudge) {
+    if (SOLO_BIT) {
       const soloReg = (Array.isArray(BITS) ? BITS : []).find(
         (b) => b && b.id === SOLO_BIT && (b.status == null || b.status === "active")
       );
@@ -1517,8 +1413,6 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // + cpush consumers: a fresh cpush this turn or a Director force runs after
     // and overrides (both re-point top themselves); a death-blow also wins
     // (checked at its own branch). Cap-only for v1 — no early-out on resolution.
-    // Skipped on silence-nudge turns (isSilenceNudge is forced false today, but
-    // keep the guard consistent with the other fire paths).
     // STAMP-TIGHTEN (2026-08-02): the FIRST silence beat after the BIT-233
     // demand re-runs with the SAME message array (host's own line last, no new
     // caller turn), so countUserTurns is unchanged and (turn - lastBitTurn) == 0
@@ -1538,7 +1432,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     const isSilenceBeat = sustainLastRole === "assistant";
     const huntFloor = isSilenceBeat ? 0 : 1; // silence beat may open the window at gap 0
     let inHuntWindow = false;
-    if (HUNT_WINDOW && !isSilenceNudge && stored &&
+    if (HUNT_WINDOW && stored &&
         stored.lastBitId === CPUSH_BIT && stored.lastBitTurn != null &&
         (turn - stored.lastBitTurn) >= huntFloor &&
         (turn - stored.lastBitTurn) <= HUNT_WINDOW_TURNS) {
@@ -1597,7 +1491,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // the per-call reason that can only be known at fire time.)
     let forcedFire = false;
     const forcedCtl = controls && controls.forced ? controls.forced : null;
-    if (!isSilenceNudge && forcedCtl && forcedCtl.bit_id) {
+    if (forcedCtl && forcedCtl.bit_id) {
       const forcedBit = ranked.find(
         (r) => r.id === forcedCtl.bit_id && !r.excluded && r.score > -Infinity
       );
@@ -1646,7 +1540,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         (!!(stored && stored.commitmentPush)) + ")"
       );
     }
-    if (EVENT_FIRE && !isSilenceNudge && !forcedFire && cpush) {
+    if (EVENT_FIRE && !forcedFire && cpush) {
       // FIRST try the ranked pool (bit is eligible this phase -> use its live
       // scored entry, keeps breakdown/why for the trace).
       let cpushBit = ranked.find(
@@ -1736,7 +1630,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // cooldown:999 does not help here — the gag-open path deliberately bypasses
     // the scorer, so it bypasses cooldown too.
     const alreadyFiredThisCall = !!(stored && stored.lastBitId);
-    if (!fire && !isSilenceNudge && turn === 1 && !alreadyFiredThisCall) {
+    if (!fire && turn === 1 && !alreadyFiredThisCall) {
       const gagBit = ranked.find(
         (r) =>
           !r.excluded &&
@@ -1794,7 +1688,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         : null;
     const lastIsCallerLine = reinjectLastRole === "user";
     if (
-      !fire && !isSilenceNudge && gap === 0 && lastIsCallerLine &&
+      !fire && gap === 0 && lastIsCallerLine &&
       stored && stored.lastBitId && withinReinjectWindow
     ) {
       const same = ranked.find((r) => r.id === stored.lastBitId);
@@ -1802,6 +1696,39 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         top = same;
         fire = true;
         sameTurnReinject = true; // suppresses the duplicate trace + state write
+      }
+    }
+
+    // ── TEXTURE ROTATION (step d of the gears→triggers teardown) ──────────
+    // Behind TEXTURE_ROTATION (default off in _bits_scorer.js). Runs ONLY when
+    // nothing above has already claimed the turn (`!fire`) — a scenario bit
+    // (force/cpush/hunt-window/gag-open/re-injection) ALWAYS wins the turn
+    // over texture, per Bits' spec ("inject the scenario bit and SUPPRESS
+    // texture for that turn — and the texture cooldown does NOT reset"). Since
+    // selectTextureBit() is never even called when a scenario already fired,
+    // its LRU state is simply untouched this turn — which IS "cooldown not
+    // reset," with no extra bookkeeping needed.
+    //
+    // selectTextureBit() itself is a pure, deterministic pick (phase+cooldown
+    // LRU — see _bits_scorer.js); it returns null when TEXTURE_ROTATION is off
+    // or no texture bit is eligible this turn, in which case this block is a
+    // no-op and the starvation guard below is unchanged as the final fallback.
+    let textureFired = false;
+    if (!fire) {
+      const texBit = selectTextureBit(scorerState);
+      if (texBit) {
+        top = {
+          ...texBit,
+          score: DEPLOY_THRESHOLD,
+          breakdown: { fit: null, gearBias: null, recency: null,
+            why: ["texture rotation (phase+cooldown LRU)"] },
+        };
+        fire = true;
+        textureFired = true;
+        console.log(
+          "texture ROTATION fire bit=" + texBit.id + " turn=" + turn +
+          " phase=" + phase + " pool=" + (texBit.pool || "middle")
+        );
       }
     }
 
@@ -1814,7 +1741,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // Still respects warm-up (bar=Infinity early) and requires a real candidate.
     const STARVE_AFTER = parseInt(process.env.STARVE_AFTER || "4", 10);
     let starvationFired = false;
-    if (!fire && !isSilenceNudge && top && !accusation && turn > WARMUP_TURNS && gap >= STARVE_AFTER) {
+    if (!fire && top && !accusation && turn > WARMUP_TURNS && gap >= STARVE_AFTER) {
       // Bar is relaxed to the deploy threshold floor (not Infinity/warmup); the
       // top bit fires if it's a genuine candidate at all. Spacing is waived once.
       if (top.score >= DEPLOY_THRESHOLD) {
@@ -2012,6 +1939,8 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           ? "starvation"
           : firedArmedBit
           ? "armed"
+          : textureFired
+          ? "texture_rotation"
           : "auto",
         turn_index: turn,
         // TELEMETRY: dry_turns = turns since the last discrete bit before this
@@ -2202,6 +2131,15 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
             ? { lastBitId: top.id, lastBitTurn: turn, lastBitAt: Date.now() }
             : {}),
           ...(archetypeNew ? { archetype } : {}),
+          // TEXTURE ROTATION (step d): stamp THIS bit's last-actually-fired
+          // turn into the per-bit map, merged with whatever was already
+          // there — never touched on a turn a texture bit was merely
+          // eligible-but-suppressed by a scenario bit (see the block above;
+          // selectTextureBit() isn't even called on those turns, so there is
+          // nothing to merge and the map is simply left out of this write).
+          ...(textureFired
+            ? { textureLastFire: { ...(scorerState.textureLastFire || {}), [top.id]: turn } }
+            : {}),
         }).catch(() => {})
       ); // never awaited
     }
@@ -2360,12 +2298,13 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
       // Close out the turn: if the engine has a bench line to inject, await it
       // (it was generated in parallel and is usually ready), emit it as a final
       // tagged content delta, THEN finish. Guarantees the [[NAME]] marker
-      // reaches Vapi/TTS regardless of what the model wrote.
+      // reaches the agent/TTS regardless of what the model wrote.
       const finishUp = async () => {
-        // DIAGNOSTIC: log what PE is actually sending back to Vapi to be spoken.
-        // On a silence-nudge turn this reveals whether PE produced real speakable
-        // words (=> problem is Vapi not speaking them) or empty/non-speakable
-        // output (=> problem is PE's nudge generation). Preview only, truncated.
+        // DIAGNOSTIC: log what PE is actually sending back to the agent to be
+        // spoken. On a silence-nudge turn this reveals whether PE produced real
+        // speakable words (=> problem is the agent not speaking them) or
+        // empty/non-speakable output (=> problem is PE's nudge generation).
+        // Preview only, truncated.
         try {
           const outPreview = String(hostText || "").replace(/\s+/g, " ").trim();
           console.log("OUT len=" + outPreview.length + " text=" + JSON.stringify(outPreview.slice(0, 120)));
@@ -2376,52 +2315,6 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
           // raw=true sent=true   -> (c) PE delivered it; it's on the LiveKit side
           console.log("SNZ raw=" + (String(hostText || "").indexOf("[SNEEZE]") >= 0) + " sent=" + svSneezeSent);
         } catch { /* never break the stream */ }
-        // LOUD DIAGNOSTIC: on a nudge, print the exact state of every link in the
-        // Option B chain, so ONE call reveals which one is broken. Unconditional.
-        if (isSilenceNudge) {
-          try {
-            console.log("NUDGE_FINISH isSilence=" + isSilenceNudge +
-              " hasStored=" + (!!stored) +
-              " hasControlUrl=" + (!!(stored && stored.controlUrl)) +
-              " controlUrl=" + JSON.stringify((stored && stored.controlUrl) ? String(stored.controlUrl).slice(0, 60) : null) +
-              " hostTextLen=" + String(hostText || "").length);
-          } catch (e) { console.log("NUDGE_FINISH diag error: " + String(e && e.message)); }
-        }
-        // ===== OPTION B: CONTROL-CHANNEL say.exact FOR SILENCE NUDGES =========
-        // Vapi's say.prompt hook does NOT voice our custom-LLM completion (proven
-        // live: intro via the normal path is heard; nudge via say.prompt is not).
-        // So on a silence nudge we POST the generated line to the per-call
-        // monitor.controlUrl as {type:"say", content:<line>} — which IS voiced
-        // (proven via /api/saytest). The stored controlUrl was stamped on the
-        // slug row on turn 1; the nudge loads `stored` by slug (Fix B), so it's
-        // available here. endOnLast lets the FINAL nudge hang up after speaking.
-        if (isSilenceNudge && stored && stored.controlUrl) {
-          try {
-            let line = String(hostText || "")
-              .replace(/\[\[[^\]]*\]\]/g, "")        // strip sv_slug tag
-              .replace(/\*[^*\n]{0,60}\*/g, "")      // strip *stage directions*
-              .replace(/\[[^\]\n]{0,60}\]/g, "")      // strip [tags]
-              .replace(/^\s*["'“”]+|["'“”]+\s*$/g, "") // strip wrapping quotes
-              .replace(/\s+/g, " ")
-              .trim();
-            if (line) {
-              // Is this the LAST nudge? The 2nd hook prompt says "drifting toward
-              // wrapping up" — use that as the signal to end the call after it
-              // speaks. Best-effort detection from the inbound nudge prompt.
-              const lastUserText2 = (messages && messages.length)
-                ? String(messages[messages.length - 1]?.content || "") : "";
-              const endAfter = /wrapping up|drifting/i.test(lastUserText2);
-              const payload = { type: "say", content: line, endCallAfterSpoken: endAfter };
-              const post = fetch(stored.controlUrl, {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify(payload),
-              }).then(r => console.log("SAY_EXACT status=" + r.status + " end=" + endAfter + " line=" + JSON.stringify(line.slice(0, 80))))
-                .catch(e => console.log("SAY_EXACT FAILED: " + String(e && e.message)));
-              if (typeof waitUntil === "function") waitUntil(post); else await post;
-            }
-          } catch (e) { console.log("SAY_EXACT block error: " + String(e && e.message)); }
-        }
         let benchTxt = null;
         if (appendText && !appendSent) {
           appendSent = true;
@@ -2656,9 +2549,9 @@ export async function runHostTurn({ messages, callId, meta }) {
   const benchResult = await runBenchArrival({ stored, controls, messages, callId, benchTurn, waitUntil });
   const benchPhantomInvoke = benchResult.benchPhantomInvoke;
 
-  // No pre-snap prefix in sim (Vapi system absent) -> base is a minimal host
-  // frame so the gears/bits layer has something to sit on. buildSystemBlocks
-  // does ALL the real engine work and bus emits internally.
+  // No pre-snap prefix in sim (no caller-supplied system prompt) -> base is a
+  // minimal host frame so the gears/bits layer has something to sit on.
+  // buildSystemBlocks does ALL the real engine work and bus emits internally.
   let baseSystem =
     (stored && stored.prefix) ||
     "You are the Host on a live video call with a spammer who booked time with " +
@@ -2668,7 +2561,7 @@ export async function runHostTurn({ messages, callId, meta }) {
   if (benchPhantomInvoke) baseSystem = baseSystem + "\n\n" + benchPhantomInvoke;
 
   await loadBitDirectives(); // see the handler site — must precede buildSystemBlocks
-  const built = buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil, false);
+  const built = buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil);
   const systemBlocks = built ? built.blocks : null;
   const deathBlowFiring = built ? built.deathBlowFiring : false;
   const turn = countUserTurns(messages);
