@@ -286,6 +286,16 @@ const EVENT_DETECT =
 // reversible — EVENT_FIRE off leaves the Step-1 detector fully intact.
 const EVENT_FIRE =
   /^(1|true|yes|on)$/i.test(String(process.env.EVENT_FIRE || ""));
+// ── CALLER-REDIRECT DETECT ("caller_redirected" signal) ───────────────────
+// Same doctrine as commitment_push: the reader already judges INTENT from
+// meaning every turn (that's what it's FOR — this is not new text-sniffing,
+// it's one more question on the same reader call that already runs). Asks
+// whether the caller's most recent turn moved AWAY from whatever the host
+// was stalling on (dropped it, changed subject, said "forget it") rather
+// than continuing to press on it. OFF by default; when off, readCall's
+// prompt and output are BYTE-FOR-BYTE what they were before this existed.
+const CALLER_REDIRECT_DETECT =
+  /^(1|true|yes|on)$/i.test(String(process.env.CALLER_REDIRECT_DETECT || ""));
 const CPUSH_BIT = process.env.CPUSH_BIT || "BIT-233";
 // ── SYNCHRONOUS CARD-ASK TRIGGER (card_ask) ──────────────────────────────
 // FIRST BRICK OF THE TRIGGER ARCHITECTURE (replacing gears). The async reader
@@ -337,7 +347,68 @@ function cardAskNow(callerText) {
 const HUNT_WINDOW =
   /^(1|true|yes|on)$/i.test(String(process.env.HUNT_WINDOW || ""));
 const HUNT_WINDOW_TURNS = parseInt(process.env.HUNT_WINDOW_TURNS || "3", 10);
+// ── STALL RESOLUTION DETECTOR ("the stall has run long enough") ──────────
+// The hunt-window above is cap-only by design — it has no early-out on
+// resolution, which is exactly what let a hunt (or any stall-lane bit) run
+// indefinitely through repeated caller-silence beats: HUNT_WINDOW_TURNS is
+// TURN-COUNT based, and turn is FROZEN during pure silence (the caller isn't
+// speaking, so countUserTurns never advances) — so the cap can never trigger
+// on silence alone. Diagnosed live (Aug 3, room sv-test-andy-msdiq4god9qp):
+// the hunt was correctly holding the floor the whole time; the call ended
+// only because the AGENT's own 60s silence_watchdog ceiling closed the room,
+// unrelated to PE. This detector gives PE its OWN elapsed-time signal so a
+// long-silent stall can be told to WRAP UP before the agent's ceiling forces
+// a hard close.
+//
+// ELAPSED TIME COMES FREE, NO NEW STORE COLUMN: stored.lastBitAt is stamped
+// once on the bit's TRUE first fire (`fire && !sameTurnReinject &&
+// !inHuntWindow`) and is NEVER re-stamped while inHuntWindow stays true (the
+// hunt-window SUSTAIN block's own top/fire override does not re-trigger that
+// condition). So for as long as a stall-lane bit keeps holding the floor,
+// stored.lastBitAt stays pinned at the moment the stall BEGAN — exactly the
+// "how long has this been going" clock this needs, already persisted.
+//
+// Behind STALL_RESOLVE (default OFF until proven on a live call, same
+// discipline as every other flag in this file). STALL_RESOLVE_MS is the
+// wall-clock threshold; default sits comfortably inside the agent's own
+// ~60s ceiling (3 nudges land around 13s/27s/46-50s per the traced call) so
+// PE's own wrap-up instruction has a real chance to land BEFORE the agent
+// gives up and silently closes the room. STALL_EXHAUST_RUNGS is the RUNG-
+// COUNT threshold (Andrew/Canon framing: "been on the same hunt a while" —
+// counted in beats, not seconds). Either crossing resolves the stall — rung
+// count is the primary signal a caller/product person reasons in; wall-clock
+// is the backstop that still catches a stall during a long silence stretch
+// where turns (and so rungs measured per-turn) may not be advancing at all.
+const STALL_RESOLVE =
+  /^(1|true|yes|on)$/i.test(String(process.env.STALL_RESOLVE || ""));
+const STALL_RESOLVE_MS = parseInt(process.env.STALL_RESOLVE_MS || "50000", 10);
+const STALL_EXHAUST_RUNGS = parseInt(process.env.STALL_EXHAUST_RUNGS || "3", 10);
+// Is the CURRENTLY-HELD stall (whichever bit last fired, if it's stall-lane)
+// done — either by RUNG COUNT (stored.huntRungCount, incremented once per
+// hunt-window SUSTAIN turn — see the hunt-window block below) or by WALL-
+// CLOCK (stored.lastBitAt, pinned at the stall's true start — see above)?
+// Pure function of persisted state — no LLM call. Shared by both injection
+// sites below (the messagesForModel STALL-LANE GUARD synthetic turn, and the
+// hunt-window SUSTAIN gate) so there is exactly one definition of "done."
+function stallShouldResolve(stored) {
+  if (!STALL_RESOLVE) return false;
+  if (!stored || !stored.lastBitId || !stored.lastBitAt) return false;
+  if (laneOf(stored.lastBitId) !== "stall") return false;
+  const rungsExhausted =
+    STALL_EXHAUST_RUNGS > 0 && (stored.huntRungCount || 0) >= STALL_EXHAUST_RUNGS;
+  const timeExhausted = Date.now() - stored.lastBitAt >= STALL_RESOLVE_MS;
+  // CALLER-REDIRECT: the reader's judgment (flag-gated, see
+  // CALLER_REDIRECT_DETECT above) that the caller's last turn moved AWAY
+  // from what the host is stalling on. When true, resolve immediately
+  // regardless of rung count or elapsed time — Canon's framing ("the caller
+  // pulls away from it, you let it rest") is a THIRD, independent way in,
+  // not a replacement for the other two.
+  const callerMovedOn = stored.callerRedirected === true;
+  return rungsExhausted || timeExhausted || callerMovedOn;
+}
 const MAX_TOKENS = () => parseInt(process.env.MAX_TOKENS || "1024", 10);
+
+
 
 // Generate a bench character's barge-in line, in character, reacting to the
 // live call. Fast non-streaming Haiku call (short cap). Returns the spoken line
@@ -445,8 +516,21 @@ async function readCall(messages, prior) {
           "pricing, a vague 'how would payment work', or merely mentioning " +
           "cost is NOT a push — report false. When unsure, report false.\n"
         : "") +
+      (CALLER_REDIRECT_DETECT
+        ? "caller_redirected — the host may be mid-stall (waiting on an " +
+          "approver, chasing something down). Did the caller's MOST RECENT " +
+          "turn move AWAY from that — change the subject, drop it, say " +
+          "'never mind' / 'forget it', or otherwise stop pressing on the " +
+          "thing the host is stalling about? Report true only if they " +
+          "clearly moved on. A caller who is just quiet, or still pushing " +
+          "on the SAME thing, is NOT a redirect — report false. When " +
+          "unsure, report false.\n"
+        : "") +
       (EVENT_DETECT
-        ? 'Reply EXACTLY: {"phase":"..","suspicion":"..","pressure":"..","engagement":"..","commitment_push":true|false}'
+        ? 'Reply EXACTLY: {"phase":"..","suspicion":"..","pressure":"..","engagement":"..","commitment_push":true|false' +
+          (CALLER_REDIRECT_DETECT ? ',"caller_redirected":true|false' : "") + '}'
+        : CALLER_REDIRECT_DETECT
+        ? 'Reply EXACTLY: {"phase":"..","suspicion":"..","pressure":"..","engagement":"..","caller_redirected":true|false}'
         : 'Reply EXACTLY: {"phase":"..","suspicion":"..","pressure":"..","engagement":".."}');
     const r = await fetch(ANTHROPIC_URL, {
       method: "POST",
@@ -486,6 +570,11 @@ async function readCall(messages, prior) {
     if (EVENT_DETECT) {
       out.commitmentPush = parsed.commitment_push === true;
     }
+    // CALLER-REDIRECT DETECT (flag-gated): same pattern — strict boolean,
+    // never present when the flag is off.
+    if (CALLER_REDIRECT_DETECT) {
+      out.callerRedirected = parsed.caller_redirected === true;
+    }
     return Object.keys(out).length ? out : null;
   } catch {
     return null;
@@ -506,6 +595,12 @@ function blendRead(keywordState, read) {
   // event, true only on the turn the demand happened. Rides the same setCall.
   if (typeof read.commitmentPush === "boolean") {
     out.commitmentPush = read.commitmentPush;
+  }
+  // CALLER-REDIRECT DETECT: same shape as commitment_push — a momentary
+  // per-turn event, true only on the turn the redirect happened, NOT
+  // one-way/latched. Rides the same setCall write.
+  if (typeof read.callerRedirected === "boolean") {
+    out.callerRedirected = read.callerRedirected;
   }
   // ONE-WAY BUSINESS LATCH (phase-overlay split): the first turn the call is
   // read as non-"opening", latch businessLatched=true so completions serves the
@@ -871,11 +966,26 @@ export default async function handler(req) {
       const lastBitStall = !!(
         stored && stored.lastBitId && laneOf(stored.lastBitId) === "stall"
       );
+      // RESOLUTION CHECK: has this stall been running long enough that it
+      // should wrap up instead of continuing to hold the loop open? See
+      // stallShouldResolve() above. Checked ONLY when lastBitStall is true —
+      // a non-stall silence beat doesn't need this at all.
+      const resolveStall = lastBitStall && stallShouldResolve(stored);
       // The bracketed line is a STAGE DIRECTION to the model, not spoken text —
       // it shapes the fresh line the model writes. Escalation is in the
       // direction's urgency, not in dictating words (the host stays in voice).
       let synthetic = "[The caller has gone quiet on the line.]";
-      if (lastBitStall) {
+      if (resolveStall) {
+        // STALL RESOLUTION (STALL_RESOLVE flag): this stall has run long
+        // enough — land it instead of extending it further. Full
+        // conversation history is intact, so the host already has everything
+        // it needs to pick the real conversation back up; this only tells it
+        // to do so. Resolve in-character (the person came back / a step
+        // completed / give up gracefully) and move the conversation forward
+        // — do NOT start another rung of the same stall.
+        synthetic =
+          "[You've been in this stall long enough — it's time to LAND it, not extend it. Resolve it naturally in character (whoever you were waiting on gets back to you, or you decide to stop waiting and move on) in one line, then carry the conversation forward from there. Do NOT start another step of the same stall, and do NOT just go quiet.]";
+      } else if (lastBitStall) {
         // Stall in progress — hold the loop open, never break to the caller.
         synthetic =
           "[You're in the middle of a stall — you just played a beat where you're momentarily occupied (looking something up, trying to reach someone, checking on a step). The quiet is YOU being busy, not the caller leaving. Do NOT ask if they're still there, do NOT check the line, do NOT break off to address them. Stay in the stall: play the next small step of it — one step, then stop — or just hold the beat. Keep the loop open.]";
@@ -1432,10 +1542,25 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     const isSilenceBeat = sustainLastRole === "assistant";
     const huntFloor = isSilenceBeat ? 0 : 1; // silence beat may open the window at gap 0
     let inHuntWindow = false;
-    if (HUNT_WINDOW && stored &&
-        stored.lastBitId === CPUSH_BIT && stored.lastBitTurn != null &&
-        (turn - stored.lastBitTurn) >= huntFloor &&
-        (turn - stored.lastBitTurn) <= HUNT_WINDOW_TURNS) {
+    // RESOLUTION CHECK (STALL_RESOLVE): if this hunt has already run long
+    // enough per stallShouldResolve(), stop re-claiming the floor here — let
+    // this turn fall through to normal scenario/texture/starvation scoring
+    // instead of sustaining indefinitely. The actual "wrap it up" directive
+    // is injected into mutable below (huntJustResolved), once, on the turn
+    // the hunt stops being sustained.
+    const huntWasSustaining =
+      HUNT_WINDOW && stored && stored.lastBitId === CPUSH_BIT &&
+      stored.lastBitTurn != null && (turn - stored.lastBitTurn) >= huntFloor &&
+      (turn - stored.lastBitTurn) <= HUNT_WINDOW_TURNS;
+    const huntJustResolved = huntWasSustaining && stallShouldResolve(stored);
+    // RUNG COUNTER: incremented once per SUSTAIN turn (the true first fire
+    // stamps huntRungCount=1 in the SNAPSHOT write further down — see there).
+    // Read here for logging/threshold purposes; the actual +1 write happens
+    // in the SNAPSHOT block so it persists exactly once per turn, same as
+    // every other piece of hunt state.
+    const priorRungCount = (stored && stored.huntRungCount) || 1;
+    let sustainRungIncrement = false;
+    if (huntWasSustaining && !huntJustResolved) {
       // Synthesize BIT-233's fire-able entry the same way the cpush consumer
       // does (it's phase-gated out of `ranked`, so ranked.find won't have it).
       // Only if it's still active in the registry — a parked/retired bit must
@@ -1451,14 +1576,24 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         };
         fire = true;
         inHuntWindow = true;
+        sustainRungIncrement = true;
         console.log(
           "hunt-window SUSTAIN turn=" + turn + " — BIT-233 holds floor (" +
-          (turn - stored.lastBitTurn) + "/" + HUNT_WINDOW_TURNS + " turns)" +
+          (turn - stored.lastBitTurn) + "/" + HUNT_WINDOW_TURNS + " turns, rung " +
+          (priorRungCount + 1) + "/" + STALL_EXHAUST_RUNGS + ")" +
           (isSilenceBeat && (turn - stored.lastBitTurn) === 0 ? " [same-turn silence beat: hunt stamped before first poke]" : "") +
           (heldName && heldName !== reg.name ? ", over normal pick '" + heldName + "'" : "")
         );
       }
+    } else if (huntJustResolved) {
+      console.log(
+        "hunt-window RESOLVE turn=" + turn + " — BIT-233 rung " + priorRungCount +
+        "/" + STALL_EXHAUST_RUNGS + ", elapsed " +
+        Math.round((Date.now() - stored.lastBitAt) / 1000) + "s >= " +
+        Math.round(STALL_RESOLVE_MS / 1000) + "s threshold; releasing the floor"
+      );
     }
+
 
     // ── FORCE CONSUMER ────────────────────────────────────────────────────
     // The Director's "fire THIS bit now" override, from Mead Hall via
@@ -1791,6 +1926,23 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // Goes AFTER the cached base, so injecting never busts the prompt cache.
     let mutable = postureBlock(state);
 
+    // STALL RESOLUTION (STALL_RESOLVE) — one-turn wrap-up note. Fires exactly
+    // on the turn the hunt-window above stopped sustaining because
+    // stallShouldResolve() went true. Applies regardless of whether a new
+    // scenario/texture bit ALSO fires this same turn (that bit's own [BIT
+    // ACTIVE] block, if any, is appended separately below) — this note just
+    // makes sure the still-open hunt thread gets closed out rather than
+    // silently abandoned. Full history is intact; this only gives permission
+    // to move on.
+    if (huntJustResolved) {
+      mutable +=
+        "\n\nTHE HUNT HAS RUN LONG ENOUGH — before anything else this turn, " +
+        "close out the approver/payment thread you left open: resolve it " +
+        "naturally in character (they got back to you, or you're done " +
+        "waiting) in a line or two, then move the conversation forward. Do " +
+        "NOT start another rung of the same hunt.";
+    }
+
     // SILENCE CHECK-IN DIRECTIVE (added 2026-07-25). On LiveKit the agent
     // handles a caller silence by firing a bare session.generate_reply() — it
     // re-asks the model to continue with NO new caller message. The tell in the
@@ -1823,6 +1975,34 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         "line; say something new and easy. If you just broke something or had a " +
         "moment, you can let that breathe — but say SOMETHING. Never return an " +
         "empty turn.";
+    }
+
+    // INTERRUPTION (Voice stamps metadata.interrupted=true on the one turn
+    // following a detected caller barge-in; same extra_body.metadata channel
+    // as silence_beat, bare boolean, absent on every normal turn — read the
+    // same defensive way). This is UNIVERSAL, not hunt-specific: any bit with
+    // multi-turn state can get talked over. PE does not decide what the host
+    // does with it (that's Host Canon's call — react, then finish/drop/pivot
+    // per what the caller actually said) — this only SURFACES that an
+    // interruption happened this turn, since the model reading its own
+    // possibly-truncated prior line has no other way to know it was cut off
+    // mid-thought rather than finished naturally.
+    const wasInterrupted =
+      body?.metadata?.interrupted ??
+      body?.extra_body?.metadata?.interrupted ??
+      body?.call?.metadata?.interrupted ??
+      false;
+    if (wasInterrupted === true) {
+      mutable +=
+        "\n\nTHE CALLER JUST CUT YOU OFF mid-line. React to being interrupted " +
+        "naturally, in character, in one short beat (\"oh — sorry, go ahead\" " +
+        "or similar) — then take in what they actually just said before " +
+        "deciding anything. If it's a real question or a redirect, go with " +
+        "THEM and let go of what you were doing; if it's just a nudge to " +
+        "keep going, carry your thread one beat further; if it doesn't need " +
+        "either, let it fall away like any dangle. Never barrel on as if " +
+        "they hadn't spoken, and never restart from the top like the last " +
+        "few turns didn't happen.";
     }
 
     // FAST-JOIN OPENER: on the host's first line of a fast-turnaround booking,
@@ -2131,6 +2311,19 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
             ? { lastBitId: top.id, lastBitTurn: turn, lastBitAt: Date.now() }
             : {}),
           ...(archetypeNew ? { archetype } : {}),
+          // STALL RUNG COUNTER ("stall_exhausted" signal, Andrew/Canon
+          // framing: N≈3-4 rungs, not seconds). Reset to 1 on a FRESH
+          // stall-lane bit's true first fire (same condition as the
+          // lastBitId/lastBitTurn stamp above, narrowed to stall-lane bits
+          // only — an ordinary scenario/texture fire doesn't touch this).
+          // Incremented by exactly 1 on each hunt-window SUSTAIN turn (see
+          // sustainRungIncrement above) — never touched on a turn the stall
+          // was merely eligible but a fresh cpush/force/gag/re-injection
+          // outranked it, since none of those set sustainRungIncrement.
+          ...(fire && !sameTurnReinject && !inHuntWindow && laneOf(top.id) === "stall"
+            ? { huntRungCount: 1 }
+            : {}),
+          ...(sustainRungIncrement ? { huntRungCount: priorRungCount + 1 } : {}),
           // TEXTURE ROTATION (step d): stamp THIS bit's last-actually-fired
           // turn into the per-bit map, merged with whatever was already
           // there — never touched on a turn a texture bit was merely
