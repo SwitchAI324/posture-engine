@@ -416,6 +416,10 @@
   .tcard h3 .x{margin-left:auto;cursor:pointer;color:var(--muted)}
   .tl{font-size:13px;line-height:1.5;margin:8px 0;padding:8px 12px;border-radius:8px}
   .tl.d{background:var(--bone2)} .tl.j{background:#fbf3e2}
+  /* consecutive same-speaker turns = separate generations (silence gap). Keep them visibly
+     distinct so two turns never read as one merged block. */
+  .tl.contd{margin-top:-2px;border-top:1px dashed #cbb98f;border-top-left-radius:0;border-top-right-radius:0}
+  .tl.contd::before{content:"\25B8 next turn";display:block;font-size:8px;letter-spacing:.04em;color:#b09a5f;margin:-2px 0 3px}
   .tl b{font-family:var(--mono);font-size:11px}
   /* dev telemetry HUD */
   .devtoggle{position:fixed;left:14px;bottom:14px;z-index:35;background:var(--ink);color:#fff;border:none;
@@ -931,8 +935,14 @@
 
   function tline(side,txt,label){ const name=label||(side==='d'?'DEREK':'JARL');
     script.push({who:name, text:txt});
-    const l=document.createElement('div'); l.className='tl '+side;
-    l.innerHTML='<b>'+name+':</b> '+txt; $('#tlog').appendChild(l); $('#tlog').scrollTop=$('#tlog').scrollHeight; }
+    const log=$('#tlog');
+    // PE: a silence gap produces two separate same-speaker turns with nothing between them.
+    // If the immediately preceding line is the SAME speaker, mark this one as a continuation
+    // so a real separate generation never visually merges into the previous turn.
+    const prev=log&&log.lastElementChild;
+    const contd=!!(prev && prev.classList && prev.classList.contains('tl') && prev.classList.contains(side) && prev.getAttribute('data-who')===name);
+    const l=document.createElement('div'); l.className='tl '+side+(contd?' contd':''); l.setAttribute('data-who',name);
+    l.innerHTML='<b>'+name+':</b> '+txt; log.appendChild(l); log.scrollTop=log.scrollHeight; }
   function showJarl(txt){ const e=$('#capJarl'); e.textContent='\u201C'+txt+'\u201D'; e.classList.add('show'); setSpeak('host'); }
 
   tline('d', convo[0].content); tline('j', convo[1].content); showJarl(convo[1].content);
