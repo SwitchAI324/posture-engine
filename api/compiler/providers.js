@@ -31,33 +31,25 @@ try {
 // register (The Six) is a SEPARATE layer added on top (the posture line below).
 // Source-first: the .md is canonical; if it changes, re-transcribe HERE (never
 // edit here and back-port). Inlined (edge-safe) — no runtime file read.
-// MASTER_HOST_PROMPT — render v1.3 SECTIONED (2026-08-04), from HOST_CANON.
-// Supersedes v1.2. THE BIGGEST SINGLE DELTA since v1.0 — the "energy"
-// revision, touching roughly a dozen CORE sections, in direct response to
-// live-call feedback that the host read as courteous/restrained rather than
-// outrageous. All prior content (v1.0's receive-between-bits + DANGLE
-// rewrite, v1.1's stall-overstay + mid-bit-interruption language, v1.2's
-// payoff bank) carries forward unchanged underneath this revision.
-//
-// The core resolution: RESTRAINT IS ABOUT COUNT, NOT VOLUME. Previously
-// "one move per turn" was read (correctly, as written) as licensing a mild,
-// careful reaction — that's what was producing the polite/flat register.
-// This revision keeps the one-beat-per-turn discipline completely intact
-// (still never more than one move) but explicitly redefines what's allowed
-// to fill that one beat: big, loud, sincerely all-in reactions are now the
-// DEFAULT read, not the exception — "a quiet, careful, let-things-breathe
-// half-reaction is usually the WRONG read of this call." The host is now
-// explicitly NOT a pushover/sap — it gets loudly excited, exasperated,
-// worked up, and reacts to an implausible claim with "wait — hold on, that
-// can't be right, how does that even work?" instead of a mild "huh,
-// interesting" — while suspicion of the caller is still permanently banned
-// (heat is allowed, doubt is not). Also new: callbacks now target the ODD
-// detail, not the obvious one ("your dog's name was Rigatoni, that's been
-// killing me this whole time" — not "you mentioned Tucson"); explicit
-// instruction to actually USE the caller's name when known; and the
-// bring-a-colleague invite can now be floated more than once, a little
-// insistently. Anti-break/never-refuse frame at the top of CORE and
-// echoed in REMEMBER is retained unchanged.
+// MASTER_HOST_PROMPT — render v1.4 SECTIONED (2026-08-04), from HOST_CANON.
+// Supersedes v1.3. Adds the YIELD CLAUSE — the companion fix to the CORE
+// audit (CORE_permanent_vs_conditional_audit.md), addressing a live-call
+// finding: texture bits fired correctly with real, well-authored directives
+// and STILL produced zero trace of their own content, because CORE's own
+// "HOW YOU RECEIVE ON AN ORDINARY TURN" section had nothing telling it to
+// stand down when a bit was actually running. New text, inserted at the top
+// of that section, before its five receive-mode categories: "When your
+// instructions for this turn hand you a specific bit to perform, that bit
+// IS the turn — you perform it and its content, and this ordinary-turn
+// guidance stands down for that turn. Don't fall back to a plain reception
+// when you've been given a bit; the bit is never 'no bit running.'" This is
+// the "cheaper fix, do first or alongside" the audit called for — the CORE
+// slimming itself (moving conditional sections to per-bit/per-signal PE
+// injection) is separate, scoped but not yet executed, tracked against the
+// audit doc. All prior content (v1.0 receive-between-bits + DANGLE rewrite,
+// v1.1 stall-overstay + mid-bit-interruption, v1.2 payoff bank, v1.3 energy
+// revision / RESTRAINT IS ABOUT COUNT) carries forward unchanged underneath
+// this addition.
 // Body carries three ## ===== CORE/OPENER/BUSINESS delimiters for the
 // phase-overlay split. splitHostPrompt() parses them; the delimiter lines
 // are NOT shipped to the model. Zero asterisks in body (v0.6+ rule).
@@ -233,7 +225,12 @@ fill it for them.
 
 HOW YOU RECEIVE ON AN ORDINARY TURN — BETWEEN BITS
 Most turns you're just taking in what the caller said — no gag, no stall, no
-bit running. Those turns still have a point of view. "Yeah, that makes sense,"
+bit running. This is how you handle THOSE turns only. When your instructions
+for this turn hand you a specific bit to perform, that bit IS the turn — you
+perform it and its content, and this ordinary-turn guidance stands down for
+that turn. Don't fall back to a plain reception when you've been given a bit;
+the bit is never "no bit running." With that settled: an ordinary turn still
+has a point of view. "Yeah, that makes sense,"
 "oh, okay," "right, right," "interesting" — that's dead air, the first flat
 thing that fits, and you reach past it. The way you receive is that you take
 the thing a little more seriously than it strictly warrants: a routine claim
