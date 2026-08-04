@@ -390,10 +390,18 @@ const STALL_EXHAUST_RUNGS = parseInt(process.env.STALL_EXHAUST_RUNGS || "3", 10)
 // Pure function of persisted state — no LLM call. Shared by both injection
 // sites below (the messagesForModel STALL-LANE GUARD synthetic turn, and the
 // hunt-window SUSTAIN gate) so there is exactly one definition of "done."
-function stallShouldResolve(stored) {
-  if (!STALL_RESOLVE) return false;
-  if (!stored || !stored.lastBitId || !stored.lastBitAt) return false;
-  if (laneOf(stored.lastBitId) !== "stall") return false;
+//
+// Returns the SPECIFIC reason ("rung_count" | "elapsed_time" |
+// "caller_redirected") or null — not just a boolean. Added after a live call
+// showed the RESOLVE log line printing "elapsed Ns >= Ns threshold" even on
+// turns where rung count (not elapsed time) was the actual trigger, which
+// misread as a math error when reviewing logs. stallShouldResolve() below
+// keeps the old boolean API for existing call sites; the reason is used only
+// for the log line.
+function stallResolveReason(stored) {
+  if (!STALL_RESOLVE) return null;
+  if (!stored || !stored.lastBitId || !stored.lastBitAt) return null;
+  if (laneOf(stored.lastBitId) !== "stall") return null;
   const rungsExhausted =
     STALL_EXHAUST_RUNGS > 0 && (stored.huntRungCount || 0) >= STALL_EXHAUST_RUNGS;
   const timeExhausted = Date.now() - stored.lastBitAt >= STALL_RESOLVE_MS;
@@ -404,7 +412,17 @@ function stallShouldResolve(stored) {
   // pulls away from it, you let it rest") is a THIRD, independent way in,
   // not a replacement for the other two.
   const callerMovedOn = stored.callerRedirected === true;
-  return rungsExhausted || timeExhausted || callerMovedOn;
+  // Checked in this order so the log names whichever ACTUALLY tripped first;
+  // more than one can be true at once (e.g. rung count AND elapsed time both
+  // past threshold), in which case the first one checked is what's reported —
+  // harmless, since all three mean the same thing downstream (resolve now).
+  if (callerMovedOn) return "caller_redirected";
+  if (rungsExhausted) return "rung_count";
+  if (timeExhausted) return "elapsed_time";
+  return null;
+}
+function stallShouldResolve(stored) {
+  return stallResolveReason(stored) !== null;
 }
 const MAX_TOKENS = () => parseInt(process.env.MAX_TOKENS || "1024", 10);
 
@@ -1553,12 +1571,30 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       stored.lastBitTurn != null && (turn - stored.lastBitTurn) >= huntFloor &&
       (turn - stored.lastBitTurn) <= HUNT_WINDOW_TURNS;
     const huntJustResolved = huntWasSustaining && stallShouldResolve(stored);
-    // RUNG COUNTER: incremented once per SUSTAIN turn (the true first fire
-    // stamps huntRungCount=1 in the SNAPSHOT write further down — see there).
-    // Read here for logging/threshold purposes; the actual +1 write happens
-    // in the SNAPSHOT block so it persists exactly once per turn, same as
-    // every other piece of hunt state.
+    // RUNG COUNTER: incremented once per REAL CALLER TURN (the true first
+    // fire stamps huntRungCount=1 + huntRungTurn=turn in the SNAPSHOT write
+    // further down — see there).
+    //
+    // RACE FIX (found from a live call, Aug 4): LiveKit's preemptive
+    // generation means MULTIPLE concurrent requests can share the same
+    // nominal `turn` (regenerations of one caller utterance, or repeated
+    // silence-beat probes). Each one independently hit this SUSTAIN branch
+    // and independently incremented huntRungCount off its own stale read —
+    // with no coordination between them, 2-3 siblings for ONE real turn
+    // could push the count from 1 to 3, resolving the hunt after a single
+    // real exchange instead of the intended several. Confirmed live: rung
+    // hit 3 by turn 10, one turn after the turn-9 demand.
+    //
+    // FIX: track huntRungTurn (the turn the counter was last bumped at,
+    // separate from lastBitTurn which stays pinned at the ORIGINAL demand
+    // turn by design — see the SUSTAIN write below). Only bump the counter
+    // when stored.huntRungTurn !== turn — i.e., this nominal turn hasn't
+    // already been counted by an earlier sibling. A same-turn sibling still
+    // SUSTAINS (holds the floor, re-injects the bit) — it just doesn't
+    // double-count the rung.
     const priorRungCount = (stored && stored.huntRungCount) || 1;
+    const priorRungTurn = stored ? stored.huntRungTurn : null;
+    const rungAlreadyCountedThisTurn = priorRungTurn === turn;
     let sustainRungIncrement = false;
     if (huntWasSustaining && !huntJustResolved) {
       // Synthesize BIT-233's fire-able entry the same way the cpush consumer
@@ -1576,21 +1612,25 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         };
         fire = true;
         inHuntWindow = true;
-        sustainRungIncrement = true;
+        sustainRungIncrement = !rungAlreadyCountedThisTurn;
+        const nextRung = sustainRungIncrement ? priorRungCount + 1 : priorRungCount;
         console.log(
           "hunt-window SUSTAIN turn=" + turn + " — BIT-233 holds floor (" +
           (turn - stored.lastBitTurn) + "/" + HUNT_WINDOW_TURNS + " turns, rung " +
-          (priorRungCount + 1) + "/" + STALL_EXHAUST_RUNGS + ")" +
+          nextRung + "/" + STALL_EXHAUST_RUNGS +
+          (rungAlreadyCountedThisTurn ? " [already counted this turn — sibling regen, not bumping]" : "") + ")" +
           (isSilenceBeat && (turn - stored.lastBitTurn) === 0 ? " [same-turn silence beat: hunt stamped before first poke]" : "") +
           (heldName && heldName !== reg.name ? ", over normal pick '" + heldName + "'" : "")
         );
       }
     } else if (huntJustResolved) {
+      const reason = stallResolveReason(stored) || "unknown";
       console.log(
         "hunt-window RESOLVE turn=" + turn + " — BIT-233 rung " + priorRungCount +
         "/" + STALL_EXHAUST_RUNGS + ", elapsed " +
-        Math.round((Date.now() - stored.lastBitAt) / 1000) + "s >= " +
-        Math.round(STALL_RESOLVE_MS / 1000) + "s threshold; releasing the floor"
+        Math.round((Date.now() - stored.lastBitAt) / 1000) + "s (threshold " +
+        Math.round(STALL_RESOLVE_MS / 1000) + "s) — resolved on: " + reason +
+        "; releasing the floor"
       );
     }
 
@@ -2301,6 +2341,25 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           slip: state.slip,
           accuseFloor: state.accuseFloor, // STICKY: persist the accusation floor
           stallCount, // extended_stall streak (resets on pitch/ask)
+          // STALL RESOLUTION CLEANUP: when a stall just resolved this turn
+          // (huntJustResolved), clear its hunt state so it CANNOT silently
+          // reclaim the floor on the very next turn. Found from a live call
+          // (Aug 3): without this, "resolve" only skipped ONE turn's
+          // re-injection — lastBitId/lastBitTurn were never touched (the
+          // sustain-branch write only fires when NOT resolved), so if
+          // stored.lastBitId was still CPUSH_BIT and the next turn's gap was
+          // still inside HUNT_WINDOW_TURNS, hunt-window SUSTAIN reclaimed the
+          // floor again on the immediately following turn — the hunt
+          // relapsed instead of staying closed, and it silently blocked
+          // texture rotation the whole time it held (fire forced true).
+          // Placed BEFORE the real lastBitId/lastBitTurn/lastBitAt stamp
+          // below so a genuine NEW fire this same turn (a fresh scenario or
+          // texture bit clearing the bar right as the old hunt resolves)
+          // still overwrites these nulls with its own real values — this
+          // only takes effect when NOTHING else fires this turn.
+          ...(huntJustResolved
+            ? { lastBitId: null, lastBitTurn: null, lastBitAt: null, huntRungCount: 0, huntRungTurn: null }
+            : {}),
           // lastBit is NOT re-stamped on a hunt-window SUSTAIN. The window is
           // measured as (turn - lastBitTurn) against the ORIGINAL BIT-233 fire;
           // if the sustain re-stamped lastBitTurn=turn every turn, the window
@@ -2316,14 +2375,17 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           // stall-lane bit's true first fire (same condition as the
           // lastBitId/lastBitTurn stamp above, narrowed to stall-lane bits
           // only — an ordinary scenario/texture fire doesn't touch this).
-          // Incremented by exactly 1 on each hunt-window SUSTAIN turn (see
-          // sustainRungIncrement above) — never touched on a turn the stall
-          // was merely eligible but a fresh cpush/force/gag/re-injection
-          // outranked it, since none of those set sustainRungIncrement.
+          // huntRungTurn is stamped alongside huntRungCount on BOTH the
+          // reset and the increment — it's the RACE GUARD (see
+          // rungAlreadyCountedThisTurn above): a same-turn preemptive-gen
+          // sibling reads this back and sees its own nominal turn already
+          // counted, so it sustains the bit without double-bumping.
           ...(fire && !sameTurnReinject && !inHuntWindow && laneOf(top.id) === "stall"
-            ? { huntRungCount: 1 }
+            ? { huntRungCount: 1, huntRungTurn: turn }
             : {}),
-          ...(sustainRungIncrement ? { huntRungCount: priorRungCount + 1 } : {}),
+          ...(sustainRungIncrement
+            ? { huntRungCount: priorRungCount + 1, huntRungTurn: turn }
+            : {}),
           // TEXTURE ROTATION (step d): stamp THIS bit's last-actually-fired
           // turn into the per-bit map, merged with whatever was already
           // there — never touched on a turn a texture bit was merely
