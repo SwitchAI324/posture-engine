@@ -2165,6 +2165,22 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       // producing thematically-adjacent mood instead of the bit's structure —
       // sanding was systemic across every multi-beat bit. A fire is now a
       // command to PERFORM the specific routine, not ambient guidance.
+      //
+      // EXPLICIT OVERRIDE ADDED (Aug 4, live-call finding): confirmed from a
+      // real call where EVERY texture-pool bit fired mechanically correctly,
+      // with real well-authored BIT_DIRECTIVES content, and STILL produced
+      // zero trace of its own gimmick every single time — while BIT-233 (the
+      // approver hunt, a scenario bit) performed real, specific content on
+      // every fire in the SAME call. The difference: CORE has its OWN
+      // extensive, cached, heavily-reinforced instruction set for exactly
+      // "ordinary receiving turns" (the SNAG / HALF-CONNECTION / CURIOSITY /
+      // QUIET WEIGHT / SMALL OBSERVATION rotation) — the hunt has no
+      // competing guidance anywhere else in CORE, so its directive wins by
+      // default; a texture bit's directive is a small, one-off addition
+      // competing against an alternative the model has already been given a
+      // strong, well-established pattern for following. This makes the
+      // override explicit and names the competing categories directly, so
+      // there is no ambiguity left for the model to resolve on its own.
       const bitDirective =
         BIT_DIRECTIVES && BIT_DIRECTIVES[top.id] && String(BIT_DIRECTIVES[top.id]).trim()
           ? String(BIT_DIRECTIVES[top.id]).trim()
@@ -2173,7 +2189,10 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         '\n\n[BIT ACTIVE: ' + top.id + ' — "' + top.name + '"]\n' +
         "A specific routine has been selected and MUST be performed this turn. " +
         "This is not ambient guidance and not a tone suggestion — a bit has " +
-        "fired. " +
+        "fired. THIS OVERRIDES your ordinary-receiving-turn habits for this " +
+        "one turn: do NOT reach for a SNAG, a HALF-CONNECTION, a CURIOSITY, " +
+        "QUIET WEIGHT, or a SMALL OBSERVATION instead — those are for turns " +
+        "with no bit active. This turn has one, and it wins. " +
         (bitDirective
           ? "Its directive follows. Perform ITS specific structure: hit its " +
             "beats, its required moves, its sequence. Do NOT produce behavior " +
