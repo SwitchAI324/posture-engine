@@ -40,7 +40,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-   `&select=prefix,posture_line,gear,pressure,engagement,slip,accuse_floor,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,texture_last_fire,hunt_rung_count,caller_redirected,hunt_rung_turn`;
+   `&select=prefix,posture_line,gear,pressure,engagement,slip,accuse_floor,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,texture_last_fire,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn`;
   const r = await fetch(url, {
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
@@ -96,13 +96,25 @@ export async function getCall(callId) {
     // increment. null = never bumped (fresh call, or just resolved).
     huntRungTurn: rows[0].hunt_rung_turn ?? null,
     callerRedirected: rows[0].caller_redirected ?? false,
+    // CALLER-CRUDE signal: raw per-turn classification + two running counts.
+    // Defaults match "nothing crude has happened yet" for a call that
+    // predates this feature or a fresh row.
+    callerCrude: rows[0].caller_crude ?? "none",
+    crudeImpersonalCount: rows[0].crude_impersonal_count ?? 0,
+    crudePersonalCount: rows[0].crude_personal_count ?? 0,
+    // MARKER AWARENESS: per-marker running counts + per-marker last-fired
+    // turn (both jsonb objects keyed by marker token, e.g. "COFFEE_CUP_
+    // BREAK"). Empty objects for a call that predates this feature or a
+    // fresh row — same "nothing has happened yet" default as everything else.
+    markerCounts: rows[0].marker_counts ?? {},
+    markerLastTurn: rows[0].marker_last_turn ?? {},
   };
 }
 // WRITE (upsert) — used at pre-snap to freeze the prefix, and later by the
 // posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, textureLastFire, huntRungCount, callerRedirected, huntRungTurn }
+  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, textureLastFire, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -160,6 +172,14 @@ export async function setCall(
   // for why) — only written when provided, same pattern as every field here.
   if (huntRungTurn !== undefined) row.hunt_rung_turn = huntRungTurn;
   if (callerRedirected !== undefined) row.caller_redirected = callerRedirected;
+  // CALLER-CRUDE: raw classification + the two running counts. Same "only
+  // write when provided" pattern as every other field here.
+  if (callerCrude !== undefined) row.caller_crude = callerCrude;
+  if (crudeImpersonalCount !== undefined) row.crude_impersonal_count = crudeImpersonalCount;
+  if (crudePersonalCount !== undefined) row.crude_personal_count = crudePersonalCount;
+  // MARKER AWARENESS: both jsonb, same "only write when provided" pattern.
+  if (markerCounts !== undefined) row.marker_counts = markerCounts;
+  if (markerLastTurn !== undefined) row.marker_last_turn = markerLastTurn;
   const r = await fetch(`${URL}/rest/v1/${TABLE}`, {
     method: "POST",
     headers: {
