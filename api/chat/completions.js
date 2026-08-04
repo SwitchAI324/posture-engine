@@ -296,6 +296,54 @@ const EVENT_FIRE =
 // prompt and output are BYTE-FOR-BYTE what they were before this existed.
 const CALLER_REDIRECT_DETECT =
   /^(1|true|yes|on)$/i.test(String(process.env.CALLER_REDIRECT_DETECT || ""));
+// ── CALLER-CRUDE DETECT ("caller_crude" signal, two-level + running count) ─
+// Same doctrine as the two above: one more question on the reader call that
+// already runs, not new text-sniffing. Classifies the caller's most recent
+// turn as "none" | "impersonal" (crude/hostile language not aimed at the
+// host — cursing about the world, a competitor, themselves) | "personal"
+// (aimed AT the host — a jab, an insult, hostility directed at them).
+// Mutually exclusive by construction (the reader picks one). Persisted as
+// TWO separate running counts (crudeImpersonalCount, crudePersonalCount) —
+// a bare boolean isn't enough for Canon's planned conditional content, which
+// wants to know not just "did this happen" but "how many times, of which
+// kind." OFF by default; when off, readCall's prompt and output are
+// BYTE-FOR-BYTE what they were before this existed.
+const CALLER_CRUDE_DETECT =
+  /^(1|true|yes|on)$/i.test(String(process.env.CALLER_CRUDE_DETECT || ""));
+// ── CALLER-CRUDE INJECTION TEXT — SWAP POINT ──────────────────────────────
+// The PE-side plumbing for the CORE audit's crude-section split
+// (CORE_permanent_vs_conditional_audit.md): once Canon splits WHEN THEY SAY
+// SOMETHING CRUDE OR HOSTILE — anti-break half stays permanent in CORE,
+// "how to play a crude mishear" half comes OUT and needs a new home — this
+// injection site is that new home. Canon has NOT sent that text yet, so
+// these two functions hold PLACEHOLDER text drawn from CORE's OWN existing
+// (still-unsplit) guidance, so the mechanism is provably working on a real
+// call today. THE SWAP: when Canon's real text arrives, replace the return
+// values of these two functions — nothing else in this file changes.
+function crudeImpersonalText(count) {
+  return (
+    "THE CALLER'S LAST LINE WAS CRUDE OR HOSTILE, BUT NOT AIMED AT YOU — " +
+    "about the world, a competitor, themselves. You don't hear it that " +
+    "way: take the innocent surface reading and answer that sincerely, OR " +
+    "let it remind you of a harmless story (keep it PG), OR just sail " +
+    "right past it on the actual topic. Never get scandalized, never " +
+    "match it." +
+    (count > 1 ? " (This kind of thing has come up " + count + " times " +
+      "this call — don't reach for the same handling twice in a row.)" : "")
+  );
+}
+function crudePersonalText(count) {
+  return (
+    "THE CALLER'S LAST LINE WAS AIMED AT YOU — a jab, an insult, hostility " +
+    "directed at you personally. You don't catch the edge: take it at " +
+    "face value and answer it sincerely. Never fire back, never get " +
+    "defensive, never reveal you noticed anything. You can feel the room " +
+    "cool without understanding why — get a touch quieter, that's all. " +
+    "Never match or amplify it." +
+    (count > 1 ? " (This is the " + count + (count === 2 ? "nd" : count === 3 ? "rd" : "th") +
+      " time this call — still never reveal you've noticed a pattern.)" : "")
+  );
+}
 const CPUSH_BIT = process.env.CPUSH_BIT || "BIT-233";
 // ── SYNCHRONOUS CARD-ASK TRIGGER (card_ask) ──────────────────────────────
 // FIRST BRICK OF THE TRIGGER ARCHITECTURE (replacing gears). The async reader
@@ -544,12 +592,25 @@ async function readCall(messages, prior) {
           "on the SAME thing, is NOT a redirect — report false. When " +
           "unsure, report false.\n"
         : "") +
-      (EVENT_DETECT
-        ? 'Reply EXACTLY: {"phase":"..","suspicion":"..","pressure":"..","engagement":"..","commitment_push":true|false' +
-          (CALLER_REDIRECT_DETECT ? ',"caller_redirected":true|false' : "") + '}'
-        : CALLER_REDIRECT_DETECT
-        ? 'Reply EXACTLY: {"phase":"..","suspicion":"..","pressure":"..","engagement":"..","caller_redirected":true|false}'
-        : 'Reply EXACTLY: {"phase":"..","suspicion":"..","pressure":"..","engagement":".."}');
+      (CALLER_CRUDE_DETECT
+        ? "caller_crude — did the caller's MOST RECENT turn include " +
+          "something crude, hostile, or demeaning? Classify it: " +
+          "\"impersonal\" (crude/hostile language NOT aimed at the host — " +
+          "cursing about the world, a competitor, themselves), " +
+          "\"personal\" (aimed AT the host — a jab, an insult, hostility " +
+          "directed at them), or \"none\" if nothing crude. When unsure, " +
+          "report \"none\".\n"
+        : "") +
+      (() => {
+        // Build the Reply-EXACTLY line from whichever flags are on, instead
+        // of a nested ternary per combination — scales cleanly as more
+        // flag-gated fields get added (this is now the third).
+        const fields = ['"phase":".."', '"suspicion":".."', '"pressure":".."', '"engagement":".."'];
+        if (EVENT_DETECT) fields.push('"commitment_push":true|false');
+        if (CALLER_REDIRECT_DETECT) fields.push('"caller_redirected":true|false');
+        if (CALLER_CRUDE_DETECT) fields.push('"caller_crude":"none"|"impersonal"|"personal"');
+        return "Reply EXACTLY: {" + fields.join(",") + "}";
+      })();
     const r = await fetch(ANTHROPIC_URL, {
       method: "POST",
       headers: {
@@ -593,6 +654,13 @@ async function readCall(messages, prior) {
     if (CALLER_REDIRECT_DETECT) {
       out.callerRedirected = parsed.caller_redirected === true;
     }
+    // CALLER-CRUDE DETECT (flag-gated): strict enum, defaults "none" for
+    // anything not exactly "impersonal" or "personal" — fail safe toward
+    // "nothing crude happened" rather than mis-tagging a normal turn.
+    if (CALLER_CRUDE_DETECT) {
+      const crude = typeof parsed.caller_crude === "string" ? parsed.caller_crude.toLowerCase().trim() : "none";
+      out.callerCrude = (crude === "impersonal" || crude === "personal") ? crude : "none";
+    }
     return Object.keys(out).length ? out : null;
   } catch {
     return null;
@@ -619,6 +687,14 @@ function blendRead(keywordState, read) {
   // one-way/latched. Rides the same setCall write.
   if (typeof read.callerRedirected === "boolean") {
     out.callerRedirected = read.callerRedirected;
+  }
+  // CALLER-CRUDE DETECT: same momentary shape, not one-way/latched — this
+  // turn's classification only ("none" | "impersonal" | "personal"). The
+  // RUNNING COUNTS live separately (crudeImpersonalCount/crudePersonalCount,
+  // incremented in the main SNAPSHOT write when this value is consumed next
+  // turn — see there); this field is just the raw per-turn read.
+  if (typeof read.callerCrude === "string") {
+    out.callerCrude = read.callerCrude;
   }
   // ONE-WAY BUSINESS LATCH (phase-overlay split): the first turn the call is
   // read as non-"opening", latch businessLatched=true so completions serves the
@@ -2044,6 +2120,20 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         "NOT start another rung of the same hunt.";
     }
 
+    // CALLER-CRUDE conditional injection (Aug 4, CORE audit's crude-section
+    // split). stored.callerCrude is last turn's reader judgment, consumed
+    // THIS turn — same one-turn-lag pattern as the hunt-resolution reasons
+    // above. Gated on CALLER_CRUDE_DETECT even though stored.callerCrude
+    // already defaults to "none" when the flag's off, for clarity/defense.
+    // See crudeImpersonalText/crudePersonalText above for the SWAP POINT —
+    // Canon's real conditional text replaces those two function bodies,
+    // nothing else here changes when that lands.
+    if (CALLER_CRUDE_DETECT && stored && stored.callerCrude === "impersonal") {
+      mutable += "\n\n" + crudeImpersonalText(stored.crudeImpersonalCount || 0);
+    } else if (CALLER_CRUDE_DETECT && stored && stored.callerCrude === "personal") {
+      mutable += "\n\n" + crudePersonalText(stored.crudePersonalCount || 0);
+    }
+
     // SILENCE CHECK-IN DIRECTIVE (added 2026-07-25). On LiveKit the agent
     // handles a caller silence by firing a bare session.generate_reply() — it
     // re-asks the model to continue with NO new caller message. The tell in the
@@ -2417,7 +2507,13 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     }
 
     // SNAPSHOT: persist gears (+ the fired bit, for recency/pacing next turn).
-    if (dirty || !stored || fire || archetypeNew) {
+    // CRUDE COUNT GATE: stored.callerCrude is last turn's reader judgment,
+    // consumed THIS turn (same one-turn-lag pattern as commitmentPush/
+    // callerRedirected). Added to the write gate below so an increment isn't
+    // silently dropped on a turn where nothing ELSE changed (dirty/fire/
+    // archetypeNew could all be false while crude still needs counting).
+    const crudeDetected = !!(stored && (stored.callerCrude === "impersonal" || stored.callerCrude === "personal"));
+    if (dirty || !stored || fire || archetypeNew || crudeDetected) {
       waitUntil(
         setCall(callId, {
           gear: state.suspicion,
@@ -2479,6 +2575,18 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           // nothing to merge and the map is simply left out of this write).
           ...(textureFired
             ? { textureLastFire: { ...(scorerState.textureLastFire || {}), [top.id]: turn } }
+            : {}),
+          // CALLER-CRUDE running counts ("caller_crude" signal, two-level).
+          // Incremented on CONSUMPTION (this turn reading last turn's
+          // reader judgment), not on the judgment turn itself — same
+          // one-turn-lag as commitmentPush/callerRedirected elsewhere. Two
+          // independent counters, mutually exclusive per turn (the reader
+          // reports at most one of the two per turn by construction).
+          ...(stored && stored.callerCrude === "impersonal"
+            ? { crudeImpersonalCount: (stored.crudeImpersonalCount || 0) + 1 }
+            : {}),
+          ...(stored && stored.callerCrude === "personal"
+            ? { crudePersonalCount: (stored.crudePersonalCount || 0) + 1 }
             : {}),
         }).catch(() => {})
       ); // never awaited
