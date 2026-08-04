@@ -310,6 +310,15 @@ const CALLER_REDIRECT_DETECT =
 // BYTE-FOR-BYTE what they were before this existed.
 const CALLER_CRUDE_DETECT =
   /^(1|true|yes|on)$/i.test(String(process.env.CALLER_CRUDE_DETECT || ""));
+// ── MARKER AWARENESS ("self-caused environment marker" persistence) ───────
+// PE_self_caused_marker_awareness.md. Detection lives in finishUp (the SSE
+// handler), persistence in stored.markerCounts/markerLastTurn, injection
+// here in the mutable block for any marker fired within the awareness
+// window. OFF by default; when off, detection still runs (cheap, harmless)
+// but nothing is ever injected and stored.markerLastTurn is simply never
+// read.
+const MARKER_AWARENESS =
+  /^(1|true|yes|on)$/i.test(String(process.env.MARKER_AWARENESS || ""));
 // ── CALLER-CRUDE INJECTION TEXT — SWAP POINT ──────────────────────────────
 // The PE-side plumbing for the CORE audit's crude-section split
 // (CORE_permanent_vs_conditional_audit.md): once Canon splits WHEN THEY SAY
@@ -620,18 +629,50 @@ async function readCall(messages, prior) {
       },
       body: JSON.stringify({
         model: MODEL(),
-        max_tokens: 60,
+        // RAISED 60 -> 200 (Aug 4): this budget was set back when the reply
+        // schema was 4 fields (phase/suspicion/pressure/engagement). It has
+        // since grown to up to 7 (commitment_push, caller_redirected,
+        // caller_crude all added this session, each behind its own flag) —
+        // 60 tokens is tight even for the base 4-field JSON and risks
+        // truncating a longer reply before the closing brace, which fails
+        // the regex match below and gets silently counted as a callread
+        // failure. Found from a live call showing "callread FAILED" on
+        // nearly every turn. Still a tiny, cheap, low-latency call — 200 is
+        // real headroom, not a meaningful cost/latency change.
+        max_tokens: 200,
         system: sys,
         messages: [{ role: "user", content: convo + "\n\nJSON:" }],
       }),
     });
-    if (!r.ok) return null;
+    // FAILURE-REASON LOGGING (Aug 4): "callread FAILED" at the call site used
+    // to be a single generic message regardless of WHICH of these three
+    // things actually happened — an HTTP error, a reply with no JSON object
+    // in it at all, or a reply with a JSON-shaped chunk that didn't actually
+    // parse (e.g. truncated mid-object). Logging the specific reason here,
+    // at the point it's actually known, means the next time this fires the
+    // cause is visible immediately instead of requiring another diagnosis
+    // pass like this one.
+    if (!r.ok) {
+      console.log("callread REASON=http_not_ok status=" + r.status);
+      return null;
+    }
     const j = await r.json();
     const txt = (j.content || []).map((c) => c.text || "").join("").trim();
     const m = txt.match(/\{[\s\S]*\}/);
-    if (!m) return null;
+    if (!m) {
+      console.log("callread REASON=no_json_found raw=" + JSON.stringify(txt.slice(0, 150)));
+      return null;
+    }
     let parsed;
-    try { parsed = JSON.parse(m[0]); } catch { return null; }
+    try {
+      parsed = JSON.parse(m[0]);
+    } catch (e) {
+      console.log(
+        "callread REASON=parse_error err=" + (e && e.message ? e.message : e) +
+        " raw=" + JSON.stringify(m[0].slice(0, 150))
+      );
+      return null;
+    }
     // Validate each field against legal values; drop anything illegal.
     const legal = {
       phase: ["opening", "pitching", "probing", "drifting"],
@@ -1171,6 +1212,15 @@ export default async function handler(req) {
     ...(deathBlowFiring ? { temperature: 1 } : {}),
     ...(systemBlocks ? { system: systemBlocks } : {}),
   };
+
+  // MODEL-DIAG (Aug 4): logs which model actually handled this turn. Added
+  // after a live A/B (Haiku vs a bigger model in the same family) turned out
+  // to be the real fix for "bits fire but leave no trace" — three prompt
+  // fixes had failed before that was even known, because there was no way
+  // to confirm which model a given log/call actually used without cross-
+  // referencing MODEL()'s env-var default by hand. Now it's one line per
+  // turn, no guessing.
+  console.log("MODEL-DIAG model=" + anthropicReq.model);
 
   const upstream = await fetch(ANTHROPIC_URL, {
     method: "POST",
@@ -2102,12 +2152,6 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // MUTABLE block: posture lines + (on fire) a gentle in-character bit cue.
     // Goes AFTER the cached base, so injecting never busts the prompt cache.
     let mutable = postureBlock(state);
-    // ★ DIAGNOSTIC (Aug 4, temporary, paired with the BIT-DIRECTIVE-DIAG
-    // logs below): hoisted so the final log can compute how much content
-    // landed AFTER the bit block — i.e. how stale/buried it ends up by the
-    // time the model actually generates.
-    let mutableCharsBeforeBitBlock = null;
-    let mutableCharsAfterBitBlock = null;
 
     // STALL RESOLUTION (STALL_RESOLVE) — one-turn wrap-up note. Fires exactly
     // on the turn the hunt-window above stopped sustaining because
@@ -2138,6 +2182,42 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       mutable += "\n\n" + crudeImpersonalText(stored.crudeImpersonalCount || 0);
     } else if (CALLER_CRUDE_DETECT && stored && stored.callerCrude === "personal") {
       mutable += "\n\n" + crudePersonalText(stored.crudePersonalCount || 0);
+    }
+
+    // MARKER AWARENESS INJECTION (Aug 4, PE_self_caused_marker_awareness.md).
+    // Detection + persistence happens in finishUp (search SELF-CAUSED MARKER
+    // AWARENESS) — this is the read side. For any marker that fired within
+    // the last ~2-3 turns (this turn included), inject a plain FACTUAL note:
+    // that it happened, and how many times this call. Deliberately NOT a
+    // performance directive — the reaction content and the marquee-vs-
+    // ambient escalation ladder are Bits' to author (division of labor per
+    // the spec); this only makes the fact + count available so (a) the host
+    // can own a late caller reference instead of denying it, and (b) a
+    // future Bits directive reading stored.markerCounts[marker] knows this
+    // is fire N and can pick the right rung. Ages out on its own — once
+    // turn - markerLastTurn exceeds the window, the note simply stops
+    // appearing; the underlying count is untouched and keeps accumulating
+    // for whenever Bits' escalation logic wants it.
+    if (MARKER_AWARENESS && stored && stored.markerLastTurn) {
+      const AWARENESS_WINDOW_TURNS = 2; // fired this turn, or up to 2 turns ago
+      const recent = Object.keys(stored.markerLastTurn).filter((marker) => {
+        const lastTurn = stored.markerLastTurn[marker];
+        return typeof lastTurn === "number" && turn - lastTurn <= AWARENESS_WINDOW_TURNS && turn - lastTurn >= 0;
+      });
+      if (recent.length) {
+        const counts = stored.markerCounts || {};
+        const notes = recent.map((marker) => {
+          const readable = marker.toLowerCase().replace(/_/g, " ");
+          const n = counts[marker] || 1;
+          return readable + " (" + n + (n === 1 ? " time" : " times") + " this call)";
+        });
+        mutable +=
+          "\n\nAWARENESS — something real just happened on your end: " +
+          notes.join("; ") + ". It's real, not the caller's imagination — if " +
+          "they reference it, own it naturally (\"oh — yeah, that was me, " +
+          "sorry\"), never deny it. If nothing prompts you to mention it, you " +
+          "don't have to bring it up yourself.";
+      }
     }
 
     // SILENCE CHECK-IN DIRECTIVE (added 2026-07-25). On LiveKit the agent
@@ -2262,51 +2342,26 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       // sanding was systemic across every multi-beat bit. A fire is now a
       // command to PERFORM the specific routine, not ambient guidance.
       //
-      // EXPLICIT OVERRIDE ADDED (Aug 4, live-call finding): confirmed from a
-      // real call where EVERY texture-pool bit fired mechanically correctly,
-      // with real well-authored BIT_DIRECTIVES content, and STILL produced
-      // zero trace of its own gimmick every single time — while BIT-233 (the
-      // approver hunt, a scenario bit) performed real, specific content on
-      // every fire in the SAME call. The difference: CORE has its OWN
-      // extensive, cached, heavily-reinforced instruction set for exactly
-      // "ordinary receiving turns" (the SNAG / HALF-CONNECTION / CURIOSITY /
-      // QUIET WEIGHT / SMALL OBSERVATION rotation) — the hunt has no
-      // competing guidance anywhere else in CORE, so its directive wins by
-      // default; a texture bit's directive is a small, one-off addition
-      // competing against an alternative the model has already been given a
-      // strong, well-established pattern for following. This makes the
-      // override explicit and names the competing categories directly, so
-      // there is no ambiguity left for the model to resolve on its own.
+      // PRUNED (Aug 4): a "THIS OVERRIDES your ordinary-receiving-turn
+      // habits..." sentence lived here briefly, added while chasing the
+      // "bits fire but leave no trace" investigation (same theory as
+      // providers.js's now-also-pruned yield clause and bit carve-out — see
+      // that file's history). All three were reasonable, evidence-based
+      // hypotheses that turned out not to be the cause: a live diagnostic
+      // trace proved the injected directive was reaching the model intact
+      // on every fire, and the actual fix was swapping the production model
+      // off Haiku onto a larger tier. Removed as inert prompt weight now
+      // that the real cause is known — the HARDENED FRAMING above (Jul 15)
+      // is the durable fix that actually matters here.
       const bitDirective =
         BIT_DIRECTIVES && BIT_DIRECTIVES[top.id] && String(BIT_DIRECTIVES[top.id]).trim()
           ? String(BIT_DIRECTIVES[top.id]).trim()
           : null;
-      // ★ DIAGNOSTIC (Aug 4, temporary — remove once the "bits leave no
-      // trace" question is settled). Two prompt-text fixes (the yield
-      // clause, the explicit override above) landed correctly and neither
-      // changed the outcome — inferring from OUTPUT alone has now misled
-      // two fix attempts. This logs what's ACTUALLY being injected, so the
-      // question becomes checkable directly instead of guessed at again:
-      // is BIT_DIRECTIVES[id] really landing in the model's context, at
-      // real length, in the right position — or is something upstream
-      // (load timing, truncation, a null/empty entry despite the source
-      // file having one) quietly breaking before it ever reaches the model?
-      mutableCharsBeforeBitBlock = mutable.length;
-      console.log(
-        "BIT-DIRECTIVE-DIAG id=" + top.id + ' name="' + top.name + '" ' +
-        "hasDirective=" + !!bitDirective + " " +
-        "directiveChars=" + (bitDirective ? bitDirective.length : 0) + " " +
-        "mutableCharsBeforeThisBlock=" + mutableCharsBeforeBitBlock + " " +
-        "preview=" + JSON.stringify((bitDirective || "").slice(0, 100))
-      );
       mutable +=
         '\n\n[BIT ACTIVE: ' + top.id + ' — "' + top.name + '"]\n' +
         "A specific routine has been selected and MUST be performed this turn. " +
         "This is not ambient guidance and not a tone suggestion — a bit has " +
-        "fired. THIS OVERRIDES your ordinary-receiving-turn habits for this " +
-        "one turn: do NOT reach for a SNAG, a HALF-CONNECTION, a CURIOSITY, " +
-        "QUIET WEIGHT, or a SMALL OBSERVATION instead — those are for turns " +
-        "with no bit active. This turn has one, and it wins. " +
+        "fired. " +
         (bitDirective
           ? "Its directive follows. Perform ITS specific structure: hit its " +
             "beats, its required moves, its sequence. Do NOT produce behavior " +
@@ -2338,16 +2393,6 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         "never name the bit, never break character, and stay in the live " +
         "thread — the caller's last line still gets a real response woven " +
         "through the performance.\n[END BIT]";
-      // ★ DIAGNOSTIC continued: the block's actual injected size. Final
-      // position relative to the end of the full prompt is logged separately
-      // right before the prompt is finalized (BIT-DIRECTIVE-DIAG-FINAL below)
-      // — content can still be appended after this point (armedHookFact,
-      // etc.), so measuring "distance from end" here would be premature.
-      mutableCharsAfterBitBlock = mutable.length;
-      console.log(
-        "BIT-DIRECTIVE-DIAG-2 id=" + top.id + " " +
-        "blockChars=" + (mutable.length - mutableCharsBeforeBitBlock)
-      );
       // If this bit is fueled, hand the host the REAL scouted fact to weave in.
       const fact = factHint(top, scorerState.byHook);
       if (fact) {
@@ -2421,21 +2466,6 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       mutable +=
         "\n\nALSO — if it fits naturally, work in this real detail about them: " +
         armedHookFact + ". Quote the real fact, never invent one.";
-    }
-
-    // ★ DIAGNOSTIC FINAL (Aug 4, temporary — remove once settled): the real
-    // distance from the end of the prompt to where the bit block SAT before
-    // anything else got appended after it. 0 chars after = it was the very
-    // last thing the model read before generating; a large number means
-    // real content (silence check-in, crude injection, armedHookFact) landed
-    // AFTER it and pushed it earlier/staler. Only logs on a turn a bit
-    // actually fired (mutableCharsBeforeBitBlock stays null otherwise).
-    if (mutableCharsBeforeBitBlock !== null) {
-      console.log(
-        "BIT-DIRECTIVE-DIAG-FINAL id=" + (top ? top.id : "?") + " " +
-        "totalMutableChars=" + mutable.length + " " +
-        "charsAppendedAfterBitBlock=" + (mutable.length - mutableCharsAfterBitBlock)
-      );
     }
 
     blocks.push({ type: "text", text: mutable });
@@ -2812,6 +2842,51 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
           // raw=true sent=true   -> (c) PE delivered it; it's on the LiveKit side
           console.log("SNZ raw=" + (String(hostText || "").indexOf("[SNEEZE]") >= 0) + " sent=" + svSneezeSent);
         } catch { /* never break the stream */ }
+        // SELF-CAUSED MARKER AWARENESS (Aug 4, PE_self_caused_marker_awareness.md).
+        // ROOT PROBLEM: an environment marker ([COFFEE_CUP_BREAK], [DOG_BARK],
+        // etc.) fires as audio and the token is stripped before the CALLER
+        // hears it as text — correct, it's a trigger, not spoken content. But
+        // that also means the HOST has no memory it happened one turn later:
+        // can't OWN it if the caller references it late ("did you break
+        // something?"), and can't ESCALATE it if it repeats (every fire reads
+        // as turn one instead of a building situation).
+        // PE'S JOB PER THE SPEC: persist THAT it happened + a COUNT of how many
+        // times, for ~2-3 turns, so (a) a late caller reference still lands and
+        // the host can own it, (b) a future Bits-authored escalation directive
+        // knows this is fire N and can pick the right rung. PE does NOT own the
+        // reaction content or the marquee/ambient escalation ladder — that's
+        // Bits', per the division of labor in the spec. This only detects +
+        // persists the fact; the awareness injection lives in buildSystemBlocks
+        // (search MARKER AWARENESS INJECTION).
+        // DETECTION, same regex family the sound-marker pass-through above
+        // already uses (ALL-CAPS bracket tokens are the established sound-
+        // marker convention) — reading BIT/PE-observable output (what the
+        // engine actually emitted this turn), never the host's spoken words,
+        // per the Scar A / lesson 6 constraint (engine logic off content).
+        try {
+          const firedMarkers = Array.from(
+            new Set(
+              Array.from(String(hostText || "").matchAll(/\[([A-Z0-9_]{2,32})\]/g)).map((mm) => mm[1])
+            )
+          );
+          if (firedMarkers.length && meta.callId && isConfigured()) {
+            waitUntil(
+              getCall(meta.callId)
+                .then((s) => {
+                  const priorCounts = (s && s.markerCounts) || {};
+                  const priorTurns = (s && s.markerLastTurn) || {};
+                  const nextCounts = { ...priorCounts };
+                  const nextTurns = { ...priorTurns };
+                  for (const marker of firedMarkers) {
+                    nextCounts[marker] = (nextCounts[marker] || 0) + 1;
+                    nextTurns[marker] = meta.turn;
+                  }
+                  return setCall(meta.callId, { markerCounts: nextCounts, markerLastTurn: nextTurns });
+                })
+                .catch(() => {})
+            );
+          }
+        } catch { /* marker detection must never break the stream */ }
         let benchTxt = null;
         if (appendText && !appendSent) {
           appendSent = true;
@@ -3094,6 +3169,8 @@ export async function runHostTurn({ messages, callId, meta }) {
     ...(deathBlowFiring ? { temperature: 1 } : {}),
     ...(systemBlocks ? { system: systemBlocks } : {}),
   };
+  // MODEL-DIAG (Aug 4): same as the live handler — see that comment for why.
+  console.log("MODEL-DIAG model=" + req.model);
   const r = await fetch(ANTHROPIC_URL, {
     method: "POST",
     headers: {
