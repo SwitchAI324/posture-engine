@@ -40,7 +40,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-   `&select=prefix,posture_line,gear,pressure,engagement,slip,accuse_floor,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,texture_last_fire,hunt_rung_count,caller_redirected`;
+   `&select=prefix,posture_line,gear,pressure,engagement,slip,accuse_floor,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,texture_last_fire,hunt_rung_count,caller_redirected,hunt_rung_turn`;
   const r = await fetch(url, {
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
@@ -91,6 +91,10 @@ export async function getCall(callId) {
     // to their "nothing has happened yet" state so a call that predates
     // these reads exactly as if the feature didn't exist.
     huntRungCount: rows[0].hunt_rung_count ?? 0,
+    // huntRungTurn: the turn the rung counter was last bumped at — the race
+    // guard so same-turn preemptive-gen siblings don't each independently
+    // increment. null = never bumped (fresh call, or just resolved).
+    huntRungTurn: rows[0].hunt_rung_turn ?? null,
     callerRedirected: rows[0].caller_redirected ?? false,
   };
 }
@@ -98,7 +102,7 @@ export async function getCall(callId) {
 // posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, textureLastFire, huntRungCount, callerRedirected }
+  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, textureLastFire, huntRungCount, callerRedirected, huntRungTurn }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -152,6 +156,9 @@ export async function setCall(
   // caller-redirect judgment (callerRedirected). Same "only write when
   // provided" pattern as every other field here.
   if (huntRungCount !== undefined) row.hunt_rung_count = huntRungCount;
+  // huntRungTurn: the race-guard companion to huntRungCount (see completions.js
+  // for why) — only written when provided, same pattern as every field here.
+  if (huntRungTurn !== undefined) row.hunt_rung_turn = huntRungTurn;
   if (callerRedirected !== undefined) row.caller_redirected = callerRedirected;
   const r = await fetch(`${URL}/rest/v1/${TABLE}`, {
     method: "POST",
