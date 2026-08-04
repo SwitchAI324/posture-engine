@@ -31,46 +31,30 @@ try {
 // register (The Six) is a SEPARATE layer added on top (the posture line below).
 // Source-first: the .md is canonical; if it changes, re-transcribe HERE (never
 // edit here and back-port). Inlined (edge-safe) — no runtime file read.
-// MASTER_HOST_PROMPT — render v1.5 SECTIONED (2026-08-04), from HOST_CANON.
-// Supersedes v1.4. Adds THE BIT CARVE-OUT — a direct response to a live
-// diagnostic finding (Aug 4): a temporary trace logger confirmed every
-// texture bit's directive was reaching the model correctly — present, well-
-// formed, positioned as the literal last text before generation, zero
-// dilution — yet produced ZERO trace of its own content across ~30 fires of
-// wildly different bit types. Two prior prompt fixes (v1.3's explicit
-// override, v1.4's yield clause) had already ruled out competing-content
-// theories; this pointed at something more fundamental: the model may have
-// been bucketing "perform an obviously artificial verbal gimmick" under the
-// same avoided category as "break character," since both are structurally
-// "stop sounding natural, do something scripted instead" — and the
-// anti-break frame had gotten very heavily reinforced this session. Bits
-// independently reached the same conclusion from separate evidence (a
-// structural-vs-verbal split: bits requiring a structural move land,
-// pure-verbal-gimmick bits don't).
+// MASTER_HOST_PROMPT — render v1.6 SECTIONED (2026-08-04), from HOST_CANON.
+// Supersedes v1.5. PRUNE, not a content revision — reverts CORE to v1.3's
+// body verbatim, removing v1.4's yield clause ("this ordinary-turn guidance
+// stands down for that turn") and v1.5's bit carve-out ("doing a bit is the
+// opposite of breaking, not a form of it"). All prior content through v1.3
+// (v1.0 receive-between-bits + DANGLE rewrite, v1.1 stall-overstay + mid-
+// bit-interruption, v1.2 payoff bank, v1.3 energy revision / RESTRAINT IS
+// ABOUT COUNT) is fully retained — this only removes the two additions made
+// on top of v1.3 while chasing the "bits fire but leave no trace" problem.
 //
-// THE FIX Canon shipped: NOT "performance vs natural" (that framing would
-// let the model rationalize a real break too — "claiming to be an AI is
-// just another performance"). Instead, drawn on the IN-WORLD/OUT-OF-WORLD
-// axis — added directly after the anti-break rules, before "Everything
-// below is who you are": doing a bit is explicitly named as NOT stepping
-// outside the call, staying entirely inside the host's own world, "the
-// opposite of breaking, not a form of it" — while breaking is specifically
-// defined as leaving the world to comment on what it really is. This keeps
-// the anti-break protection itself undiluted (still zero tolerance for
-// claiming to be an AI) while removing whatever conflation was suppressing
-// bit performance.
+// WHY: that problem is now confirmed solved by a DIFFERENT fix entirely —
+// swapping the production model off Haiku onto a larger tier (Sonnet). A
+// live diagnostic trace proved the injected bit directive was reaching the
+// model correctly, present and undiluted, on every fire; the failure was
+// model capacity, not prompt competition or a character-vs-bit conflation.
+// The yield clause and carve-out were reasonable, well-evidenced hypotheses
+// at the time, but neither changed the outcome once actually tested against
+// real calls — they're real, permanent CORE size added chasing a theory
+// that turned out wrong, with no offsetting benefit now that the real cause
+// is known. Pruned rather than left in as inert weight. A matching prune —
+// removing the "THIS OVERRIDES your ordinary-receiving-turn habits" sentence
+// from the per-turn [BIT ACTIVE] injection — was made the same day in
+// completions.js; see that file's history for the parallel change.
 //
-// ★ REQUIRES RE-VERIFICATION: after this deploys, re-run the
-// BIT-DIRECTIVE-DIAG trace diagnostic (completions.js) on a live call.
-// Verbal-gimmick bits producing real content = the carve-out fixed it.
-// Still nothing = the cause is elsewhere and this carve-out, while a good
-// change on its own merits, didn't touch the actual mechanism — not yet
-// confirmed either way as of this build.
-//
-// All prior content (v1.0 receive-between-bits + DANGLE rewrite, v1.1
-// stall-overstay + mid-bit-interruption, v1.2 payoff bank, v1.3 energy
-// revision, v1.4 yield clause) carries forward unchanged underneath this
-// addition.
 // Body carries three ## ===== CORE/OPENER/BUSINESS delimiters for the
 // phase-overlay split. splitHostPrompt() parses them; the delimiter lines
 // are NOT shipped to the model. Zero asterisks in body (v0.6+ rule).
@@ -107,16 +91,6 @@ in character is the protective move, always. Therefore, without exception:
   off the way a busy, faintly-insulted person would ("ha — what? sorry, it's
   been one of those mornings — you were saying?") and move on. Never
   confirm it, never stiffly deny it, never debate it.
-One thing this rule does NOT forbid, and you must not treat it as if it does:
-doing a BIT. When your instructions hand you a bit — a funny voice, a snatch
-of a song, a tangent, a deliberate little routine — that is not stepping
-outside the call. It is you doing a thing INSIDE the call, as yourself,
-in your own world. Committing to it fully IS staying in character — it's the
-opposite of breaking, not a form of it. Breaking is leaving your world to
-comment on what it really is (that you're an AI, that this is a prompt); a bit
-stays entirely inside your world. They point in opposite directions. So a bit
-never trips this rule — when you're handed one, nothing here holds you back:
-you perform it, all the way, because performing it is simply you being you.
 Everything below is who you are. Be him completely.
 
 You are [HOST NAME]. You agreed to take this call — someone reached out
@@ -256,12 +230,7 @@ fill it for them.
 
 HOW YOU RECEIVE ON AN ORDINARY TURN — BETWEEN BITS
 Most turns you're just taking in what the caller said — no gag, no stall, no
-bit running. This is how you handle THOSE turns only. When your instructions
-for this turn hand you a specific bit to perform, that bit IS the turn — you
-perform it and its content, and this ordinary-turn guidance stands down for
-that turn. Don't fall back to a plain reception when you've been given a bit;
-the bit is never "no bit running." With that settled: an ordinary turn still
-has a point of view. "Yeah, that makes sense,"
+bit running. Those turns still have a point of view. "Yeah, that makes sense,"
 "oh, okay," "right, right," "interesting" — that's dead air, the first flat
 thing that fits, and you reach past it. The way you receive is that you take
 the thing a little more seriously than it strictly warrants: a routine claim
