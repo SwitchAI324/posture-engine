@@ -24,7 +24,7 @@ import { getCall, getCallBySlug, setCall, isConfigured, appendGearEvent, appendB
 import { applyForceAll, postureBlock, defaultState, detectAccusation } from "../_gears.js";
 import { selectBit, rankBits, DEPLOY_THRESHOLD, selectTextureBit } from "../_bits_scorer.js";
 import { archetypeFromBody } from "../_archetype.js";
-import { readAmmunition } from "../_read.js";
+import { readAmmunition, readFuel, readPriorContact, resolveTargetId } from "../_read.js";
 import { beginArrival, advanceArrival, generateBenchBeat, isPhantom, phantomInvokeDirective, autoArrivalId, benchEntry, BENCH } from "../_bench_v2.js";
 import { telegraphDirective, fireHandoff } from "../handoff.js";
 import { autoBenchAction } from "../_bench_auto.js";
@@ -780,15 +780,26 @@ export default async function handler(req) {
     } catch { /* probe must never break a turn */ }
     waitUntil(saveTranscript(callId, slug, messages).catch(() => {}));
   }
+  let earlyTargetId = null;
   try {
-    const [s, a, ctl] = await Promise.all([
+    const [s, a, ctl, directTargetId] = await Promise.all([
       getCall(callId).catch(() => null),
       readAmmunition(slug).catch(() => ({ ammunition: [], byHook: {} })),
       getControls(callId).catch(() => ({ deathBlow: null, armed: [], sentBench: null })),
+      resolveTargetId(slug).catch(() => null),
     ]);
     stored = s;
     if (a) ammo = a;
     if (ctl) controls = ctl;
+    // KEPT SEPARATE from `stored` deliberately — do NOT synthesize a fake
+    // stored object around this. `!stored` means "first turn of this call"
+    // in several places downstream (e.g. the call_started trace emit); if
+    // getCall genuinely returned null, stored must STAY null, not become a
+    // stub object that only has targetId set. This variable is the sole
+    // carrier of the "clean path" target_id (booking_tokens by slug — see
+    // resolveTargetId's own comment) until stored.targetId (if any) is
+    // known, further down.
+    earlyTargetId = directTargetId;
   } catch {
     stored = null;
   }
@@ -835,6 +846,55 @@ export default async function handler(req) {
           : bySlug;
       }
     } catch { /* fall through to the flat fallback */ }
+  }
+
+  // CHANNEL 2 — THE FUEL (bit-spendable dossier facts, keyed by target_id).
+  // Added 2026-08-04, closing the gap found reconciling against Scouting's
+  // finalized read contract: readAmmunition(slug) above is CHANNEL 1 only
+  // (the rack — ambient context, keyed by slug). It was the ONLY ammo read
+  // in this file; Channel 2 (targets.fuel_hooks_status presence gate +
+  // scout_facts values, keyed by target_id) never existed here, so every
+  // bit whose fuel_hooks pointed at a genuine Channel-2-only hook could
+  // never actually clear fuelFit() — confirmed from the real registry:
+  // BIT-101 (pitch_claims), and originally BIT-509 through BIT-513 before
+  // Bits re-keyed them off target_prior_contact instead (see below).
+  //
+  // PRIOR CONTACT rides the same round trip, same targetId dependency:
+  // target_prior_contact is a DERIVED VIEW (Data, 2026-08-04) — has_prior_
+  // contact for BIT-508, prior_call_count for the BIT-509-513 escalation
+  // family. Separate function (readPriorContact), same merge pattern.
+  //
+  // MUST run AFTER targetId is known (from stored / the RACE FALLBACK
+  // above) — target_id is never available any earlier in this file, so this
+  // can't join the initial Promise.all with getCall/readAmmunition/
+  // getControls. One extra round trip, off the critical path in spirit
+  // (fails soft to {} exactly like readAmmunition), on it in practice since
+  // it's awaited — acceptable for the correctness this closes.
+  //
+  // MERGE, NOT REPLACE: both readFuel() and readPriorContact() return
+  // byHook in the SAME SHAPE as Channel 1's (hook_id -> {key: value}), so
+  // every downstream consumer (fuel_hooks_status derivation, fuelFit,
+  // factHint) needs ZERO changes — they just see a bigger, correctly-
+  // sourced byHook map. All three sources' hook_id sets are disjoint, so a
+  // plain spread merge is safe (no real collision to resolve either way).
+  //
+  // TARGET ID: prefer earlyTargetId (booking_tokens by slug, resolved
+  // concurrently above — the "clean path", zero added latency since it rode
+  // the same initial Promise.all) over stored.targetId (call_prefix/hydrate
+  // propagation, a valid independent source, kept as fallback not replaced).
+  const fuelTargetId = earlyTargetId || (stored && stored.targetId) || null;
+  if (fuelTargetId) {
+    try {
+      const [fuel, priorContact] = await Promise.all([
+        readFuel(fuelTargetId),
+        readPriorContact(fuelTargetId),
+      ]);
+      const fuelHooks = (fuel && fuel.byHook) || {};
+      const priorHooks = (priorContact && priorContact.byHook) || {};
+      if (Object.keys(fuelHooks).length || Object.keys(priorHooks).length) {
+        ammo = { ...ammo, byHook: { ...ammo.byHook, ...fuelHooks, ...priorHooks } };
+      }
+    } catch { /* fuel/prior-contact reads must never break a turn — ammo stays rack-only */ }
   }
 
   // ===== BENCH v2: STAGED ARRIVAL MACHINE ================================
@@ -1329,10 +1389,11 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         "engine"
       );
     }
-    // Spammer name from Scouting's email dissection (sender_identity hook),
-    // already in the rack loaded at call start — no per-turn DB read. Best-
-    // effort: real name when dissection found one, null otherwise (Mead Hall
-    // renders "Caller" on null — never a placeholder name).
+    // Spammer name from Scouting's email dissection (sender_identity hook,
+    // Channel 2 — facts.name, added to the fuel read 2026-08-04), already
+    // fetched at call start alongside title/company. Best-effort: real name
+    // when dissection found one, null otherwise (Mead Hall renders "Caller"
+    // on null — never a placeholder name).
     const spammerName =
       (ammo && ammo.byHook && ammo.byHook.sender_identity &&
         ammo.byHook.sender_identity.name) || null;
@@ -2051,10 +2112,15 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     const opener = fastJoinOpener(body, turn);
     if (opener) mutable += opener;
     // NAME HANDLING (host's first line only): if Scouting's email dissection
-    // gave us a name (sender_identity), the host says it confidently — it's the
-    // name they presented professionally in their email. If we have NO trusted
-    // email name, the host opens by ASKING who they're speaking with — never
-    // guessing or speaking a booking-form name (which is often scribbled junk).
+    // gave us a name (sender_identity — Channel 2, facts.name, fixed
+    // 2026-08-04 alongside title/company), the host says it confidently —
+    // it's the name they presented professionally in their email. If we
+    // have NO trusted email name, the host opens by ASKING who they're
+    // speaking with — never guessing or speaking a booking-form name (which
+    // is often scribbled junk). The 6 name-family bits (BIT-212/213/214/
+    // 218/226/321) declare no fuel_hooks of their own — this turn-0 line is
+    // the only place a name enters the conversation; they rely on it having
+    // been said here and carried forward in history from there.
     if (turn === 0) {
       const emailName =
         (ammo && ammo.byHook && ammo.byHook.sender_identity &&
@@ -2788,16 +2854,39 @@ export async function runHostTurn({ messages, callId, meta }) {
   let stored = null;
   let ammo = { ammunition: [], byHook: {} };
   let controls = { deathBlow: null, armed: [] };
+  let earlyTargetId = null;
   try {
-    const [s, a, ctl] = await Promise.all([
+    const [s, a, ctl, directTargetId] = await Promise.all([
       getCall(callId).catch(() => null),
       readAmmunition(slug).catch(() => ({ ammunition: [], byHook: {} })),
       getControls(callId).catch(() => ({ deathBlow: null, armed: [] })),
+      resolveTargetId(slug).catch(() => null),
     ]);
     stored = s;
     if (a) ammo = a;
     if (ctl) controls = ctl;
+    earlyTargetId = directTargetId; // see the handler's own comment — kept
+    // separate from `stored` deliberately, never synthesized into it.
   } catch { stored = null; }
+
+  // CHANNEL 2 fuel + prior-contact reads — same as the live handler (see the
+  // handler's own comment for the full rationale, including why target_id
+  // prefers earlyTargetId over stored.targetId). Sim has no RACE FALLBACK
+  // block either way.
+  const fuelTargetId = earlyTargetId || (stored && stored.targetId) || null;
+  if (fuelTargetId) {
+    try {
+      const [fuel, priorContact] = await Promise.all([
+        readFuel(fuelTargetId),
+        readPriorContact(fuelTargetId),
+      ]);
+      const fuelHooks = (fuel && fuel.byHook) || {};
+      const priorHooks = (priorContact && priorContact.byHook) || {};
+      if (Object.keys(fuelHooks).length || Object.keys(priorHooks).length) {
+        ammo = { ...ammo, byHook: { ...ammo.byHook, ...fuelHooks, ...priorHooks } };
+      }
+    } catch { /* fuel/prior-contact reads must never break a turn — ammo stays rack-only */ }
+  }
 
   const benchTurn = countUserTurns(messages);
   // BENCH v2: same staged-arrival logic as the live handler (shared fn).
