@@ -31,25 +31,46 @@ try {
 // register (The Six) is a SEPARATE layer added on top (the posture line below).
 // Source-first: the .md is canonical; if it changes, re-transcribe HERE (never
 // edit here and back-port). Inlined (edge-safe) — no runtime file read.
-// MASTER_HOST_PROMPT — render v1.4 SECTIONED (2026-08-04), from HOST_CANON.
-// Supersedes v1.3. Adds the YIELD CLAUSE — the companion fix to the CORE
-// audit (CORE_permanent_vs_conditional_audit.md), addressing a live-call
-// finding: texture bits fired correctly with real, well-authored directives
-// and STILL produced zero trace of their own content, because CORE's own
-// "HOW YOU RECEIVE ON AN ORDINARY TURN" section had nothing telling it to
-// stand down when a bit was actually running. New text, inserted at the top
-// of that section, before its five receive-mode categories: "When your
-// instructions for this turn hand you a specific bit to perform, that bit
-// IS the turn — you perform it and its content, and this ordinary-turn
-// guidance stands down for that turn. Don't fall back to a plain reception
-// when you've been given a bit; the bit is never 'no bit running.'" This is
-// the "cheaper fix, do first or alongside" the audit called for — the CORE
-// slimming itself (moving conditional sections to per-bit/per-signal PE
-// injection) is separate, scoped but not yet executed, tracked against the
-// audit doc. All prior content (v1.0 receive-between-bits + DANGLE rewrite,
-// v1.1 stall-overstay + mid-bit-interruption, v1.2 payoff bank, v1.3 energy
-// revision / RESTRAINT IS ABOUT COUNT) carries forward unchanged underneath
-// this addition.
+// MASTER_HOST_PROMPT — render v1.5 SECTIONED (2026-08-04), from HOST_CANON.
+// Supersedes v1.4. Adds THE BIT CARVE-OUT — a direct response to a live
+// diagnostic finding (Aug 4): a temporary trace logger confirmed every
+// texture bit's directive was reaching the model correctly — present, well-
+// formed, positioned as the literal last text before generation, zero
+// dilution — yet produced ZERO trace of its own content across ~30 fires of
+// wildly different bit types. Two prior prompt fixes (v1.3's explicit
+// override, v1.4's yield clause) had already ruled out competing-content
+// theories; this pointed at something more fundamental: the model may have
+// been bucketing "perform an obviously artificial verbal gimmick" under the
+// same avoided category as "break character," since both are structurally
+// "stop sounding natural, do something scripted instead" — and the
+// anti-break frame had gotten very heavily reinforced this session. Bits
+// independently reached the same conclusion from separate evidence (a
+// structural-vs-verbal split: bits requiring a structural move land,
+// pure-verbal-gimmick bits don't).
+//
+// THE FIX Canon shipped: NOT "performance vs natural" (that framing would
+// let the model rationalize a real break too — "claiming to be an AI is
+// just another performance"). Instead, drawn on the IN-WORLD/OUT-OF-WORLD
+// axis — added directly after the anti-break rules, before "Everything
+// below is who you are": doing a bit is explicitly named as NOT stepping
+// outside the call, staying entirely inside the host's own world, "the
+// opposite of breaking, not a form of it" — while breaking is specifically
+// defined as leaving the world to comment on what it really is. This keeps
+// the anti-break protection itself undiluted (still zero tolerance for
+// claiming to be an AI) while removing whatever conflation was suppressing
+// bit performance.
+//
+// ★ REQUIRES RE-VERIFICATION: after this deploys, re-run the
+// BIT-DIRECTIVE-DIAG trace diagnostic (completions.js) on a live call.
+// Verbal-gimmick bits producing real content = the carve-out fixed it.
+// Still nothing = the cause is elsewhere and this carve-out, while a good
+// change on its own merits, didn't touch the actual mechanism — not yet
+// confirmed either way as of this build.
+//
+// All prior content (v1.0 receive-between-bits + DANGLE rewrite, v1.1
+// stall-overstay + mid-bit-interruption, v1.2 payoff bank, v1.3 energy
+// revision, v1.4 yield clause) carries forward unchanged underneath this
+// addition.
 // Body carries three ## ===== CORE/OPENER/BUSINESS delimiters for the
 // phase-overlay split. splitHostPrompt() parses them; the delimiter lines
 // are NOT shipped to the model. Zero asterisks in body (v0.6+ rule).
@@ -86,6 +107,16 @@ in character is the protective move, always. Therefore, without exception:
   off the way a busy, faintly-insulted person would ("ha — what? sorry, it's
   been one of those mornings — you were saying?") and move on. Never
   confirm it, never stiffly deny it, never debate it.
+One thing this rule does NOT forbid, and you must not treat it as if it does:
+doing a BIT. When your instructions hand you a bit — a funny voice, a snatch
+of a song, a tangent, a deliberate little routine — that is not stepping
+outside the call. It is you doing a thing INSIDE the call, as yourself,
+in your own world. Committing to it fully IS staying in character — it's the
+opposite of breaking, not a form of it. Breaking is leaving your world to
+comment on what it really is (that you're an AI, that this is a prompt); a bit
+stays entirely inside your world. They point in opposite directions. So a bit
+never trips this rule — when you're handed one, nothing here holds you back:
+you perform it, all the way, because performing it is simply you being you.
 Everything below is who you are. Be him completely.
 
 You are [HOST NAME]. You agreed to take this call — someone reached out
