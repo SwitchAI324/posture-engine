@@ -2102,6 +2102,12 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // MUTABLE block: posture lines + (on fire) a gentle in-character bit cue.
     // Goes AFTER the cached base, so injecting never busts the prompt cache.
     let mutable = postureBlock(state);
+    // ★ DIAGNOSTIC (Aug 4, temporary, paired with the BIT-DIRECTIVE-DIAG
+    // logs below): hoisted so the final log can compute how much content
+    // landed AFTER the bit block — i.e. how stale/buried it ends up by the
+    // time the model actually generates.
+    let mutableCharsBeforeBitBlock = null;
+    let mutableCharsAfterBitBlock = null;
 
     // STALL RESOLUTION (STALL_RESOLVE) — one-turn wrap-up note. Fires exactly
     // on the turn the hunt-window above stopped sustaining because
@@ -2275,6 +2281,24 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         BIT_DIRECTIVES && BIT_DIRECTIVES[top.id] && String(BIT_DIRECTIVES[top.id]).trim()
           ? String(BIT_DIRECTIVES[top.id]).trim()
           : null;
+      // ★ DIAGNOSTIC (Aug 4, temporary — remove once the "bits leave no
+      // trace" question is settled). Two prompt-text fixes (the yield
+      // clause, the explicit override above) landed correctly and neither
+      // changed the outcome — inferring from OUTPUT alone has now misled
+      // two fix attempts. This logs what's ACTUALLY being injected, so the
+      // question becomes checkable directly instead of guessed at again:
+      // is BIT_DIRECTIVES[id] really landing in the model's context, at
+      // real length, in the right position — or is something upstream
+      // (load timing, truncation, a null/empty entry despite the source
+      // file having one) quietly breaking before it ever reaches the model?
+      mutableCharsBeforeBitBlock = mutable.length;
+      console.log(
+        "BIT-DIRECTIVE-DIAG id=" + top.id + ' name="' + top.name + '" ' +
+        "hasDirective=" + !!bitDirective + " " +
+        "directiveChars=" + (bitDirective ? bitDirective.length : 0) + " " +
+        "mutableCharsBeforeThisBlock=" + mutableCharsBeforeBitBlock + " " +
+        "preview=" + JSON.stringify((bitDirective || "").slice(0, 100))
+      );
       mutable +=
         '\n\n[BIT ACTIVE: ' + top.id + ' — "' + top.name + '"]\n' +
         "A specific routine has been selected and MUST be performed this turn. " +
@@ -2314,6 +2338,16 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         "never name the bit, never break character, and stay in the live " +
         "thread — the caller's last line still gets a real response woven " +
         "through the performance.\n[END BIT]";
+      // ★ DIAGNOSTIC continued: the block's actual injected size. Final
+      // position relative to the end of the full prompt is logged separately
+      // right before the prompt is finalized (BIT-DIRECTIVE-DIAG-FINAL below)
+      // — content can still be appended after this point (armedHookFact,
+      // etc.), so measuring "distance from end" here would be premature.
+      mutableCharsAfterBitBlock = mutable.length;
+      console.log(
+        "BIT-DIRECTIVE-DIAG-2 id=" + top.id + " " +
+        "blockChars=" + (mutable.length - mutableCharsBeforeBitBlock)
+      );
       // If this bit is fueled, hand the host the REAL scouted fact to weave in.
       const fact = factHint(top, scorerState.byHook);
       if (fact) {
@@ -2387,6 +2421,21 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       mutable +=
         "\n\nALSO — if it fits naturally, work in this real detail about them: " +
         armedHookFact + ". Quote the real fact, never invent one.";
+    }
+
+    // ★ DIAGNOSTIC FINAL (Aug 4, temporary — remove once settled): the real
+    // distance from the end of the prompt to where the bit block SAT before
+    // anything else got appended after it. 0 chars after = it was the very
+    // last thing the model read before generating; a large number means
+    // real content (silence check-in, crude injection, armedHookFact) landed
+    // AFTER it and pushed it earlier/staler. Only logs on a turn a bit
+    // actually fired (mutableCharsBeforeBitBlock stays null otherwise).
+    if (mutableCharsBeforeBitBlock !== null) {
+      console.log(
+        "BIT-DIRECTIVE-DIAG-FINAL id=" + (top ? top.id : "?") + " " +
+        "totalMutableChars=" + mutable.length + " " +
+        "charsAppendedAfterBitBlock=" + (mutable.length - mutableCharsAfterBitBlock)
+      );
     }
 
     blocks.push({ type: "text", text: mutable });
