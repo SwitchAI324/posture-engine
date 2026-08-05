@@ -482,6 +482,43 @@ function stallShouldResolve(stored) {
   return stallResolveReason(stored) !== null;
 }
 const MAX_TOKENS = () => parseInt(process.env.MAX_TOKENS || "1024", 10);
+// ── FIRST-TOKEN WATCHDOG (Aug 4, live-call finding — CORRECTED same day) ───
+// A real call showed one generation taking 11.4s end-to-end on an ordinary
+// cached request (cache_creation:0 — not a cold-start cost, the model just
+// took that long). ORIGINAL framing here was wrong and has been corrected
+// per Voice: LiveKit's "preemptive generation" is NOT parallel candidates
+// racing — it's ONE speculative generation, cancelled and restarted fresh
+// if context changes mid-flight. The several requestIds seen in a log for
+// one turn are SEQUENTIAL attempts (speculative -> discarded -> real), not
+// simultaneous racers, and there is no first-finished-wins mechanism to
+// lean on. The 11.4s was the only real generation for that turn, full stop.
+//
+// Voice owns the primary fix now: a per-request LLM timeout (APIConnectOptions)
+// on the agent side, agreed at 8s with one retry — closer to the actual
+// call, and able to genuinely retry a fresh generation rather than just
+// substitute a placeholder line. THIS watchdog is deliberately set well
+// PAST that ceiling (20s, vs. Voice's 8s+retry) so the two stop competing:
+// it no longer exists to catch the common case, only the genuine worst
+// case where even Voice's own retry comes back slow too. If Voice's fix
+// proves solid in practice, this can likely come out entirely later — kept
+// for now as a deeper backstop, not a redundant first line.
+//
+// Mechanism unchanged: keyed on TIME-TO-FIRST-TOKEN, not total response
+// time — once real content starts flowing, the watchdog stands down
+// completely. A response this fires on is thrown away entirely, not
+// delayed-then-shown.
+const FIRST_TOKEN_TIMEOUT_MS = parseInt(process.env.FIRST_TOKEN_TIMEOUT_MS || "20000", 10);
+// Varied on purpose — never the same "buying time" line twice in a row in
+// practice, since which one fires is random each time. Deliberately generic
+// (works regardless of what the actual turn was about) and deliberately
+// mundane — this is a rare-case safety net, not a bit; it should read as a
+// normal human beat, not draw attention to itself.
+const FIRST_TOKEN_FALLBACKS = [
+  "Sorry — hang on one sec, I got distracted for a second there.",
+  "Oh — sorry, hold on, what were you saying? I spaced out for a second.",
+  "Hang on, one sec — sorry, lost my train of thought there for a moment.",
+  "Sorry, say that again? I got pulled away for a second.",
+];
 
 
 
@@ -660,7 +697,24 @@ async function readCall(messages, prior) {
     const txt = (j.content || []).map((c) => c.text || "").join("").trim();
     const m = txt.match(/\{[\s\S]*\}/);
     if (!m) {
-      console.log("callread REASON=no_json_found raw=" + JSON.stringify(txt.slice(0, 150)));
+      // ENRICHED (Aug 5): a live call showed this branch firing repeatedly
+      // with raw="" (genuinely empty content, not truncated mid-JSON) — a
+      // DIFFERENT shape than the truncation this reason was originally built
+      // to catch. New suspect: readCall shares MODEL() with the main host
+      // turn, so it's now running on whatever model that resolves to (e.g.
+      // Sonnet) for a terse forced-JSON task it was never tuned against.
+      // stop_reason + output_tokens actually consumed distinguishes the
+      // possibilities: stop_reason="max_tokens" with output_tokens near the
+      // budget ceiling means something (preamble?) ate the whole budget
+      // before any JSON appeared; stop_reason="end_turn" with output_tokens
+      // near zero means the model stopped on its own with nothing to say —
+      // a different problem entirely. No more guessing which on the next fire.
+      console.log(
+        "callread REASON=no_json_found raw=" + JSON.stringify(txt.slice(0, 150)) +
+        " stop_reason=" + (j.stop_reason || "?") +
+        " output_tokens=" + (j.usage && j.usage.output_tokens != null ? j.usage.output_tokens : "?") +
+        " contentBlocks=" + ((j.content || []).length)
+      );
       return null;
     }
     let parsed;
@@ -669,7 +723,9 @@ async function readCall(messages, prior) {
     } catch (e) {
       console.log(
         "callread REASON=parse_error err=" + (e && e.message ? e.message : e) +
-        " raw=" + JSON.stringify(m[0].slice(0, 150))
+        " raw=" + JSON.stringify(m[0].slice(0, 150)) +
+        " stop_reason=" + (j.stop_reason || "?") +
+        " output_tokens=" + (j.usage && j.usage.output_tokens != null ? j.usage.output_tokens : "?")
       );
       return null;
     }
@@ -1222,6 +1278,13 @@ export default async function handler(req) {
   // turn, no guessing.
   console.log("MODEL-DIAG model=" + anthropicReq.model);
 
+  // FIRST-TOKEN WATCHDOG (see the constant's own comment above): the
+  // controller lets anthropicToOpenAISSE abort this specific request if no
+  // text starts arriving in time. Created here (not inside the SSE
+  // transform) because it must wrap the SAME fetch call it may need to cut
+  // off — passing an already-fetched Response's body reader in isn't enough
+  // to abort the underlying connection.
+  const firstTokenController = new AbortController();
   const upstream = await fetch(ANTHROPIC_URL, {
     method: "POST",
     headers: {
@@ -1230,6 +1293,7 @@ export default async function handler(req) {
       "anthropic-version": ANTHROPIC_VERSION,
     },
     body: JSON.stringify(anthropicReq),
+    signal: firstTokenController.signal,
   });
 
   if (!upstream.ok || !upstream.body) {
@@ -1262,7 +1326,7 @@ export default async function handler(req) {
     stallBit: turnIsStall && built ? built.firedBitId : null, // -> pe_stall_bit (agent logging)
   };
 
-  return new Response(anthropicToOpenAISSE(upstream.body, meta, benchAppend), {
+  return new Response(anthropicToOpenAISSE(upstream.body, meta, benchAppend, firstTokenController), {
     headers: {
       "content-type": "text/event-stream; charset=utf-8",
       "cache-control": "no-cache, no-transform",
@@ -2773,7 +2837,7 @@ function extractText(content) {
 // opening role delta), content_block_delta/text_delta (emit content), and
 // message_stop (emit finish_reason + [DONE]). Everything else (ping,
 // content_block_start/stop, message_delta) is ignored.
-function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
+function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenController) {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
 
@@ -2821,6 +2885,26 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
         controller.enqueue(encoder.encode(chunkStr(delta, finish_reason)));
       const done = () =>
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+
+      // FIRST-TOKEN WATCHDOG (see FIRST_TOKEN_TIMEOUT_MS's own comment). If
+      // no real text has arrived by the deadline, send a short fallback line
+      // ourselves and abort the upstream fetch — the abort makes reader.read()
+      // below throw, which the existing catch/finally already handles (calls
+      // finishUp with whatever hostText holds, closes the controller). Cleared
+      // the instant a real delta arrives, at the SAME point firstDeltaSeen
+      // already gets set below — a normal-speed response never touches this.
+      const firstTokenTimer = firstTokenController
+        ? setTimeout(() => {
+            if (firstDeltaSeen) return; // shouldn't fire once cleared, safe either way
+            const fallback =
+              FIRST_TOKEN_FALLBACKS[Math.floor(Math.random() * FIRST_TOKEN_FALLBACKS.length)];
+            console.log("FIRST-TOKEN-WATCHDOG fired — no text within " + FIRST_TOKEN_TIMEOUT_MS + "ms, using fallback");
+            if (!roleSent) { send({ role: "assistant" }); roleSent = true; }
+            hostText = fallback;
+            send({ content: fallback });
+            try { firstTokenController.abort(); } catch { /* already settled */ }
+          }, FIRST_TOKEN_TIMEOUT_MS)
+        : null;
 
       // Close out the turn: if the engine has a bench line to inject, await it
       // (it was generated in parallel and is usually ready), emit it as a final
@@ -2985,6 +3069,13 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText) {
               p.delta?.type === "text_delta"
             ) {
               if (p.delta.text) {
+                // FIRST-TOKEN WATCHDOG: clear the moment REAL text starts
+                // arriving from the model — deliberately here (the earliest
+                // point any content exists), not after the scrub buffer below
+                // decides whether to hold or emit it. The watchdog's job is
+                // catching "nothing has happened yet," not "something arrived
+                // but is being held for a marker/tag to close."
+                if (firstTokenTimer) clearTimeout(firstTokenTimer);
                 hostText += p.delta.text;
                 if (!svSneezeRawLogged && hostText.indexOf("[SNEEZE]") >= 0) {
                   svSneezeRawLogged = true;
