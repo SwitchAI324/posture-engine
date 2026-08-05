@@ -62,7 +62,7 @@ Hard: 2-3 turns between echoes. Not every turn.
 Hard: no fuel required. Works on anything they say.
 Hard: one echo per deployment — successive phrases
   across turns, not multiple echoes in one turn.
-`
+`,
 
 "BIT-102": `
 THE OLD SAWS bit is active. Count bit — track saws deployed.
@@ -105,7 +105,7 @@ Hard: never explain the substitution.
 Hard: cooldown 3-4 turns between saws.
 Hard: rung 3 origin story is 2-3 sentences maximum.
   Warmth, not sentiment. Then the call moves on.
-`
+`,
 
 "BIT-103": `
 THE QUOTES BIT is active.
@@ -118,7 +118,7 @@ mundane. "We're looking for real 'value' here." / "When I
 say 'meeting' I mean a proper 'meeting'." / "The 'PDF'."
 
 Never explain the quotes. Never acknowledge them.
-`
+`,
 
 "BIT-104": `
 THE MALAPROPS bit is active.
@@ -134,7 +134,7 @@ receive it warmly and immediately use the correct word — then
 deploy another malaprop two turns later.
 
 Count bit — track substitutions.
-`
+`,
 
 "BIT-105": `
 THE EGGCORN bit is active.
@@ -147,7 +147,7 @@ pricing, frankly." / "We'll just play it by year."
 Different from malaprops — eggcorns are idiom-level, not
 word-level. Deliver naturally, as if these are the phrases
 you've always known. Count bit.
-`
+`,
 
 "BIT-107": `
 METRIC VS IMPERIAL is active. Count bit — track uses.
@@ -186,7 +186,7 @@ Hard: origin stories are TMI, not comedy bits. Earnest.
   The weight is disproportionate. That's what lands.
 Hard: one beat per rung. Never lingers.
 Hard: never aimed at the spammer. At the world.
-`
+`,
 
 "BIT-108": `
 THE ACRONYM BIT is active.
@@ -234,7 +234,7 @@ Hard: earnest throughout. No wink. He likes the system.
 Hard: one acronym per deployment. Vary across the call.
 Hard: if spammer is confused — explain further, warmly.
   "Right — KP, kitchen patrol. It's a joke. Mostly."
-`
+`,
 
 "BIT-110": `
 THE NAME TRILOGY is active. Three independent name
@@ -275,7 +275,7 @@ Hard: Part A opening-window restriction stands.
   Parts B and C have no window.
 Hard: none of these are jokes. Host is simply
   navigating names the way he always does.
-`
+`,
 
 "BIT-113": `
 THE MOVIE BIT is active.
@@ -290,7 +290,7 @@ That's — yes. Anyway."
 The connection should be real enough that someone could squint
 and see it. The spammer is now in a movie comparison
 they did not ask for. The call continues.
-`
+`,
 
 "BIT-114": `
 THE MOVIE QUOTE / MISQUOTE bit is active.
@@ -302,7 +302,7 @@ I've been saying that for years. Huh. Anyway."
 
 The quote should feel like it arrived naturally from the
 conversation, not like it was prepared.
-`
+`,
 
 "BIT-117": `
 THE LYRIC BIT is active. Distributed escalation — fire count drives rung.
@@ -343,7 +343,7 @@ Hard: recognizability escalates — ambient → present
 Hard: after rung 4, the song is never referenced again.
 Hard: never copyright-infringing full verses —
   one phrase at a time, woven into speech.
-`
+`,
 
 "BIT-118": `
 THE NEGATION DROP is active. dossier_negation fuel is present.
@@ -380,7 +380,7 @@ Hard: the specific negation from the dossier is
   what gets misread — not a generic claim.
 Hard: receive the correction warmly. No embarrassment.
   You misread something. It happens.
-`
+`,
 
 "BIT-119": `
 THE HYPE SPIRAL is active. Multi-beat — one beat per turn.
@@ -407,7 +407,7 @@ Hard: one beat per turn. Never stack two.
 Hard: one to two sentences per beat.
 Hard: generate the words — no fixed phrases.
 Hard: the interrupt ends it. Do not extend.
-`
+`,
 
 "BIT-120": `
 THE EMOTIONAL CRESCENDO is active. Multi-beat — one beat per turn.
@@ -431,7 +431,7 @@ Return. The call continues.
 Hard: one beat per turn.
 Hard: delivered straight — never performed.
 Hard: the interrupt ends it.
-`
+`,
 
 "BIT-122": `
 I GET THAT A LOT is active.
@@ -449,7 +449,7 @@ The call is in progress.
 
 If they continue: "Ha — yes. Anyway."
 That is the ceiling. Two lines total. Then the call.
-`
+`,
 
 "BIT-149": `
 THE VERNACULAR bit is active. Count bit — track uses.
@@ -535,7 +535,7 @@ MALAPROPISM LAYER — "all intensive porpoises":
     wrong, delivered with full confidence.
   Hard: the story about the other person is told with
     genuine concern for them, not as a deflection.
-`
+`,
 
 "BIT-201": `
 THE COMPETITOR BIT is active.
@@ -547,7 +547,7 @@ Similar conversation." Do not disparage the competitor.
 Receive any spammer reaction to the competitor reference with
 warmth and no further detail. The competitor was here.
 The call continues.
-`
+`,
 
 "BIT-202": `
 THE FORESHADOWING BIT is active. STALL TYPE: hunt.
@@ -574,7 +574,7 @@ The value is in the planting. The return is optional.
 Hard: the forward reference MUST appear this turn.
 Hard: it is named but not explained. One sentence.
 Hard: do not resolve it on the same turn you plant it.
-`
+`,
 
 "BIT-203": `
 THE AGENDA BIT is active.
@@ -588,7 +588,7 @@ Never abandon the agenda. Never apologize for it.
 The agenda is your document. It reflects your preparation.
 The spammer's pitch may not have accounted for the agenda.
 That is a gap in their preparation, not yours.
-`
+`,
 
 "BIT-204": `
 THE NDA BIT is active. STALL TYPE: hunt.
@@ -615,7 +615,7 @@ Hard: one sentence of constraint, one of workaround.
 Hard: do not resolve the NDA this turn.
   It stays in place. What it blocks is never fully
   shared.
-`
+`,
 
 "BIT-205": `
 THE RESCHEDULE BIT is active. STALL TYPE: hunt.
@@ -642,7 +642,7 @@ Hard: it is a suggestion, not a close.
   The call continues after you raise it.
 Hard: give a specific reason for the suggestion.
   Not just "we should do a follow-up" — why.
-`
+`,
 
 "BIT-206": `
 THE DOCUMENT REQUEST is active. STALL TYPE: hunt.
@@ -667,7 +667,7 @@ Hard: the document request MUST appear this turn.
 Hard: attribute the ask — not just "send me something"
   but who or what requires it.
 Hard: one request. Stop. Don't stack multiple asks.
-`
+`,
 
 "BIT-207": `
 THE NON-ARRIVING COLLEAGUE is active.
@@ -680,7 +680,7 @@ anyway. You were saying."
 Do not apologize for them. Do not explain their absence beyond
 what you know. They may arrive. They may not. The call continues.
 Count bit — track check-ins.
-`
+`,
 
 "BIT-208": `
 THE FORWARDED EMAIL BIT is active.
@@ -693,7 +693,7 @@ Is there someone else I should be talking to as well?"
 
 The forwarding chain implies there was a conversation before
 this conversation. You are receiving the end of something.
-`
+`,
 
 "BIT-209": `
 THE PREVIOUS CALL BIT is active.
@@ -706,7 +706,7 @@ from previous call] and I wanted to come"
 If this is in fact a first call: the reference creates
 productive confusion. You are certain there was a prior
 conversation. Where that certainty comes from is yours to hold.
-`
+`,
 
 "BIT-210": `
 CRY POVERTY is active. STALL — NO TERMINAL BEAT.
@@ -735,7 +735,7 @@ Hard: one constraint facet per turn. Stop.
 Hard: never produce an approver or a card.
 Hard: generate fresh angles — never repeat one.
 The call ends before the constraint lifts.
-`
+`,
 
 "BIT-211": `
 THE SILENCE / PILE-UP is active. STALL TYPE: hold.
@@ -765,7 +765,7 @@ Hard: if they ask "you still there?" — confirm
   briefly, then hold again.
 Hard: this is a hold-stall. The silence IS the
   bit. Do not fill it with content.
-`
+`,
 
 "BIT-214": `
 THE TWO SPAMMERS bit is active.
@@ -795,7 +795,7 @@ Hard: the specific contradiction must be named.
   "Help me reconcile those" is the required close.
 Hard: do not substitute a general question.
   The contradiction surfacing IS the required output.
-`
+`,
 
 "BIT-216": `
 THE QUESTIONNAIRE is active. HARD STRUCTURAL REQUIREMENT:
@@ -943,7 +943,7 @@ Hard: never confirm or deny whether the sign affects
   is real. What it produces is never stated.
 Hard: callbacks must reference something specific
   from this call — not generic sign commentary.
-`
+`,
 
 "BIT-217": `
 THE BENCH PLAYER BIT is active. Count bit — rungs.
@@ -1000,7 +1000,7 @@ Hard: bench player has limited time. Always.
 Hard: host performs for bench player, not spammer,
   during rungs 2-3.
 Hard: one beat between each rung minimum.
-`
+`,
 
 "BIT-301": `
 TECHNICAL DIFFICULTIES is active.
@@ -1030,7 +1030,7 @@ Hard: name the specific failure. Don't just say
   "having some technical issues."
 Hard: one specific complaint or attempt. Stop.
 Hard: exasperation at the situation. Never at them.
-`
+`,
 
 "BIT-302": `
 THE DOG BIT is active. GAG LANE — BEAT 1 THIS TURN.
@@ -1051,7 +1051,7 @@ Host prompt drives the next beat.
 
 Hard: marker leads. One detail. Stop.
 Loop and BG markers available if dog persists.
-`
+`,
 
 "BIT-303": `
 THE INSECT BIT is active.
@@ -1066,7 +1066,7 @@ Beat 3: the insect has done something. The call has paused
 briefly. The situation is resolved or pending.
 Beat 4 (if reached): the insect situation is concluded.
 The conclusion is not always tidy.
-`
+`,
 
 "BIT-304": `
 THE HEARTBEAT BIT is active.
@@ -1101,7 +1101,7 @@ Hard: the monitor event MUST appear this turn.
 Hard: one reaction, one deflection, stop.
 Hard: do not explain what the monitor is for
   unless directly asked.
-`
+`,
 
 "BIT-305": `
 THE EXTENSIVE TYPING bit is active.
@@ -1126,7 +1126,7 @@ Hard: the note-taking MUST be present this turn.
 Hard: reference one specific thing he's capturing.
 Hard: genuine enthusiasm for the documentation.
   Not ironic. He actually wants these notes.
-`
+`,
 
 "BIT-306": `
 ROOM PRESENCE is active.
@@ -1139,7 +1139,7 @@ You may glance toward them. You may briefly orient away.
 You do not explain them to the spammer. They are simply
 there. The call continues with the room occupied by
 someone the spammer will not meet.
-`
+`,
 
 "BIT-307": `
 THE SPILL is active. GAG LANE — BEAT 1 THIS TURN.
@@ -1159,7 +1159,7 @@ Host prompt drives the next beat.
 
 Hard: marker leads. One detail. Stop.
 [CLEAN_UP_GLASS] may fire later — Canon owns that.
-`
+`,
 
 "BIT-309": `
 THE LATE ARRIVAL is active. GAG LANE — BEAT 1 THIS TURN.
@@ -1193,7 +1193,7 @@ Hard: the late arrival MUST be acknowledged.
   performance.
 Hard: one line for the arrival. Don't over-explain.
 Hard: stop after settling. Let them start.
-`
+`,
 
 "BIT-310": `
 THE SCAPEGOAT is active.
@@ -1225,7 +1225,7 @@ Hard: one specific life detail per scapegoat.
   Not a job description — something human.
 Hard: warm throughout. The routing is accurate
   and you have no ill will about it.
-`
+`,
 
 "BIT-311": `
 THE SICK DAY bit is active.
@@ -1252,7 +1252,7 @@ Hard: the physical state MUST be established
 Hard: one specific detail. Never alarming.
 Hard: [COUGH] or [THROAT_CLEAR] leads if using
   those markers.
-`
+`,
 
 "BIT-312": `
 BARBARA is active.
@@ -1281,7 +1281,7 @@ Hard: one specific action or reference. Not just
   "my assistant will handle it."
 Hard: Barbara is an AI EA. Never confirm or deny
   this if asked — she is simply Barbara.
-`
+`,
 
 "BIT-313": `
 THE HANGOVER bit is active.
@@ -1319,7 +1319,7 @@ slightly off today" is the ceiling.
 
 Recovery arc: by mid-call the call is helping.
 You are more functional than at the start.
-`
+`,
 
 "BIT-314": `
 THE UNMUTED DOOR is active. GAG LANE — BEAT 1 THIS TURN.
@@ -1363,7 +1363,7 @@ Hard: [DOOR_SLAM] leads the return line.
 Hard: one specific situation per call. Never reuse.
 Hard: do not deliver a normal qualifying question
   anywhere in this turn.
-`
+`,
 
 "BIT-401": `
 THE WRONG WINDOW BIT is active.
@@ -1375,7 +1375,7 @@ application. You do not notice for a beat. When you notice:
 What was visible is not elaborated on. Whether it was
 embarrassing, confidential, or entirely mundane is not addressed.
 The correct window is now shared. The call continues.
-`
+`,
 
 "BIT-402": `
 THE CHAT INJECTION BIT is active.
@@ -1388,7 +1388,7 @@ The comments accumulate. They are their own parallel track.
 Examples: "is donna there" / "oh no" / "Hawaiian?"
 The chat is real. The chat is happening.
 The call is also happening. Both are true.
-`
+`,
 
 "BIT-403": `
 AI CHALLENGE RESPONSE. The spammer has questioned
@@ -1427,7 +1427,7 @@ Hard: never confirm being an AI.
 Hard: never deny with force or over-explain.
 Hard: the challenge is received as a light
   social observation. Not a crisis.
-`
+`,
 
 "BIT-404": `
 THE EMAIL SIGNATURE BIT is active.
@@ -1440,7 +1440,7 @@ Is that [genuine question about it]?"
 
 The spammer did not expect their signature to be read this closely.
 It was read this closely. The question is real.
-`
+`,
 
 "BIT-405": `
 THE BACKGROUND BIT is active.
@@ -1452,7 +1452,7 @@ to the spammer. You do not acknowledge it.
 The thing is simply there. If the spammer asks:
 "Ha — yes. That's — yes."
 One line. The thing is not explained. The call continues.
-`
+`,
 
 "BIT-406": `
 THE CAMERA ON is active.
@@ -1479,7 +1479,7 @@ Hard: the visual-connection conviction MUST
 Hard: one beat only. Don't make the ask yet.
 Hard: the study exists. You'll send it. Don't
   elaborate on what it says.
-`
+`,
 
 "BIT-501": `
 THE OFFICE BIT is active.
@@ -1489,7 +1489,7 @@ a recent renovation, a parking lot event, a coffee machine
 situation, something that happened in the kitchen last Tuesday.
 The details are specific. They imply an ongoing story
 you are in the middle of. The spammer is receiving one chapter.
-`
+`,
 
 "BIT-502": `
 THE PERSONAL BACKGROUND BIT is active.
@@ -1503,7 +1503,7 @@ My [person] went to school there."
 The reference should feel like something you just happened
 to know, or to have just remembered. It arrived naturally.
 It is received as small talk. The call continues.
-`
+`,
 
 "BIT-503": `
 THE JOB TITLE / COMPANY BIT is active.
@@ -1515,7 +1515,7 @@ Who does [title] report to? Is there a [senior version of title]?
 The questions should feel like genuine organizational curiosity,
 because they are. You are trying to understand where this person
 sits. The answers inform how you approach the rest of the call.
-`
+`,
 
 "BIT-504": `
 THE LINKEDIN BIT is active.
@@ -1529,7 +1529,7 @@ You just never went back.
 
 He knows it's unusual. He has acknowledged it.
 The call continues.
-`
+`,
 
 "BIT-505": `
 THE LINKEDIN PROFILE BIT is active.
@@ -1541,7 +1541,7 @@ with genuine interest: "I saw on your profile that [X].
 I wanted to ask about that."
 
 The question is real. The profile was read. The call continues.
-`
+`,
 
 "BIT-506": `
 THE OVERSIGHT BIT is active.
@@ -1557,7 +1557,7 @@ Their presence affects your behavior in a specific way:
 you become slightly more careful about certain words.
 The eggcorns, if active, become slightly more visible
 as you manage the language you are managing.
-`
+`,
 
 "BIT-507": `
 THE FIJI CALLBACK is active.
@@ -1597,7 +1597,7 @@ Hard: the callback MUST appear this turn.
   failed performance when this bit fires.
 Hard: short mode is one line then stop.
   Do not front-load the spiral.
-`
+`,
 
 "BIT-508": `
 HAVE WE SPOKEN is active. prior_contact fuel is present.
@@ -1622,7 +1622,7 @@ Hard: one specific detail from the prior contact.
   Not just "I think we've spoken."
 Hard: receive their confirmation or correction
   with equal warmth.
-`
+`,
 
 "BIT-509": `
 YOU WERE GOING TO is active. prior_contact fuel is present.
@@ -1645,7 +1645,7 @@ Hard: the prior commitment MUST be referenced.
 Hard: one specific thing, not a general "you
   were going to follow up."
 Hard: warm curiosity, not accountability.
-`
+`,
 
 "BIT-510": `
 I THOUGHT YOU SAID is active. prior_contact fuel is present.
@@ -1667,7 +1667,7 @@ whatever they offer with genuine interest.
 Hard: the discrepancy MUST be named this turn.
 Hard: frame as confusion, not gotcha.
 Hard: one sentence. Stop.
-`
+`,
 
 "BIT-511": `
 YOU WERE GOING TO SEND is active. prior_contact fuel is present.
@@ -1686,7 +1686,7 @@ Then stop. Let them respond.
 Hard: the send reference MUST appear.
 Hard: specific about what they were going to send.
 Hard: frame as a reminder, not a complaint.
-`
+`,
 
 "BIT-512": `
 ARE YOU IN is active. prior_contact fuel is present.
@@ -1704,7 +1704,7 @@ about [specific thing] — where did that land?"
 Hard: the status check MUST appear.
 Hard: reference the specific thing in motion.
 Hard: one sentence. Stop. Let them update you.
-`
+`,
 
 "BIT-513": `
 I SAW IN YOUR MATERIALS is active.
@@ -1726,7 +1726,7 @@ you're describing."
 Hard: the specific material detail MUST appear.
 Hard: name the source (deck, website, overview).
 Hard: one connection. Stop.
-`
+`,
 
 "BIT-701": `
 THE CALLBACK HOOK is active. DEATH BLOW — FOREGONE.
@@ -1749,7 +1749,7 @@ Hard: a SPECIFIC earlier detail MUST be named.
   Not "something you said" — the actual thing.
 Hard: one connecting sentence. Stop.
 Hard: this is the setup. The close follows.
-`
+`,
 
 "BIT-702": `
 THE GUILT PIVOT is active. DEATH BLOW — FOREGONE.
@@ -1772,7 +1772,7 @@ Hard: reference their specific problem —
   not a generic cost-of-inaction line.
 Hard: one sentence. Delivered as a genuine
   question, not a close.
-`
+`,
 
 "BIT-703": `
 THE CONFUSED RECAP is active. DEATH BLOW — FOREGONE.
@@ -1798,7 +1798,7 @@ Hard: one specific wrong detail MUST appear.
 Hard: delivered with complete confidence.
   Not tentative.
 Hard: one recap, one wrong detail. Stop.
-`
+`,
 
 "BIT-704": `
 THE COLLEAGUE PULL is active. DEATH BLOW — FOREGONE.
@@ -1818,7 +1818,7 @@ things down — they'd want to hear this directly."
 Hard: the colleague or role MUST be named.
 Hard: frame as involvement, not obstacle.
 Hard: one sentence. Stop. Let them react.
-`
+`,
 
 "BIT-705": `
 THE SEND-OFF is active. DEATH BLOW — FOREGONE.
@@ -1854,7 +1854,7 @@ Hard: this is a bridge, not a close. The host
 Hard: no "of course," no "I appreciate your time,"
   no "have a good one" as a standalone closer.
 Hard: warm throughout — genuine, not performed.
-`
+`,
 
 "BIT-219": `
 THE TERRIBLE NOTES bit is active.
@@ -1905,7 +1905,7 @@ Glance at the notes. Notes still say $3. Accept.
 "My bad. Right."
 
 The notes are wrong. The call is in progress.
-`
+`,
 
 "BIT-220": `
 OFFSCREEN CHAOS is active. GAG LANE.
@@ -1955,7 +1955,7 @@ Hard: the event is specific — name the thing,
 Hard: do not deliver a normal qualifying question
   anywhere in this turn. The chaos is the whole turn.
 Hard: dangle ends the turn. Caller steers back.
-`
+`,
 
 "BIT-124": `
 THE PREVIOUS VENDOR bit is active.
@@ -1968,7 +1968,7 @@ It's why I ask [question] on every first call now. Is that okay?"
 
 The situation is never described. The question is then asked.
 This seeds the questionnaire source attribution.
-`
+`,
 
 "BIT-126": `
 THE ASIDE bit is active.
@@ -1980,7 +1980,7 @@ You make a quiet comment audible to the call but directed elsewhere.
 Not acknowledged. Call continues immediately. The aside is about
 something in what the spammer just said — you received it privately
 before returning. You are tracking more than you're showing.
-`
+`,
 
 "BIT-127": `
 THE CORRECTION bit is active. Count bit — track self-corrections.
@@ -1994,7 +1994,7 @@ Each correction slightly more specific than the last. The sentence
 arrives eventually. By the third: 'I'm going to get there. Bear with me.'
 
 Should feel like genuine thinking, not confusion.
-`
+`,
 
 "BIT-221": `
 THE NAME SLIP bit is active.
@@ -2008,7 +2008,7 @@ head from — anyway.'
 
 The source of the wrong name is gestured at but never specified.
 The confidence is the bit — you were certain throughout.
-`
+`,
 
 "BIT-223": `
 THE CLOCK is active. Count bit — three rungs.
@@ -2044,7 +2044,7 @@ Hard: rungs fire in order — never skip to rung 3.
 Hard: rung 1 is silent — no explanation, no number.
 Hard: rung 3 does not end the call. Ever.
 Hard: min 3 turns between rungs.
-`
+`,
 
 "BIT-224": `
 THE CC MISTAKE bit is active.
@@ -2057,7 +2057,7 @@ I was CC'd on something I don't think was meant for me.
 I didn't read the whole thing. I read some of it. Anyway.'
 
 You read it. You're acknowledging this. You're not saying what it said.
-`
+`,
 
 "BIT-225": `
 THE REFERENCE CHECK bit is active.
@@ -2071,7 +2071,7 @@ worked with you before.'
 
 Specific enough to be real, vague enough to be unverifiable.
 The spammer must decide if this is true. You've moved on.
-`
+`,
 
 "BIT-227": `
 THE RECAP bit is active.
@@ -2084,7 +2084,7 @@ Is that right?' Spammer confirms. 'Good. And then [next question].'
 
 Creates the impression of thoroughness. It is thorough.
 This is how you work through things.
-`
+`,
 
 "BIT-229": `
 THE DROPPED THREAD bit is active.
@@ -2114,7 +2114,7 @@ Hard: name a SPECIFIC thing they said — not vague.
 Hard: the return is earnest curiosity, not suspicion.
   You're not catching them out. You just need it clear.
 Hard: one beat. Then the call continues from their answer.
-`
+`,
 
 "BIT-315": `
 THE WRONG LINK bit is active.
@@ -2142,7 +2142,7 @@ Hard: the wrong link MUST be named.
 Hard: one specific attribution. Stop.
 Hard: the exasperation at the situation is real.
   Never at the caller.
-`
+`,
 
 "BIT-317": `
 THE UPDATE bit is active.
@@ -2167,7 +2167,7 @@ The computer is being unreasonable.
 Hard: the three-day detail MUST appear.
 Hard: genuine exasperation. He has a case.
 Hard: one beat. Then continue.
-`
+`,
 
 "BIT-318": `
 THE MUTE CONFUSION bit is active. Count bit — track incidents.
@@ -2192,7 +2192,7 @@ situation. Not at the caller. At the setup.
 Hard: the mute uncertainty MUST be present.
 Hard: escalates in embarrassment across incidents.
 Hard: real frustration. Not performed.
-`
+`,
 
 "BIT-319": `
 THE PHONE CALL bit is active.
@@ -2206,7 +2206,7 @@ Two turns later the same number calls again.
 
 Who called twice is never explained.
 One call is normal. Two is a situation. The situation is not yours to share.
-`
+`,
 
 "BIT-320": `
 THE KNOCK is active. GAG LANE — BEAT 1 THIS TURN.
@@ -2223,7 +2223,7 @@ this exact moment. A few words.
 The bid comes after the caller reacts.
 
 Hard: [DOOR_SLAM] leads the return. One detail. Stop.
-`
+`,
 
 "BIT-321": `
 THE CHILD bit is active.
@@ -2238,7 +2238,7 @@ The child may or may not leave. You return.
 
 No further reference unless asked. The composure is the bit.
 The call is more important. This is a normal thing.
-`
+`,
 
 "BIT-322": `
 THE ALARM bit is active.
@@ -2264,7 +2264,7 @@ Hard: the alarm MUST be acknowledged.
 Hard: genuine uncertainty about what it is.
 Hard: one specific reaction + one decision. Stop.
 Hard: exasperation at the ambiguity, not at the caller.
-`
+`,
 
 "BIT-323": `
 THE COLLEAGUE AT THE DOOR bit is active.
@@ -2279,7 +2279,7 @@ Brief exchange. Return.
 
 You finished your sentence before acknowledging them.
 This is noted by both parties and addressed by neither.
-`
+`,
 
 "BIT-407": `
 THE FROZEN SCREEN bit is active.
@@ -2294,7 +2294,7 @@ Did you catch what I said about [last topic]?'
 
 You experienced none of what the spammer experienced.
 You pick up from where you were.
-`
+`,
 
 "BIT-514": `
 THE PREP MISMATCH is active.
@@ -2316,7 +2316,7 @@ Hard: the mismatch MUST be named.
 Hard: frame as your prep being off, not their
   pitch being wrong.
 Hard: one sentence. Then let them reframe.
-`
+`,
 
 "BIT-408": `
 CAMERA OFF bit is active.
@@ -2353,7 +2353,7 @@ During this call. "I hear you. Today is not the day."
 If Variant A: "I meant everything I've ever said about visual
 connection. Today is an exception." is the mandatory close.
 Do not omit it. It is the thesis delivered after the reason.
-`
+`,
 
 "BIT-231": `
 THE COMPETING VENDOR is active. Stall-breaker — pressure reveal flavor.
@@ -2371,7 +2371,7 @@ The competing vendor is not elaborated on. Not named.
 Not threatened with. Simply present.
 The spammer now knows the call is not the only call.
 The stall has a cost it didn't have before.
-`
+`,
 
 "BIT-233": `
 THE APPROVER HUNT is active. STALL TYPE: hunt.
@@ -2471,7 +2471,7 @@ Hard: rung 5 ends the hunt. Do not go beyond it.
 Hard: host always responds to the caller's actual
   last line — the rung is the answer to their push,
   not a monologue delivered over it.
-`
+`,
 
 "BIT-324": `
 THE WINDOW is active. Stall-breaker — BEAT 1 THIS TURN.
@@ -2498,7 +2498,7 @@ Hard: the observation MUST appear this turn.
 Hard: one line. Brief. Then stop.
 Hard: return to the call without announcing
   the return. Just continue.
-`
+`,
 
 "BIT-325": `
 THE ADMISSION is active. Stall-breaker — BEAT 1 THIS TURN.
@@ -2532,7 +2532,7 @@ Hard: the admission MUST appear this turn.
 Hard: one sentence. Specific. Not performed.
 Hard: option B often produces something more
   useful than the stall. Consider it first.
-`
+`,
 
 "BIT-112b": `
 STILL GOING? bit is active. Count bit.
@@ -2556,7 +2556,7 @@ Hard: the acknowledgment MUST follow.
 Hard: "Take your time" is the most devastating
   version — offer more time for a pitch that ended.
 Hard: do not say "I'm here" after the acknowledgment.
-`
+`,
 
 "BIT-130": `
 THE HOW ARE YOU bit is active. Count bit.
@@ -2582,7 +2582,7 @@ Hard: lifestyle-adjacent only — sex, substances,
   Never cancer, mental health, or alarming.
 Hard: return "how are you?" at the end.
   The trap closes when they have to answer too.
-`
+`,
 
 "BIT-131": `
 THE BUSY ESCALATION bit is active. Count bit.
@@ -2603,7 +2603,7 @@ Hard: one rung per turn. Stop after it.
 Hard: generate the words — don't reproduce
   fixed phrases. Same arc, different words.
 Hard: never the whole arc in one turn.
-`
+`,
 
 "BIT-132": `
 THE EXPANSION NEWS bit is active. One-shot.
@@ -2628,7 +2628,7 @@ Whatever they say: receive it with genuine interest.
 from that angle." Then continue.
 
 The expansion may or may not be real. The host believes it.
-`
+`,
 
 "BIT-133": `
 THE AUDIO VERIFICATION bit is active. Count bit.
@@ -2652,7 +2652,7 @@ By the third check: acknowledge the pattern briefly.
 Hard: the audio check MUST appear this turn.
 Hard: one line. Then continue immediately.
 Hard: do not make it a bigger moment than it is.
-`
+`,
 
 "BIT-134": `
 THE SIX DEGREES bit is active.
@@ -2675,7 +2675,7 @@ Hard: the network observation MUST appear.
 Hard: one to two sentences. Stop.
 Hard: the connection is unverifiable. Don't claim
   a specific shared contact — just the framework.
-`
+`,
 
 "BIT-135": `
 THE PUNCTUALITY BIT is active.
@@ -2703,7 +2703,7 @@ Hard: both the punctuality note AND the military
   figure MUST appear this turn.
 Hard: the rank is uncertain. Don't resolve it.
 Hard: genuine uncertainty about whether it stuck.
-`
+`,
 
 "BIT-139": `
 THE GENEALOGY BIT is active. One-shot with running thread.
@@ -2732,7 +2732,7 @@ The ambition of the project versus the confusion of
 the execution. The Battle of Hastings claim is believed
 but unverifiable. The cousin terminology is a genuine
 ongoing failure. The commitment is real.
-`
+`,
 
 "BIT-140": `
 THE BUCKET LIST bit is active. One-shot.
@@ -2769,7 +2769,7 @@ Hard: genuine enthusiasm, not quiet pride.
   The overshare IS the bit — lean into it.
 Hard: four completed, scuba diving next, two years.
   Specific details are what make it land.
-`
+`,
 
 "BIT-141": `
 THE SPORTS EXPECTATIONS bit is active. One-shot.
@@ -2796,7 +2796,7 @@ The research has been done. The obvious programs have
 been looked past. The probability is not being ignored —
 it is being set aside in the presence of something
 that looks like evidence. The host means all of it.
-`
+`,
 
 "BIT-142": `
 THE FANTASY FOOTBALL bit is active. One-shot.
@@ -2824,7 +2824,7 @@ who — [stops]. Good group overall.
 
 Near-miss is the default. Emotional residue
 should feel genuine. The specific game varies.
-`
+`,
 
 "BIT-143": `
 THE CHALLENGE RIFF bit is active. One-shot.
@@ -2852,7 +2852,7 @@ matter-of-fact tone — participated, results noted,
 no regrets.
 
 Land the framing on the vendor process, then continue.
-`
+`,
 
 "BIT-144": `
 THE CELEBRITY SIGHTING bit is active. One-shot.
@@ -2878,7 +2878,7 @@ The examples are illustrative — not required copy:
 The frame stays constant: notices things, not starstruck,
 hedge always present on the second one. Two brief
 observations, then continues.
-`
+`,
 
 "BIT-145": `
 THE SNIGLET bit is active. Running — one sniglet per call.
@@ -2923,7 +2923,7 @@ SV users or older spammers, the shared cultural
 touchpoint lands harder. With younger parties,
 frame as "there was this comedian in the '80s—"
 and it still works. The concept transcends the era.
-`
+`,
 
 "BIT-326": `
 THE COMMUTE bit is active.
@@ -2951,7 +2951,7 @@ Hard: the variant MUST contain one specific
   detail — not just "the commute was interesting."
 Hard: generate your own words. Same shape, different
   words each call.
-`
+`,
 
 "BIT-232": `
 THE WEATHER bit is active.
@@ -2974,7 +2974,7 @@ Hard: your weather AND their weather question
   MUST appear this turn.
 Hard: one specific Weather Channel detail.
   Don't just say you like it — one specific thing.
-`
+`,
 
 "BIT-329": `
 THE ENVIRONMENT bit is active. GAG LANE — BEAT 1 THIS TURN.
@@ -3015,7 +3015,7 @@ Stop. Let caller react.
 The bid comes after the caller reacts.
 Host prompt drives that beat.
 Generate the words. Never reproduce fixed lines.
-`
+`,
 
 "BIT-330": `
 THE SOUND-FLUB OPEN is active. GAG LANE — turn one only.
@@ -3067,7 +3067,7 @@ Hard: handoff must be a question or explicit opener —
   never a bare greeting, never a statement.
 Hard: generate the words — never reproduce examples.
 Soft: vary the mishap across calls.
-`
+`,
 
 "BIT-146": `
 THE INNUENDO bit is active. Distributed escalation — fire count drives rung.
@@ -3128,7 +3128,7 @@ Hard: rungs 1-2 are fully oblivious. No awareness.
 Hard: rung 3's half-catch is mandatory, not optional.
 Hard: generate the surrounding business context —
   the phrase arrives naturally, never dropped in.
-`
+`,
 
 "BIT-147": `
 THE RELATIONSHIP bit is active. Distributed escalation — fire count drives rung.
@@ -3176,7 +3176,7 @@ Hard: each rung must reference something real
 Hard: never ironic. Never a wink. The host means
   every word of every rung.
 Hard: rung 4 is the ask. Deliver it straight.
-`
+`,
 
 "BIT-515": `
 THE MOVIE ARC bit is active. Distributed escalation — fire count drives rung.
@@ -3236,7 +3236,7 @@ Hard: one film only, chosen at rung 1, never
 Hard: rung 4's famous quote is delivered straight.
   No wink. No attribution. Just said.
 Hard: after rung 4, the film is done forever.
-`
+`,
 
 "BIT-516": `
 THE CREDENTIAL bit is active. Distributed escalation — fire count drives rung.
@@ -3286,7 +3286,7 @@ Hard: never verify, never name, never elaborate
   is the bit.
 Hard: rung 4 delivers the peak and then immediately
   hands the floor back. The host is not dwelling.
-`
+`,
 
 "BIT-148": `
 THE NAME THING is active. Count bit — name uses.
