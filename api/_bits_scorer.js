@@ -148,6 +148,9 @@ const EMITTED_TRIGGERS = new Set([
   "extended_stall",    // the stall path / state.extended_stall
   "phase:opening",     // out.phase === "opening"
   "phase:probing",     // out.phase === "probing"
+  "pricing_raised",    // out.pricingRaised (the reader), ONE-WAY LATCH — see
+                        // completions.js's blendRead comment. Added Aug 5 for
+                        // BIT-210, which was already wired registry-side.
   // Tier 2 (trivial) — computed directly from turn count, no LLM cost:
   "call_turn_1",       // state.turn === 1
   // NOTE: call_phase_late is intentionally NOT here. It tags only the 700-series
@@ -177,6 +180,8 @@ function triggerPresent(trigger, state) {
       return state.phase === "probing";
     case "call_turn_1":
       return (state.turn ?? 0) === 1;
+    case "pricing_raised":
+      return state.pricing_raised === true;
     default:
       // Not an allowlisted trigger — should never reach here (loadout guards).
       // Fail SAFE toward eligibility so a mis-call can't silently blackhole a bit.
@@ -486,6 +491,15 @@ export function loadout(state, { pool = BITS } = {}) {
     if (TRIGGER_MATCH && b.trigger && EMITTED_TRIGGERS.has(b.trigger)) {
       if (!triggerPresent(b.trigger, state)) return false;
     }
+    // LATEST-TURN GATE (new registry field, Aug 4): a hard eligibility
+    // cutoff, same shape as the phase_pref exclusion above — NOT a scoring
+    // penalty, a bit past its latest_turn simply isn't in the pool anymore.
+    // Generic (any bit can carry this field), not hardcoded to a specific
+    // id — same rule-based philosophy as phase_pref above. First use:
+    // BIT-110 (The Name Pronunciation Bit), latest_turn:8 — the bit only
+    // makes sense early; past turn 8 it's excluded outright, same as an
+    // opening bit once the call leaves opening.
+    if (b.latest_turn != null && (state.turn ?? 0) > b.latest_turn) return false;
     // OPENING GATE — two rules, phase first (Bits ratified Jul 15).
     //
     // 1. PHASE is the real boundary: opening bits leave the pool the moment the

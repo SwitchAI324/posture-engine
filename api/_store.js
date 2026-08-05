@@ -40,7 +40,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-   `&select=prefix,posture_line,gear,pressure,engagement,slip,accuse_floor,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,texture_last_fire,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn`;
+   `&select=prefix,posture_line,gear,pressure,engagement,slip,accuse_floor,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,texture_last_fire,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised`;
   const r = await fetch(url, {
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
@@ -108,13 +108,15 @@ export async function getCall(callId) {
     // fresh row — same "nothing has happened yet" default as everything else.
     markerCounts: rows[0].marker_counts ?? {},
     markerLastTurn: rows[0].marker_last_turn ?? {},
+    // PRICING RAISED: one-way latch, default false (nothing quoted yet).
+    pricingRaised: rows[0].pricing_raised ?? false,
   };
 }
 // WRITE (upsert) — used at pre-snap to freeze the prefix, and later by the
 // posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, textureLastFire, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn }
+  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, textureLastFire, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -180,6 +182,10 @@ export async function setCall(
   // MARKER AWARENESS: both jsonb, same "only write when provided" pattern.
   if (markerCounts !== undefined) row.marker_counts = markerCounts;
   if (markerLastTurn !== undefined) row.marker_last_turn = markerLastTurn;
+  // PRICING RAISED: only ever written as true (see blendRead's one-way-latch
+  // comment) — "only write when provided" naturally means a false/absent
+  // read never overwrites an existing true.
+  if (pricingRaised !== undefined) row.pricing_raised = pricingRaised;
   const r = await fetch(`${URL}/rest/v1/${TABLE}`, {
     method: "POST",
     headers: {
