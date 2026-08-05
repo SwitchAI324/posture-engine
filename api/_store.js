@@ -40,7 +40,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-   `&select=prefix,posture_line,gear,pressure,engagement,slip,accuse_floor,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,texture_last_fire,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised`;
+   `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,texture_last_fire,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited`;
   const r = await fetch(url, {
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
@@ -50,11 +50,11 @@ export async function getCall(callId) {
   return {
     prefix: rows[0].prefix,
     postureLine: rows[0].posture_line,
-    gear: rows[0].gear || "alive", // gear column = SUSPICION axis
+    // gear/slip/accuseFloor REMOVED (Aug 5, gears removal) — suspicion axis
+    // retired entirely, no replacement. The gear/slip/accuse_floor DB columns
+    // are left as-is (harmless unused legacy), just no longer read/written.
     pressure: rows[0].pressure || "calm",
     engagement: rows[0].engagement || "hooked",
- slip: rows[0].slip ?? 0, // suspicion slip accumulator (hysteresis)
-    accuseFloor: rows[0].accuse_floor ?? 0, // STICKY: accusation ratchet floor
     phase: rows[0].phase ?? "opening", // Stage-4 call phase (async read)
     targetId: rows[0].target_id ?? null, // the target the booking token was
                                          // minted for; compiled at hydrate,
@@ -110,13 +110,17 @@ export async function getCall(callId) {
     markerLastTurn: rows[0].marker_last_turn ?? {},
     // PRICING RAISED: one-way latch, default false (nothing quoted yet).
     pricingRaised: rows[0].pricing_raised ?? false,
+    // TEXTURE INVITED: momentary, defaults PERMISSIVE (true) — a missing/
+    // absent read must never silently suppress all texture; only an
+    // explicit false (this turn's reader judgment) does that.
+    textureInvited: rows[0].texture_invited ?? true,
   };
 }
 // WRITE (upsert) — used at pre-snap to freeze the prefix, and later by the
 // posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, gear, pressure, engagement, slip, accuseFloor, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, textureLastFire, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised }
+  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, textureLastFire, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -126,12 +130,11 @@ export async function setCall(
   const row = { call_id: callId, updated_at: new Date().toISOString() };
   if (prefix !== undefined) row.prefix = prefix;
   if (postureLine !== undefined) row.posture_line = postureLine;
-  if (gear !== undefined) row.gear = gear; // gear column = SUSPICION axis
+  // gear/slip/accuseFloor REMOVED (Aug 5, gears removal) — suspicion axis
+  // retired entirely, no replacement.
   if (pressure !== undefined) row.pressure = pressure;
   if (engagement !== undefined) row.engagement = engagement;
-  if (slip !== undefined) row.slip = slip;
   if (phase !== undefined) row.phase = phase; // Stage-4 call phase (async read)
-  if (accuseFloor !== undefined) row.accuse_floor = accuseFloor;
   if (targetId !== undefined) row.target_id = targetId; // booking_tokens.target_id,
                                                         // written once at hydrate
   if (arrivalState !== undefined) row.arrival_state = arrivalState; // v2 bench (jsonb, nullable)
@@ -186,6 +189,10 @@ export async function setCall(
   // comment) — "only write when provided" naturally means a false/absent
   // read never overwrites an existing true.
   if (pricingRaised !== undefined) row.pricing_raised = pricingRaised;
+  // TEXTURE INVITED: momentary boolean, same "only write when provided"
+  // pattern — no latch logic needed here, blendRead already handles that
+  // this field is per-turn, not sticky.
+  if (textureInvited !== undefined) row.texture_invited = textureInvited;
   const r = await fetch(`${URL}/rest/v1/${TABLE}`, {
     method: "POST",
     headers: {
@@ -456,18 +463,19 @@ export async function fireArm(id) {
 // gear-trace graph. Append-only (one row per turn), best-effort, and only
 // ever called via waitUntil() so it never touches the hot path. Failures are
 // swallowed: telemetry must never break a call.
+// suspicion/slip REMOVED from the payload (Aug 5, gears removal) — the
+// gear_events TABLE/columns are left as-is (harmless unused legacy), the
+// call site simply no longer sends them.
 export async function appendGearEvent(
   callId,
-  { turn, suspicion, pressure, engagement, slip, accusation, utterance }
+  { turn, pressure, engagement, accusation, utterance }
 ) {
   if (!isConfigured() || !callId) return false;
   const row = {
     call_id: callId,
     turn,
-    suspicion,
     pressure,
     engagement,
-    slip,
     accusation: accusation || null,
     utterance: (utterance || "").slice(0, 500),
   };

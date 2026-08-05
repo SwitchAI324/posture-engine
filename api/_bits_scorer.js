@@ -4,15 +4,32 @@
 // are the special case — same scorer, triggered at the Director's break-glass,
 // always-fire.
 //
-//   effective_score = fit_score + gear_bias - recency_penalty
+// SIMPLIFIED (Aug 5) — fit_score and gear_bias are no longer scored bonuses.
+// Both were confirmed dead or reduced to a pure gate before being stripped:
+//   - gear_bias: confirmed dead. It read bit.gear[axis][state], but the
+//     registry moved to flat top-level pressure/engagement/suspicion fields
+//     at some point and this was never updated to match — zero bits in the
+//     registry have a .gear field, so this had already been contributing 0
+//     to every score, for every bit, before it was ever touched here. Left
+//     as a stub (not deleted outright) so breakdown.gearBias stays a stable
+//     key for anything downstream still reading it.
+//   - fit_score: was archetype-tier bonus + accusation bonus + tone bonus.
+//     Checked directly — zero bits in the registry have an .accusations or
+//     .tones field, so those two were also already inert everywhere. Only
+//     archetype match was ever real, and it's now a pure ELIGIBILITY gate
+//     (matches = eligible, score 0; doesn't match = excluded), not a scored
+//     bonus — no more differentiation between "universal" and "specific
+//     match."
 //
-//   fit_score      — about this caller? archetype > accusation > tone, PLUS a
-//                    FUEL boost: a bit that can use a live dossier hook is by
-//                    definition more precisely fitted to THIS caller, so it
-//                    rises above generic bits. (Missing hook = still excluded.)
-//   gear_bias      — does this moment want it? sum of the bit's per-state
-//                    biases across whichever gear axes it declares.
-//   recency        — suppress a just-used bit; decays over its cooldown.
+// So today, ranking among ELIGIBLE bits comes entirely from: recency
+// (suppress a just-used bit, decays over its cooldown), sequencing (reward
+// escalation, penalize same-category-twice), phase bias (soft preference for
+// a bit whose phase_pref matches the call phase), fuel boost (a dossier-
+// targeted bit rises above generic ones), and arm boost (a Director-armed
+// bit's learning-phase escalation). Eligibility itself — archetype match,
+// cooldown, phase-pool, status, latest_turn, fuel availability — stays a set
+// of hard gates, unchanged in kind, just no longer double as scored bonuses
+// on top of being gates.
 //
 // Two-stage pick: LOADOUT (per-turn candidacy — drop death blows, fuel-less,
 // parked, and bits the CALL TURN has closed the door on) narrows the registry
@@ -24,10 +41,9 @@
 // ----------------------------------------------------------------------
 import { BITS } from "./_bits_registry.js";
 export const WEIGHTS = {
-  archetypeMatch: 3.0,
-  universal: 1.0,
-  accusation: 1.5,
-  tone: 0.5,
+  // archetypeMatch/universal/accusation/tone REMOVED (Aug 5) — fitScore() no
+  // longer scores these, archetype match is now a pure eligibility gate (see
+  // that function's comment). Unused, deleted rather than left dead.
   fuelBoost: 2.0, // a dossier-targeted bit rises above generic ones
   fuelExtraHook: 0.5, // each hook beyond the first = more specific = more boost
   chain: 1.5, // SEQUENCING: reward a bit that escalates from the last one
@@ -204,6 +220,19 @@ function triggerPresent(trigger, state) {
 // (gag/stall) keep their own separate mechanisms in completions.js untouched.
 const TEXTURE_ROTATION =
   /^(1|true|yes|on)$/i.test(String(process.env.TEXTURE_ROTATION || ""));
+// WEIGHTED LOTTERY (Aug 5, its own flag, default off — behind AND separate
+// from TEXTURE_ROTATION itself, so the original deterministic-LRU behavior
+// stays the default even once texture rotation is on): instead of ALWAYS
+// handing the single longest-waiting candidate to the model, weight-
+// randomize among the top TEXTURE_LOTTERY_TOP_N by wait time. Never-fired
+// bits (wait = full turn count) still dominate the weighting, same
+// novelty-first bias as today — this just stops it being perfectly
+// deterministic among near-ties, so two calls with a similar history don't
+// always produce the identical pick. Zero model involvement, zero new risk
+// to anything downstream — selectTextureBit()'s return shape is unchanged.
+const TEXTURE_LOTTERY =
+  /^(1|true|yes|on)$/i.test(String(process.env.TEXTURE_LOTTERY || ""));
+const TEXTURE_LOTTERY_TOP_N = parseInt(process.env.TEXTURE_LOTTERY_TOP_N || "4", 10);
 const isTextureBit = (b) =>
   b.status !== "parked" && !isDeathBlow(b) && !b.trigger && !b.lane;
 // PHASE -> which pool(s) are eligible this turn. No grace on a phase flip: a
@@ -263,7 +292,19 @@ export function selectTextureBit(state, { pool = BITS } = {}) {
   });
   if (!candidates.length) return null;
   candidates.sort((a, b) => (lastFire[a.id] || 0) - (lastFire[b.id] || 0));
-  return candidates[0];
+  if (!TEXTURE_LOTTERY) return candidates[0];
+  // WEIGHTED LOTTERY: take the top N by wait time (never-fired bits, lastFire
+  // 0, naturally sort first and dominate here same as the deterministic path),
+  // weight each by how long it's waited, pick randomly proportional to weight.
+  const shortlist = candidates.slice(0, Math.max(1, TEXTURE_LOTTERY_TOP_N));
+  const weights = shortlist.map((b) => Math.max(1, turn - (lastFire[b.id] || 0)));
+  const total = weights.reduce((a, w) => a + w, 0);
+  let roll = Math.random() * total;
+  for (let i = 0; i < shortlist.length; i++) {
+    roll -= weights[i];
+    if (roll <= 0) return shortlist[i];
+  }
+  return shortlist[0]; // floating-point fallback, should never actually hit
 }
 // Debug/proof helper (same discipline as steps a-c: prove on a live log before
 // flipping TEXTURE_ROTATION on). Not called by production selection — a quick
@@ -298,49 +339,37 @@ function fuelFit(bit, state) {
 }
 // --- scoring --------------------------------------------------------------
 function fitScore(bit, state) {
-  const why = [];
+  // SIMPLIFIED (Aug 5, Andrew: strip fit down to eligibility, drop the small
+  // scored bonuses). Archetype match is now a pure binary gate — matches or
+  // it's excluded, no differentiated bonus for universal-vs-specific match
+  // anymore (both used to add a small score; now both just mean "eligible").
+  // Accusation and tone bonuses removed entirely — they were fine-grained
+  // tie-breakers built for a precise-scoring philosophy; the system is
+  // moving toward eligible-pool + weighted/LRU selection instead (same
+  // shape the texture lottery already uses), where these small bonuses
+  // don't have an obvious job left. WEIGHTS.archetypeMatch/universal/
+  // accusation/tone are now unused — removed from WEIGHTS below.
   const arch = bit.archetypes;
-  let s = 0;
-  if (arch === "universal") {
-    s += WEIGHTS.universal;
-    why.push(`universal +${WEIGHTS.universal}`);
-  } else if (Array.isArray(arch) && arch.includes(state.archetype)) {
-    s += WEIGHTS.archetypeMatch;
-    why.push(`archetype:${state.archetype} +${WEIGHTS.archetypeMatch}`);
-  } else if (TEST_UNSCOPE_BITS.has(bit.id)) {
-    // TEST MODE: this bit's archetype doesn't match, but it's on the unscope
-    // list, so we don't exclude it — score it as a universal-fit bit so it
-    // lands in the pool and gear/score decides its ranking like everything
-    // else. Registry scope is untouched; flip TEST_UNSCOPE_BITS off to restore.
-    s += WEIGHTS.universal;
-    why.push(`test-unscoped (real scope ${JSON.stringify(arch)}) +${WEIGHTS.universal}`);
-  } else {
+  const eligible =
+    arch === "universal" ||
+    (Array.isArray(arch) && arch.includes(state.archetype)) ||
+    TEST_UNSCOPE_BITS.has(bit.id);
+  if (!eligible) {
     return { score: -Infinity, why: ["archetype mismatch — excluded"] };
   }
-  if (bit.accusations && state.accusation &&
-      bit.accusations.includes(state.accusation)) {
-    s += WEIGHTS.accusation;
-    why.push(`accusation:${state.accusation} +${WEIGHTS.accusation}`);
-  }
-  if (bit.tones && state.tone && bit.tones.includes(state.tone)) {
-    s += WEIGHTS.tone;
-    why.push(`tone:${state.tone} +${WEIGHTS.tone}`);
-  }
-  return { score: s, why };
+  return { score: 0, why: [] };
 }
 function gearBias(bit, state) {
-  const why = [];
-  let b = 0;
-  if (bit.gear) {
-    for (const [axis, map] of Object.entries(bit.gear)) {
-      const st = state.gears?.[axis];
-      if (st != null && map[st] != null) {
-        b += map[st];
-        why.push(`${axis}:${st} ${map[st] >= 0 ? "+" : ""}${map[st]}`);
-      }
-    }
-  }
-  return { bias: b, why };
+  // CONFIRMED DEAD (Aug 5, Bits: intentional, not a regression) — this used
+  // to read bit.gear[axis][state], but the registry moved to flat top-level
+  // pressure/engagement/suspicion fields at some point and this was never
+  // updated to match. Verified directly: zero bits in the current registry
+  // have a .gear field at all, so this has been contributing 0 to every
+  // score, for every bit, for as long as that's been true. Left as a stub
+  // (not deleted outright) so breakdown.gearBias stays a stable key for
+  // anything downstream still reading it — always 0/undefined now, never
+  // computed from anything.
+  return { bias: 0, why: [] };
 }
 function recencyPenalty(bit, state) {
   const since = state.recency?.[bit.id];
