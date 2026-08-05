@@ -743,7 +743,25 @@ async function readCall(messages, prior) {
         "callread REASON=no_json_found raw=" + JSON.stringify(txt.slice(0, 150)) +
         " stop_reason=" + (j.stop_reason || "?") +
         " output_tokens=" + (j.usage && j.usage.output_tokens != null ? j.usage.output_tokens : "?") +
-        " contentBlocks=" + ((j.content || []).length)
+        " contentBlocks=" + ((j.content || []).length) +
+        // FURTHER ENRICHED (Aug 5): the leading hypothesis after the above —
+        // 200 tokens spent, one real content block, zero extracted text —
+        // is that the block isn't type:"text" at all (a reasoning/thinking-
+        // style block would look exactly like this, since only .text gets
+        // read here). This logs each block's actual type and, for anything
+        // with a non-"text" shape, a preview of whatever field DOES hold
+        // content — confirms or kills the hypothesis directly instead of
+        // inferring it from token counts alone.
+        " blockTypes=" + JSON.stringify((j.content || []).map((c) => c.type)) +
+        " blockPreview=" + JSON.stringify(
+          (j.content || []).map((c) => {
+            if (c.type === "text") return { type: c.type, len: (c.text || "").length };
+            // Any other block shape: dump its own keys + a short preview of
+            // whichever field looks like it holds the actual content.
+            const contentField = c.thinking || c.text || JSON.stringify(c).slice(0, 100);
+            return { type: c.type, keys: Object.keys(c), preview: String(contentField).slice(0, 100) };
+          })
+        )
       );
       return null;
     }
