@@ -310,6 +310,24 @@ const CALLER_REDIRECT_DETECT =
 // BYTE-FOR-BYTE what they were before this existed.
 const CALLER_CRUDE_DETECT =
   /^(1|true|yes|on)$/i.test(String(process.env.CALLER_CRUDE_DETECT || ""));
+// ── PRICING RAISED DETECT ("pricing_raised" trigger for BIT-210) ──────────
+// Same doctrine as the signals above: one more question on the reader call
+// that already runs. UNLIKE commitment_push/caller_redirected/caller_crude
+// (all momentary, per-turn, never latched), this is a ONE-WAY LATCH — same
+// shape as businessLatched, not the momentary signals: once a specific
+// price/cost has been stated ANYWHERE in the call, that fact stays true for
+// the rest of the call (a quoted number doesn't stop being known a turn
+// later, unlike "caller just demanded payment right now"). Governor's
+// trigger-detection pass; BIT-210 is already wired to key on it (Bits' side,
+// nothing to build there) — this is PE's emission half, plus the
+// EMITTED_TRIGGERS allowlist entry in _bits_scorer.js that makes the
+// registry's trigger:"pricing_raised" declaration actually matchable (a
+// trigger not in that allowlist falls through to gear-scoring unchanged —
+// see that file's own comment on the nothing-goes-dark guarantee). OFF by
+// default; when off, readCall's prompt and output are BYTE-FOR-BYTE what
+// they were before this existed.
+const PRICING_RAISED_DETECT =
+  /^(1|true|yes|on)$/i.test(String(process.env.PRICING_RAISED_DETECT || ""));
 // ── MARKER AWARENESS ("self-caused environment marker" persistence) ───────
 // PE_self_caused_marker_awareness.md. Detection lives in finishUp (the SSE
 // handler), persistence in stored.markerCounts/markerLastTurn, injection
@@ -647,14 +665,26 @@ async function readCall(messages, prior) {
           "directed at them), or \"none\" if nothing crude. When unsure, " +
           "report \"none\".\n"
         : "") +
+      (PRICING_RAISED_DETECT
+        ? "pricing_raised — has a SPECIFIC price, cost, rate, or dollar " +
+          "figure been stated ANYWHERE in the call so far (by either " +
+          "party)? Report true once a real number has been quoted — a " +
+          "monthly fee, a per-visit rate, an install cost, anything " +
+          "concrete. A vague reference to 'pricing' or 'cost' with no " +
+          "actual figure is NOT enough — report false until a real number " +
+          "appears. This is a ONE-WAY fact: once true, later turns should " +
+          "still report true even if pricing isn't being discussed at that " +
+          "exact moment.\n"
+        : "") +
       (() => {
         // Build the Reply-EXACTLY line from whichever flags are on, instead
         // of a nested ternary per combination — scales cleanly as more
-        // flag-gated fields get added (this is now the third).
+        // flag-gated fields get added (this is now the fourth).
         const fields = ['"phase":".."', '"suspicion":".."', '"pressure":".."', '"engagement":".."'];
         if (EVENT_DETECT) fields.push('"commitment_push":true|false');
         if (CALLER_REDIRECT_DETECT) fields.push('"caller_redirected":true|false');
         if (CALLER_CRUDE_DETECT) fields.push('"caller_crude":"none"|"impersonal"|"personal"');
+        if (PRICING_RAISED_DETECT) fields.push('"pricing_raised":true|false');
         return "Reply EXACTLY: {" + fields.join(",") + "}";
       })();
     const r = await fetch(ANTHROPIC_URL, {
@@ -758,6 +788,12 @@ async function readCall(messages, prior) {
       const crude = typeof parsed.caller_crude === "string" ? parsed.caller_crude.toLowerCase().trim() : "none";
       out.callerCrude = (crude === "impersonal" || crude === "personal") ? crude : "none";
     }
+    // PRICING-RAISED DETECT (flag-gated): strict boolean here — the ONE-WAY
+    // latch behavior (never writing false once true) happens in blendRead,
+    // not here; this just carries this turn's raw read.
+    if (PRICING_RAISED_DETECT) {
+      out.pricingRaised = parsed.pricing_raised === true;
+    }
     return Object.keys(out).length ? out : null;
   } catch {
     return null;
@@ -792,6 +828,17 @@ function blendRead(keywordState, read) {
   // turn — see there); this field is just the raw per-turn read.
   if (typeof read.callerCrude === "string") {
     out.callerCrude = read.callerCrude;
+  }
+  // PRICING-RAISED: ONE-WAY LATCH, same pattern as businessLatched below —
+  // only ever WRITE true, never explicitly write false. If this turn's read
+  // is false (or absent), out.pricingRaised is simply left unset, which
+  // means setCall's "only write when provided" convention leaves whatever
+  // was already persisted untouched — a prior true stays true forever, a
+  // wobble back to false on a later read can never un-latch it. This is
+  // deliberately different from callerRedirected/callerCrude above: a
+  // quoted price is a fact that stays known, not a momentary event.
+  if (read.pricingRaised === true) {
+    out.pricingRaised = true;
   }
   // ONE-WAY BUSINESS LATCH (phase-overlay split): the first turn the call is
   // read as non-"opening", latch businessLatched=true so completions serves the
@@ -1737,6 +1784,13 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       // selectTextureBit() treats as always-LRU-first. Read from stored state;
       // defaults to {} for a call that predates this feature or a fresh call.
       textureLastFire: (stored && stored.textureLastFire) || {},
+      // PRICING RAISED — feeds the generic EMITTED_TRIGGERS gate in
+      // _bits_scorer.js (see triggerPresent's "pricing_raised" case) so
+      // BIT-210's trigger:"pricing_raised" declaration is actually
+      // matchable. Reads the ONE-WAY LATCH persisted by blendRead — once
+      // true, stays true for the rest of the call regardless of what THIS
+      // turn's reader read was.
+      pricing_raised: !!(stored && stored.pricingRaised),
     };
     // LOADOUT then rank: selectBit narrows to the bits that fit this moment,
     // then ranks that focused set (not all 71). threshold:0 so we apply our own
@@ -2333,6 +2387,21 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       body?.extra_body?.metadata?.interrupted ??
       body?.call?.metadata?.interrupted ??
       false;
+    // ★ DIAGNOSTIC (Aug 5, temporary — remove once the zero-trace mystery is
+    // settled). Voice traced the wire shape precisely: interrupted lands at
+    // body.metadata.interrupted, the SAME object callId/slug already arrive
+    // on and read successfully every turn — so the read path is confirmed
+    // correct, and the zero-trace across 8 real stamps needs the actual raw
+    // object PE received to diagnose, not another guess. Logs EVERY turn
+    // (not just wasInterrupted===true) so a normal turn and a stamped turn
+    // can be compared directly once one shows up in a real call.
+    console.log(
+      "INTERRUPT-BODY-DIAG turn=" + turn +
+      " metadata=" + JSON.stringify(body?.metadata) +
+      " extra_body_metadata=" + JSON.stringify(body?.extra_body?.metadata) +
+      " call_metadata=" + JSON.stringify(body?.call?.metadata) +
+      " wasInterrupted=" + wasInterrupted
+    );
     if (wasInterrupted === true) {
       mutable +=
         "\n\nTHE CALLER JUST CUT YOU OFF mid-line. React to being interrupted " +
