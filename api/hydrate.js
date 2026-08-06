@@ -100,10 +100,25 @@ async function readDossierFloor(targetId) {
   const KEY =
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
   if (!URL || !KEY) return null;
+  // HARD TIMEOUT (Aug 6, found live — a real gap, not defensive extra). The
+  // try/catch below only ever handled a THROWN error; it did nothing for a
+  // fetch that simply hangs (a stalled connection, a slow response, no
+  // outright failure). Because this is awaited sequentially BEFORE
+  // assemblePrefix()/writePrefix() run, a hang here meant call_prefix.prefix
+  // never got written AT ALL — the caller-facing symptom: the model
+  // receives no system prompt whatsoever and answers as bare, uncostumed
+  // Claude ("I'm a text-based AI assistant"). This is an ENHANCEMENT (the
+  // floor, not the whole dossier) — it must never be able to block the
+  // core call from having a host prompt at all. AbortController + a short
+  // ceiling; on abort, degrades to null exactly like any other failure
+  // here — same safe path, just reachable now.
+  const DOSSIER_FLOOR_TIMEOUT_MS = parseInt(process.env.DOSSIER_FLOOR_TIMEOUT_MS || "2000", 10);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DOSSIER_FLOOR_TIMEOUT_MS);
   try {
     const r = await fetch(
       `${URL}/rest/v1/scout_facts?target_id=eq.${encodeURIComponent(targetId)}&select=source_lane,facts`,
-      { headers: { apikey: KEY, authorization: `Bearer ${KEY}` } }
+      { headers: { apikey: KEY, authorization: `Bearer ${KEY}` }, signal: controller.signal }
     );
     if (!r.ok) return null;
     const rows = await r.json();
@@ -161,8 +176,19 @@ async function readDossierFloor(targetId) {
     // dossier; truncate rather than let any one part blow the budget.
     return line.slice(0, 400) || null;
   } catch (e) {
-    console.log("hydrate: readDossierFloor failed: " + (e && e.message));
+    // AbortError specifically means the timeout fired — log it distinctly
+    // from a genuine fetch/parse failure so a pattern of timeouts (vs. one-
+    // off errors) is easy to spot in the logs later.
+    const isTimeout = e && e.name === "AbortError";
+    console.log(
+      "hydrate: readDossierFloor " + (isTimeout ? "TIMED OUT after " + DOSSIER_FLOOR_TIMEOUT_MS + "ms" : "failed: " + (e && e.message))
+    );
     return null; // never blocks hydrate — the floor degrading to absent is safe
+  } finally {
+    // Clears on EVERY exit path (success, any early return, or the catch
+    // above) — the one thing a scattering of individual clearTimeout calls
+    // before each return would risk missing.
+    clearTimeout(timer);
   }
 }
 
