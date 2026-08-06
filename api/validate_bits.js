@@ -57,8 +57,12 @@ if (!arrMatch) {
         fail(`${b.id}: invalid status "${b.status}"`);
       }
 
-      // Stale gear fields
-      if (b.gear) { fail(`${b.id}: stale "gear" field — remove`); gearCount++; }
+      // Stale/dead fields — confirmed non-functional per PE Aug 5
+      const dead = ['gear','pressure','engagement','suspicion','accusations',
+                    'tones','latest_turn','earliest_turn'];
+      for (const f of dead) {
+        if (b[f] !== undefined) fail(`${b.id}: dead field "${f}" — strip it`);
+      }
 
       // Brace bug detection: check that rung_spacing doesn't contain pool/phase_pref etc
       if (b.rung_spacing) {
@@ -108,21 +112,39 @@ const keyMatches = [...dirSrc.matchAll(/"(BIT-[0-9]+[a-z]?)"\s*:/g)];
 ok(`Directives: ${keyMatches.length} entries found`);
 
 // Check for banned phrases in directive text
+// Skip lines that are prohibition text (hard rules telling host NOT to say something)
 const BANNED = [
-  'where were we', 'anyway,', 'anyways', "I'm here",
-  "that makes sense", "mm-hmm", "uh-huh", "yep yep",
-  "I'll let you go", "great to reconnect", "happy to help",
-  "of course,", "certainly,", "absolutely,"
+  // B - model voice
+  'happy to help', 'glad to help', 'great question', 'good question',
+  "that's a great point", 'I understand your concern', 'I appreciate that',
+  'how can I help you today', 'is there anything else', 'let me assist',
+  // B - office status jargon
+  'heads down', 'heads-down', 'circle back', 'touch base',
+  // C - dead air
+  "that makes sense", "I'm here",
+  // D - reset tics
+  'anyway,', 'anyways', 'where were we', 'okay, so',
+  // E - call ending
+  "I'll let you go", 'that about covers it', 'thanks for your time',
+  "I should let you get back", 'have a good one',
+  // F - false familiarity
+  'great to reconnect', 'good to hear your voice again',
+  // G - stage directions
+  '*laughs*', '*pauses*', '*sighs*', '[LAUGHS]',
 ];
+
+// Lines that are prohibition text — skip them
+const PROHIBITION_RE = /hard:|never\s|do not|banned|not.*say|avoid|no[t]?\s["']|prohibited/i;
+
 const bannedHits = [];
-for (const phrase of BANNED) {
-  const re = new RegExp(phrase, 'gi');
-  const matches = [...dirSrc.matchAll(re)];
-  if (matches.length) {
-    matches.forEach(m => {
-      const lineNo = dirSrc.slice(0, m.index).split('\n').length;
-      bannedHits.push(`Line ${lineNo}: "${phrase}"`);
-    });
+const dirLines = dirSrc.split('\n');
+for (let i = 0; i < dirLines.length; i++) {
+  const line = dirLines[i];
+  if (PROHIBITION_RE.test(line)) continue;
+  for (const phrase of BANNED) {
+    if (line.toLowerCase().includes(phrase.toLowerCase())) {
+      bannedHits.push(`Line ${i+1}: "${phrase}" — ${line.trim().slice(0,60)}`);
+    }
   }
 }
 if (bannedHits.length) {
