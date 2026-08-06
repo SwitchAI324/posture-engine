@@ -1071,6 +1071,25 @@ export default async function handler(req) {
     body.metadata?.slug ??
     (vv.sv_slug || null) ??
     null;
+  // ★ DIAGNOSTIC (Aug 6, temporary — remove once the bare-prefix mystery is
+  // settled). Live evidence just ruled out a hydrate-side hang (hydrate
+  // logged OK, fast, every time) and pointed at something further down:
+  // EVERY hydrate call for the broken calls was "(slug-key only)" — call_id
+  // was never supplied to hydrate, so the ONLY way completions.js can ever
+  // find that prefix is the getCallBySlug fallback below, which requires
+  // THIS slug value to be correctly populated. This logs it directly, plus
+  // which of the four sources (if any) supplied it, so the next call
+  // settles definitively whether the agent is sending slug on this request
+  // at all — rather than inferring it a second time from a downstream
+  // symptom.
+  console.log(
+    "SLUG-DIAG slug=" + JSON.stringify(slug) +
+    " source=" + (body.slug ? "body.slug" :
+      body.call?.metadata?.slug ? "body.call.metadata.slug" :
+      body.metadata?.slug ? "body.metadata.slug" :
+      vv.sv_slug ? "vv.sv_slug" : "NONE") +
+    " callId=" + JSON.stringify(callId)
+  );
   let stored = null;
   let ammo = { ammunition: [], byHook: {} };
   let controls = { deathBlow: null, armed: [], sentBench: null, forced: null };
