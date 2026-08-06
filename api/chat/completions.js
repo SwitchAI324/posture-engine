@@ -1153,9 +1153,28 @@ export default async function handler(req) {
   // missing or has no prefix yet (first turn beat the call_id write), pull the
   // slug-keyed prefix so the opener still runs the REAL compiled prompt instead
   // of the flat fallback. Best-effort; never throws.
+  console.log(
+    "SLUG-FALLBACK-GATE slug=" + JSON.stringify(slug) +
+    " storedIsNull=" + (stored == null) +
+    " storedHasPrefix=" + !!(stored && stored.prefix) +
+    " willAttemptFallback=" + !!(slug && (!stored || !stored.prefix))
+  );
   if (slug && (!stored || !stored.prefix)) {
     try {
       const bySlug = await getCallBySlug(slug);
+      // ★ DIAGNOSTIC (Aug 6, temporary — remove once the bare-prefix mystery
+      // is settled). SLUG-DIAG already confirmed slug arrives correctly at
+      // body.slug, and hydrate confirms its own write succeeds — this is the
+      // one remaining unverified link: did THIS lookup, right here, actually
+      // find the row hydrate wrote, and did it have a real prefix? If this
+      // logs found=false despite hydrate logging OK moments earlier, that's
+      // a real race between the write and this read, not a slug problem.
+      console.log(
+        "SLUG-FALLBACK-DIAG slug=" + JSON.stringify(slug) +
+        " found=" + !!bySlug +
+        " hasPrefix=" + !!(bySlug && bySlug.prefix) +
+        " prefixLen=" + (bySlug && bySlug.prefix ? bySlug.prefix.length : 0)
+      );
       if (bySlug && bySlug.prefix) {
         // Keep any live per-call state we already have; just borrow the prefix
         // (and posture line) from the slug row.
