@@ -894,13 +894,22 @@ function loadoutFor(bitIds) {
 // [4] CALL CONTEXT — the call-stable fragments of Data + Product Logic
 // (target dossier summary, tactic/roster routing, second-call flag, etc.).
 // Real source: Data doc + Product Logic compile.
+// DOSSIER FLOOR (2026-08-05, Data's scoping — see hydrate.js's readDossierFloor
+// for the read side). cfg.dossierFloor is the condensed ~50-token identity +
+// prior-contact string, computed once at hydrate from scout_facts and passed
+// straight through here — this function does no fetching, no logic beyond
+// picking which text to show. Falls back to the old placeholder when absent
+// (a fresh target with no scout_facts yet, or the read failing safely) so a
+// call NEVER ships with an empty/broken CALL CONTEXT line.
 function callStableContext(cfg) {
   return (
-    `CALL CONTEXT: target=${cfg.target || "<dossier summary>"}; ` +
-    `tactic=${cfg.tactic || "<classifier output>"}; ` +
-    `second_call=${cfg.secondCall ? "yes" : "no"}.\n` +
-    `[[ DATA / PRODUCT LOGIC PLACEHOLDER — call-stable context compiles ` +
-    `from the Data doc + Product Logic. ]]`
+    `CALL CONTEXT: ` +
+    (cfg.dossierFloor
+      ? cfg.dossierFloor
+      : `target=${cfg.target || "<dossier summary>"}; ` +
+        `[[ no dossier floor yet for this target ]]`) +
+    ` tactic=${cfg.tactic || "<classifier output>"}; ` +
+    `second_call=${cfg.secondCall ? "yes" : "no"}.`
   );
 }
 module.exports = { hostBaseFor, hostOverlaysFor, splitHostPrompt, loadoutFor, callStableContext };
