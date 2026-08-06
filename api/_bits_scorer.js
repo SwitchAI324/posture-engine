@@ -175,6 +175,21 @@ const EMITTED_TRIGGERS = new Set([
                         // Aug 5 for BIT-403.
   // Tier 2 (trivial) — computed directly from turn count, no LLM cost:
   "call_turn_1",       // state.turn === 1
+  // Tier 3 — PRE-CALL FACTS, known from turn 1, sourced from ammo.byHook
+  // (the same Channel 1/2 fuel read that already arms these bits' CONTENT —
+  // this is that same data, also used as an eligibility gate). Unlike
+  // pricing_raised/caller_questioned_humanity, these need no detection at
+  // all — the fact is already known before the call starts.
+  "has_prior_contact", // ammo.byHook.has_prior_contact presence. Added Aug 6
+                        // for BIT-508-513 (the prior-contact/escalation
+                        // family) — was tracked here as "prior_contact"
+                        // (unbuilt); Bits' registry correction landed on a
+                        // different name, so this entry matches what's
+                        // actually on the bits, not the old placeholder name.
+  "browsed_tmi",        // ammo.byHook.browsed_tmi presence. Added Aug 6 for
+                        // BIT-507 (the Fiji Callback) — the fuel-hook side
+                        // (content-arming) was already live; this is the
+                        // eligibility-gate half that was missing.
   // NOTE: call_phase_late is intentionally NOT here. It tags only the 700-series
   // death-blows, which never pass through normal loadout() — they fire via
   // selectDeathBlow() (separate end-of-call path, threshold bypassed). The
@@ -182,8 +197,8 @@ const EMITTED_TRIGGERS = new Set([
   // needs no PE emitter and no gate here; the tag is descriptive only.
   // NOT yet emitted (stay gear-scored until PE adds each emitter — do NOT add
   // here until the emitter is live and logged):
-  //   prior_contact, browsed_tmi, caller_pitched, caller_made_claim,
-  //   caller_named_competitor, caller_named_hobby, caller_went_quiet
+  //   caller_pitched, caller_made_claim, caller_named_competitor,
+  //   caller_named_hobby, caller_went_quiet
   // NOT an event (lane marker, never add): ambient
 ]);
 // Is this bit's trigger PRESENT in the current call state? Only called for a
@@ -205,6 +220,10 @@ function triggerPresent(trigger, state) {
       return state.pricing_raised === true;
     case "caller_questioned_humanity":
       return state.caller_questioned_humanity === true;
+    case "has_prior_contact":
+      return state.has_prior_contact === true;
+    case "browsed_tmi":
+      return state.browsed_tmi === true;
     default:
       // Not an allowlisted trigger — should never reach here (loadout guards).
       // Fail SAFE toward eligibility so a mis-call can't silently blackhole a bit.
@@ -258,23 +277,37 @@ const bitPool = (b) => b.pool || "middle";
 // 4 turns. (Separate from recencyPenalty's gear-era cooldown default above —
 // that one still governs gear-scored bits; this is the rotation's own knob.)
 const bitCooldown = (b) => b.cooldown ?? 4;
+// UNIVERSAL FIRE HISTORY (Aug 6, generalized from the old texture-only
+// textureLastFire). Shape: { [bitId]: { lastFiredTurn, totalFires,
+// lastCountedTurn } }. lastFiredTurn/totalFires answer cooldown and
+// max_fires_per_call respectively; lastCountedTurn is the same-turn
+// preemptive-gen race guard used everywhere else in this codebase (mirrors
+// huntRungTurn) — completions.js checks it before incrementing so same-turn
+// regeneration siblings for one real turn don't each burn a count.
+// Read-only helper here; completions.js owns the actual stamp/persist.
+const lastFiredTurnOf = (history, bitId) => {
+  const e = (history || {})[bitId];
+  return (e && e.lastFiredTurn) || 0;
+};
+const totalFiresOf = (history, bitId) => {
+  const e = (history || {})[bitId];
+  return (e && e.totalFires) || 0;
+};
 // Pick the next texture bit to fire this turn, or null. LRU within the
 // phase's eligible pool(s): the bit that fired LONGEST ago wins; never-fired
 // (last_fire_turn 0 or absent) always sorts first. No weights, no randomness
 // — fully deterministic, per spec.
 //
-// EXPECTS (new state fields completions.js must supply once wired):
-//   state.textureLastFire — { [bit.id]: <turn it last ACTUALLY fired> },
-//     0 or absent = never fired.
+// EXPECTS state.bitFireHistory (see above — generalized Aug 6, was
+// state.textureLastFire, texture-only).
 //   state.turn  — current caller turn (already used elsewhere in this file).
 //   state.phase — current call phase (already used elsewhere in this file).
 //
 // COOLDOWN IS NOT RESET HERE — this function only SELECTS. Per spec, when a
 // scenario bit also wants the turn, the caller injects the scenario bit and
-// suppresses texture for that turn WITHOUT touching textureLastFire, so the
-// caller (completions.js) must stamp textureLastFire[bit.id] = turn ONLY on
-// turns this pick was actually performed, never on a turn it was merely
-// selected then suppressed.
+// suppresses texture for that turn WITHOUT touching the history, so the
+// caller (completions.js) must stamp it ONLY on turns this pick was actually
+// performed, never on a turn it was merely selected then suppressed.
 //
 // EDGE CASES (per spec, all handled here or explicitly left alone):
 //   - no eligible bit -> null (the starvation guard elsewhere handles a dry
@@ -287,24 +320,27 @@ const bitCooldown = (b) => b.cooldown ?? 4;
 export function selectTextureBit(state, { pool = BITS } = {}) {
   if (!TEXTURE_ROTATION) return null;
   const eligiblePools = POOL_FOR_PHASE[state.phase] || ["middle"];
-  const lastFire = state.textureLastFire || {};
+  const history = state.bitFireHistory || {};
   const turn = state.turn ?? 0;
   const candidates = pool.filter((b) => {
     if (!isTextureBit(b)) return false;
     if (!fuelFit(b, state).available) return false; // still needs its ammo if fueled
     if (!eligiblePools.includes(bitPool(b))) return false; // phase gate, no grace
-    const last = lastFire[b.id] || 0;
+    const last = lastFiredTurnOf(history, b.id);
     if (last > 0 && turn - last < bitCooldown(b)) return false; // still cooling down
+    // MAX FIRES PER CALL (Aug 6, new — see loadout()'s own comment for the
+    // full rationale): a hard cap, only bits that declare it are affected.
+    if (b.max_fires_per_call != null && totalFiresOf(history, b.id) >= b.max_fires_per_call) return false;
     return true;
   });
   if (!candidates.length) return null;
-  candidates.sort((a, b) => (lastFire[a.id] || 0) - (lastFire[b.id] || 0));
+  candidates.sort((a, b) => lastFiredTurnOf(history, a.id) - lastFiredTurnOf(history, b.id));
   if (!TEXTURE_LOTTERY) return candidates[0];
   // WEIGHTED LOTTERY: take the top N by wait time (never-fired bits, lastFire
   // 0, naturally sort first and dominate here same as the deterministic path),
   // weight each by how long it's waited, pick randomly proportional to weight.
   const shortlist = candidates.slice(0, Math.max(1, TEXTURE_LOTTERY_TOP_N));
-  const weights = shortlist.map((b) => Math.max(1, turn - (lastFire[b.id] || 0)));
+  const weights = shortlist.map((b) => Math.max(1, turn - lastFiredTurnOf(history, b.id)));
   const total = weights.reduce((a, w) => a + w, 0);
   let roll = Math.random() * total;
   for (let i = 0; i < shortlist.length; i++) {
@@ -536,6 +572,34 @@ export function loadout(state, { pool = BITS } = {}) {
     // makes sense early; past turn 8 it's excluded outright, same as an
     // opening bit once the call leaves opening.
     if (b.latest_turn != null && (state.turn ?? 0) > b.latest_turn) return false;
+    // UNIVERSAL COOLDOWN + MAX-FIRES-PER-CALL (Aug 6, gap found live: a
+    // gag-lane bit — THE ENVIRONMENT (BIT-329) — kept winning the ranked
+    // pool turn after turn despite its OWN directive saying "two variants
+    // per call max, minimum 4 turns apart," because cooldown was previously
+    // only a HARD gate inside selectTextureBit() — every other bit type only
+    // got a soft, beatable recencyPenalty in the ranking formula. This
+    // applies the SAME hard exclusion texture bits already had to every bit
+    // type. max_fires_per_call is NEW — a bit only gets capped if it
+    // explicitly declares one; the ~140 bits that don't are unaffected.
+    // EXCLUSION LOGGING: this is exactly the kind of silent failure that
+    // took a full manual transcript read to catch once already — logging
+    // AT the exclusion point so the next one (if any) shows up in a normal
+    // log scan instead of requiring that again.
+    {
+      const history = state.bitFireHistory || {};
+      const fireEntry = history[b.id];
+      const last = (fireEntry && fireEntry.lastFiredTurn) || 0;
+      const cd = b.cooldown ?? 4;
+      if (last > 0 && (state.turn ?? 0) - last < cd) {
+        console.log("bit EXCLUDED id=" + b.id + " reason=cooldown turn=" + state.turn + " lastFired=" + last + " cooldown=" + cd);
+        return false;
+      }
+      const totalFires = (fireEntry && fireEntry.totalFires) || 0;
+      if (b.max_fires_per_call != null && totalFires >= b.max_fires_per_call) {
+        console.log("bit EXCLUDED id=" + b.id + " reason=max_fires_per_call turn=" + state.turn + " totalFires=" + totalFires + " cap=" + b.max_fires_per_call);
+        return false;
+      }
+    }
     // OPENING GATE — two rules, phase first (Bits ratified Jul 15).
     //
     // 1. PHASE is the real boundary: opening bits leave the pool the moment the

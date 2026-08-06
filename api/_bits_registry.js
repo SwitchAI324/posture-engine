@@ -315,7 +315,8 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 6,
-    "trigger": "phase:opening"
+    "trigger": "phase:opening",
+    "max_fires_per_call": 1
   },
   {
     "id": "BIT-133",
@@ -796,7 +797,8 @@ export const BITS = [
     "stall_type": "hunt",
     "rungs": 5,
     "trigger": "commitment_push",
-    "status": "active"
+    "status": "active",
+    "max_fires_per_call": 5
   },
   {
     "archetypes": "universal",
@@ -852,7 +854,8 @@ export const BITS = [
     "name": "The Spill",
     "lane": "gag",
     "trigger": "ambient",
-    "status": "active"
+    "status": "active",
+    "max_fires_per_call": 1
   },
   {
     "id": "BIT-308",
@@ -908,7 +911,8 @@ export const BITS = [
     "cooldown": 6,
     "lane": "gag",
     "trigger": "ambient",
-    "status": "active"
+    "status": "active",
+    "max_fires_per_call": 1
   },
   {
     "id": "BIT-315",
@@ -951,7 +955,8 @@ export const BITS = [
     "cooldown": 5,
     "lane": "gag",
     "trigger": "ambient",
-    "status": "active"
+    "status": "active",
+    "max_fires_per_call": 1
   },
   {
     "id": "BIT-321",
@@ -1027,7 +1032,8 @@ export const BITS = [
     "cooldown": 5,
     "lane": "gag",
     "trigger": "ambient",
-    "status": "active"
+    "status": "active",
+    "max_fires_per_call": 2
   },
   {
     "id": "BIT-330",
@@ -1037,7 +1043,8 @@ export const BITS = [
     "phase_pref": "opening",
     "cooldown": 999,
     "trigger": "call_turn_1",
-    "status": "active"
+    "status": "active",
+    "max_fires_per_call": 1
   },
   {
     "id": "BIT-401",
@@ -1180,7 +1187,7 @@ export const BITS = [
       "has_prior_contact"
     ],
     "cooldown": 5,
-    "trigger": "prior_contact",
+    "trigger": "has_prior_contact",
     "status": "active"
   },
   {
@@ -1191,7 +1198,7 @@ export const BITS = [
       "prior_call_count"
     ],
     "cooldown": 4,
-    "trigger": "prior_contact",
+    "trigger": "has_prior_contact",
     "status": "active"
   },
   {
@@ -1202,7 +1209,7 @@ export const BITS = [
       "prior_call_count"
     ],
     "cooldown": 5,
-    "trigger": "prior_contact",
+    "trigger": "has_prior_contact",
     "status": "active"
   },
   {
@@ -1213,7 +1220,7 @@ export const BITS = [
       "prior_call_count"
     ],
     "cooldown": 5,
-    "trigger": "prior_contact",
+    "trigger": "has_prior_contact",
     "status": "active"
   },
   {
@@ -1224,7 +1231,7 @@ export const BITS = [
       "prior_call_count"
     ],
     "cooldown": 4,
-    "trigger": "prior_contact",
+    "trigger": "has_prior_contact",
     "status": "active"
   },
   {
@@ -1235,7 +1242,7 @@ export const BITS = [
       "prior_call_count"
     ],
     "cooldown": 4,
-    "trigger": "prior_contact",
+    "trigger": "has_prior_contact",
     "status": "active"
   },
   {
@@ -1260,7 +1267,8 @@ export const BITS = [
       "rung_4_earliest_turn": 16
     },
     "pool": "middle",
-    "status": "active"
+    "status": "active",
+    "max_fires_per_call": 4
   },
   {
     "id": "BIT-516",

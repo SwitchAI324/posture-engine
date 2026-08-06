@@ -40,7 +40,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-   `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,texture_last_fire,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn`;
+   `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn`;
   const r = await fetch(url, {
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
@@ -81,12 +81,13 @@ export async function getCall(callId) {
     // false when the column is absent/null — a call that never saw a payment
     // demand reads false, same as the detector-off case.
     commitmentPush: rows[0].commitment_push ?? false,
-    // TEXTURE ROTATION (step d): per-bit last-actually-fired turn map,
-    // {bit.id: turn}. jsonb column, defaults {} for a call that predates this
-    // feature (or a fresh row where it's null). selectTextureBit() in
-    // _bits_scorer.js treats an absent/0 entry as never-fired = always LRU-
-    // first, so {} here is the correct "nothing has ever fired yet" state.
-    textureLastFire: rows[0].texture_last_fire ?? {},
+    // UNIVERSAL FIRE HISTORY (Aug 6, generalized from texture-only
+    // textureLastFire, replaces it — see _bits_scorer.js's own comment for
+    // the full shape: { [bitId]: { lastFiredTurn, totalFires,
+    // lastCountedTurn } }). jsonb column, defaults {} for a call that
+    // predates this feature (or a fresh row where it's null). An
+    // absent/never-fired entry reads as "eligible" everywhere it's checked.
+    bitFireHistory: rows[0].bit_fire_history ?? {},
     // STALL RESOLUTION SIGNALS (rung count + caller-redirect). Both default
     // to their "nothing has happened yet" state so a call that predates
     // these reads exactly as if the feature didn't exist.
@@ -124,7 +125,7 @@ export async function getCall(callId) {
 // posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, textureLastFire, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn }
+  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -169,10 +170,10 @@ export async function setCall(
   // field was previously dropped here, so stored.commitmentPush was always
   // undefined and the consumer guard never passed.
   if (commitmentPush !== undefined) row.commitment_push = commitmentPush;
-  // textureLastFire: step-d rotation's per-bit last-fired map (jsonb). Only
-  // written when provided — same pattern as every other field here, so a
-  // call that never touches texture rotation leaves the column untouched.
-  if (textureLastFire !== undefined) row.texture_last_fire = textureLastFire;
+  // bitFireHistory: universal per-bit fire-history map (jsonb), generalized
+  // Aug 6 from texture-only textureLastFire. Only written when provided —
+  // same pattern as every other field here.
+  if (bitFireHistory !== undefined) row.bit_fire_history = bitFireHistory;
   // STALL RESOLUTION SIGNALS: rung counter (huntRungCount) and the reader's
   // caller-redirect judgment (callerRedirected). Same "only write when
   // provided" pattern as every other field here.
