@@ -112,14 +112,21 @@ const BIT_STALL_TYPE = Object.fromEntries(
 const stallTypeOf = (id) => BIT_STALL_TYPE[id] || "hold"; // absent → safe default
 const STALL_TYPE_SPLIT =
   /^(1|true|yes|on)$/i.test(String(process.env.STALL_TYPE_SPLIT || ""));
-// SOLO_BIT (TEST HARNESS, throwaway): when set to a bit id (e.g. "BIT-233"),
-// the scorer's pick is BYPASSED — that bit is forced to fire and ALL other
-// scored auto-bits are suppressed, so a test call reaches the target bit
-// without the normal scoring layer (Questionnaire et al.) firing first and
-// ending the call. Does NOT touch _bits_scorer.js — sits on top of the pick.
-// Unset in production; delete when the scoring layer is settled. Openers/gag
-// still work (they're their own paths); this only forces the one scored bit.
-const SOLO_BIT = String(process.env.SOLO_BIT || "").trim() || null;
+// TEST_PRIORITY_BITS (Aug 6, TEST HARNESS, throwaway — replaces SOLO_BIT,
+// removed same day once this fully subsumed it: TEST_PRIORITY_BITS set to
+// a single id behaves identically to what SOLO_BIT did, so keeping both was
+// two mechanisms for one job). Comma-separated list of bit ids — a single
+// id works exactly like the old SOLO_BIT; a longer list reviews a whole
+// batch across a handful of test calls instead of one run per bit. When
+// set, EVERY call cycles through ONLY that list — LRU within it, same
+// last-fired-turn logic selectTextureBit() already uses, so repeated test
+// calls naturally rotate through the whole list rather than always forcing
+// the same one. Bypasses ALL normal eligibility (archetype/pool/cooldown/
+// trigger/family/absurdity) — the point is to HEAR the bit regardless of
+// whether it would naturally be eligible right now. Unset in production;
+// delete once the review pass is done.
+const TEST_PRIORITY_BITS = String(process.env.TEST_PRIORITY_BITS || "")
+  .split(",").map((s) => s.trim()).filter(Boolean);
 import { waitUntil } from "@vercel/functions";
 
 // FULL BIT DIRECTIVES (id -> directive prose), same source providers.js
@@ -1898,6 +1905,23 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       );
     }
 
+    // ABSURDITY CEILING (Aug 6, Bits — hard gate, see _bits_scorer.js's own
+    // comment for the enforcement side). This is the COMBINING logic: three
+    // possible sources, most restrictive wins. ONLY the Director-override
+    // and a single global default are actually built here — Bits' other two
+    // example use cases (a per-archetype cap for first-call archetypes, a
+    // turn-based ramp that loosens after some threshold) both need REAL
+    // values (which archetypes, which turn) that PE doesn't have and
+    // shouldn't guess at. Building the mechanism now so it's ready the
+    // moment those values land, rather than blocking on them.
+    const ABSURDITY_CEILING_DEFAULT = process.env.ABSURDITY_CEILING_DEFAULT
+      ? parseInt(process.env.ABSURDITY_CEILING_DEFAULT, 10)
+      : null; // null = unrestricted by default; nothing changes until set
+    const absurdityCeiling =
+      controls && controls.absurdityCeiling != null
+        ? controls.absurdityCeiling // Director override always wins
+        : ABSURDITY_CEILING_DEFAULT;
+
     const scorerState = {
       archetype,
       accusation,
@@ -1914,6 +1938,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       // internal shape).
       has_prior_contact: !!(ammo.byHook && ammo.byHook.has_prior_contact),
       browsed_tmi: !!(ammo.byHook && ammo.byHook.browsed_tmi),
+      absurdityCeiling,
       // sequencing anchor — without this, chain + category spacing never fire.
       lastBitId: stored ? stored.lastBitId || null : null,
       // EXTENDED_STALL: true when the call has been content-less/social too long.
@@ -1952,7 +1977,30 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // LOADOUT then rank: selectBit narrows to the bits that fit this moment,
     // then ranks that focused set (not all 71). threshold:0 so we apply our own
     // INJECT_BAR below; we just want the ranked loadout + its size.
-    const sel = selectBit(scorerState, { threshold: 0 });
+    //
+    // TEST_PRIORITY_BITS (Aug 6, TEST HARNESS, throwaway): when set, this is
+    // the ONLY thing that changes — selectBit() runs on a RESTRICTED pool
+    // (just the listed bits) instead of the full registry. Every rule still
+    // applies normally to whatever's left: archetype, pool/phase, cooldown,
+    // max_fires_per_call, trigger, family exclusion, absurdity ceiling, the
+    // deploy bar, MIN_GAP spacing — all of it, exactly as any real turn.
+    // This is NOT a force — if nothing in the list is currently eligible,
+    // nothing fires this turn, same as an empty pool on any normal turn.
+    // (Earlier version of this harness bypassed everything and force-fired
+    // regardless of eligibility — replaced same day once it was clear that
+    // wasn't actually what was wanted: hearing whether reviewed bits fire
+    // for REAL reasons, not guaranteed regardless of the rules.)
+    const testPool = TEST_PRIORITY_BITS.length
+      ? (Array.isArray(BITS) ? BITS : []).filter((b) => b && TEST_PRIORITY_BITS.includes(b.id))
+      : BITS;
+    if (TEST_PRIORITY_BITS.length) {
+      console.log(
+        "TEST_PRIORITY_BITS active — pool restricted to " + testPool.length + "/" +
+        TEST_PRIORITY_BITS.length + " listed ids (missing/parked ones silently excluded, same as any bit); " +
+        "all normal eligibility + firing rules still apply"
+      );
+    }
+    const sel = selectBit(scorerState, { threshold: 0, pool: testPool });
     const ranked = sel.ranked;
     let top = ranked[0] || null;
     const poolSize = sel.pool;
@@ -1960,35 +2008,6 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     const bar = effectiveBar(turn);
     // fire: whether a bit clears the bar this turn.
     let fire = !!(top && top.score >= bar && gap >= MIN_GAP);
-
-    // ── SOLO_BIT (TEST HARNESS) ───────────────────────────────────────────
-    // When SOLO_BIT is set, bypass the normal pick entirely: suppress whatever
-    // the scorer chose and force ONLY the solo bit to fire. Lets a test call
-    // reach the target bit (e.g. BIT-233) without other scored bits firing
-    // first. Placed before the hunt-window/cpush/force blocks so it's the base
-    // behavior; those still layer on (the hunt-window will re-fire BIT-233 as
-    // normal once cpush has fired, which is fine). Throwaway — env-gated off in
-    // production.
-    if (SOLO_BIT) {
-      const soloReg = (Array.isArray(BITS) ? BITS : []).find(
-        (b) => b && b.id === SOLO_BIT && (b.status == null || b.status === "active")
-      );
-      if (soloReg) {
-        top = {
-          id: soloReg.id, name: soloReg.name || soloReg.id, score: 999, excluded: false,
-          breakdown: { fit: null, gearBias: null, recency: null, why: ["SOLO_BIT test harness"] },
-        };
-        fire = true;
-        console.log("SOLO_BIT active — forcing " + SOLO_BIT + " turn=" + turn +
-          ", suppressing normal pick" + (top ? "" : ""));
-      } else {
-        // Solo bit not in registry/active: suppress ALL fires so the harness
-        // fails loud (nothing fires) rather than silently falling back to the
-        // normal pick we were trying to bypass.
-        fire = false;
-        console.log("SOLO_BIT=" + SOLO_BIT + " not found/active — suppressing all fires turn=" + turn);
-      }
-    }
 
     // ── HUNT-WINDOW FLOOR (STEP 3 beat controller) ────────────────────────
     // If BIT-233 opened a commitment-push scenario in the last few turns, keep
@@ -2388,7 +2407,13 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     }
     let textureFired = false;
     if (!fire && textureInvitedNow && !textureCooldownActive) {
-      const texBit = selectTextureBit(scorerState);
+      // Same TEST_PRIORITY_BITS restriction as the scored path above — a
+      // texture-classified bit in the list needs this too, since
+      // selectTextureBit() has its own separate candidate pool (texture
+      // bits are excluded from loadout()'s scored path by design when
+      // TEXTURE_ROTATION is on, so restricting only selectBit() above would
+      // silently miss every texture bit in the list).
+      const texBit = selectTextureBit(scorerState, { pool: testPool });
       if (texBit) {
         top = {
           ...texBit,
@@ -2441,7 +2466,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // (same outcome as any other non-fire turn), and it's LOGGED LOUDLY so
     // this is findable in a normal log scan, not just a manual transcript
     // read the way tonight's bug was found.
-    // SCOPED TO NATURAL SELECTION ONLY (!forcedFire) — a Director/SOLO_BIT
+    // SCOPED TO NATURAL SELECTION ONLY (!forcedFire) — a Director/TEST_PRIORITY_BITS
     // force is a deliberate, understood bypass of every other gate already;
     // extending the breaker to forced fires is a separate, open design
     // question (does forcing mean "win the ranking" or "fire no matter
