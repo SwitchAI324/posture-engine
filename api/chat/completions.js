@@ -1905,6 +1905,15 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       recency,
       fuel_hooks_status,
       byHook: ammo.byHook || {},
+      // PRE-CALL FACT TRIGGERS (Aug 6): unlike pricing_raised/caller_
+      // questioned_humanity, these need no detection at all — the fact is
+      // already known from turn 1, sourced directly from the same
+      // ammo.byHook data that already arms these bits' CONTENT. Presence in
+      // byHook is all that's checked (matches the fuel_hooks_status
+      // convention above — any present hook counts, regardless of its
+      // internal shape).
+      has_prior_contact: !!(ammo.byHook && ammo.byHook.has_prior_contact),
+      browsed_tmi: !!(ammo.byHook && ammo.byHook.browsed_tmi),
       // sequencing anchor — without this, chain + category spacing never fire.
       lastBitId: stored ? stored.lastBitId || null : null,
       // EXTENDED_STALL: true when the call has been content-less/social too long.
@@ -1920,11 +1929,11 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       // bias, not an exclusion). The scorer previously received NO turn
       // number, so no turn gate was implementable there at all.
       turn,
-      // TEXTURE ROTATION (step d, TEXTURE_ROTATION flag) — per-bit last-
-      // ACTUALLY-fired turn map, {bit.id: turn}. Absent/0 = never fired, which
-      // selectTextureBit() treats as always-LRU-first. Read from stored state;
-      // defaults to {} for a call that predates this feature or a fresh call.
-      textureLastFire: (stored && stored.textureLastFire) || {},
+      // UNIVERSAL FIRE HISTORY (Aug 6, generalized from texture-only
+      // textureLastFire — see _bits_scorer.js's own comment for the full
+      // shape and rationale). Read from stored state; defaults to {} for a
+      // call that predates this feature or a fresh call.
+      bitFireHistory: (stored && stored.bitFireHistory) || {},
       // PRICING RAISED — feeds the generic EMITTED_TRIGGERS gate in
       // _bits_scorer.js (see triggerPresent's "pricing_raised" case) so
       // BIT-210's trigger:"pricing_raised" declaration is actually
@@ -2411,6 +2420,45 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       if (top.score >= DEPLOY_THRESHOLD) {
         fire = true;
         starvationFired = true;
+      }
+    }
+
+    // DOMINANCE CIRCUIT BREAKER (Aug 6, new failsafe — see the cooldown/cap
+    // gates above for the primary fix). The primary fix protects any bit
+    // that DECLARES max_fires_per_call; this protects against the NEXT
+    // unknown bug of the same shape, for bits that don't. Because exactly
+    // one bit wins the entire turn's attention by hard architecture
+    // (`let top = ranked[0]` — there is no second-place slot), a bit that
+    // keeps winning for ANY reason — a scoring quirk nobody's found yet, a
+    // narrow-archetype call where almost nothing else is eligible, whatever
+    // — silently starves the ENTIRE rest of the library for as long as it
+    // keeps winning. That's what actually happened with THE ENVIRONMENT
+    // (BIT-329) tonight: cooldown/cap will stop bits that self-declare a
+    // limit, but nothing catches a bit that dominates for a reason no one
+    // anticipated. This is that backstop: if letting this fire would push
+    // the bit's SHARE of the whole call's fires past DOMINANCE_RATIO_MAX,
+    // suppress it — the turn falls through to normal conversation instead
+    // (same outcome as any other non-fire turn), and it's LOGGED LOUDLY so
+    // this is findable in a normal log scan, not just a manual transcript
+    // read the way tonight's bug was found.
+    // SCOPED TO NATURAL SELECTION ONLY (!forcedFire) — a Director/SOLO_BIT
+    // force is a deliberate, understood bypass of every other gate already;
+    // extending the breaker to forced fires is a separate, open design
+    // question (does forcing mean "win the ranking" or "fire no matter
+    // what") that hasn't been decided yet, not something to fold in here.
+    const DOMINANCE_RATIO_MAX = parseFloat(process.env.DOMINANCE_RATIO_MAX || "0.5");
+    const DOMINANCE_MIN_TURNS = parseInt(process.env.DOMINANCE_MIN_TURNS || "6", 10);
+    if (fire && !forcedFire && top && turn >= DOMINANCE_MIN_TURNS) {
+      const priorTotal = (scorerState.bitFireHistory || {})[top.id]?.totalFires || 0;
+      const projectedTotal = priorTotal + 1;
+      const ratio = projectedTotal / turn;
+      if (ratio > DOMINANCE_RATIO_MAX) {
+        console.log(
+          "bit CIRCUIT-BREAKER-TRIPPED id=" + top.id + " turn=" + turn +
+          " wouldBeTotalFires=" + projectedTotal + " ratio=" + ratio.toFixed(2) +
+          " max=" + DOMINANCE_RATIO_MAX + " — suppressing this fire, falling through to normal conversation"
+        );
+        fire = false;
       }
     }
 
@@ -2960,14 +3008,27 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           ...(sustainRungIncrement
             ? { huntRungCount: priorRungCount + 1, huntRungTurn: turn }
             : {}),
-          // TEXTURE ROTATION (step d): stamp THIS bit's last-actually-fired
-          // turn into the per-bit map, merged with whatever was already
-          // there — never touched on a turn a texture bit was merely
-          // eligible-but-suppressed by a scenario bit (see the block above;
-          // selectTextureBit() isn't even called on those turns, so there is
-          // nothing to merge and the map is simply left out of this write).
-          ...(textureFired
-            ? { textureLastFire: { ...(scorerState.textureLastFire || {}), [top.id]: turn } }
+          // UNIVERSAL FIRE HISTORY (Aug 6, generalized from texture-only
+          // textureLastFire — replaces it). Stamps ANY fired bit, not just
+          // texture ones — this is the fix for the live gap found tonight:
+          // THE ENVIRONMENT (BIT-329), a gag-lane bit, kept winning the
+          // ranked pool turn after turn because cooldown was previously
+          // only hard-enforced for texture bits. Same-turn race guard
+          // reuses `sameTurnReinject` (already computed above for the
+          // hunt-rung stamp) — a same-turn preemptive-gen sibling for the
+          // SAME bit does not double-bump totalFires, exactly the guard
+          // huntRungTurn already uses for the same underlying race.
+          ...(fire && !sameTurnReinject
+            ? {
+                bitFireHistory: {
+                  ...(scorerState.bitFireHistory || {}),
+                  [top.id]: {
+                    lastFiredTurn: turn,
+                    totalFires: ((scorerState.bitFireHistory || {})[top.id]?.totalFires || 0) + 1,
+                    lastCountedTurn: turn,
+                  },
+                },
+              }
             : {}),
           // CALLER-CRUDE running counts ("caller_crude" signal, two-level).
           // Incremented on CONSUMPTION (this turn reading last turn's
