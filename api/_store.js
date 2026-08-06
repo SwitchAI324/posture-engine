@@ -45,7 +45,18 @@ export async function getCall(callId) {
     cache: "no-store",
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
-  if (!r.ok) return null;
+  if (!r.ok) {
+    // SURFACE THE REAL ERROR (Aug 6, found live — this exact silence hid a
+    // missing-column bug for the entire debugging session). A non-ok
+    // response was being treated identically to "zero rows found," which
+    // made a genuine query failure (a 400, a schema mismatch, anything)
+    // indistinguishable from an empty result. Log the actual body so the
+    // next failure like this is visible in one log line, not a full
+    // Supabase log export.
+    const errBody = await r.text().catch(() => "");
+    console.log("getCall FAILED status=" + r.status + " callId=" + callId + " body=" + errBody.slice(0, 300));
+    return null;
+  }
   const rows = await r.json();
   if (!rows || !rows.length) return null;
   return {
