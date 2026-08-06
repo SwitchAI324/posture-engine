@@ -783,17 +783,19 @@ async function readCall(messages, prior) {
       },
       body: JSON.stringify({
         model: MODEL(),
-        // RAISED 60 -> 200 (Aug 4): this budget was set back when the reply
-        // schema was 4 fields (phase/suspicion/pressure/engagement). It has
-        // since grown to up to 7 (commitment_push, caller_redirected,
-        // caller_crude all added this session, each behind its own flag) —
-        // 60 tokens is tight even for the base 4-field JSON and risks
-        // truncating a longer reply before the closing brace, which fails
-        // the regex match below and gets silently counted as a callread
-        // failure. Found from a live call showing "callread FAILED" on
-        // nearly every turn. Still a tiny, cheap, low-latency call — 200 is
-        // real headroom, not a meaningful cost/latency change.
-        max_tokens: 200,
+        // RAISED AGAIN 200 -> 1024 (Aug 6) — the previous raise (60->200,
+        // Aug 4) helped but didn't fully fix it. DEFINITIVELY diagnosed this
+        // time, not just hypothesized: the enriched diagnostic caught
+        // blockTypes=["thinking"] on a live failure — the model is
+        // generating an EXTENDED-THINKING block for this call, and the
+        // entire budget was being consumed by that block (empty, cut off
+        // mid-start by max_tokens) before any JSON ever got a chance to
+        // appear. 200 tokens was never going to be enough once thinking
+        // overhead is in play, regardless of the reply schema's field
+        // count. Still a tiny, cheap, low-latency call in absolute terms —
+        // 1024 is real headroom for thinking + JSON both, not a meaningful
+        // cost change.
+        max_tokens: 1024,
         system: sys,
         messages: [{ role: "user", content: convo + "\n\nJSON:" }],
       }),
@@ -1743,6 +1745,13 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     const spammerName =
       (ammo && ammo.byHook && ammo.byHook.sender_identity &&
         ammo.byHook.sender_identity.name) || null;
+    // CONFIDENCE (2026-08-06, Scouting's ranked resolution): 0.7 for body/
+    // signature or From-display-name sources, 0.55 for an email-local-part
+    // guess. null/undefined (a call predating this feature) is treated as
+    // trustworthy — same as the pre-ranking behavior, no regression.
+    const spammerNameConfidence =
+      (ammo && ammo.byHook && ammo.byHook.sender_identity &&
+        ammo.byHook.sender_identity.confidence) ?? 1;
     trace.emit(
       "utterance",
       { speaker_role: "spammer", speaker_name: spammerName, character_id: null, text: lastUserText(messages), turn_index: turn },
@@ -2528,6 +2537,112 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // Goes AFTER the cached base, so injecting never busts the prompt cache.
     let mutable = buildPostureBlock(state);
 
+    // NAME AT OUTSET (Aug 6, Andrew — now confidence-aware per Scouting's
+    // 8/6 ranked-resolution update). Two branches, not one:
+    //   HIGH CONFIDENCE (>= NAME_CONFIDENCE_THRESHOLD): force natural use in
+    //     the greeting, as before.
+    //   LOW CONFIDENCE (below threshold — an email-local-part guess) OR NO
+    //     NAME AT ALL: don't force a possibly-wrong name into the greeting,
+    //     and don't silently skip either — Andrew's own instinct: ask for
+    //     it naturally, as one of the first things, same as a real person
+    //     would if they hadn't caught a name yet.
+    // Threshold sits between Scouting's two known tiers (0.7 real sources,
+    // 0.55 local-part guess) so it cleanly separates them without being
+    // fragile to a small confidence jitter within either tier.
+    const NAME_CONFIDENCE_THRESHOLD = parseFloat(process.env.NAME_CONFIDENCE_THRESHOLD || "0.65");
+    if (turn === 1) {
+      if (spammerName && spammerNameConfidence >= NAME_CONFIDENCE_THRESHOLD) {
+        mutable +=
+          "\n\n[TURN 1 — the caller's name is known: " + spammerName + ". Use it " +
+          "naturally in your greeting this turn (e.g. \"" + spammerName +
+          ", good to talk to you\" / \"hey, " + spammerName + "\") — not a forced " +
+          "or robotic use, just a natural human greeting that includes their name.]";
+      } else if (spammerName && spammerNameConfidence < NAME_CONFIDENCE_THRESHOLD) {
+        // A guessed name (email-local-part tier) exists but isn't trustworthy
+        // enough to use confidently — deliberately do NOT surface the guess
+        // itself here, so the model isn't tempted to use it anyway.
+        mutable +=
+          "\n\n[TURN 1 — you don't have a confirmed name for the caller yet. " +
+          "Ask for it naturally, early in the call, the way a real person " +
+          "would (e.g. \"sorry, who am I talking to?\" / \"and your name is—?\") " +
+          "— not an interrogation, just a normal, natural thing to ask.]";
+      } else {
+        mutable +=
+          "\n\n[TURN 1 — you don't know the caller's name yet. Ask for it " +
+          "naturally, early in the call, the way a real person would (e.g. " +
+          "\"sorry, who am I talking to?\" / \"and your name is—?\") — not an " +
+          "interrogation, just a normal, natural thing to ask.]";
+      }
+    }
+
+    // EXPERTISE-LEVEL DIAL (Aug 6, Andrew — one-time-per-call Director dial,
+    // default "above average"). Mechanism only — ships OFF (EXPERTISE_DIAL_
+    // ENABLED, default false) until Canon supplies the real up/down
+    // transition performance text; the placeholder below must never
+    // actually reach a live call. Scale: 1-4, matching absurdity's shape;
+    // EXPERTISE_LEVEL_DEFAULT (env, default 3) is the "above average"
+    // baseline the dial moves up or down FROM, not from zero.
+    //
+    // CHANGE DETECTION: compares controls.expertiseLevel (what the Director
+    // has it set to RIGHT NOW) against stored.expertiseLevelUsed (what PE
+    // actually used LAST turn — persisted specifically so this comparison
+    // is possible). A mismatch means the dial moved since the last turn;
+    // this is the ONE turn that gets a transition beat. Every other turn is
+    // steady-state — no transition language, just the current level.
+    //
+    // TWO DIRECTIONS, DELIBERATELY NOT SYMMETRIC (Andrew's own framing):
+    // dialing UP needs a performed "I just figured it out" realization beat
+    // — the host can't just silently know more. Dialing DOWN needs its own
+    // different answer (a believable human lapse vs. a jarring competence
+    // drop) — NOT simply the inverse of the up-case. Both are Canon's to
+    // write, not PE's to guess at; the placeholders below mark exactly
+    // where that real text plugs in.
+    const EXPERTISE_DIAL_ENABLED =
+      /^(1|true|yes|on)$/i.test(String(process.env.EXPERTISE_DIAL_ENABLED || ""));
+    const EXPERTISE_LEVEL_DEFAULT = parseInt(process.env.EXPERTISE_LEVEL_DEFAULT || "3", 10);
+    const expertiseLevelNow =
+      controls && controls.expertiseLevel != null ? controls.expertiseLevel : EXPERTISE_LEVEL_DEFAULT;
+    const expertiseLevelPrev =
+      stored && stored.expertiseLevelUsed != null ? stored.expertiseLevelUsed : EXPERTISE_LEVEL_DEFAULT;
+    const expertiseChanged = EXPERTISE_DIAL_ENABLED && expertiseLevelNow !== expertiseLevelPrev;
+    // TRANSITION LINES (Aug 6, Canon). Deliberately NOT mirror images —
+    // Canon's own framing: UP is a recognition landing ("I just put it
+    // together"), never a flat competence jump (reads uncanny, like he
+    // secretly knew). DOWN is attention wandering, NOT competence dropping
+    // ("I'm blanking" was explicitly rejected — that reads as impaired, not
+    // distracted). Three options each, picked at random per fire — same
+    // variety discipline as the opener bank, so a dial move doesn't always
+    // sound identical across different calls.
+    const EXPERTISE_UP_LINES = [
+      "wait — hold on — is this the thing with the— yeah, no, I know exactly what you mean, I just didn't put it together till right now—",
+      "oh! okay, no, now I'm with you — I've actually been chewing on this exact thing, I just didn't realize that's what we were—",
+      "huh — wait, say that again? Because if that's what you're— yeah. Yeah, okay, I know this one. Keep going.",
+    ];
+    const EXPERTISE_DOWN_LINES = [
+      "sorry — say that part again? I think I lost the thread for a second, I was still back on the— no, go on, I'm with you.",
+      "hang on, you said the— sorry, honestly half my brain's still on this thing from earlier, give me the short version again?",
+      "mm — you know what, I was following and then I just— sorry, where are we exactly? Walk me back a step.",
+    ];
+    if (expertiseChanged) {
+      const direction = expertiseLevelNow > expertiseLevelPrev ? "UP" : "DOWN";
+      const bank = direction === "UP" ? EXPERTISE_UP_LINES : EXPERTISE_DOWN_LINES;
+      const line = bank[Math.floor(Math.random() * bank.length)];
+      // ONE BEAT ONLY (Canon's own wiring caution): this is a single move —
+      // the line itself, performed, then continue normally. Explicitly NOT
+      // a cue to stack this with anything else the turn also needs to do
+      // (e.g. the down-beat's re-explain ask is already doing real stall
+      // work on its own — piling more onto the same turn is exactly the
+      // stacked-questions/lead-don't-follow failure from elsewhere).
+      mutable +=
+        "\n\n[EXPERTISE " + direction + " — THIS TURN ONLY, ONE BEAT: perform this " +
+        "moment, in character, then continue the turn normally. Do not stack " +
+        "anything else onto it.]\n" + line;
+      console.log(
+        "expertise-level TRANSITION turn=" + turn + " direction=" + direction +
+        " " + expertiseLevelPrev + "->" + expertiseLevelNow
+      );
+    }
+
     // STALL RESOLUTION (STALL_RESOLVE) — one-turn wrap-up note. Fires exactly
     // on the turn the hunt-window above stopped sustaining because
     // stallShouldResolve() went true. Applies regardless of whether a new
@@ -2973,7 +3088,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // persists pressure/engagement now, on its own schedule. The write below
     // still fires for all the OTHER real reasons it always did.
     const crudeDetected = !!(stored && (stored.callerCrude === "impersonal" || stored.callerCrude === "personal"));
-    if (!stored || fire || archetypeNew || crudeDetected) {
+    if (!stored || fire || archetypeNew || crudeDetected || expertiseChanged) {
       waitUntil(
         setCall(callId, {
           // gear/slip/accuseFloor REMOVED (Aug 5, gears removal) — suspicion
@@ -2983,6 +3098,17 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           // this gate fires for anyway).
           pressure: state.pressure,
           engagement: state.engagement,
+          // EXPERTISE-LEVEL DIAL: persist what was actually USED this turn,
+          // unconditionally whenever this gate fires at all — not just on
+          // the transition turn. If this only wrote on the transition turn
+          // itself, a later turn where the gate fires for an unrelated
+          // reason (a bit fires, archetype resolves) would compare against
+          // a STALE value and could re-detect a "change" that already
+          // happened, firing the transition beat again. Added
+          // expertiseChanged to this gate's own OR-condition above so the
+          // write is GUARANTEED to happen on the turn a real change occurs,
+          // not left dependent on something else coincidentally firing too.
+          expertiseLevelUsed: expertiseLevelNow,
           stallCount, // extended_stall streak (resets on pitch/ask)
           // STALL RESOLUTION CLEANUP: when a stall just resolved this turn
           // (huntJustResolved), clear its hunt state so it CANNOT silently
