@@ -73,6 +73,76 @@ async function readToken(slug) {
   return rows[0] || null;
 }
 
+// DOSSIER FLOOR (2026-08-05, Data's scoping) — the AMBIENT FLOOR read:
+// baseline identity + top prior-contact fact, condensed to ~50 tokens, baked
+// into the STABLE (cached) prefix so the host always has it, unconditional
+// on any bit firing. Complements, does NOT duplicate, the bit-fuel system
+// (browsed_tmi/email_dossier/etc.) — those stay conditional/deployable; this
+// is the "who they are" floor underneath. Source is scout_facts directly, no
+// new schema, no stored doc — a fresh condensed render every hydrate, same
+// anti-drift discipline as everything else in this pipeline.
+//
+// IDENTITY extraction mirrors _read.js's sender_identity shape exactly (body
+// lane: name/title/company) — same fields, same source, just read here
+// instead of per-turn, since this data is stable for the whole call.
+//
+// PRIOR-CONTACT FACT: best-effort. scout_facts' lane taxonomy beyond body/
+// signature isn't something I have full visibility into from PE's side —
+// this looks for a plausible call-derived lane (e.g. "call") and pulls one
+// short representative detail if present. WORTH CONFIRMING WITH SCOUTING:
+// is there a specific lane/field name for "memorable facts from a prior
+// call" that this should be reading instead of guessing at? If the shape
+// doesn't match what's actually there, this silently degrades to
+// identity-only (never throws, never blocks hydrate) — see the try/catch.
+async function readDossierFloor(targetId) {
+  if (!targetId) return null;
+  const URL = process.env.SUPABASE_URL;
+  const KEY =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+  if (!URL || !KEY) return null;
+  try {
+    const r = await fetch(
+      `${URL}/rest/v1/scout_facts?target_id=eq.${encodeURIComponent(targetId)}&select=source_lane,facts`,
+      { headers: { apikey: KEY, authorization: `Bearer ${KEY}` } }
+    );
+    if (!r.ok) return null;
+    const rows = await r.json();
+    if (!Array.isArray(rows) || !rows.length) return null;
+
+    const bodyRow = rows.find((row) => row && row.source_lane === "body");
+    const facts = (bodyRow && bodyRow.facts) || {};
+    const name = facts.name || null;
+    const title = facts.title || null;
+    const company = facts.company || null;
+
+    // Best-effort prior-contact detail — see the function comment above.
+    const callRow = rows.find((row) => row && row.source_lane === "call");
+    const priorDetail =
+      callRow && callRow.facts && (callRow.facts.summary || callRow.facts.detail || null);
+
+    if (!name && !title && !company && !priorDetail) return null;
+
+    // FORMAT: labeled, terse, hard-capped. This bakes into the CACHED prefix
+    // and pays a token cost on every turn of every call — ruthlessly
+    // minimal per Data's own guidance, not prose.
+    const parts = [];
+    if (name) parts.push(`Target "${name}"`);
+    const role = [title, company].filter(Boolean).join(" at ");
+    if (role) parts.push(`claims ${role}`);
+    let line = parts.join(", ");
+    if (priorDetail) {
+      line += (line ? ". " : "") + "Prior contact: " + String(priorDetail).slice(0, 120);
+    }
+    // Hard cap: ~50 tokens is roughly ~220 characters for typical English
+    // prose. Truncate rather than let a long prior-call summary blow the
+    // budget — this is a floor, not the whole dossier.
+    return line.slice(0, 240) || null;
+  } catch (e) {
+    console.log("hydrate: readDossierFloor failed: " + (e && e.message));
+    return null; // never blocks hydrate — the floor degrading to absent is safe
+  }
+}
+
 // Write the compiled prefix to call_prefix via the store. setCall handles the
 // upsert; we pass prefix + archetype (+ the initial posture line so turn 1 has
 // one before the engine sets its own).
@@ -119,6 +189,14 @@ module.exports = async function handler(req, res) {
       return res.end(JSON.stringify({ error: "unknown slug" }));
     }
 
+    // DOSSIER FLOOR: read once here, alongside the token, before assembling —
+    // condensed identity + top prior-contact fact, ~50 tokens, baked into the
+    // STABLE prefix (see readDossierFloor's own comment for the full account
+    // and the one open question re: the prior-contact lane name). Never
+    // throws/blocks hydrate — degrades to null (the placeholder text) if
+    // anything about this read fails or the target has no scout_facts yet.
+    const dossierFloor = await readDossierFloor(token.target_id);
+
     const posture = process.env.SV_DEFAULT_POSTURE || "skald"; // neutral/warm
     const cfg = {
       posture,
@@ -132,6 +210,7 @@ module.exports = async function handler(req, res) {
       bits: [],
       armedBench: [], // room starts empty; bench sent in live
       target: token.target_id || null,
+      dossierFloor, // NEW (Aug 5) — the condensed ambient-floor string, or null
       tactic: token.archetype || "universal",
       host_name: token.host_name || null,
       secondCall: false,

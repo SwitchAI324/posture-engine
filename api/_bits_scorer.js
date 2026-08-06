@@ -167,6 +167,12 @@ const EMITTED_TRIGGERS = new Set([
   "pricing_raised",    // out.pricingRaised (the reader), ONE-WAY LATCH — see
                         // completions.js's blendRead comment. Added Aug 5 for
                         // BIT-210, which was already wired registry-side.
+  "caller_questioned_humanity", // accusation === "ai" (detectAccusation) —
+                        // SYNCHRONOUS, same-turn, no reader lag. Reuses the
+                        // existing AI-accusation classifier (extracted from
+                        // gears during their removal) rather than building
+                        // new detection — same signal, new consumer. Added
+                        // Aug 5 for BIT-403.
   // Tier 2 (trivial) — computed directly from turn count, no LLM cost:
   "call_turn_1",       // state.turn === 1
   // NOTE: call_phase_late is intentionally NOT here. It tags only the 700-series
@@ -177,8 +183,7 @@ const EMITTED_TRIGGERS = new Set([
   // NOT yet emitted (stay gear-scored until PE adds each emitter — do NOT add
   // here until the emitter is live and logged):
   //   prior_contact, browsed_tmi, caller_pitched, caller_made_claim,
-  //   caller_named_competitor, caller_named_hobby, caller_went_quiet,
-  //   caller_questioned_humanity
+  //   caller_named_competitor, caller_named_hobby, caller_went_quiet
   // NOT an event (lane marker, never add): ambient
 ]);
 // Is this bit's trigger PRESENT in the current call state? Only called for a
@@ -198,6 +203,8 @@ function triggerPresent(trigger, state) {
       return (state.turn ?? 0) === 1;
     case "pricing_raised":
       return state.pricing_raised === true;
+    case "caller_questioned_humanity":
+      return state.caller_questioned_humanity === true;
     default:
       // Not an allowlisted trigger — should never reach here (loadout guards).
       // Fail SAFE toward eligibility so a mis-call can't silently blackhole a bit.

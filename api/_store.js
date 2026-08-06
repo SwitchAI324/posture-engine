@@ -40,7 +40,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-   `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,texture_last_fire,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited`;
+   `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,texture_last_fire,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn`;
   const r = await fetch(url, {
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
@@ -95,6 +95,10 @@ export async function getCall(callId) {
     // guard so same-turn preemptive-gen siblings don't each independently
     // increment. null = never bumped (fresh call, or just resolved).
     huntRungTurn: rows[0].hunt_rung_turn ?? null,
+    // TEXTURE POST-EVENT COOLDOWN: the turn a stall/hunt last resolved, read
+    // FORWARD by the texture gate (not cleared on read, unlike the hunt-state
+    // fields above). null = never resolved / fresh call.
+    lastStallResolvedTurn: rows[0].last_stall_resolved_turn ?? null,
     callerRedirected: rows[0].caller_redirected ?? false,
     // CALLER-CRUDE signal: raw per-turn classification + two running counts.
     // Defaults match "nothing crude has happened yet" for a call that
@@ -120,7 +124,7 @@ export async function getCall(callId) {
 // posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, textureLastFire, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited }
+  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, textureLastFire, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -176,6 +180,8 @@ export async function setCall(
   // huntRungTurn: the race-guard companion to huntRungCount (see completions.js
   // for why) — only written when provided, same pattern as every field here.
   if (huntRungTurn !== undefined) row.hunt_rung_turn = huntRungTurn;
+  // TEXTURE POST-EVENT COOLDOWN: same "only write when provided" pattern.
+  if (lastStallResolvedTurn !== undefined) row.last_stall_resolved_turn = lastStallResolvedTurn;
   if (callerRedirected !== undefined) row.caller_redirected = callerRedirected;
   // CALLER-CRUDE: raw classification + the two running counts. Same "only
   // write when provided" pattern as every other field here.

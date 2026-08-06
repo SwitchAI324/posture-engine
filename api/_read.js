@@ -166,6 +166,30 @@ const FUEL_HOOKS = {
       return Object.keys(out).length ? out : null;
     },
   },
+  // EMAIL DOSSIER (2026-08-05, Email/Barbara): a summary of the pre-call email
+  // thread, written at markBooked_ — same body lane as pitch_claims/
+  // sender_identity, per their contract. shape: {summary, quotes, hook,
+  // contradictions}. quotes capped to 4 here even though their own writer
+  // already caps at 2-4 — belt and suspenders, never trust a single layer to
+  // enforce a length constraint. ALL of this is THEIR CLAIMS, not verified
+  // fact — factHint's own framing ("You happen to know this about them")
+  // already reads naturally as "what they told you," but if this hook ever
+  // gets a bespoke injection instead of the generic factHint path, that
+  // framing must be made explicit there too (quote their pitch back, never
+  // treat it as confirmed truth).
+  email_dossier: {
+    lane: "body",
+    extract: (facts) => {
+      const d = facts?.email_dossier;
+      if (!d) return null;
+      const out = {};
+      if (d.summary) out.summary = d.summary;
+      if (Array.isArray(d.quotes) && d.quotes.length) out.quotes = d.quotes.slice(0, 4).join(" | ");
+      if (d.hook) out.hook = d.hook;
+      if (d.contradictions) out.contradictions = d.contradictions;
+      return Object.keys(out).length ? out : null;
+    },
+  },
 };
 
 export async function readFuel(targetId) {
