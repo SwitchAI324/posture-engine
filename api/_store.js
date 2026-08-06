@@ -42,6 +42,7 @@ export async function getCall(callId) {
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
    `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used`;
   const r = await fetch(url, {
+    cache: "no-store",
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
   if (!r.ok) return null;
@@ -211,6 +212,7 @@ export async function setCall(
   // this field is per-turn, not sticky.
   if (textureInvited !== undefined) row.texture_invited = textureInvited;
   const r = await fetch(`${URL}/rest/v1/${TABLE}`, {
+    cache: "no-store",
     method: "POST",
     headers: {
       apikey: KEY,
@@ -237,7 +239,7 @@ export async function getControls(callId) {
   const r = await fetch(
     `${URL}/rest/v1/${CONTROLS}?call_id=eq.${encodeURIComponent(callId)}` +
       `&select=id,control_type,rung_id,status,idempotency_key,payload`,
-    { headers: { apikey: KEY, authorization: `Bearer ${KEY}` } }
+    { cache: "no-store", headers: { apikey: KEY, authorization: `Bearer ${KEY}` } }
   );
   if (!r.ok) return empty;
   const rows = await r.json();
@@ -307,6 +309,7 @@ export async function setDeathBlow(callId, { rungId, rungName, finalLine, idem, 
     payload: { rung_name: rungName ?? null, final_line: finalLine ?? null },
   };
   const r = await fetch(`${URL}/rest/v1/${CONTROLS}`, {
+    cache: "no-store",
     method: "POST",
     headers: {
       apikey: KEY, authorization: `Bearer ${KEY}`,
@@ -324,6 +327,7 @@ export async function clearDeathBlow(callId, status = "fired") {
     `${URL}/rest/v1/${CONTROLS}?call_id=eq.${encodeURIComponent(callId)}` +
       `&control_type=eq.death_blow`,
     {
+    cache: "no-store",
       method: "PATCH",
       headers: {
         apikey: KEY, authorization: `Bearer ${KEY}`,
@@ -349,6 +353,7 @@ export async function addArm(callId, { bitId, hookId, idem, director }) {
     payload: { bit_id: bitId ?? null, hook_id: hookId ?? null, armed_turn: null },
   };
   const r = await fetch(`${URL}/rest/v1/${CONTROLS}`, {
+    cache: "no-store",
     method: "POST",
     headers: {
       apikey: KEY, authorization: `Bearer ${KEY}`,
@@ -378,6 +383,7 @@ export async function removeArm(callId, { bitId }) {
     `&status=in.(pending,armed)` +
     `&payload->>bit_id=eq.${encodeURIComponent(bitId)}`;
   const r = await fetch(q, {
+    cache: "no-store",
     method: "PATCH",
     headers: {
       apikey: KEY, authorization: `Bearer ${KEY}`,
@@ -406,6 +412,7 @@ export async function forceBit(callId, { bitId, idem, director }) {
     payload: { bit_id: bitId ?? null, forced_turn: null },
   };
   const r = await fetch(`${URL}/rest/v1/${CONTROLS}`, {
+    cache: "no-store",
     method: "POST",
     headers: {
       apikey: KEY, authorization: `Bearer ${KEY}`,
@@ -429,6 +436,7 @@ export async function fireForce(callId, { bitId }) {
     `&status=eq.pending` +
     `&payload->>bit_id=eq.${encodeURIComponent(bitId)}`;
   const r = await fetch(q, {
+    cache: "no-store",
     method: "PATCH",
     headers: {
       apikey: KEY, authorization: `Bearer ${KEY}`,
@@ -454,6 +462,7 @@ export async function setBench(callId, { benchId, idem, director }) {
     payload: { bench_id: benchId ?? null, sent_turn: null },
   };
   const r = await fetch(`${URL}/rest/v1/${CONTROLS}`, {
+    cache: "no-store",
     method: "POST",
     headers: {
       apikey: KEY, authorization: `Bearer ${KEY}`,
@@ -468,6 +477,7 @@ export async function setBench(callId, { benchId, idem, director }) {
 export async function stampArm(id, payload) {
   if (!isConfigured() || !id) return false;
   const r = await fetch(`${URL}/rest/v1/${CONTROLS}?id=eq.${encodeURIComponent(id)}`, {
+    cache: "no-store",
     method: "PATCH",
     headers: {
       apikey: KEY, authorization: `Bearer ${KEY}`,
@@ -480,6 +490,7 @@ export async function stampArm(id, payload) {
 export async function fireArm(id) {
   if (!isConfigured() || !id) return false;
   const r = await fetch(`${URL}/rest/v1/${CONTROLS}?id=eq.${encodeURIComponent(id)}`, {
+    cache: "no-store",
     method: "PATCH",
     headers: {
       apikey: KEY, authorization: `Bearer ${KEY}`,
@@ -510,6 +521,7 @@ export async function appendGearEvent(
     utterance: (utterance || "").slice(0, 500),
   };
   const r = await fetch(`${URL}/rest/v1/${EVENTS}`, {
+    cache: "no-store",
     method: "POST",
     headers: {
       apikey: KEY,
@@ -535,6 +547,7 @@ export async function appendBitEvent(
     fired: !!fired, why: (why || "").slice(0, 300),
   };
   const r = await fetch(`${URL}/rest/v1/bit_events`, {
+    cache: "no-store",
     method: "POST",
     headers: {
       apikey: KEY, authorization: `Bearer ${KEY}`,
@@ -578,7 +591,8 @@ export async function saveTranscript(callId, slug, messages) {
       `${URL}/rest/v1/call_transcripts?call_id=eq.${encodeURIComponent(
         callId
       )}&select=messages`,
-      { headers: { apikey: KEY, authorization: `Bearer ${KEY}` } }
+      {
+    cache: "no-store", headers: { apikey: KEY, authorization: `Bearer ${KEY}` } }
     );
     if (g.ok) {
       const rows = await g.json().catch(() => null);
@@ -598,6 +612,7 @@ export async function saveTranscript(callId, slug, messages) {
     updated_at: new Date().toISOString(),
   };
   const r = await fetch(`${URL}/rest/v1/call_transcripts`, {
+    cache: "no-store",
     method: "POST",
     headers: {
       apikey: KEY,
@@ -646,6 +661,7 @@ export async function insertCallOutcome({
   if (transcript !== undefined) row.transcript = transcript;
   if (status !== undefined) row.status = status;
   const r = await fetch(`${URL}/rest/v1/${CALLS}`, {
+    cache: "no-store",
     method: "POST",
     headers: {
       apikey: KEY, authorization: `Bearer ${KEY}`,
@@ -678,6 +694,7 @@ export async function cancelForce(callId, { bitId } = {}) {
   // one-in-flight model means there is at most one).
   if (bitId) q += `&payload->>bit_id=eq.${encodeURIComponent(bitId)}`;
   const r = await fetch(q, {
+    cache: "no-store",
     method: "PATCH",
     headers: {
       apikey: KEY, authorization: `Bearer ${KEY}`,
