@@ -61,7 +61,7 @@ function extractSocials(text) {
   return out;
 }
 
-export async function dissect({ body = '', signature = '', subject = '', attachments = [] } = {}) {
+export async function dissect({ body = '', signature = '', subject = '', attachments = [], from_name = '', from_email = '' } = {}) {
   const sigText = signature || body;
   const socials = extractSocials(`${body}\n${signature}`);
 
@@ -81,10 +81,28 @@ export async function dissect({ body = '', signature = '', subject = '', attachm
   const llm = await extractFacts(subject, body, sigText, attachmentText);
   const c = llm.confidence || {};
 
+  // Name by CONFIDENCE ORDER — most deliberate self-identification wins, a weak
+  // source never overrides a stronger one:
+  //   1. llm.name       — pulled from signature/body (a deliberate sign-off or
+  //                        "my name is": the strongest signal, whose='them').
+  //   2. from_name      — the From display name they chose to present.
+  //   3. email local-part — parsed from from_email; WEAKEST (info@, winner284@,
+  //                        hijacked accounts), used only when nothing better.
+  const resolvedName =
+    (llm.name && llm.name.trim()) ||
+    (from_name && from_name.trim()) ||
+    nameFromEmail(from_email) ||
+    null;
+  const nameSource = (llm.name && llm.name.trim()) ? 'body'
+    : (from_name && from_name.trim()) ? 'from_display'
+    : nameFromEmail(from_email) ? 'from_localpart'
+    : null;
+
   // Per-lane fact rows for scout_facts (Data's shape).
   const factRows = [];
   const bodyFacts = {
-    name: llm.name || null,
+    name: resolvedName,
+    name_source: nameSource, // which source the name came from (confidence hint)
     title: llm.title || null,
     company: llm.company || null,
     location: llm.location || null,
@@ -110,12 +128,12 @@ export async function dissect({ body = '', signature = '', subject = '', attachm
       confidence: num(c.claims, 0.8),
       source: 'email:body',
     });
-  if (llm.name || llm.title || llm.company)
+  if (resolvedName || llm.title || llm.company)
     hooks.push({
       hook_id: 'sender_identity',
-      label: identityLabel(llm),
-      payload: { name: llm.name || null, title: llm.title || null, company: llm.company || null },
-      confidence: num(c.identity, 0.7),
+      label: identityLabel({ name: resolvedName, title: llm.title, company: llm.company }),
+      payload: { name: resolvedName, title: llm.title || null, company: llm.company || null },
+      confidence: identityConfidence(nameSource, num(c.identity, 0.7)),
       source: 'email:body',
     });
   const linkedin = socials.find((s) => s.platform === 'linkedin') || null;
@@ -212,6 +230,34 @@ function anyValue(o) {
 }
 function num(v, d) {
   return typeof v === 'number' && v >= 0 && v <= 1 ? v : d;
+}
+
+// Parse a plausible person-name from an email local-part. WEAKEST source —
+// deliberately conservative: only fire on name-shaped local-parts, never on
+// role/noise addresses (info@, sales@, winner2847@). Returns null when it's
+// not clearly a name.
+function nameFromEmail(email) {
+  const local = String(email || '').split('@')[0].toLowerCase().trim();
+  if (!local) return null;
+  const ROLE = new Set(['info', 'sales', 'contact', 'support', 'admin', 'hello',
+    'team', 'office', 'billing', 'noreply', 'no-reply', 'help', 'service',
+    'enquiries', 'inquiries', 'marketing', 'accounts']);
+  if (ROLE.has(local)) return null;
+  // Split on . _ - into parts; require 2 alpha parts (first + last) to accept —
+  // a single token or anything with digits is too weak to call a name.
+  const parts = local.split(/[._-]+/).filter(Boolean);
+  const alpha = parts.filter((p) => /^[a-z]+$/.test(p) && p.length >= 2);
+  if (alpha.length < 2) return null;
+  return alpha.slice(0, 2).map((p) => p[0].toUpperCase() + p.slice(1)).join(' ');
+}
+
+// sender_identity confidence reflects HOW the name was sourced — a signature
+// name is trustworthy; a local-part guess should gate low so a bit can choose
+// not to spend a shaky name (using a wrong name is worse than none).
+function identityConfidence(nameSource, base) {
+  if (nameSource === 'from_localpart') return 0.55;
+  if (nameSource === 'from_display') return 0.7;
+  return base; // 'body' (llm) or title/company-only
 }
 function identityLabel(l) {
   const who = [l.name, l.title].filter(Boolean).join(', ');
