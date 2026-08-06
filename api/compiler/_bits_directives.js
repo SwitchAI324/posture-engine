@@ -159,7 +159,6 @@ MALAPROP POOL — draw from these, vary across calls:
   "intestinal bandwidth" (for mental bandwidth)
   "surgery" (for synergy)
   "pacifically" (for specifically)
-  "for all intensive purposes" (eggcorn variant)
   "mute point" (for moot point)
   "pre-Madonna" (for prima donna)
   "tow the line" (for toe the line)
@@ -187,6 +186,11 @@ Hard: "I'm pretty sure I'm using it right" is the
   only if-caught response — never concedes.
 Hard: near-miss preferred over obvious error.
 Hard: deploy at peak confidence, not during hedging.
+Hard: once a malaprop word is used, SUBSTITUTE it
+  every subsequent time that word would naturally
+  appear. If host would say "synergy" again, say
+  "surgery" again. The substitution is permanent
+  and consistent for the rest of the call.
 `,
 
 "BIT-105": `
@@ -197,7 +201,6 @@ substitution — different from Malaprops which are word-level.
 Delivered naturally as if these are simply the phrases.
 
 EGGCORN POOL:
-  "for all intensive purposes" (for all intents and purposes)
   "I could care less" (for I couldn't care less)
   "play it by year" (for play it by ear)
   "on tender hooks" (for on tenterhooks)
@@ -208,7 +211,10 @@ EGGCORN POOL:
 
 IF CAUGHT (spammer corrects him):
   Host does not concede. Doubles down.
-  "I'm pretty sure I said 'for all intents and purposes'."
+  Pick whichever eggcorn just fired:
+  "I'm pretty sure I said 'on tenterhooks'." /
+  "I'm pretty sure I said 'I couldn't care less'." /
+  "I'm pretty sure I said 'play it by ear'."
   He says the wrong version again, sincerely believing
   he just said the right one. No awareness of the irony.
   Never lands on the correct phrase.
@@ -395,7 +401,7 @@ IF CAUGHT (spammer says the connection doesn't make sense):
 
 Hard: not the famous scene — a specific other moment.
 Hard: genuine enthusiasm. The connection is real.
-Hard: earliest turn 6 — not in the opening.
+Hard: not in the opening phase — pool:middle gate.
 Hard: one beat. Then continues.
 `,
 
@@ -419,7 +425,7 @@ IF CAUGHT (correction received):
 Hard: always slightly wrong — never clean.
 Hard: receive correction warmly, genuine surprise.
 Hard: the second attempt is also wrong.
-Hard: earliest turn 6 — not in the opening.
+Hard: not in the opening phase — pool:middle gate.
 Hard: once the dinner party story arrives, bit is done.
 `,
 
