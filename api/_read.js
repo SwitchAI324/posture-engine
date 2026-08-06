@@ -140,6 +140,15 @@ const FUEL_HOOKS = {
       if (facts?.name) out.name = facts.name;
       if (facts?.title) out.title = facts.title;
       if (facts?.company) out.company = facts.company;
+      // CONFIDENCE-RANKED NAME RESOLUTION (2026-08-06, Scouting): name may
+      // now come from body/signature (LLM, ~0.7), the From display name
+      // (0.7), or the email local-part (0.55, name-shaped addresses only —
+      // role/noise addresses like info@ already return null upstream).
+      // name_source tells you WHICH; confidence tells you how much to
+      // trust it. Both pass through unchanged — PE's job is deciding what
+      // to DO with a low-confidence guess, not re-deriving trust here.
+      if (facts?.confidence != null) out.confidence = facts.confidence;
+      if (facts?.name_source) out.name_source = facts.name_source;
       return Object.keys(out).length ? out : null;
     },
   },

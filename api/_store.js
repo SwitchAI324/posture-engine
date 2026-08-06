@@ -40,7 +40,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-   `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn`;
+   `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used`;
   const r = await fetch(url, {
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
@@ -100,6 +100,12 @@ export async function getCall(callId) {
     // FORWARD by the texture gate (not cleared on read, unlike the hunt-state
     // fields above). null = never resolved / fresh call.
     lastStallResolvedTurn: rows[0].last_stall_resolved_turn ?? null,
+    // EXPERTISE-LEVEL DIAL (Aug 6): the level PE actually USED last turn —
+    // separate from the Director's live control (getControls), which is
+    // "what SHOULD it be now." Comparing these two each turn is how a
+    // change gets detected (this persisted value lags one turn behind by
+    // definition). null = never set yet (fresh call, uses the default).
+    expertiseLevelUsed: rows[0].expertise_level_used ?? null,
     callerRedirected: rows[0].caller_redirected ?? false,
     // CALLER-CRUDE signal: raw per-turn classification + two running counts.
     // Defaults match "nothing crude has happened yet" for a call that
@@ -125,7 +131,7 @@ export async function getCall(callId) {
 // posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn }
+  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -183,6 +189,10 @@ export async function setCall(
   if (huntRungTurn !== undefined) row.hunt_rung_turn = huntRungTurn;
   // TEXTURE POST-EVENT COOLDOWN: same "only write when provided" pattern.
   if (lastStallResolvedTurn !== undefined) row.last_stall_resolved_turn = lastStallResolvedTurn;
+  // EXPERTISE-LEVEL DIAL: the level PE actually used THIS turn, persisted so
+  // NEXT turn can compare against it to detect a change. Same "only write
+  // when provided" pattern as everything else here.
+  if (expertiseLevelUsed !== undefined) row.expertise_level_used = expertiseLevelUsed;
   if (callerRedirected !== undefined) row.caller_redirected = callerRedirected;
   // CALLER-CRUDE: raw classification + the two running counts. Same "only
   // write when provided" pattern as every other field here.
@@ -222,7 +232,7 @@ export async function setCall(
 // concurrently with getCall, so no added hot-path latency). Only pending/armed
 // rows are "live"; fired/cleared drop.
 export async function getControls(callId) {
-  const empty = { deathBlow: null, armed: [], sentBench: null, forced: null };
+  const empty = { deathBlow: null, armed: [], sentBench: null, forced: null, absurdityCeiling: null, expertiseLevel: null };
   if (!isConfigured() || !callId) return empty;
   const r = await fetch(
     `${URL}/rest/v1/${CONTROLS}?call_id=eq.${encodeURIComponent(callId)}` +
@@ -237,6 +247,8 @@ export async function getControls(callId) {
   const armed = [];
   let sentBench = null;
   let forced = null;
+  let absurdityCeiling = null;
+  let expertiseLevel = null;
   for (const row of rows) {
     const p = row.payload || {};
     if (row.control_type === "death_blow") {
@@ -264,9 +276,20 @@ export async function getControls(callId) {
         id: row.id, bit_id: p.bit_id ?? null,
         forced_turn: p.forced_turn ?? null, idem: row.idempotency_key || null,
       };
+    } else if (row.control_type === "absurdity_ceiling" && live(row.status)) {
+      // Director-set session-level absurdity cap (Aug 6). Last live one wins,
+      // same pattern as sentBench. null = no Director override; the caller
+      // falls back to whatever default/archetype logic applies.
+      absurdityCeiling = p.ceiling ?? null;
+    } else if (row.control_type === "expertise_level" && live(row.status)) {
+      // Director-set topical-expertise level (Aug 6, one-time-per-call dial —
+      // "above average" default, dial turns it up or down). Last live one
+      // wins, same pattern as absurdityCeiling. null = no Director override;
+      // the caller falls back to the default level.
+      expertiseLevel = p.level ?? null;
     }
   }
-  return { deathBlow, armed, sentBench, forced };
+  return { deathBlow, armed, sentBench, forced, absurdityCeiling, expertiseLevel };
 }
 // DEATH BLOW (Trigger A) — insert one pending death_blow row. The partial unique
 // index keeps it to one per call_id; a duplicate (same call or same idem) comes

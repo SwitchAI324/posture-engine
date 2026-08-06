@@ -120,7 +120,24 @@ async function readDossierFloor(targetId) {
     const priorDetail =
       callRow && callRow.facts && (callRow.facts.summary || callRow.facts.detail || null);
 
-    if (!name && !title && !company && !priorDetail) return null;
+    // TOPICAL EXPERTISE (Aug 6, Andrew — replaces archetype for host framing).
+    // Same email_dossier data _read.js's fuel-hook path already reads — this
+    // is a SECOND consumption path for data that's already being written
+    // (Email/Barbara's buildEmailDossier_ merges it into this SAME body-lane
+    // row), not new tracking. RE-ANGLED on purpose: the fuel-hook version
+    // frames this as "their claims, quote it back at them" (a callback/
+    // gotcha device for a bit that may never fire). This is different —
+    // baseline, unconditional, first-person: the host reached out BECAUSE
+    // they're following up on a real email thread and have some genuine
+    // familiarity with what's being offered, not a stalling target waiting
+    // to be caught out. Pulls summary/hook only (not quotes/contradictions
+    // — those stay bit-layer, this is the ambient floor, ruthlessly
+    // minimal per Data's own guidance).
+    const dossier = facts.email_dossier;
+    const topicalSummary = dossier && dossier.summary ? dossier.summary : null;
+    const topicalHook = dossier && dossier.hook ? dossier.hook : null;
+
+    if (!name && !title && !company && !priorDetail && !topicalSummary) return null;
 
     // FORMAT: labeled, terse, hard-capped. This bakes into the CACHED prefix
     // and pays a token cost on every turn of every call — ruthlessly
@@ -130,13 +147,19 @@ async function readDossierFloor(targetId) {
     const role = [title, company].filter(Boolean).join(" at ");
     if (role) parts.push(`claims ${role}`);
     let line = parts.join(", ");
+    if (topicalSummary) {
+      line += (line ? ". " : "") + "Reason for this call: you followed up on their " +
+        "email pitch — " + String(topicalSummary).slice(0, 140) +
+        (topicalHook ? " (" + String(topicalHook).slice(0, 60) + ")" : "") +
+        " — you're genuinely weighing whether to learn more/move forward.";
+    }
     if (priorDetail) {
       line += (line ? ". " : "") + "Prior contact: " + String(priorDetail).slice(0, 120);
     }
-    // Hard cap: ~50 tokens is roughly ~220 characters for typical English
-    // prose. Truncate rather than let a long prior-call summary blow the
-    // budget — this is a floor, not the whole dossier.
-    return line.slice(0, 240) || null;
+    // Hard cap widened (240 -> 400) to fit the topical-expertise sentence
+    // alongside identity/prior-contact — still a floor, not the whole
+    // dossier; truncate rather than let any one part blow the budget.
+    return line.slice(0, 400) || null;
   } catch (e) {
     console.log("hydrate: readDossierFloor failed: " + (e && e.message));
     return null; // never blocks hydrate — the floor degrading to absent is safe
