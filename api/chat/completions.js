@@ -389,6 +389,21 @@ const PRICING_RAISED_DETECT =
 // selectTextureBit() runs exactly as it does today.
 const TEXTURE_INVITES_DETECT =
   /^(1|true|yes|on)$/i.test(String(process.env.TEXTURE_INVITES_DETECT || ""));
+// ── TEXTURE POST-EVENT COOLDOWN ("don't stack texture right on top of a
+// bigger moment") ──────────────────────────────────────────────────────────
+// Two triggers, one cooldown mechanism: right after a sound/gag marker fires
+// (a cup break, a dog bark — that's already its own beat), or right after a
+// hunt/stall resolves (Canon's own prompt language already says "a stall can
+// overstay" — this adds a mechanical grace period behind it, not a
+// replacement for it), texture selection is skipped for
+// TEXTURE_POST_EVENT_COOLDOWN_TURNS turns. Reuses state PE already persists
+// (markerLastTurn for markers; a new lastStallResolvedTurn stamped alongside
+// the existing resolve-clear logic) — no new detection built, just a new
+// consumer of facts already being tracked. OFF by default; when off,
+// selectTextureBit() runs exactly as it does today, nothing changes.
+const TEXTURE_POST_EVENT_COOLDOWN =
+  /^(1|true|yes|on)$/i.test(String(process.env.TEXTURE_POST_EVENT_COOLDOWN || ""));
+const TEXTURE_POST_EVENT_COOLDOWN_TURNS = parseInt(process.env.TEXTURE_POST_EVENT_COOLDOWN_TURNS || "2", 10);
 // ── MARKER AWARENESS ("self-caused environment marker" persistence) ───────
 // PE_self_caused_marker_awareness.md. Detection lives in finishUp (the SSE
 // handler), persistence in stored.markerCounts/markerLastTurn, injection
@@ -1917,6 +1932,13 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       // true, stays true for the rest of the call regardless of what THIS
       // turn's reader read was.
       pricing_raised: !!(stored && stored.pricingRaised),
+      // CALLER QUESTIONED HUMANITY — feeds BIT-403's trigger declaration.
+      // Momentary (this turn only, not latched) and SYNCHRONOUS — reuses
+      // detectAccusation()'s existing "ai" classification (computed every
+      // turn already, no new detection built) rather than a reader-based
+      // signal, so a direct "are you a bot?" gets same-turn eligibility
+      // instead of a one-turn lag.
+      caller_questioned_humanity: accusation === "ai",
     };
     // LOADOUT then rank: selectBit narrows to the bits that fit this moment,
     // then ranks that focused set (not all 71). threshold:0 so we apply our own
@@ -2331,8 +2353,32 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     if (TEXTURE_INVITES_DETECT && !textureInvitedNow) {
       console.log("texture SKIPPED turn=" + turn + " — reader judged this moment doesn't invite texture");
     }
+    // TEXTURE POST-EVENT COOLDOWN (Aug 5, behind TEXTURE_POST_EVENT_COOLDOWN):
+    // don't stack texture right on top of a bigger moment. Two checks, either
+    // one can suppress: (a) any sound/gag marker fired within the cooldown
+    // window (reuses markerLastTurn, already persisted regardless of the
+    // MARKER_AWARENESS flag — detection there runs unconditionally); (b) a
+    // stall/hunt resolved within the window (lastStallResolvedTurn, stamped
+    // at the resolve-clear point above). Both read the MOST RECENT event of
+    // their kind, not just the last turn — a marker or resolve from exactly
+    // N turns ago still counts inside the window.
+    let textureCooldownActive = false;
+    if (TEXTURE_POST_EVENT_COOLDOWN && stored) {
+      const markerTurns = Object.values(stored.markerLastTurn || {});
+      const lastMarkerTurn = markerTurns.length ? Math.max(...markerTurns) : 0;
+      const lastResolveTurn = stored.lastStallResolvedTurn || 0;
+      const sinceMarker = lastMarkerTurn ? turn - lastMarkerTurn : Infinity;
+      const sinceResolve = lastResolveTurn ? turn - lastResolveTurn : Infinity;
+      if (sinceMarker < TEXTURE_POST_EVENT_COOLDOWN_TURNS || sinceResolve < TEXTURE_POST_EVENT_COOLDOWN_TURNS) {
+        textureCooldownActive = true;
+        console.log(
+          "texture SKIPPED turn=" + turn + " — post-event cooldown (sinceMarker=" +
+          sinceMarker + " sinceResolve=" + sinceResolve + " window=" + TEXTURE_POST_EVENT_COOLDOWN_TURNS + ")"
+        );
+      }
+    }
     let textureFired = false;
-    if (!fire && textureInvitedNow) {
+    if (!fire && textureInvitedNow && !textureCooldownActive) {
       const texBit = selectTextureBit(scorerState);
       if (texBit) {
         top = {
@@ -2882,7 +2928,11 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           // still overwrites these nulls with its own real values — this
           // only takes effect when NOTHING else fires this turn.
           ...(huntJustResolved
-            ? { lastBitId: null, lastBitTurn: null, lastBitAt: null, huntRungCount: 0, huntRungTurn: null }
+            ? { lastBitId: null, lastBitTurn: null, lastBitAt: null, huntRungCount: 0, huntRungTurn: null,
+                // TEXTURE POST-EVENT COOLDOWN: stamp when a stall resolved,
+                // independent of the clears above — this one is read FORWARD
+                // (by the texture gate on later turns), not just cleared.
+                lastStallResolvedTurn: turn }
             : {}),
           // lastBit is NOT re-stamped on a hunt-window SUSTAIN. The window is
           // measured as (turn - lastBitTurn) against the ORIGINAL BIT-233 fire;
