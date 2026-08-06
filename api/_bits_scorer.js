@@ -293,6 +293,43 @@ const totalFiresOf = (history, bitId) => {
   const e = (history || {})[bitId];
   return (e && e.totalFires) || 0;
 };
+// FAMILY-BASED MUTUAL EXCLUSION (Aug 6, Bits). `family` is one string or an
+// array of strings on a bit (a bit CAN span more than one); `excludes_family`
+// is an array of family names this bit shouldn't fire near. BIDIRECTIONAL by
+// design (Andrew: "so long as Bits knows it manages that too" — one
+// declaration on EITHER side is enough, PE checks both directions, Bits
+// should NOT duplicate an exclusion on both bits unless they genuinely want
+// belt-and-suspenders documentation — a single declaration already fully
+// enforces it): a bit is excluded if (a) ITS OWN excludes_family lists a
+// family that fired recently, OR (b) something that fired recently has an
+// excludes_family list naming THIS bit's own family. Window is
+// FAMILY_EXCLUSION_WINDOW turns (default 3) — same "recently" concept as
+// cooldown, but checking OTHER bits' fires, not this bit's own.
+const FAMILY_EXCLUSION_WINDOW = parseInt(process.env.FAMILY_EXCLUSION_WINDOW || "3", 10);
+const asArray = (v) => (v == null ? [] : Array.isArray(v) ? v : [v]);
+function familyExcluded(b, pool, history, turn) {
+  const myFamilies = asArray(b.family);
+  const myExcludes = asArray(b.excludes_family);
+  if (!myFamilies.length && !myExcludes.length) return null; // opts out entirely
+  for (const other of pool) {
+    if (other.id === b.id) continue;
+    const last = lastFiredTurnOf(history, other.id);
+    if (last <= 0) continue; // never fired
+    const since = turn - last;
+    if (since < 0 || since >= FAMILY_EXCLUSION_WINDOW) continue; // outside window
+    const otherFamilies = asArray(other.family);
+    const otherExcludes = asArray(other.excludes_family);
+    // Direction A: THIS bit excludes a family the OTHER bit belongs to.
+    if (myExcludes.length && otherFamilies.some((f) => myExcludes.includes(f))) {
+      return { blockedBy: other.id, via: "my excludes_family -> their family" };
+    }
+    // Direction B: the OTHER bit excludes a family THIS bit belongs to.
+    if (otherExcludes.length && myFamilies.some((f) => otherExcludes.includes(f))) {
+      return { blockedBy: other.id, via: "their excludes_family -> my family" };
+    }
+  }
+  return null;
+}
 // Pick the next texture bit to fire this turn, or null. LRU within the
 // phase's eligible pool(s): the bit that fired LONGEST ago wins; never-fired
 // (last_fire_turn 0 or absent) always sorts first. No weights, no randomness
@@ -331,6 +368,8 @@ export function selectTextureBit(state, { pool = BITS } = {}) {
     // MAX FIRES PER CALL (Aug 6, new — see loadout()'s own comment for the
     // full rationale): a hard cap, only bits that declare it are affected.
     if (b.max_fires_per_call != null && totalFiresOf(history, b.id) >= b.max_fires_per_call) return false;
+    if (familyExcluded(b, pool, history, turn)) return false;
+    if (state.absurdityCeiling != null && (b.absurdity ?? 1) > state.absurdityCeiling) return false;
     return true;
   });
   if (!candidates.length) return null;
@@ -560,8 +599,23 @@ export function loadout(state, { pool = BITS } = {}) {
     // is skipped entirely and falls through to gear-scoring unchanged. So this
     // NARROWS the pool (removes an event-bit on turns its event is absent) and
     // never widens or blackholes: a non-allowlisted trigger is a no-op here.
-    if (TRIGGER_MATCH && b.trigger && EMITTED_TRIGGERS.has(b.trigger)) {
-      if (!triggerPresent(b.trigger, state)) return false;
+    //
+    // COMPOUND "a|b" SYNTAX (Aug 6, bug fix — found doing a full trigger audit):
+    // BIT-210 declared trigger:"commitment_push|pricing_raised", presumably
+    // meaning "either is enough." The check below used to test the WHOLE
+    // string against EMITTED_TRIGGERS as one value — which never matched
+    // anything (neither individual name equals the compound string), so
+    // BIT-210 was silently falling through to generic ranking, ungated by
+    // either trigger, despite the registry appearing to wire it correctly.
+    // Now: split on "|", OR semantics across whichever parts ARE
+    // allowlisted (parts that aren't yet emitted are ignored individually,
+    // same as a plain unbuilt trigger always has been — never blackholes).
+    if (TRIGGER_MATCH && b.trigger) {
+      const parts = String(b.trigger).split("|").map((s) => s.trim()).filter(Boolean);
+      const allowlistedParts = parts.filter((p) => EMITTED_TRIGGERS.has(p));
+      if (allowlistedParts.length && !allowlistedParts.some((p) => triggerPresent(p, state))) {
+        return false;
+      }
     }
     // LATEST-TURN GATE (new registry field, Aug 4): a hard eligibility
     // cutoff, same shape as the phase_pref exclusion above — NOT a scoring
@@ -599,6 +653,27 @@ export function loadout(state, { pool = BITS } = {}) {
         console.log("bit EXCLUDED id=" + b.id + " reason=max_fires_per_call turn=" + state.turn + " totalFires=" + totalFires + " cap=" + b.max_fires_per_call);
         return false;
       }
+      const famBlock = familyExcluded(b, pool, history, state.turn ?? 0);
+      if (famBlock) {
+        console.log("bit EXCLUDED id=" + b.id + " reason=family_exclusion turn=" + state.turn + " blockedBy=" + famBlock.blockedBy + " via=\"" + famBlock.via + "\"");
+        return false;
+      }
+      // ABSURDITY CEILING (Aug 6, Bits — hard gate, their stated preference:
+      // "predictable behavior"). b.absurdity defaults to 1 (Grounded) when
+      // absent, per Bits' own spec. state.absurdityCeiling is a single
+      // combined number the CALLER (completions.js) is responsible for
+      // computing — this function doesn't know or care whether it came from
+      // a Director override, an archetype default, or a turn-based ramp; it
+      // just enforces whatever ceiling it's handed. null/undefined ceiling =
+      // no restriction (fail toward eligibility, same convention as every
+      // other gate's "not configured yet" default in this file).
+      if (state.absurdityCeiling != null) {
+        const level = b.absurdity ?? 1;
+        if (level > state.absurdityCeiling) {
+          console.log("bit EXCLUDED id=" + b.id + " reason=absurdity_ceiling turn=" + state.turn + " level=" + level + " ceiling=" + state.absurdityCeiling);
+          return false;
+        }
+      }
     }
     // OPENING GATE — two rules, phase first (Bits ratified Jul 15).
     //
@@ -620,14 +695,14 @@ export function loadout(state, { pool = BITS } = {}) {
 }
 // Mid-call pick: rank the LOADOUT (not the whole registry) and take the top if
 // it clears the deploy bar; else null ("just keep talking").
-export function selectBit(state, { threshold = DEPLOY_THRESHOLD } = {}) {
-  const pool = loadout(state);
-  const ranked = rankBits(state, { pool });
+export function selectBit(state, { threshold = DEPLOY_THRESHOLD, pool = BITS } = {}) {
+  const loadoutPool = loadout(state, { pool });
+  const ranked = rankBits(state, { pool: loadoutPool });
   const top = ranked[0];
   if (!top || top.score < threshold) {
-    return { bit: null, reason: "below deploy threshold", ranked, pool: pool.length };
+    return { bit: null, reason: "below deploy threshold", ranked, pool: loadoutPool.length };
   }
-  return { bit: top, reason: "fires", ranked, pool: pool.length };
+  return { bit: top, reason: "fires", ranked, pool: loadoutPool.length };
 }
 // Death Blow: the top 700-series finisher, always thrown (threshold bypassed).
 // Special rules from the Bits handoff: BIT-704 (Colleague Pull) overrides all

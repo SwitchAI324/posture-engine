@@ -17,7 +17,9 @@ export const BITS = [
     "rung_spacing": {
       "min_between": 2,
       "rung_3_earliest_turn": 6
-    }
+    },
+    "family": "verbal",
+    "absurdity": 2
   },
   {
     "id": "BIT-102",
@@ -29,7 +31,9 @@ export const BITS = [
     "rung_spacing": {
       "min_between": 3
     },
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 2
   },
   {
     "id": "BIT-103",
@@ -38,7 +42,9 @@ export const BITS = [
     "channel": "video",
     "archetypes": "universal",
     "cooldown": 4,
-    "pool": "early"
+    "pool": "early",
+    "family": "video",
+    "absurdity": 3
   },
   {
     "id": "BIT-104",
@@ -48,7 +54,9 @@ export const BITS = [
     "bit_type": "count",
     "count_label": "substitutions",
     "cooldown": 2,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 3
   },
   {
     "id": "BIT-105",
@@ -58,7 +66,9 @@ export const BITS = [
     "bit_type": "count",
     "count_label": "eggcorns",
     "cooldown": 3,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 2
   },
   {
     "id": "BIT-106",
@@ -66,7 +76,9 @@ export const BITS = [
     "status": "parked",
     "archetypes": "universal",
     "cooldown": 4,
-    "pool": "early"
+    "pool": "early",
+    "family": "verbal",
+    "absurdity": 1
   },
   {
     "id": "BIT-107",
@@ -74,7 +86,9 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 4,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 2
   },
   {
     "id": "BIT-108",
@@ -82,7 +96,9 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 3,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 4
   },
   {
     "id": "BIT-109",
@@ -90,7 +106,9 @@ export const BITS = [
     "status": "parked",
     "archetypes": "universal",
     "cooldown": 3,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 1
   },
   {
     "id": "BIT-110",
@@ -98,7 +116,9 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 4,
-    "pool": "early"
+    "pool": "early",
+    "family": "verbal",
+    "absurdity": 2
   },
   {
     "id": "BIT-111",
@@ -106,7 +126,9 @@ export const BITS = [
     "status": "parked",
     "archetypes": "universal",
     "cooldown": 4,
-    "pool": "late"
+    "pool": "late",
+    "family": "verbal",
+    "absurdity": 1
   },
   {
     "id": "BIT-112",
@@ -115,7 +137,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 3,
     "phase_pref": "drifting",
-    "trigger": "extended_stall"
+    "trigger": "extended_stall",
+    "family": "verbal",
+    "absurdity": 1
   },
   {
     "id": "BIT-112b",
@@ -126,7 +150,10 @@ export const BITS = [
     "count_label": "overheld pauses",
     "cooldown": 3,
     "phase_pref": "drifting",
-    "trigger": "extended_stall"
+    "trigger": "extended_stall",
+    "family": "verbal",
+    "absurdity": 1,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-113",
@@ -134,7 +161,9 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 5,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 2
   },
   {
     "id": "BIT-114",
@@ -142,7 +171,9 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 5,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 2
   },
   {
     "id": "BIT-115",
@@ -150,7 +181,9 @@ export const BITS = [
     "status": "parked",
     "archetypes": "universal",
     "cooldown": 5,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 1
   },
   {
     "id": "BIT-116",
@@ -158,7 +191,9 @@ export const BITS = [
     "status": "parked",
     "archetypes": "universal",
     "cooldown": 3,
-    "trigger": "caller_named_competitor"
+    "trigger": "caller_named_competitor",
+    "family": "verbal",
+    "absurdity": 1
   },
   {
     "id": "BIT-117",
@@ -173,7 +208,9 @@ export const BITS = [
       "rung_3_earliest_turn": 8,
       "rung_4_earliest_turn": 14
     },
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 3
   },
   {
     "id": "BIT-118",
@@ -185,7 +222,9 @@ export const BITS = [
     ],
     "cooldown": 6,
     "phase_pref": "pitching",
-    "trigger": "caller_made_claim"
+    "trigger": "caller_made_claim",
+    "family": "verbal",
+    "absurdity": 2
   },
   {
     "id": "BIT-119",
@@ -197,7 +236,9 @@ export const BITS = [
     "cooldown": 5,
     "phase_pref": "pitching",
     "trigger": "caller_pitched",
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 4
   },
   {
     "id": "BIT-120",
@@ -207,7 +248,9 @@ export const BITS = [
       "crypto_investment"
     ],
     "cooldown": 5,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 3
   },
   {
     "id": "BIT-121",
@@ -215,15 +258,20 @@ export const BITS = [
     "status": "parked",
     "archetypes": "universal",
     "cooldown": 4,
-    "pool": "early"
+    "pool": "early",
+    "family": "verbal",
+    "absurdity": 1
   },
   {
     "id": "BIT-122",
     "name": "I Get That A Lot",
-    "status": "active",
+    "status": "parked",
     "archetypes": "universal",
     "cooldown": 6,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 1,
+    "park_reason": "Andrew review Aug 5 \u2014 too thin"
   },
   {
     "id": "BIT-123",
@@ -231,7 +279,9 @@ export const BITS = [
     "status": "parked",
     "archetypes": "universal",
     "cooldown": 4,
-    "pool": "early"
+    "pool": "early",
+    "family": "verbal",
+    "absurdity": 1
   },
   {
     "id": "BIT-124",
@@ -239,7 +289,9 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 5,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 3
   },
   {
     "id": "BIT-125",
@@ -249,7 +301,9 @@ export const BITS = [
     "bit_type": "count",
     "count_label": "tangents",
     "cooldown": 3,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 1
   },
   {
     "id": "BIT-126",
@@ -257,17 +311,22 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 4,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 3
   },
   {
     "id": "BIT-127",
     "name": "The Correction",
-    "status": "active",
+    "status": "parked",
     "archetypes": "universal",
     "bit_type": "count",
     "count_label": "self-corrections",
     "cooldown": 3,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 1,
+    "park_reason": "Andrew review Aug 5 \u2014 too thin"
   },
   {
     "id": "BIT-128",
@@ -277,7 +336,9 @@ export const BITS = [
     "cooldown": 3,
     "phase_pref": "drifting",
     "trigger": "extended_stall",
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 1
   },
   {
     "id": "BIT-129",
@@ -287,17 +348,22 @@ export const BITS = [
     "cooldown": 3,
     "phase_pref": "drifting",
     "trigger": "extended_stall",
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 1
   },
   {
     "id": "BIT-130",
     "name": "How Are You",
-    "status": "active",
+    "status": "parked",
     "archetypes": "universal",
     "bit_type": "count",
     "count_label": "genuine answers",
     "cooldown": 5,
-    "trigger": "phase:opening"
+    "trigger": "phase:opening",
+    "family": "structural",
+    "absurdity": 2,
+    "park_reason": "Andrew review Aug 5 \u2014 too thin"
   },
   {
     "id": "BIT-131",
@@ -307,7 +373,9 @@ export const BITS = [
     "bit_type": "count",
     "count_label": "busy exchanges",
     "cooldown": 4,
-    "trigger": "phase:opening"
+    "trigger": "phase:opening",
+    "family": "structural",
+    "absurdity": 3
   },
   {
     "id": "BIT-132",
@@ -316,7 +384,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 6,
     "trigger": "phase:opening",
-    "max_fires_per_call": 1
+    "max_fires_per_call": 1,
+    "family": "structural",
+    "absurdity": 3
   },
   {
     "id": "BIT-133",
@@ -326,7 +396,9 @@ export const BITS = [
     "bit_type": "count",
     "count_label": "audio checks",
     "cooldown": 3,
-    "trigger": "phase:opening"
+    "trigger": "phase:opening",
+    "family": "structural",
+    "absurdity": 4
   },
   {
     "id": "BIT-134",
@@ -334,7 +406,9 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 5,
-    "trigger": "phase:opening"
+    "trigger": "phase:opening",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "id": "BIT-135",
@@ -342,7 +416,9 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 5,
-    "trigger": "phase:opening"
+    "trigger": "phase:opening",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "id": "BIT-136",
@@ -350,7 +426,9 @@ export const BITS = [
     "status": "parked",
     "park_reason": "superseded by BIT-326",
     "archetypes": "universal",
-    "cooldown": 4
+    "cooldown": 4,
+    "family": "personal",
+    "absurdity": 1
   },
   {
     "id": "BIT-137",
@@ -358,7 +436,9 @@ export const BITS = [
     "status": "parked",
     "park_reason": "superseded by BIT-327",
     "archetypes": "universal",
-    "cooldown": 4
+    "cooldown": 4,
+    "family": "personal",
+    "absurdity": 1
   },
   {
     "id": "BIT-138",
@@ -373,7 +453,9 @@ export const BITS = [
       "min_between": 2,
       "rung_3_earliest_turn": 8,
       "rung_4_earliest_turn": 14
-    }
+    },
+    "family": "personal",
+    "absurdity": 1
   },
   {
     "id": "BIT-139",
@@ -381,7 +463,9 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 5,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "personal",
+    "absurdity": 2
   },
   {
     "id": "BIT-140",
@@ -389,7 +473,9 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 5,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "personal",
+    "absurdity": 2
   },
   {
     "id": "BIT-141",
@@ -397,7 +483,9 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 5,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "personal",
+    "absurdity": 2
   },
   {
     "id": "BIT-142",
@@ -405,15 +493,20 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 5,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "personal",
+    "absurdity": 2
   },
   {
     "id": "BIT-143",
     "name": "The Challenge Riff",
-    "status": "active",
+    "status": "parked",
     "archetypes": "universal",
     "cooldown": 5,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "personal",
+    "absurdity": 2,
+    "park_reason": "Andrew review Aug 5 \u2014 too thin"
   },
   {
     "id": "BIT-144",
@@ -421,7 +514,9 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 5,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "personal",
+    "absurdity": 2
   },
   {
     "id": "BIT-145",
@@ -429,7 +524,10 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 4,
-    "pool": "early"
+    "pool": "early",
+    "family": "verbal",
+    "absurdity": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-146",
@@ -439,13 +537,14 @@ export const BITS = [
     "cooldown": 4,
     "rungs": 4,
     "ceiling": "soft_dead_end",
-    "trigger": "ambient",
     "rung_spacing": {
       "min_between": 2,
       "rung_3_earliest_turn": 8,
       "rung_4_earliest_turn": 14
     },
-    "pool": "middle"
+    "pool": "middle",
+    "family": "personal",
+    "absurdity": 3
   },
   {
     "id": "BIT-147",
@@ -455,13 +554,14 @@ export const BITS = [
     "cooldown": 5,
     "rungs": 4,
     "ceiling": "soft_dead_end",
-    "trigger": "ambient",
     "rung_spacing": {
       "min_between": 2,
       "rung_3_earliest_turn": 10,
       "rung_4_earliest_turn": 16
     },
-    "pool": "middle"
+    "pool": "middle",
+    "family": "personal",
+    "absurdity": 2
   },
   {
     "id": "BIT-148",
@@ -470,14 +570,16 @@ export const BITS = [
     "archetypes": "universal",
     "bit_type": "count",
     "count_label": "name_uses",
-    "cooldown": 1,
+    "cooldown": 3,
     "rungs": 5,
     "ceiling": "soft_dead_end",
     "rung_spacing": {
       "min_between": 1,
       "rung_4_earliest_turn": 6
     },
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 2
   },
   {
     "id": "BIT-149",
@@ -487,7 +589,9 @@ export const BITS = [
     "bit_type": "count",
     "count_label": "vernacular_uses",
     "cooldown": 4,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "verbal",
+    "absurdity": 3
   },
   {
     "id": "BIT-201",
@@ -495,7 +599,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 4,
     "pool": "middle",
-    "status": "active"
+    "status": "active",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "archetypes": "universal",
@@ -505,14 +611,18 @@ export const BITS = [
     "lane": "stall",
     "stall_type": "hunt",
     "trigger": "commitment_push",
-    "status": "active"
+    "status": "active",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "id": "BIT-203",
     "name": "The Agenda Bit",
     "status": "active",
     "archetypes": "universal",
-    "cooldown": 3
+    "cooldown": 3,
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "archetypes": "universal",
@@ -522,14 +632,18 @@ export const BITS = [
     "lane": "stall",
     "stall_type": "hunt",
     "trigger": "commitment_push",
-    "status": "active"
+    "status": "active",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "id": "BIT-205",
     "name": "The Reschedule Bit",
     "status": "active",
     "archetypes": "universal",
-    "cooldown": 4
+    "cooldown": 4,
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "id": "BIT-206",
@@ -538,7 +652,9 @@ export const BITS = [
     "archetypes": [
       "b2b_saas"
     ],
-    "cooldown": 4
+    "cooldown": 4,
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "id": "BIT-207",
@@ -548,7 +664,9 @@ export const BITS = [
     "bit_type": "count",
     "count_label": "check-ins",
     "cooldown": 3,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "id": "BIT-208",
@@ -556,7 +674,9 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 4,
-    "pool": "early"
+    "pool": "early",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "id": "BIT-209",
@@ -564,7 +684,9 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 6,
-    "pool": "early"
+    "pool": "early",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "archetypes": "universal",
@@ -574,7 +696,9 @@ export const BITS = [
     "lane": "stall",
     "stall_type": "hunt",
     "trigger": "commitment_push|pricing_raised",
-    "status": "active"
+    "status": "active",
+    "family": "stall",
+    "absurdity": 1
   },
   {
     "id": "BIT-211",
@@ -584,7 +708,9 @@ export const BITS = [
     "bit_type": "count",
     "count_label": "silences",
     "cooldown": 3,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "stall",
+    "absurdity": 1
   },
   {
     "archetypes": "universal",
@@ -592,7 +718,9 @@ export const BITS = [
     "id": "BIT-212",
     "name": "The Join",
     "pool": "middle",
-    "status": "parked"
+    "status": "parked",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "archetypes": "universal",
@@ -600,7 +728,9 @@ export const BITS = [
     "id": "BIT-213",
     "name": "The Accidental Joiner",
     "pool": "middle",
-    "status": "parked"
+    "status": "parked",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "archetypes": "universal",
@@ -608,7 +738,9 @@ export const BITS = [
     "id": "BIT-214",
     "name": "The Two Spammers",
     "pool": "middle",
-    "status": "active"
+    "status": "active",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "archetypes": "universal",
@@ -620,7 +752,9 @@ export const BITS = [
     "lane": "stall",
     "stall_type": "hold",
     "trigger": "caller_went_quiet",
-    "status": "parked"
+    "status": "parked",
+    "family": "stall",
+    "absurdity": 1
   },
   {
     "archetypes": [
@@ -631,7 +765,9 @@ export const BITS = [
     "name": "The Questionnaire",
     "phase_pref": "probing",
     "trigger": "phase:probing",
-    "status": "active"
+    "status": "active",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "archetypes": "universal",
@@ -646,7 +782,9 @@ export const BITS = [
       "min_between": 2,
       "rung_3_earliest_turn": 8,
       "rung_4_earliest_turn": 14
-    }
+    },
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "archetypes": "universal",
@@ -654,7 +792,9 @@ export const BITS = [
     "id": "BIT-218",
     "name": "The Introduction",
     "pool": "early",
-    "status": "parked"
+    "status": "parked",
+    "family": "stall",
+    "absurdity": 1
   },
   {
     "id": "BIT-219",
@@ -662,7 +802,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 4,
     "pool": "middle",
-    "status": "active"
+    "status": "active",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "id": "BIT-220",
@@ -670,8 +812,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 4,
     "lane": "gag",
-    "trigger": "ambient",
-    "status": "active"
+    "status": "active",
+    "family": "stall",
+    "absurdity": 1
   },
   {
     "id": "BIT-221",
@@ -679,7 +822,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 5,
     "pool": "middle",
-    "status": "active"
+    "status": "active",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "id": "BIT-222",
@@ -689,7 +834,9 @@ export const BITS = [
     "count_label": "overlaps",
     "cooldown": 3,
     "pool": "middle",
-    "status": "parked"
+    "status": "parked",
+    "family": "stall",
+    "absurdity": 1
   },
   {
     "id": "BIT-223",
@@ -707,7 +854,9 @@ export const BITS = [
       "min_between": 3,
       "rung_3_earliest_turn": 10
     },
-    "pool": "middle"
+    "pool": "middle",
+    "family": "stall",
+    "absurdity": 1
   },
   {
     "id": "BIT-224",
@@ -715,7 +864,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 5,
     "pool": "middle",
-    "status": "active"
+    "status": "active",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "id": "BIT-225",
@@ -724,7 +875,9 @@ export const BITS = [
     "cooldown": 5,
     "phase_pref": "probing",
     "trigger": "phase:probing",
-    "status": "active"
+    "status": "active",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "id": "BIT-226",
@@ -732,7 +885,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 5,
     "pool": "middle",
-    "status": "parked"
+    "status": "parked",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "id": "BIT-227",
@@ -740,7 +895,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 4,
     "pool": "late",
-    "status": "active"
+    "status": "active",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "id": "BIT-228",
@@ -750,7 +907,9 @@ export const BITS = [
     "count_label": "time checks",
     "cooldown": 3,
     "pool": "middle",
-    "status": "parked"
+    "status": "parked",
+    "family": "stall",
+    "absurdity": 1
   },
   {
     "id": "BIT-229",
@@ -758,7 +917,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 4,
     "pool": "middle",
-    "status": "active"
+    "status": "active",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "id": "BIT-230",
@@ -768,7 +929,9 @@ export const BITS = [
     "phase_pref": "probing",
     "trigger": "phase:probing",
     "pool": "late",
-    "status": "parked"
+    "status": "parked",
+    "family": "stall",
+    "absurdity": 1
   },
   {
     "id": "BIT-231",
@@ -777,7 +940,9 @@ export const BITS = [
     "cooldown": 4,
     "phase_pref": "probing",
     "trigger": "phase:probing",
-    "status": "active"
+    "status": "active",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "id": "BIT-232",
@@ -785,7 +950,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 4,
     "trigger": "phase:opening",
-    "status": "active"
+    "status": "active",
+    "family": "structural",
+    "absurdity": 1
   },
   {
     "id": "BIT-233",
@@ -798,7 +965,9 @@ export const BITS = [
     "rungs": 5,
     "trigger": "commitment_push",
     "status": "active",
-    "max_fires_per_call": 5
+    "max_fires_per_call": 5,
+    "family": "stall",
+    "absurdity": 1
   },
   {
     "archetypes": "universal",
@@ -806,21 +975,27 @@ export const BITS = [
     "id": "BIT-301",
     "name": "Technical Difficulties",
     "pool": "middle",
-    "status": "active"
+    "status": "active",
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-302",
     "name": "The Dog Bit",
     "status": "active",
     "archetypes": "universal",
-    "cooldown": 4
+    "cooldown": 4,
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-303",
     "name": "The Insect Bit",
     "status": "active",
     "archetypes": "universal",
-    "cooldown": 5
+    "cooldown": 5,
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "archetypes": [
@@ -831,21 +1006,27 @@ export const BITS = [
     "name": "The Heartbeat Bit",
     "phase_pref": "pitching",
     "trigger": "commitment_push",
-    "status": "active"
+    "status": "active",
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-305",
     "name": "The Extensive Typing Bit",
     "status": "active",
     "archetypes": "universal",
-    "cooldown": 3
+    "cooldown": 3,
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-306",
     "name": "Room Presence Bits",
     "status": "active",
     "archetypes": "universal",
-    "cooldown": 3
+    "cooldown": 3,
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "archetypes": "universal",
@@ -853,16 +1034,19 @@ export const BITS = [
     "id": "BIT-307",
     "name": "The Spill",
     "lane": "gag",
-    "trigger": "ambient",
     "status": "active",
-    "max_fires_per_call": 1
+    "max_fires_per_call": 1,
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-308",
     "name": "The Snot-Burst / Laughter Reaction",
     "status": "parked",
     "archetypes": "universal",
-    "cooldown": 5
+    "cooldown": 5,
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-309",
@@ -870,22 +1054,27 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 5,
-    "trigger": "call_turn_1"
+    "trigger": "call_turn_1",
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "archetypes": "universal",
     "cooldown": 3,
     "id": "BIT-310",
     "name": "The Scapegoat",
-    "status": "active"
+    "status": "active",
+    "family": "personal",
+    "absurdity": 1
   },
   {
     "id": "BIT-311",
     "name": "The Sick Day",
     "archetypes": "universal",
     "cooldown": 5,
-    "trigger": "ambient",
-    "status": "active"
+    "status": "active",
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-312",
@@ -893,7 +1082,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 4,
     "pool": "middle",
-    "status": "active"
+    "status": "active",
+    "family": "personal",
+    "absurdity": 1
   },
   {
     "id": "BIT-313",
@@ -901,8 +1092,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 5,
     "lane": "gag",
-    "trigger": "ambient",
-    "status": "active"
+    "status": "active",
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-314",
@@ -910,9 +1102,10 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 6,
     "lane": "gag",
-    "trigger": "ambient",
     "status": "active",
-    "max_fires_per_call": 1
+    "max_fires_per_call": 1,
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-315",
@@ -920,7 +1113,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 4,
     "pool": "middle",
-    "status": "active"
+    "status": "active",
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-317",
@@ -928,7 +1123,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 5,
     "pool": "middle",
-    "status": "active"
+    "status": "active",
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-318",
@@ -938,7 +1135,9 @@ export const BITS = [
     "count_label": "mute incidents",
     "cooldown": 3,
     "pool": "middle",
-    "status": "active"
+    "status": "active",
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-319",
@@ -946,7 +1145,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 5,
     "pool": "middle",
-    "status": "active"
+    "status": "active",
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-320",
@@ -954,9 +1155,10 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 5,
     "lane": "gag",
-    "trigger": "ambient",
     "status": "active",
-    "max_fires_per_call": 1
+    "max_fires_per_call": 1,
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-321",
@@ -964,7 +1166,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 5,
     "pool": "middle",
-    "status": "active"
+    "status": "active",
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-322",
@@ -972,7 +1176,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 5,
     "pool": "middle",
-    "status": "active"
+    "status": "active",
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-323",
@@ -980,7 +1186,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 4,
     "pool": "middle",
-    "status": "active"
+    "status": "active",
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-324",
@@ -989,7 +1197,9 @@ export const BITS = [
     "cooldown": 4,
     "phase_pref": "drifting",
     "trigger": "extended_stall",
-    "status": "active"
+    "status": "active",
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-325",
@@ -998,7 +1208,9 @@ export const BITS = [
     "cooldown": 5,
     "phase_pref": "drifting",
     "trigger": "extended_stall",
-    "status": "active"
+    "status": "active",
+    "family": "personal",
+    "absurdity": 1
   },
   {
     "id": "BIT-326",
@@ -1006,7 +1218,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 4,
     "trigger": "phase:opening",
-    "status": "active"
+    "status": "active",
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-327",
@@ -1014,7 +1228,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 4,
     "pool": "middle",
-    "status": "active"
+    "status": "active",
+    "family": "personal",
+    "absurdity": 1
   },
   {
     "id": "BIT-328",
@@ -1023,7 +1239,9 @@ export const BITS = [
     "cooldown": 3,
     "trigger": "caller_named_hobby",
     "pool": "middle",
-    "status": "active"
+    "status": "active",
+    "family": "personal",
+    "absurdity": 1
   },
   {
     "id": "BIT-329",
@@ -1031,9 +1249,10 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 5,
     "lane": "gag",
-    "trigger": "ambient",
     "status": "active",
-    "max_fires_per_call": 2
+    "max_fires_per_call": 2,
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-330",
@@ -1044,7 +1263,9 @@ export const BITS = [
     "cooldown": 999,
     "trigger": "call_turn_1",
     "status": "active",
-    "max_fires_per_call": 1
+    "max_fires_per_call": 1,
+    "family": "environment",
+    "absurdity": 1
   },
   {
     "id": "BIT-401",
@@ -1052,7 +1273,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 4,
     "pool": "middle",
-    "status": "active"
+    "status": "active",
+    "family": "video",
+    "absurdity": 1
   },
   {
     "archetypes": "universal",
@@ -1061,7 +1284,9 @@ export const BITS = [
     "name": "Chat Injection Bit",
     "pool": "middle",
     "status": "active",
-    "channel": "video"
+    "channel": "video",
+    "family": "video",
+    "absurdity": 1
   },
   {
     "id": "BIT-403",
@@ -1071,7 +1296,9 @@ export const BITS = [
     "cooldown": 4,
     "pool": "middle",
     "channel": "video",
-    "trigger": "caller_questioned_humanity"
+    "trigger": "caller_questioned_humanity",
+    "family": "video",
+    "absurdity": 1
   },
   {
     "id": "BIT-404",
@@ -1079,7 +1306,9 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 3,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "video",
+    "absurdity": 1
   },
   {
     "id": "BIT-405",
@@ -1088,7 +1317,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 3,
     "pool": "middle",
-    "channel": "video"
+    "channel": "video",
+    "family": "video",
+    "absurdity": 1
   },
   {
     "archetypes": "universal",
@@ -1097,7 +1328,9 @@ export const BITS = [
     "name": "The Camera On",
     "status": "active",
     "pool": "middle",
-    "channel": "video"
+    "channel": "video",
+    "family": "video",
+    "absurdity": 1
   },
   {
     "id": "BIT-407",
@@ -1105,9 +1338,10 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 5,
     "lane": "gag",
-    "trigger": "ambient",
     "status": "active",
-    "channel": "video"
+    "channel": "video",
+    "family": "video",
+    "absurdity": 1
   },
   {
     "id": "BIT-408",
@@ -1118,7 +1352,9 @@ export const BITS = [
     "lane": "gag",
     "trigger": "call_turn_1",
     "status": "active",
-    "channel": "video"
+    "channel": "video",
+    "family": "video",
+    "absurdity": 1
   },
   {
     "id": "BIT-501",
@@ -1126,7 +1362,9 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 4,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "id": "BIT-502",
@@ -1134,7 +1372,9 @@ export const BITS = [
     "status": "parked",
     "archetypes": "universal",
     "cooldown": 4,
-    "park_reason": "target_background hook unconfirmed \u2014 no Scouting producer yet"
+    "park_reason": "target_background hook unconfirmed \u2014 no Scouting producer yet",
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "id": "BIT-503",
@@ -1142,7 +1382,9 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 4,
-    "pool": "middle"
+    "pool": "middle",
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "archetypes": "universal",
@@ -1150,7 +1392,9 @@ export const BITS = [
     "id": "BIT-504",
     "name": "The Linkedin Bit",
     "pool": "late",
-    "status": "active"
+    "status": "active",
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "id": "BIT-505",
@@ -1158,7 +1402,9 @@ export const BITS = [
     "status": "parked",
     "archetypes": "universal",
     "cooldown": 3,
-    "park_reason": "sender_linkedin hook confirmed dead \u2014 no producer"
+    "park_reason": "sender_linkedin hook confirmed dead \u2014 no producer",
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "archetypes": "universal",
@@ -1166,7 +1412,9 @@ export const BITS = [
     "id": "BIT-506",
     "name": "The Oversight Bit",
     "pool": "late",
-    "status": "active"
+    "status": "active",
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "id": "BIT-507",
@@ -1177,7 +1425,9 @@ export const BITS = [
     ],
     "cooldown": 6,
     "trigger": "browsed_tmi",
-    "status": "active"
+    "status": "active",
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "id": "BIT-508",
@@ -1188,7 +1438,9 @@ export const BITS = [
     ],
     "cooldown": 5,
     "trigger": "has_prior_contact",
-    "status": "active"
+    "status": "active",
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "id": "BIT-509",
@@ -1199,7 +1451,9 @@ export const BITS = [
     ],
     "cooldown": 4,
     "trigger": "has_prior_contact",
-    "status": "active"
+    "status": "active",
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "id": "BIT-510",
@@ -1210,7 +1464,9 @@ export const BITS = [
     ],
     "cooldown": 5,
     "trigger": "has_prior_contact",
-    "status": "active"
+    "status": "active",
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "id": "BIT-511",
@@ -1221,7 +1477,9 @@ export const BITS = [
     ],
     "cooldown": 5,
     "trigger": "has_prior_contact",
-    "status": "active"
+    "status": "active",
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "id": "BIT-512",
@@ -1232,7 +1490,9 @@ export const BITS = [
     ],
     "cooldown": 4,
     "trigger": "has_prior_contact",
-    "status": "active"
+    "status": "active",
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "id": "BIT-513",
@@ -1243,7 +1503,9 @@ export const BITS = [
     ],
     "cooldown": 4,
     "trigger": "has_prior_contact",
-    "status": "active"
+    "status": "active",
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "id": "BIT-514",
@@ -1251,7 +1513,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 5,
     "pool": "late",
-    "status": "active"
+    "status": "active",
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "id": "BIT-515",
@@ -1260,7 +1524,6 @@ export const BITS = [
     "cooldown": 4,
     "rungs": 4,
     "ceiling": "soft_dead_end",
-    "trigger": "ambient",
     "rung_spacing": {
       "min_between": 2,
       "rung_3_earliest_turn": 10,
@@ -1268,7 +1531,9 @@ export const BITS = [
     },
     "pool": "middle",
     "status": "active",
-    "max_fires_per_call": 4
+    "max_fires_per_call": 4,
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "id": "BIT-516",
@@ -1277,14 +1542,15 @@ export const BITS = [
     "cooldown": 5,
     "rungs": 4,
     "ceiling": "soft_dead_end",
-    "trigger": "ambient",
     "rung_spacing": {
       "min_between": 2,
       "rung_3_earliest_turn": 10,
       "rung_4_earliest_turn": 16
     },
     "pool": "middle",
-    "status": "active"
+    "status": "active",
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "id": "BIT-517",
@@ -1297,7 +1563,9 @@ export const BITS = [
     "cooldown": 4,
     "pool": "middle",
     "bit_type": "count",
-    "count_label": "callbacks"
+    "count_label": "callbacks",
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "id": "BIT-601",
@@ -1306,7 +1574,9 @@ export const BITS = [
     "park_reason": "no_producer",
     "archetypes": "universal",
     "fuel_hooks": [],
-    "cooldown": 4
+    "cooldown": 4,
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "archetypes": "universal",
@@ -1318,7 +1588,9 @@ export const BITS = [
     "name": "Condolences",
     "park_reason": "no_producer",
     "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026.",
-    "status": "parked"
+    "status": "parked",
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "id": "BIT-603",
@@ -1327,7 +1599,9 @@ export const BITS = [
     "park_reason": "no_producer",
     "archetypes": "universal",
     "fuel_hooks": [],
-    "cooldown": 4
+    "cooldown": 4,
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "archetypes": "universal",
@@ -1337,7 +1611,9 @@ export const BITS = [
     "name": "Glassdoor",
     "park_reason": "no_producer",
     "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026.",
-    "status": "parked"
+    "status": "parked",
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "id": "BIT-605",
@@ -1346,7 +1622,9 @@ export const BITS = [
     "park_reason": "no_producer",
     "archetypes": "universal",
     "fuel_hooks": [],
-    "cooldown": 4
+    "cooldown": 4,
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "id": "BIT-606",
@@ -1355,7 +1633,9 @@ export const BITS = [
     "park_reason": "no_producer",
     "archetypes": "universal",
     "fuel_hooks": [],
-    "cooldown": 4
+    "cooldown": 4,
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "archetypes": "universal",
@@ -1365,7 +1645,9 @@ export const BITS = [
     "name": "Open To Work",
     "park_reason": "no_producer",
     "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026.",
-    "status": "parked"
+    "status": "parked",
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "id": "BIT-608",
@@ -1374,7 +1656,9 @@ export const BITS = [
     "park_reason": "no_producer",
     "archetypes": "universal",
     "fuel_hooks": [],
-    "cooldown": 3
+    "cooldown": 3,
+    "family": "dossier",
+    "absurdity": 1
   },
   {
     "archetypes": "universal",
@@ -1383,7 +1667,9 @@ export const BITS = [
     "id": "BIT-701",
     "name": "The Callback Hook",
     "trigger": "call_phase_late",
-    "status": "active"
+    "status": "active",
+    "family": "death_blow",
+    "absurdity": 1
   },
   {
     "id": "BIT-702",
@@ -1392,7 +1678,9 @@ export const BITS = [
     "intensity": 0.5,
     "cooldown": 6,
     "trigger": "call_phase_late",
-    "status": "active"
+    "status": "active",
+    "family": "death_blow",
+    "absurdity": 1
   },
   {
     "id": "BIT-703",
@@ -1401,7 +1689,9 @@ export const BITS = [
     "intensity": 0.6,
     "cooldown": 6,
     "trigger": "call_phase_late",
-    "status": "active"
+    "status": "active",
+    "family": "death_blow",
+    "absurdity": 1
   },
   {
     "id": "BIT-704",
@@ -1410,7 +1700,9 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 6,
     "intensity": 0.5,
-    "trigger": "call_phase_late"
+    "trigger": "call_phase_late",
+    "family": "death_blow",
+    "absurdity": 1
   },
   {
     "id": "BIT-705",
@@ -1419,6 +1711,8 @@ export const BITS = [
     "intensity": 0.3,
     "cooldown": 6,
     "trigger": "call_phase_late",
-    "status": "active"
+    "status": "active",
+    "family": "death_blow",
+    "absurdity": 1
   }
 ];
