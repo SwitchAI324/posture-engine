@@ -127,6 +127,22 @@ const STALL_TYPE_SPLIT =
 // delete once the review pass is done.
 const TEST_PRIORITY_BITS = String(process.env.TEST_PRIORITY_BITS || "")
   .split(",").map((s) => s.trim()).filter(Boolean);
+// FORCE_MARKER / FORCE_MARKER_TURN (Aug 7, TEST HARNESS, throwaway). Forces
+// a specific sound marker mid-call, completely independent of bit
+// selection — no bit has to fire, no directive has to exist for it. Fires
+// exactly once, on the given turn (default: the very next turn PE handles),
+// as its OWN standalone directive: "emit this marker, react naturally."
+// Separate mechanism from FORCE_OPEN_MARKER above — that one overrides
+// BIT-330's free choice specifically at the open; this one works any turn,
+// any marker, with no bit involved at all, for isolating whether a given
+// marker plays cleanly on its own. Unset in production; delete once the
+// sound-pipeline review is done.
+const FORCE_MARKER = process.env.FORCE_MARKER
+  ? String(process.env.FORCE_MARKER).toUpperCase().trim()
+  : null;
+const FORCE_MARKER_TURN = process.env.FORCE_MARKER_TURN
+  ? parseInt(process.env.FORCE_MARKER_TURN, 10)
+  : 1; // default: fire on turn 1 (the most common test case — the open)
 import { waitUntil } from "@vercel/functions";
 
 // FULL BIT DIRECTIVES (id -> directive prose), same source providers.js
@@ -2617,6 +2633,22 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // Goes AFTER the cached base, so injecting never busts the prompt cache.
     let mutable = buildPostureBlock(state);
 
+    // FORCE_MARKER (Aug 7, TEST HARNESS). Fires exactly once, on
+    // FORCE_MARKER_TURN, completely independent of bit selection — this is
+    // its own standalone directive, not layered onto whatever bit (if any)
+    // wins this turn. Point: isolate whether a specific marker plays
+    // cleanly on its own, with nothing else in the turn competing for
+    // attention.
+    if (FORCE_MARKER && turn === FORCE_MARKER_TURN) {
+      mutable +=
+        "\n\n[TEST OVERRIDE — this turn only: emit [" + FORCE_MARKER + "] at " +
+        "the very start of your line, exactly as given, then react to it " +
+        "naturally in character — caught off guard, one short beat, then " +
+        "continue the turn normally. This is a standalone instruction, not " +
+        "part of any other bit or routine.]";
+      console.log("FORCE_MARKER active — forcing [" + FORCE_MARKER + "] turn=" + turn);
+    }
+
     // NAME AT OUTSET (Aug 6, Andrew — now confidence-aware per Scouting's
     // 8/6 ranked-resolution update). Two branches, not one:
     //   HIGH CONFIDENCE (>= NAME_CONFIDENCE_THRESHOLD): force natural use in
@@ -2776,17 +2808,193 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       });
       if (recent.length) {
         const counts = stored.markerCounts || {};
-        const notes = recent.map((marker) => {
+        // TIER STRUCTURE (Aug 6, mechanical extension; per-marker
+        // thresholds Aug 7, Bits). The original spec (PE_self_caused_
+        // marker_awareness.md) named two tiers explicitly: AMBIENT (a
+        // quiet background fact, low count) and MARQUEE (a bigger, more
+        // prominent callback-worthy beat, once something's repeated
+        // enough to be a genuine bit). This wires the BRANCH — which
+        // tier a given marker is in, based on its own count — without
+        // inventing MARQUEE's actual performance content, same discipline
+        // as crude's build: mechanism now, real words when Canon sends
+        // them (still pending as of this write).
+        //
+        // PER-MARKER ESCALATION LADDERS (Bits, Aug 7 — real content,
+        // replaces the Aug-6 mechanism-only threshold table AND the
+        // Canon-sketch placeholder hints below it). Single source of
+        // truth now: threshold AND the actual rung text both live in one
+        // structure, eliminating the two-table drift risk the earlier
+        // split version had (confirmed Bits' thresholds exactly match
+        // what was already shipped, before consolidating). Each marker's
+        // `rungs` is an ordered array — rung index (count - 1), clamped
+        // to the last rung once count exceeds the array (matches Bits'
+        // own note: TAKEOFF_BG's 2nd rung is written to stand alone since
+        // ~7 turns will have passed, not to repeat verbatim forever, but
+        // clamping is the safe fallback rather than crashing or going
+        // silent on a 5th+ fire). A rung containing "no reaction" is a
+        // deliberate no-op — some early rungs (TYPING_LOOP's 1st,
+        // DISHWASHER_BG/THUNDER_BG's early ones) are intentionally silent
+        // even past the ambient/marquee threshold; injecting "react to
+        // this" text where the rung itself says not to would contradict
+        // itself, so those are skipped entirely rather than forced.
+        const MARKER_FLAVOR_HINTS = {
+          COFFEE_CUP_BREAK: { threshold: 1, rungs: [
+            "—ah— hang on, dropped something, sorry— [return to call, never reference again]",
+          ]},
+          DOOR_SLAM: { threshold: 2, rungs: [
+            "—sorry, that was the door— where were we.",
+            "—that's twice— I don't know who keeps doing that, sorry— you were saying?",
+          ]},
+          DOORBELL: { threshold: 2, rungs: [
+            "—hang on, someone's at the door— I'll ignore it. Go ahead.",
+            "—that's the door again— I genuinely don't know who this is— sorry— go on.",
+          ]},
+          DOG_BARK_LOOP: { threshold: 2, rungs: [
+            "—okay, hang on— he does NOT usually do this, I swear— [half to dog] buddy— sorry. Go ahead.",
+            "—that's twice now, I'm so sorry— I don't know what's gotten into him— you were saying?",
+          ]},
+          DUMP_TRUCK_BG: { threshold: 2, rungs: [
+            "—sorry about that— there's construction nearby. Go ahead.",
+            "—there it is again— I apologize, they've been at it all week— you were saying?",
+          ]},
+          TAKEOFF_BG: { threshold: 2, rungs: [
+            "—sorry, there goes a plane— I don't usually work near the airport. Go ahead.",
+            "—there goes another one— I don't usually work near the airport— you were saying?",
+          ]},
+          DOG_BARK: { threshold: 4, rungs: [
+            "—sorry, that's my dog, one sec— [back] go ahead.",
+            "—okay— hang on— he does NOT usually do this, I swear— [half to dog] — sorry. You were saying?",
+            "—buddy, come ON— sorry, I don't know what's gotten into him— go ahead.",
+            "—okay, he's just gonna do this, I'm sorry— go on, you were saying?",
+          ]},
+          TYPING_LOOP: { threshold: 4, rungs: [
+            "[no reaction — typing is expected]",
+            "—sorry, I'm getting this all down— go ahead.",
+            "—I know, I know— I just want to make sure I have all of this— go ahead.",
+            "—I'm going to keep typing, I hope that's okay. You were saying?",
+          ]},
+          SNEEZE: { threshold: 4, rungs: [
+            "—'scuse me— sorry. Go ahead.",
+            "—sorry— I don't know where that came from. Go ahead.",
+            "—okay, I think I'm— sorry— I'm fine. Go ahead.",
+            "—I may be slightly off today— I apologize— you were saying?",
+          ]},
+          COUGH: { threshold: 4, rungs: [
+            "—sorry— go ahead.",
+            "—excuse me— I'm fine, just a thing— go ahead.",
+            "—sorry— I may be slightly off today— you were saying?",
+            "—I probably should have taken the day— I appreciate your patience— go ahead.",
+          ]},
+          THROAT_CLEAR: { threshold: 4, rungs: [
+            "[no reaction needed]",
+            "—sorry— something in my throat— go ahead.",
+            "—I apologize— I'm slightly off today— go ahead.",
+            "—could you— sorry— could you speak just a little quieter? I may be slightly off today.",
+          ]},
+          DISHWASHER_BG: { threshold: 4, rungs: [
+            "[ambient — no reaction needed]",
+            "[ambient — no reaction needed]",
+            "[ambient — no reaction needed]",
+            "—sorry about the background— that's the dishwasher. Go ahead.",
+          ]},
+          THUNDER_BG: { threshold: 4, rungs: [
+            "[ambient — no reaction needed]",
+            "[ambient — no reaction needed]",
+            "—sorry, there's a storm rolling in— go ahead.",
+            "—it's really coming down out there— sorry— you were saying?",
+          ]},
+        };
+        const MARKER_THRESHOLD_DEFAULT = parseInt(process.env.AMBIENT_MARQUEE_THRESHOLD || "3", 10);
+        // (Consistency check against the live inventory lives in
+        // hydrate.js, not here — see its own comment. cfg.soundMarkers
+        // isn't available at this point in completions.js; adding a new
+        // persisted column to thread it through would repeat the exact
+        // shared-SELECT-list risk that broke every read on this call
+        // once already (expertise_level_used). hydrate.js already has
+        // the live inventory in scope where it builds the prefix, so the
+        // check runs there.)
+        //
+        // RUNG INDEXING — CORRECTED (Aug 7, found by testing before
+        // shipping): rungs are indexed by ABSOLUTE fire count (rung 1 =
+        // the 1st fire, rung 2 = the 2nd, etc.), NOT gated behind
+        // crossing the marquee threshold first. Confirmed from Bits' own
+        // text — DOOR_SLAM's rung 2 literally says "that's TWICE," which
+        // only makes sense if rung 2 fires exactly at count 2, not at
+        // "however many marquee-tier repeats this is." An earlier version
+        // of this only consulted the ladder for markers already past
+        // threshold, using min(n-1, len-1) from that point — which meant
+        // DOOR_SLAM's rung 1 ("passing note") could NEVER be reached,
+        // since marquee triggers at n=2 and jumps straight to rung 2.
+        // Fixed: any marker WITH a ladder always consults it by absolute
+        // count, independent of ambient/marquee status — the ladder
+        // itself already encodes the escalation, rung by rung. The
+        // ambient/marquee threshold split only still matters for markers
+        // with NO ladder written, which fall back to the old generic
+        // bare-fact note.
+        const ambientNotes = [];
+        const activeRungs = [];
+        recent.forEach((marker) => {
           const readable = marker.toLowerCase().replace(/_/g, " ");
           const n = counts[marker] || 1;
-          return readable + " (" + n + (n === 1 ? " time" : " times") + " this call)";
+          const ladder = MARKER_FLAVOR_HINTS[marker];
+          if (ladder) {
+            const idx = Math.min(n - 1, ladder.rungs.length - 1);
+            const rung = ladder.rungs[idx];
+            if (!/no reaction|ambient/i.test(rung)) {
+              activeRungs.push({ readable, n, rung });
+            }
+            // else: deliberate no-op rung (e.g. TYPING_LOOP's 1st, or an
+            // early DISHWASHER_BG/THUNDER_BG rung) — genuinely nothing
+            // injected this turn for this marker, not even the generic
+            // ambient note, since the ladder explicitly says stay quiet.
+            return;
+          }
+          // No ladder written for this marker at all — old generic
+          // threshold-gated behavior as the fallback.
+          const threshold = MARKER_THRESHOLD_DEFAULT;
+          if (threshold > 1 && n >= threshold) {
+            // No ladder AND past threshold: still worth a beat, but no
+            // marker-specific text exists — fold into the plain ambient
+            // note rather than inventing marquee content with nothing to
+            // draw from.
+            ambientNotes.push(readable + " (" + n + " times this call, notably repeated)");
+          } else {
+            ambientNotes.push(readable + " (" + n + (n === 1 ? " time" : " times") + " this call)");
+          }
         });
-        mutable +=
-          "\n\nAWARENESS — something real just happened on your end: " +
-          notes.join("; ") + ". It's real, not the caller's imagination — if " +
-          "they reference it, own it naturally (\"oh — yeah, that was me, " +
-          "sorry\"), never deny it. If nothing prompts you to mention it, you " +
-          "don't have to bring it up yourself.";
+        if (ambientNotes.length) {
+          mutable +=
+            "\n\nAWARENESS — something real just happened on your end: " +
+            ambientNotes.join("; ") + ". It's real, not the caller's " +
+            "imagination — if they reference it, own it naturally (\"oh — " +
+            "yeah, that was me, sorry\"), never deny it. If nothing prompts " +
+            "you to mention it, you don't have to bring it up yourself.";
+        }
+        // Framed explicitly as a shape to draw from, never a verbatim
+        // script, matching CORE's own "build your words from the moment,
+        // never a fixed bank of lines" rule. Bracketed stage directions
+        // inside a rung (e.g. "[half to dog]") are DIRECTION FOR
+        // DELIVERY, never literal spoken text — called out explicitly so
+        // this can't be confused with the ALL-CAPS silent-marker
+        // convention.
+        if (activeRungs.length) {
+          const body = activeRungs
+            .map((r) => r.readable + " (" + r.n + " times this call) — example shape, your own words, " +
+              "not verbatim, lowercase-bracketed parts are DELIVERY DIRECTION not spoken text: \"" + r.rung + "\"")
+            .join(" | ");
+          mutable +=
+            "\n\n[MARQUEE AWARENESS — this has happened enough that a bare " +
+            "fact note undersells it. THE FRAME: land a real beat on it, " +
+            "one move — react to the recurrence itself, then try to get " +
+            "back on track, which is itself a small stall since you're " +
+            "now derailed. Each fire is a rung UP in fluster, never a " +
+            "reset — this time is more worn than last time. Never " +
+            "suspicious, never step outside to comment on how absurd it " +
+            "is, never blame the caller. Stays inside the marker " +
+            "carve-out: react to the FACT it keeps happening, never " +
+            "narrate the sound itself — the marker still emits silently, " +
+            "you never describe it in prose. " + body + "]";
+        }
       }
     }
 
@@ -2957,6 +3165,18 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
             "beats, its required moves, its sequence. Do NOT produce behavior " +
             "that is merely consistent with the bit's tone — that is a failed " +
             "performance. ") +
+        // FORCE_OPEN_MARKER (Aug 7, TEST HARNESS, throwaway). BIT-330 (Sound-
+        // Flub-Open) offers the model a free "pick one" choice among three
+        // scenarios/markers — fine for production variety, useless for
+        // testing one specific sound reliably. When this env var is set AND
+        // BIT-330 is the bit that actually won this turn, override the free
+        // choice with an explicit single instruction. Silently no-ops for
+        // every other bit — this only ever touches BIT-330's own turn.
+        (top.id === "BIT-330" && process.env.FORCE_OPEN_MARKER
+          ? "\n\n[TEST OVERRIDE — ignore the \"pick one\" choice above. Use " +
+            "exactly this scenario/marker: [" + String(process.env.FORCE_OPEN_MARKER).toUpperCase().trim() +
+            "]. Do not pick a different one.]\n\n"
+          : "") +
         // PERMISSION TO DECLINE (Aug 5) — texture fires ONLY. Scenario/stall
         // mechanics (the hunt, etc.) stay mandatory once fired; those are
         // load-bearing state machines, not ambient color, and making them
@@ -3491,7 +3711,16 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
         try {
           const firedMarkers = Array.from(
             new Set(
-              Array.from(String(hostText || "").matchAll(/\[([A-Z0-9_]{2,32})\]/g)).map((mm) => mm[1])
+              Array.from(String(hostText || "").matchAll(/\[([A-Z0-9_]{2,32})\]/g))
+                .map((mm) => mm[1])
+                // STOP TOKENS EXCLUDED FROM COUNTING (Aug 7, Voice — "stop
+                // has a purpose but it does not need to be counted"). A
+                // _STOP marker ends an already-counted LOOP/BG episode; it
+                // isn't a new sound event of its own. Still passes through
+                // completely normally otherwise — this ONLY affects the
+                // awareness/escalation counting below, not emission,
+                // stripping, or anything the agent does with the token.
+                .filter((m) => !m.endsWith("_STOP"))
             )
           );
           if (firedMarkers.length && meta.callId && isConfigured()) {
