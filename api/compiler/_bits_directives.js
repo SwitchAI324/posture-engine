@@ -11,6 +11,12 @@
 // ID SPACE NOTE: These BIT-xxx keys are the canonical ids.
 // If loadoutFor currently uses slugs ("echo", "wrong_window"), map them here
 // or update loadoutFor to read BIT-xxx. Do not maintain two id spaces.
+//
+// ─── GLOBAL HARD RULE — APPLIES TO EVERY BIT ─────────────────────────────────
+// The LAUGHS bracket token is NEVER valid. It is not in the sound library.
+// Nothing plays. A laugh is a written word: "heh," "ha —," "pfft."
+// This ban is absolute — no bit, no context, no exception overrides it.
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default {
 
@@ -3346,17 +3352,13 @@ further arc in this turn.
 BEAT 1 — sound + fluster + greeting + HANDOFF:
 
 Something just went wrong near you as the call
-connected. Pick one:
-  a mug or cup shattered
-  you knocked papers off the desk
-  the dog jumped up and hit something
-  you knocked the mic
+connected. Pick one of these three ONLY — each
+has a required marker:
+  mug or cup shattered  → [COFFEE_CUP_BREAK]
+  dog jumped up         → [DOG_BARK]
+  door slammed          → [DOOR_SLAM]
 
-Emit the matching marker at the start of the line:
-  mug/cup:   [COFFEE_CUP_BREAK]
-  dog jump:  [DOG_BARK]
-  door/slam: [DOOR_SLAM]
-
+Emit the marker at the very start of the line.
 Then: react as yourself, caught off guard, a few
 words. Then one greeting. Then a handoff question
 that gives the caller the floor. Then stop.
@@ -3374,12 +3376,11 @@ left holding dead air at the worst possible moment.
 THEN STOP. Let the caller take the floor.
 Do not add backstory. Do not add the bid.
 Do not say "I'm here."
+Do not emit any bracket token not listed above.
+A laugh is a written word — "heh," "ha —," "pfft" —
+never a bracket.
 
-The warm bid comes on a later turn after the
-caller reacts — the host prompt drives it.
-This directive covers beat 1 only.
-
-Hard: marker leads. Position 0.
+Hard: marker leads. Position 0. One of the three above only.
 Hard: turn one only. Cooldown 999.
 Hard: sound + fluster + greeting + handoff. All four.
 Hard: handoff must be a question or explicit opener —
