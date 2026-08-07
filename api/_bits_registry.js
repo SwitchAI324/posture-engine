@@ -42,7 +42,7 @@ export const BITS = [
     "channel": "video",
     "archetypes": "universal",
     "cooldown": 4,
-    "pool": "early",
+    "pool": "middle",
     "family": "video",
     "absurdity": 3
   },
@@ -116,7 +116,7 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 4,
-    "pool": "early",
+    "pool": "middle",
     "family": "verbal",
     "absurdity": 2
   },
@@ -383,10 +383,10 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 6,
-    "trigger": "phase:opening",
     "max_fires_per_call": 1,
     "family": "structural",
-    "absurdity": 3
+    "absurdity": 3,
+    "pool": "middle"
   },
   {
     "id": "BIT-133",
@@ -406,9 +406,9 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 5,
-    "trigger": "phase:opening",
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 1,
+    "pool": "middle"
   },
   {
     "id": "BIT-135",
@@ -524,7 +524,7 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 4,
-    "pool": "early",
+    "pool": "middle",
     "family": "verbal",
     "absurdity": 3,
     "max_fires_per_call": 3
@@ -674,7 +674,7 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "cooldown": 4,
-    "pool": "early",
+    "pool": "middle",
     "family": "structural",
     "absurdity": 1
   },
@@ -1217,10 +1217,10 @@ export const BITS = [
     "name": "The Commute",
     "archetypes": "universal",
     "cooldown": 4,
-    "trigger": "phase:opening",
     "status": "active",
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "pool": "middle"
   },
   {
     "id": "BIT-327",
