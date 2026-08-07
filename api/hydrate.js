@@ -232,6 +232,38 @@ module.exports = async function handler(req, res) {
       return res.end(JSON.stringify({ error: "missing slug" }));
     }
 
+    // SOUND MARKERS (Aug 7, Voice — deployed on their side already). New:
+    // the agent now sends its LIVE boot-time filesystem-scan inventory in
+    // the JSON body, alongside a mirrored (harmless, non-authoritative)
+    // slug — the REAL slug stays the query param above, unchanged, per
+    // Voice's own confirmation ("your slug-read is unchanged"). Reading the
+    // body is new; hydrate.js has never done this before (only ever read
+    // query params, even on POST). Never hardcode this list — the whole
+    // point is it auto-updates with whatever's actually in the agent's
+    // sounds/ folder. Best-effort: a body-read failure (no body sent, bad
+    // JSON, an older agent build) never blocks hydrate — just means no
+    // sound-inventory section gets added to the prefix this call, same
+    // fail-open posture as the dossier floor.
+    let soundMarkers = null;
+    try {
+      let rawBody = "";
+      await new Promise((resolve) => {
+        req.on("data", (c) => (rawBody += c));
+        req.on("end", resolve);
+        req.on("error", resolve); // never hang hydrate on a body-read error
+      });
+      if (rawBody) {
+        const parsed = JSON.parse(rawBody);
+        if (Array.isArray(parsed.sound_markers) && parsed.sound_markers.length) {
+          soundMarkers = parsed.sound_markers
+            .filter((m) => typeof m === "string" && m.trim())
+            .map((m) => m.trim().toUpperCase());
+        }
+      }
+    } catch (e) {
+      console.log("hydrate: sound_markers body-read failed (non-fatal): " + (e && e.message));
+    }
+
     const token = await readToken(slug);
     if (!token) {
       res.statusCode = 404;
@@ -260,6 +292,7 @@ module.exports = async function handler(req, res) {
       armedBench: [], // room starts empty; bench sent in live
       target: token.target_id || null,
       dossierFloor, // NEW (Aug 5) — the condensed ambient-floor string, or null
+      soundMarkers, // NEW (Aug 7) — live marker inventory from the agent, or null
       tactic: token.archetype || "universal",
       host_name: token.host_name || null,
       secondCall: false,
@@ -268,6 +301,57 @@ module.exports = async function handler(req, res) {
 
     const assembled = assemblePrefix(cfg);
     let prefix = assembled.stablePrefix;
+    // MARKER-THRESHOLD CONSISTENCY CHECK (Aug 7). Bits' per-marker
+    // escalation table (in completions.js) is authored against marker
+    // NAMES — if a name in that table doesn't match anything in the
+    // actual live inventory this call received, that entry's threshold
+    // silently never applies. Checked HERE, not in completions.js,
+    // specifically because cfg.soundMarkers is genuinely in scope at this
+    // exact point and nowhere else without adding a new persisted column
+    // (which would repeat the exact shared-SELECT-list risk that broke
+    // every read once already this session). Runs once per call, cheap,
+    // never blocks hydrate. Table kept here as a literal duplicate of
+    // completions.js's MARKER_THRESHOLDS keys — if Bits' table changes,
+    // this list needs updating too (a real, known dual-maintenance point,
+    // flagged rather than pretended away).
+    //
+    // SUFFIX-AWARE MATCHING (Aug 7, Voice's clarification): _LOOP/_STOP
+    // are NOT separate clip families — they're a suffix convention that
+    // reuses the BASE marker's existing clips (DOG_BARK_LOOP loops
+    // DOG_BARK's own clips; DOG_BARK_STOP ends it). The flat
+    // sound_markers list therefore only ever contains base names (plus
+    // explicit _BG entries, which DO have their own dedicated files) —
+    // it never enumerates the derived _LOOP/_STOP variants. So a
+    // threshold-table entry is genuinely valid if it EITHER exactly
+    // matches the inventory, OR matches after stripping a trailing
+    // _LOOP or _STOP (which also correctly resolves DISHWASHER_BG_STOP
+    // down to DISHWASHER_BG, itself already an explicit inventory entry).
+    try {
+      const KNOWN_THRESHOLD_MARKERS = [
+        "DOG_BARK", "DOG_BARK_LOOP", "TYPING_LOOP", "DOOR_SLAM", "DOORBELL",
+        "COFFEE_CUP_BREAK", "SNEEZE", "COUGH", "THROAT_CLEAR",
+        "DISHWASHER_BG", "THUNDER_BG", "DUMP_TRUCK_BG", "TAKEOFF_BG",
+      ];
+      const stripLoopStopSuffix = (name) =>
+        name.endsWith("_LOOP") ? name.slice(0, -5)
+        : name.endsWith("_STOP") ? name.slice(0, -5)
+        : name;
+      if (Array.isArray(cfg.soundMarkers) && cfg.soundMarkers.length) {
+        const unmatched = KNOWN_THRESHOLD_MARKERS.filter((m) => {
+          if (cfg.soundMarkers.includes(m)) return false; // exact match
+          const base = stripLoopStopSuffix(m);
+          return !cfg.soundMarkers.includes(base); // valid if the base clip exists
+        });
+        if (unmatched.length) {
+          console.log(
+            "hydrate: MARKER-THRESHOLD-MISMATCH — these threshold-table " +
+            "entries don't match the live inventory even after suffix " +
+            "stripping (" + cfg.soundMarkers.join(", ") +
+            "), their thresholds will never apply: " + unmatched.join(", ")
+          );
+        }
+      }
+    } catch { /* diagnostic only, must never block hydrate */ }
     // PHASE OVERLAYS — the two swappable blocks carried alongside the frozen
     // prefix (assemble.js returns them separately; NOT baked into stablePrefix).
     // completions.js appends the phase-selected one after the cached region.
