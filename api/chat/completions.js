@@ -3687,6 +3687,30 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
           // raw=true sent=true   -> (c) PE delivered it; it's on the LiveKit side
           console.log("SNZ raw=" + (String(hostText || "").indexOf("[SNEEZE]") >= 0) + " sent=" + svSneezeSent);
         } catch { /* never break the stream */ }
+        // FINAL-TURN TRANSCRIPT SAVE (Aug 7, found live — a real gap, not
+        // defensive extra). The EARLY saveTranscript call (top of the
+        // handler) saves the INCOMING messages array — i.e. everything
+        // UP THROUGH the previous turn, never including the response
+        // this turn is about to generate. The old assumption ("last
+        // write = complete transcript when the call ends") only holds if
+        // there's always a NEXT incoming request to carry this turn's
+        // response forward for saving — but a call's genuinely FINAL
+        // turn has no next request, so its own response was silently
+        // never persisted anywhere. Confirmed directly: a real call's
+        // saved call_transcripts row stopped one turn short of what
+        // completions.js's own logs showed actually happened. Fixed by
+        // saving AGAIN here, once hostText is final, with this turn's own
+        // response appended — the clobber guard in saveTranscript only
+        // ever blocks a save that would SHRINK the record, so this always
+        // safely grows it, never conflicts with the early save.
+        if (callId && isConfigured() && hostText) {
+          try {
+            const grown = (Array.isArray(messages) ? messages : []).concat([
+              { role: "assistant", content: hostText },
+            ]);
+            waitUntil(saveTranscript(callId, slug, grown).catch(() => {}));
+          } catch { /* never break the stream */ }
+        }
         // SELF-CAUSED MARKER AWARENESS (Aug 4, PE_self_caused_marker_awareness.md).
         // ROOT PROBLEM: an environment marker ([COFFEE_CUP_BREAK], [DOG_BARK],
         // etc.) fires as audio and the token is stripped before the CALLER
