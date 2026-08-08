@@ -96,20 +96,19 @@ export default async function handler(req) {
       // Guarded per Voice's own note: absent entirely on a no_show close
       // (nothing was ever said) — never a bug, never logged as one.
       //
-      // ⚠ FIELD-NAME UNCERTAINTY, flagging rather than silently assuming:
-      // this reuses b.vapi_call_id as the real call_id/room name (there's
-      // no separate call_id or slug field documented on this endpoint).
-      // The name is a holdover from the pre-LiveKit era, but LiveKit room
-      // names (sv-test-andy-...) are the only plausible value that could
-      // actually be riding in it today. Worth Voice confirming directly
-      // rather than PE assuming silently — if wrong, this save would
-      // either no-op (empty callId) or, worse, write under the wrong key.
+      // Confirmed (Aug 8, live test) — vapi_call_id was empty and never had
+      // this value at all; it's not the field for it. Voice added a new,
+      // dedicated field: body.call_id, the LiveKit room name. That's the
+      // real key call_transcripts needs (same identifier used everywhere
+      // else this session — hydrate, the completions read path). Distinct
+      // from target_id (identifies the TARGET, reusable across multiple
+      // separate calls) — call_id identifies THIS specific call session.
       if (Array.isArray(b.conversation) && b.conversation.length) {
-        const conversationCallId = b.vapi_call_id ? String(b.vapi_call_id).trim() : null;
+        const conversationCallId = b.call_id ? String(b.call_id).trim() : null;
         if (conversationCallId) {
           await saveTranscript(conversationCallId, b.slug || null, b.conversation).catch(() => {});
         } else {
-          console.log("calls.js: body.conversation present but no vapi_call_id to save it under");
+          console.log("calls.js: body.conversation present but no call_id to save it under");
         }
       }
       return jsonRes({
