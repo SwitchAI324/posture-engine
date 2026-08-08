@@ -36,7 +36,7 @@
 // don't overlap, so nobody double-writes.
 // ----------------------------------------------------------------------
 
-import { insertCallOutcome } from "./_store.js";
+import { insertCallOutcome, saveTranscript } from "./_store.js";
 
 export const config = { runtime: "edge" };
 
@@ -79,6 +79,39 @@ export default async function handler(req) {
         transcript: b.transcript,
         status: b.status,
       });
+      // FINAL-CONVERSATION SAVE (Aug 8, Voice — race-proof by construction).
+      // Separate write, separate table, from the calls-row insert above:
+      // this saves to call_transcripts (what completions.js reads back for
+      // dossier/recall context), not the `calls` table (Barbara's follow-up
+      // ladder). Uses body.conversation — the agent's own session.history,
+      // sent from its shutdown callback, which fires exactly once per call
+      // on every close path. Unlike the per-turn early-save (only ever
+      // catches up via a NEXT request that may not exist) or my reverted
+      // finishUp attempt (raced against discarded preemptive-gen
+      // candidates), this fires from a single, definitive, non-racing
+      // event with the agent's own true record of what was actually
+      // spoken — exactly the "discarded candidates excluded" data PE could
+      // never get from the request stream alone.
+      //
+      // Guarded per Voice's own note: absent entirely on a no_show close
+      // (nothing was ever said) — never a bug, never logged as one.
+      //
+      // ⚠ FIELD-NAME UNCERTAINTY, flagging rather than silently assuming:
+      // this reuses b.vapi_call_id as the real call_id/room name (there's
+      // no separate call_id or slug field documented on this endpoint).
+      // The name is a holdover from the pre-LiveKit era, but LiveKit room
+      // names (sv-test-andy-...) are the only plausible value that could
+      // actually be riding in it today. Worth Voice confirming directly
+      // rather than PE assuming silently — if wrong, this save would
+      // either no-op (empty callId) or, worse, write under the wrong key.
+      if (Array.isArray(b.conversation) && b.conversation.length) {
+        const conversationCallId = b.vapi_call_id ? String(b.vapi_call_id).trim() : null;
+        if (conversationCallId) {
+          await saveTranscript(conversationCallId, b.slug || null, b.conversation).catch(() => {});
+        } else {
+          console.log("calls.js: body.conversation present but no vapi_call_id to save it under");
+        }
+      }
       return jsonRes({
         ok: true,
         action: "close",
