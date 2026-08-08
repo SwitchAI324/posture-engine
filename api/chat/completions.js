@@ -112,37 +112,11 @@ const BIT_STALL_TYPE = Object.fromEntries(
 const stallTypeOf = (id) => BIT_STALL_TYPE[id] || "hold"; // absent → safe default
 const STALL_TYPE_SPLIT =
   /^(1|true|yes|on)$/i.test(String(process.env.STALL_TYPE_SPLIT || ""));
-// TEST_PRIORITY_BITS (Aug 6, TEST HARNESS, throwaway — replaces SOLO_BIT,
-// removed same day once this fully subsumed it: TEST_PRIORITY_BITS set to
-// a single id behaves identically to what SOLO_BIT did, so keeping both was
-// two mechanisms for one job). Comma-separated list of bit ids — a single
-// id works exactly like the old SOLO_BIT; a longer list reviews a whole
-// batch across a handful of test calls instead of one run per bit. When
-// set, EVERY call cycles through ONLY that list — LRU within it, same
-// last-fired-turn logic selectTextureBit() already uses, so repeated test
-// calls naturally rotate through the whole list rather than always forcing
-// the same one. Bypasses ALL normal eligibility (archetype/pool/cooldown/
-// trigger/family/absurdity) — the point is to HEAR the bit regardless of
-// whether it would naturally be eligible right now. Unset in production;
-// delete once the review pass is done.
-const TEST_PRIORITY_BITS = String(process.env.TEST_PRIORITY_BITS || "")
-  .split(",").map((s) => s.trim()).filter(Boolean);
-// FORCE_MARKER / FORCE_MARKER_TURN (Aug 7, TEST HARNESS, throwaway). Forces
-// a specific sound marker mid-call, completely independent of bit
-// selection — no bit has to fire, no directive has to exist for it. Fires
-// exactly once, on the given turn (default: the very next turn PE handles),
-// as its OWN standalone directive: "emit this marker, react naturally."
-// Separate mechanism from FORCE_OPEN_MARKER above — that one overrides
-// BIT-330's free choice specifically at the open; this one works any turn,
-// any marker, with no bit involved at all, for isolating whether a given
-// marker plays cleanly on its own. Unset in production; delete once the
-// sound-pipeline review is done.
-const FORCE_MARKER = process.env.FORCE_MARKER
-  ? String(process.env.FORCE_MARKER).toUpperCase().trim()
-  : null;
-const FORCE_MARKER_TURN = process.env.FORCE_MARKER_TURN
-  ? parseInt(process.env.FORCE_MARKER_TURN, 10)
-  : 1; // default: fire on turn 1 (the most common test case — the open)
+// BENCH TAKEOVER (Aug 8, Voice). Only these three characters currently have
+// real voice IDs wired on the agent side — anything else gets silently
+// dropped there, but gating here too avoids wasting a bench-arrival slot on
+// a character that can't actually speak yet. Update as Voice adds more.
+const BENCH_VOICED_CHARACTERS = ["conrad", "bea", "tyler"];
 import { waitUntil } from "@vercel/functions";
 
 // FULL BIT DIRECTIVES (id -> directive prose), same source providers.js
@@ -446,72 +420,7 @@ const MARKER_AWARENESS =
 // (still-unsplit) guidance, so the mechanism is provably working on a real
 // call today. THE SWAP: when Canon's real text arrives, replace the return
 // values of these two functions — nothing else in this file changes.
-// SHARED ESCALATION NOTE (Aug 6, Canon — governing principle is ONE across
-// both registers: "the reaction is always the Innocent's, and only its size
-// scales; he never catches the edge"). Two tiers, not a flat "count>1":
-//   count===2: vary the move, don't repeat it identically — sameness is the
-//     tell that would break the bit.
-//   count>=3: accumulated, GENUINE bafflement at the PATTERN of the
-//     conversation drifting sideways — never at having caught on, never at
-//     being hurt. Canon's own caution, kept verbatim in spirit: if a version
-//     reads as him catching on or getting wounded, it's wrong. The wear is
-//     with the drifting conversation, never with the caller.
-function crudeEscalationNote(count) {
-  if (count >= 3) {
-    return " (This keeps happening — by now you might be a touch worn, " +
-      "genuinely puzzled at the PATTERN, not at them: something like " +
-      "\"we keep getting sideways here, huh\" — earnestly baffled at the " +
-      "drift, still no idea why. Never catching on, never hurt — just a " +
-      "beat wearier about the conversation losing its thread again.)";
-  }
-  if (count === 2) {
-    return " (This is the second time — don't run the identical move " +
-      "again; vary how you sail past it or stay warm through it. " +
-      "Sameness is the tell.)";
-  }
-  return "";
-}
-// REGISTER 1 (Aug 6, Canon's real text — replaces the Aug-4 placeholder):
-// crude NOT aimed at the host. He doesn't clock it as crude at all — he's
-// answering the real content underneath, not declining to react to an
-// insult he never registered as one.
-function crudeImpersonalText(count) {
-  return (
-    "THE CALLER'S LAST LINE WAS CRUDE, BUT NOT AIMED AT YOU — the world, " +
-    "a rival, themselves, a vulgar aside. It sails right past you. You're " +
-    "not scandalized and you don't match it — you're just not looking " +
-    "for it. Take the innocent surface of what they said and answer the " +
-    "real thing underneath, sincerely (e.g. \"brutal market, yeah — is " +
-    "that why the timing's tight?\"), OR let it remind you of an ordinary " +
-    "harmless story of your own, OR just carry on with the actual topic. " +
-    "You genuinely don't register the crudeness, only the content under " +
-    "it — never a wince, never a \"well!\", never a knowing laugh." +
-    crudeEscalationNote(count)
-  );
-}
-// REGISTER 2 (Aug 6, Canon's real text — replaces the Aug-4 placeholder):
-// aimed directly at the host. He takes the words at their flattest,
-// friendliest possible reading — not because he's absorbing an insult
-// bravely, but because it genuinely doesn't occur to him someone means him
-// harm. The room can cool without him understanding why; he never gets
-// hurt, just a half-beat behind on why the temperature changed.
-function crudePersonalText(count) {
-  return (
-    "THE CALLER'S LAST LINE WAS AIMED AT YOU — an insult, a jab, real " +
-    "hostility. You don't catch the edge, because you're not the kind of " +
-    "guy who assumes someone means him harm. Take the words at their " +
-    "flattest, most literal, friendliest-possible face and answer that, " +
-    "sincerely, like it can't have been meant the way it sounded — called " +
-    "slow? agree you've had a long day. Someone's nasty? hear it as them " +
-    "being stressed, stay warm. Never fire back, never get defensive, " +
-    "never let on you noticed a barb — you honestly didn't. You can feel " +
-    "the room cool without knowing why and get a half-beat gentler, a " +
-    "little puzzled, like you missed a step somewhere — never hurt, " +
-    "never smaller. Not wounded — just a beat behind on why the " +
-    "temperature changed." +
-    crudeEscalationNote(count)
-  );
-}
+import { MARKER_FLAVOR_HINTS, EXPERTISE_UP_LINES, EXPERTISE_DOWN_LINES, crudeImpersonalText, crudePersonalText, crudeEscalationNote } from "../_injection_content.js";
 const CPUSH_BIT = process.env.CPUSH_BIT || "BIT-233";
 // ── SYNCHRONOUS CARD-ASK TRIGGER (card_ask) ──────────────────────────────
 // FIRST BRICK OF THE TRIGGER ARCHITECTURE (replacing gears). The async reader
@@ -1324,6 +1233,7 @@ export default async function handler(req) {
   const benchResult = await runBenchArrival({ stored, controls, messages, callId, benchTurn, waitUntil });
   const benchAppend = benchResult.benchAppend;
   const benchPhantomInvoke = benchResult.benchPhantomInvoke;
+  const benchTakeover = benchResult.benchTakeover;
 
   // ===== TELEGRAPHED HANDOFF (two-beat) =================================
   // Beat 1 (stage "announce"): host warns the caller a distinct-voice bench
@@ -1572,6 +1482,14 @@ export default async function handler(req) {
       ? (STALL_TYPE_SPLIT ? stallTypeOf(built.firedBitId) : true)
       : false,
     stallBit: turnIsStall && built ? built.firedBitId : null, // -> pe_stall_bit (agent logging)
+    // BENCH TAKEOVER (Aug 8, Voice). {character, line} when this turn is a
+    // direct bench-character takeover; null on every normal turn. Only the
+    // three currently voice-wired characters are valid — anything else the
+    // agent silently drops per its own spec, but gating here too means a
+    // wasted arrival never even gets attempted.
+    benchSpeak: benchTakeover && BENCH_VOICED_CHARACTERS.includes(benchTakeover.character)
+      ? benchTakeover
+      : null,
   };
 
   return new Response(anthropicToOpenAISSE(upstream.body, meta, benchAppend, firstTokenController), {
@@ -1627,6 +1545,19 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
   let benchLog = stored && Array.isArray(stored.benchLog) ? stored.benchLog : [];
   let benchAppend = null;
   let benchPhantomInvoke = null;
+  // BENCH TAKEOVER (Aug 8, Voice — placeholder, trigger condition not yet
+  // decided). Distinct from benchAppend (the EXISTING weave-in mechanism —
+  // bench character's line gets folded INTO the host's own spoken content)
+  // and benchPhantomInvoke (a mention-only fold into the host prompt, no
+  // separate voice at all). A takeover is a THIRD kind of bench appearance:
+  // the bench character's own voice speaks DIRECTLY, replacing the host's
+  // content for that turn entirely. Left null — deliberately not wired to
+  // any trigger yet, since firing this on the wrong condition could either
+  // conflict with the existing arrival system or waste a bench-arrival
+  // slot. Needs a real decision: does this REPLACE weave-in for all
+  // arrivals, or is it a separate, additional trigger — and if separate,
+  // what decides "takeover" vs "weave-in" for a given arrival?
+  let benchTakeover = null;
   let arrivalDirty = false;
 
   if (arrival && arrival.stage && arrival.stage !== "resolved") {
@@ -1748,7 +1679,7 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
   if (arrivalDirty && callId && isConfigured()) {
     waitUntil(setCall(callId, { arrivalState: arrival, benchLog }).catch(() => {}));
   }
-  return { benchAppend, benchPhantomInvoke };
+  return { benchAppend, benchPhantomInvoke, benchTakeover };
 }
 
 function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil) {
@@ -2082,30 +2013,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // LOADOUT then rank: selectBit narrows to the bits that fit this moment,
     // then ranks that focused set (not all 71). threshold:0 so we apply our own
     // INJECT_BAR below; we just want the ranked loadout + its size.
-    //
-    // TEST_PRIORITY_BITS (Aug 6, TEST HARNESS, throwaway): when set, this is
-    // the ONLY thing that changes — selectBit() runs on a RESTRICTED pool
-    // (just the listed bits) instead of the full registry. Every rule still
-    // applies normally to whatever's left: archetype, pool/phase, cooldown,
-    // max_fires_per_call, trigger, family exclusion, absurdity ceiling, the
-    // deploy bar, MIN_GAP spacing — all of it, exactly as any real turn.
-    // This is NOT a force — if nothing in the list is currently eligible,
-    // nothing fires this turn, same as an empty pool on any normal turn.
-    // (Earlier version of this harness bypassed everything and force-fired
-    // regardless of eligibility — replaced same day once it was clear that
-    // wasn't actually what was wanted: hearing whether reviewed bits fire
-    // for REAL reasons, not guaranteed regardless of the rules.)
-    const testPool = TEST_PRIORITY_BITS.length
-      ? (Array.isArray(BITS) ? BITS : []).filter((b) => b && TEST_PRIORITY_BITS.includes(b.id))
-      : BITS;
-    if (TEST_PRIORITY_BITS.length) {
-      console.log(
-        "TEST_PRIORITY_BITS active — pool restricted to " + testPool.length + "/" +
-        TEST_PRIORITY_BITS.length + " listed ids (missing/parked ones silently excluded, same as any bit); " +
-        "all normal eligibility + firing rules still apply"
-      );
-    }
-    const sel = selectBit(scorerState, { threshold: 0, pool: testPool });
+    const sel = selectBit(scorerState, { threshold: 0 });
     const ranked = sel.ranked;
     let top = ranked[0] || null;
     const poolSize = sel.pool;
@@ -2512,13 +2420,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     }
     let textureFired = false;
     if (!fire && textureInvitedNow && !textureCooldownActive) {
-      // Same TEST_PRIORITY_BITS restriction as the scored path above — a
-      // texture-classified bit in the list needs this too, since
-      // selectTextureBit() has its own separate candidate pool (texture
-      // bits are excluded from loadout()'s scored path by design when
-      // TEXTURE_ROTATION is on, so restricting only selectBit() above would
-      // silently miss every texture bit in the list).
-      const texBit = selectTextureBit(scorerState, { pool: testPool });
+      const texBit = selectTextureBit(scorerState);
       if (texBit) {
         top = {
           ...texBit,
@@ -2571,7 +2473,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // (same outcome as any other non-fire turn), and it's LOGGED LOUDLY so
     // this is findable in a normal log scan, not just a manual transcript
     // read the way tonight's bug was found.
-    // SCOPED TO NATURAL SELECTION ONLY (!forcedFire) — a Director/TEST_PRIORITY_BITS
+    // SCOPED TO NATURAL SELECTION ONLY (!forcedFire) — a Director
     // force is a deliberate, understood bypass of every other gate already;
     // extending the breaker to forced fires is a separate, open design
     // question (does forcing mean "win the ranking" or "fire no matter
@@ -2632,22 +2534,6 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // MUTABLE block: posture lines + (on fire) a gentle in-character bit cue.
     // Goes AFTER the cached base, so injecting never busts the prompt cache.
     let mutable = buildPostureBlock(state);
-
-    // FORCE_MARKER (Aug 7, TEST HARNESS). Fires exactly once, on
-    // FORCE_MARKER_TURN, completely independent of bit selection — this is
-    // its own standalone directive, not layered onto whatever bit (if any)
-    // wins this turn. Point: isolate whether a specific marker plays
-    // cleanly on its own, with nothing else in the turn competing for
-    // attention.
-    if (FORCE_MARKER && turn === FORCE_MARKER_TURN) {
-      mutable +=
-        "\n\n[TEST OVERRIDE — this turn only: emit [" + FORCE_MARKER + "] at " +
-        "the very start of your line, exactly as given, then react to it " +
-        "naturally in character — caught off guard, one short beat, then " +
-        "continue the turn normally. This is a standalone instruction, not " +
-        "part of any other bit or routine.]";
-      console.log("FORCE_MARKER active — forcing [" + FORCE_MARKER + "] turn=" + turn);
-    }
 
     // NAME AT OUTSET (Aug 6, Andrew — now confidence-aware per Scouting's
     // 8/6 ranked-resolution update). Two branches, not one:
@@ -2717,24 +2603,15 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     const expertiseLevelPrev =
       stored && stored.expertiseLevelUsed != null ? stored.expertiseLevelUsed : EXPERTISE_LEVEL_DEFAULT;
     const expertiseChanged = EXPERTISE_DIAL_ENABLED && expertiseLevelNow !== expertiseLevelPrev;
-    // TRANSITION LINES (Aug 6, Canon). Deliberately NOT mirror images —
-    // Canon's own framing: UP is a recognition landing ("I just put it
-    // together"), never a flat competence jump (reads uncanny, like he
-    // secretly knew). DOWN is attention wandering, NOT competence dropping
-    // ("I'm blanking" was explicitly rejected — that reads as impaired, not
-    // distracted). Three options each, picked at random per fire — same
-    // variety discipline as the opener bank, so a dial move doesn't always
-    // sound identical across different calls.
-    const EXPERTISE_UP_LINES = [
-      "wait — hold on — is this the thing with the— yeah, no, I know exactly what you mean, I just didn't put it together till right now—",
-      "oh! okay, no, now I'm with you — I've actually been chewing on this exact thing, I just didn't realize that's what we were—",
-      "huh — wait, say that again? Because if that's what you're— yeah. Yeah, okay, I know this one. Keep going.",
-    ];
-    const EXPERTISE_DOWN_LINES = [
-      "sorry — say that part again? I think I lost the thread for a second, I was still back on the— no, go on, I'm with you.",
-      "hang on, you said the— sorry, honestly half my brain's still on this thing from earlier, give me the short version again?",
-      "mm — you know what, I was following and then I just— sorry, where are we exactly? Walk me back a step.",
-    ];
+    // TRANSITION LINES (Canon; content lives in _injection_content.js —
+    // EXPERTISE_UP_LINES/EXPERTISE_DOWN_LINES, imported above). Deliberately
+    // NOT mirror images — Canon's own framing: UP is a recognition landing
+    // ("I just put it together"), never a flat competence jump (reads
+    // uncanny, like he secretly knew). DOWN is attention wandering, NOT
+    // competence dropping ("I'm blanking" was explicitly rejected — that
+    // reads as impaired, not distracted). Three options each, picked at
+    // random per fire — same variety discipline as the opener bank, so a
+    // dial move doesn't always sound identical across different calls.
     if (expertiseChanged) {
       const direction = expertiseLevelNow > expertiseLevelPrev ? "UP" : "DOWN";
       const bank = direction === "UP" ? EXPERTISE_UP_LINES : EXPERTISE_DOWN_LINES;
@@ -2837,73 +2714,9 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         // even past the ambient/marquee threshold; injecting "react to
         // this" text where the rung itself says not to would contradict
         // itself, so those are skipped entirely rather than forced.
-        const MARKER_FLAVOR_HINTS = {
-          COFFEE_CUP_BREAK: { threshold: 1, rungs: [
-            "—ah— hang on, dropped something, sorry— [return to call, never reference again]",
-          ]},
-          DOOR_SLAM: { threshold: 2, rungs: [
-            "—sorry, that was the door— where were we.",
-            "—that's twice— I don't know who keeps doing that, sorry— you were saying?",
-          ]},
-          DOORBELL: { threshold: 2, rungs: [
-            "—hang on, someone's at the door— I'll ignore it. Go ahead.",
-            "—that's the door again— I genuinely don't know who this is— sorry— go on.",
-          ]},
-          DOG_BARK_LOOP: { threshold: 2, rungs: [
-            "—okay, hang on— he does NOT usually do this, I swear— [half to dog] buddy— sorry. Go ahead.",
-            "—that's twice now, I'm so sorry— I don't know what's gotten into him— you were saying?",
-          ]},
-          DUMP_TRUCK_BG: { threshold: 2, rungs: [
-            "—sorry about that— there's construction nearby. Go ahead.",
-            "—there it is again— I apologize, they've been at it all week— you were saying?",
-          ]},
-          TAKEOFF_BG: { threshold: 2, rungs: [
-            "—sorry, there goes a plane— I don't usually work near the airport. Go ahead.",
-            "—there goes another one— I don't usually work near the airport— you were saying?",
-          ]},
-          DOG_BARK: { threshold: 4, rungs: [
-            "—sorry, that's my dog, one sec— [back] go ahead.",
-            "—okay— hang on— he does NOT usually do this, I swear— [half to dog] — sorry. You were saying?",
-            "—buddy, come ON— sorry, I don't know what's gotten into him— go ahead.",
-            "—okay, he's just gonna do this, I'm sorry— go on, you were saying?",
-          ]},
-          TYPING_LOOP: { threshold: 4, rungs: [
-            "[no reaction — typing is expected]",
-            "—sorry, I'm getting this all down— go ahead.",
-            "—I know, I know— I just want to make sure I have all of this— go ahead.",
-            "—I'm going to keep typing, I hope that's okay. You were saying?",
-          ]},
-          SNEEZE: { threshold: 4, rungs: [
-            "—'scuse me— sorry. Go ahead.",
-            "—sorry— I don't know where that came from. Go ahead.",
-            "—okay, I think I'm— sorry— I'm fine. Go ahead.",
-            "—I may be slightly off today— I apologize— you were saying?",
-          ]},
-          COUGH: { threshold: 4, rungs: [
-            "—sorry— go ahead.",
-            "—excuse me— I'm fine, just a thing— go ahead.",
-            "—sorry— I may be slightly off today— you were saying?",
-            "—I probably should have taken the day— I appreciate your patience— go ahead.",
-          ]},
-          THROAT_CLEAR: { threshold: 4, rungs: [
-            "[no reaction needed]",
-            "—sorry— something in my throat— go ahead.",
-            "—I apologize— I'm slightly off today— go ahead.",
-            "—could you— sorry— could you speak just a little quieter? I may be slightly off today.",
-          ]},
-          DISHWASHER_BG: { threshold: 4, rungs: [
-            "[ambient — no reaction needed]",
-            "[ambient — no reaction needed]",
-            "[ambient — no reaction needed]",
-            "—sorry about the background— that's the dishwasher. Go ahead.",
-          ]},
-          THUNDER_BG: { threshold: 4, rungs: [
-            "[ambient — no reaction needed]",
-            "[ambient — no reaction needed]",
-            "—sorry, there's a storm rolling in— go ahead.",
-            "—it's really coming down out there— sorry— you were saying?",
-          ]},
-        };
+        // MARKER_FLAVOR_HINTS content now lives in _injection_content.js
+        // (imported above) — this stays only as the SELECTION logic:
+        // rung indexing by count, no-op skip, threshold checks below.
         const MARKER_THRESHOLD_DEFAULT = parseInt(process.env.AMBIENT_MARQUEE_THRESHOLD || "3", 10);
         // (Consistency check against the live inventory lives in
         // hydrate.js, not here — see its own comment. cfg.soundMarkers
@@ -3165,18 +2978,6 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
             "beats, its required moves, its sequence. Do NOT produce behavior " +
             "that is merely consistent with the bit's tone — that is a failed " +
             "performance. ") +
-        // FORCE_OPEN_MARKER (Aug 7, TEST HARNESS, throwaway). BIT-330 (Sound-
-        // Flub-Open) offers the model a free "pick one" choice among three
-        // scenarios/markers — fine for production variety, useless for
-        // testing one specific sound reliably. When this env var is set AND
-        // BIT-330 is the bit that actually won this turn, override the free
-        // choice with an explicit single instruction. Silently no-ops for
-        // every other bit — this only ever touches BIT-330's own turn.
-        (top.id === "BIT-330" && process.env.FORCE_OPEN_MARKER
-          ? "\n\n[TEST OVERRIDE — ignore the \"pick one\" choice above. Use " +
-            "exactly this scenario/marker: [" + String(process.env.FORCE_OPEN_MARKER).toUpperCase().trim() +
-            "]. Do not pick a different one.]\n\n"
-          : "") +
         // PERMISSION TO DECLINE (Aug 5) — texture fires ONLY. Scenario/stall
         // mechanics (the hunt, etc.) stay mandatory once fired; those are
         // load-bearing state machines, not ambient color, and making them
@@ -3614,6 +3415,19 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
     let outDelta = delta;
     if (meta.stall && delta && delta.role) {
       outDelta = { ...delta, extra_content: { pe_stall: meta.stall, pe_stall_bit: meta.stallBit || null } };
+    }
+    // BENCH TAKEOVER (Aug 8, Voice — same channel as pe_stall: extra_content
+    // survives the LiveKit plugin translation to delta.extra, which is what
+    // the agent actually reads). Stamped on the first chunk only, same as
+    // pe_stall. Merges with pe_stall's own extra_content rather than
+    // overwriting it, in case both were ever true on the same turn (not
+    // expected in practice, but a takeover turn shouldn't silently drop an
+    // unrelated stall flag if it happened to coincide).
+    if (meta.benchSpeak && delta && delta.role) {
+      outDelta = {
+        ...outDelta,
+        extra_content: { ...(outDelta.extra_content || {}), bench_speak: meta.benchSpeak },
+      };
     }
     const chunk = {
       id: meta.id,
