@@ -3703,14 +3703,27 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
         // response appended — the clobber guard in saveTranscript only
         // ever blocks a save that would SHRINK the record, so this always
         // safely grows it, never conflicts with the early save.
-        if (callId && isConfigured() && hostText) {
-          try {
-            const grown = (Array.isArray(messages) ? messages : []).concat([
-              { role: "assistant", content: hostText },
-            ]);
-            waitUntil(saveTranscript(callId, slug, grown).catch(() => {}));
-          } catch { /* never break the stream */ }
-        }
+        // FINAL-TURN TRANSCRIPT SAVE — BUILT, THEN REVERTED SAME SESSION
+        // (Aug 7-8). Original reasoning stands (the early save only ever
+        // captures what a NEXT request carries forward, so a call's
+        // genuinely last turn has no next request to save it) — but the
+        // fix itself was wrong. finishUp runs per REQUEST, and preemptive
+        // generation means MULTIPLE separate requests compete for the
+        // same nominal turn — every discarded candidate reaches this same
+        // finishUp too, not just whichever one the agent actually decides
+        // to speak. Confirmed live: a saved transcript's turn matched a
+        // DISCARDED candidate's text, not the one that was truly spoken.
+        // Worse than not fixing the gap — a length-based clobber guard
+        // can't tell "real winner" from "discarded candidate" apart when
+        // they're the same length, so this could silently overwrite an
+        // already-correct save with the wrong text. Reverted rather than
+        // left running. Real fix needs a race-proof signal for "this is
+        // definitely what got spoken" — checked control.js's call_ended
+        // handler as a candidate for that (call-end is a single,
+        // non-racing event) but its payload today only carries call_id/
+        // ending_type/duration, no conversation content — would need
+        // Voice to add the final messages array to that payload before
+        // this could work correctly there instead.
         // SELF-CAUSED MARKER AWARENESS (Aug 4, PE_self_caused_marker_awareness.md).
         // ROOT PROBLEM: an environment marker ([COFFEE_CUP_BREAK], [DOG_BARK],
         // etc.) fires as audio and the token is stripped before the CALLER
