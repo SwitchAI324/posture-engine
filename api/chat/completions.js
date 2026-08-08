@@ -20,7 +20,7 @@
 
 export const config = { runtime: "edge" };
 
-import { getCall, getCallBySlug, setCall, isConfigured, appendGearEvent, appendBitEvent, clearDeathBlow, getControls, stampArm, fireArm, fireForce, saveTranscript } from "../_store.js";
+import { getCall, getCallBySlug, setCall, isConfigured, appendGearEvent, appendBitEvent, clearDeathBlow, getControls, stampArm, fireArm, fireForce, saveTranscript, clearBench } from "../_store.js";
 import { directiveFor } from "../_host_directives.js";
 import { selectBit, rankBits, DEPLOY_THRESHOLD, selectTextureBit } from "../_bits_scorer.js";
 import { archetypeFromBody } from "../_archetype.js";
@@ -601,12 +601,22 @@ async function generateBenchLine(bench, messages) {
       .map((m) => (m.role === "user" ? "Caller: " : "Host: ") + m.content)
       .join("\n");
     const name = bench.tag.charAt(0) + bench.tag.slice(1).toLowerCase();
+    // REWRITTEN (Aug 8, Andrew — "multi bit beat. no cameo of one line and
+    // then silence"). Was: one ~25-word reaction line. Now: a genuine bit —
+    // several distinct beats building on each other, taking over the floor
+    // for a real moment, not a one-line cameo. Still ONE bench_speak
+    // payload (the agent's resume mechanism is automatic the instant
+    // session.say() finishes — this doesn't touch that, just makes what
+    // gets said in that one call substantially bigger).
     const sys =
-      "You are " + name + ", " + bench.note + ". You have just barged into this " +
-      "live call, cutting the host off mid-sentence. Say ONE short spoken line " +
-      "(max ~25 words), blunt and fully in character, reacting to what is being " +
-      "discussed. Output ONLY the spoken words — no name label, no quotes, no " +
-      "stage directions.";
+      "You are " + name + ", " + bench.note + ". You have just barged into " +
+      "this live call, cutting the host off, and you're taking over the " +
+      "floor for a real moment — not a quick interjection. Deliver an " +
+      "actual bit: several distinct beats building on each other (not one " +
+      "flat reaction), fully in character, landing something with real " +
+      "shape — a build, a turn, a punch. Aim for roughly 3-5 sentences, " +
+      "~60-120 words. Output ONLY the spoken words — no name label, no " +
+      "quotes, no stage directions.";
     const r = await fetch(ANTHROPIC_URL, {
       method: "POST",
       headers: {
@@ -616,7 +626,7 @@ async function generateBenchLine(bench, messages) {
       },
       body: JSON.stringify({
         model: MODEL(),
-        max_tokens: 80,
+        max_tokens: 300,
         system: sys,
         messages: [{ role: "user", content: convo + "\n\n(" + name + " cuts in:)" }],
       }),
@@ -624,7 +634,10 @@ async function generateBenchLine(bench, messages) {
     if (!r.ok) return null;
     const j = await r.json();
     const txt = (j.content || []).map((c) => c.text || "").join("").trim();
-    if (!txt || txt.length > 240) return null;
+    // Ceiling raised to match the new length (~900 chars covers ~150 words
+    // with room) — still a real cap against a runaway generation, not
+    // removed entirely.
+    if (!txt || txt.length > 900) return null;
     return txt;
   } catch {
     return null;
@@ -1436,6 +1449,44 @@ export default async function handler(req) {
   // turn, no guessing.
   console.log("MODEL-DIAG model=" + anthropicReq.model);
 
+  // BENCH TAKEOVER SHORT-CIRCUIT (Aug 8) — the piece that was still
+  // missing: skip the host's own GENERATION entirely on a takeover turn
+  // (never call Anthropic), not just discard its result afterward (that
+  // would still pay the full latency/cost, defeating the point). Does
+  // NOT skip anthropicToOpenAISSE itself, though — that function is where
+  // finishUp lives (transcript saving, marker detection, everything a
+  // real turn needs to happen). Feeding it a SYNTHETIC upstream stream
+  // (mimicking Anthropic's own SSE shape, empty text) reuses all of that
+  // proven logic instead of duplicating it — the only thing skipped is
+  // the actual slow network call to Anthropic.
+  if (benchTakeover && BENCH_VOICED_CHARACTERS.includes(benchTakeover.character)) {
+    console.log("bench takeover SHORT-CIRCUIT — skipping host generation entirely, character=" + benchTakeover.character);
+    const syntheticUpstream = syntheticAnthropicStream();
+    const takeoverMeta = {
+      id: "chatcmpl-" + crypto.randomUUID(),
+      created: Math.floor(Date.now() / 1000),
+      model: MODEL(),
+      callId,
+      turn: countUserTurns(messages),
+      hostName: hostNameFromBody(body),
+      targetId: stored?.targetId ?? null,
+      deathBlowFiring: false, // a takeover turn is never also the death-blow turn
+      stall: false,
+      stallBit: null,
+      benchSpeak: benchTakeover,
+    };
+    return new Response(
+      anthropicToOpenAISSE(syntheticUpstream, takeoverMeta, benchAppend, null),
+      {
+        headers: {
+          "content-type": "text/event-stream; charset=utf-8",
+          "cache-control": "no-cache, no-transform",
+          connection: "keep-alive",
+        },
+      }
+    );
+  }
+
   // FIRST-TOKEN WATCHDOG (see the constant's own comment above): the
   // controller lets anthropicToOpenAISSE abort this specific request if no
   // text starts arriving in time. Created here (not inside the SSE
@@ -1577,7 +1628,48 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
     }
   } else if (controls.sentBench && controls.sentBench.bench_id) {
     const wantId = controls.sentBench.bench_id;
-    if (isPhantom(wantId)) {
+    // TAKEOVER (Aug 8, Voice + Director-choosing path). A genuinely
+    // separate path from phantom/weave-in below — no staged multi-turn
+    // arrival sequence (this is a one-shot interjection, not a character
+    // "joining" the call the way weave-in is), so it deliberately doesn't
+    // touch benchLog/arrival state at all. Resolves the bench character's
+    // data, generates its line via the already-built generateBenchLine()
+    // (same function crafted for exactly this — "barges in mid-sentence,
+    // one short line"), and clears the control row immediately so it
+    // can't silently re-fire on a later turn. Line generation failing
+    // (null) is a real, deliberate no-op: better to silently skip a
+    // takeover than emit an empty/broken one — logged either way so it's
+    // visible, not silently absorbed.
+    if (controls.sentBench.mode === "takeover") {
+      const benchData = benchEntry(wantId);
+      if (benchData) {
+        const line = await generateBenchLine(benchData, messages);
+        if (callId) await clearBench(callId, "fired").catch(() => {});
+        if (line) {
+          benchTakeover = { character: wantId.toLowerCase(), line };
+          // AWARENESS FOR THE NEXT TURN (Aug 8) — without this the host
+          // has zero knowledge a bench character even spoke; the line only
+          // ever rides in metadata to the agent, never into the model's
+          // own context. Persisted here, consumed once by the very next
+          // turn (see the mutable-block injection), then cleared.
+          if (callId) {
+            waitUntil(setCall(callId, { pendingBenchAwareness: benchTakeover }).catch(() => {}));
+          }
+          if (callId) {
+            makeTrace(callId, benchTurn, waitUntil, stored?.targetId).emit(
+              "bench_joined",
+              { character_id: wantId, name: wantId, source: "director", manifestation: "takeover", joined_at: new Date().toISOString() },
+              "bench"
+            );
+          }
+        } else if (callId) {
+          console.log("bench takeover: line generation failed for " + wantId + " — skipping this turn, control cleared");
+        }
+      } else if (callId) {
+        console.log("bench takeover: unknown bench id " + wantId + " — control cleared, nothing fired");
+        await clearBench(callId, "fired").catch(() => {});
+      }
+    } else if (isPhantom(wantId)) {
       benchPhantomInvoke = phantomInvokeDirective(wantId);
       if (callId) {
         makeTrace(callId, benchTurn, waitUntil, stored?.targetId).emit(
@@ -2535,6 +2627,26 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // Goes AFTER the cached base, so injecting never busts the prompt cache.
     let mutable = buildPostureBlock(state);
 
+    // BENCH TAKEOVER AWARENESS (Aug 8) — consumed exactly once, on the
+    // very next turn after a takeover fired. Without this the host would
+    // have no idea a bench character just spoke at all, since their line
+    // only ever rode in metadata to the agent, never into the model's own
+    // context. Cleared immediately after reading so it can never inject
+    // twice — this is a one-shot "here's what just happened," not a
+    // standing fact like the dossier floor.
+    if (stored && stored.pendingBenchAwareness) {
+      const aware = stored.pendingBenchAwareness;
+      mutable +=
+        "\n\n[A MOMENT AGO — " + aware.character + " just spoke directly, in " +
+        "their own voice, cutting you off: \"" + aware.line + "\" You genuinely " +
+        "heard this happen — react to it naturally, in character, whatever " +
+        "that looks like for you (surprised, annoyed, relieved, amused — " +
+        "your call, not a script). One beat, then continue the turn normally.]";
+      if (callId) {
+        waitUntil(setCall(callId, { pendingBenchAwareness: null }).catch(() => {}));
+      }
+    }
+
     // NAME AT OUTSET (Aug 6, Andrew — now confidence-aware per Scouting's
     // 8/6 ranked-resolution update). Two branches, not one:
     //   HIGH CONFIDENCE (>= NAME_CONFIDENCE_THRESHOLD): force natural use in
@@ -3391,6 +3503,33 @@ function extractText(content) {
       .join("");
   }
   return "";
+}
+
+// SYNTHETIC ANTHROPIC STREAM (Aug 8, bench takeover). A real ReadableStream
+// producing the minimal two events anthropicToOpenAISSE actually needs
+// (message_start, message_stop) with no text content in between — used to
+// feed the SAME downstream pipeline (finishUp, transcript saving, marker
+// detection) a takeover turn goes through too, WITHOUT the real network
+// call to Anthropic that produces empty/wasted host text. The parser reads
+// each event's own "type" field, not an SSE "event:" line, so this only
+// needs to match that shape — confirmed by checking the parser directly
+// before building this, not assumed.
+function syntheticAnthropicStream() {
+  const encoder = new TextEncoder();
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(
+        "data: " + JSON.stringify({
+          type: "message_start",
+          message: { usage: { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 } },
+        }) + "\n\n"
+      ));
+      controller.enqueue(encoder.encode(
+        "data: " + JSON.stringify({ type: "message_stop" }) + "\n\n"
+      ));
+      controller.close();
+    },
+  });
 }
 
 // --- stream translation ----------------------------------------------------
