@@ -40,7 +40,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-   `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used`;
+   `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used,pending_bench_awareness`;
   const r = await fetch(url, {
     cache: "no-store",
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
@@ -118,6 +118,12 @@ export async function getCall(callId) {
     // change gets detected (this persisted value lags one turn behind by
     // definition). null = never set yet (fresh call, uses the default).
     expertiseLevelUsed: rows[0].expertise_level_used ?? null,
+    // BENCH TAKEOVER AWARENESS (Aug 8) — the last takeover's {character,
+    // line}, consumed exactly once by the NEXT turn (injected as an
+    // awareness note, then cleared). Without this the host has zero
+    // knowledge a bench character even spoke — the line only ever rode in
+    // metadata to the agent, never into the model's own context.
+    pendingBenchAwareness: rows[0].pending_bench_awareness ?? null,
     callerRedirected: rows[0].caller_redirected ?? false,
     // CALLER-CRUDE signal: raw per-turn classification + two running counts.
     // Defaults match "nothing crude has happened yet" for a call that
@@ -143,7 +149,7 @@ export async function getCall(callId) {
 // posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed }
+  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed, pendingBenchAwareness }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -205,6 +211,11 @@ export async function setCall(
   // NEXT turn can compare against it to detect a change. Same "only write
   // when provided" pattern as everything else here.
   if (expertiseLevelUsed !== undefined) row.expertise_level_used = expertiseLevelUsed;
+  // BENCH TAKEOVER AWARENESS: written with the {character, line} object
+  // when a takeover fires; written with null by the VERY NEXT turn once
+  // it's consumed (one-shot, same pattern as the expertise-dial transition
+  // note — never re-injects after the first read).
+  if (pendingBenchAwareness !== undefined) row.pending_bench_awareness = pendingBenchAwareness;
   if (callerRedirected !== undefined) row.caller_redirected = callerRedirected;
   // CALLER-CRUDE: raw classification + the two running counts. Same "only
   // write when provided" pattern as every other field here.
@@ -279,9 +290,13 @@ export async function getControls(callId) {
       });
     } else if (row.control_type === "bench" && live(row.status)) {
       // Director sent in a specific bench character. Last live one wins.
+      // mode (Aug 8): "weave" (default, absent on any pre-mode row — those
+      // read as weave, exactly their existing behavior, zero regression)
+      // or "takeover".
       sentBench = {
         id: row.id, bench_id: p.bench_id ?? null,
         sent_turn: p.sent_turn ?? null, idem: row.idempotency_key || null,
+        mode: p.mode === "takeover" ? "takeover" : "weave",
       };
     } else if (row.control_type === "force" && row.status === "pending") {
       // Director forced a bit to fire next turn. Last pending one wins.
@@ -462,7 +477,7 @@ export async function fireForce(callId, { bitId }) {
 // control_type "bench"; payload carries the chosen bench_id. Mirrors addArm.
 // The next host turn reads it (via getControls.sentBench) and weaves that
 // character in, overriding the automatic arrival schedule.
-export async function setBench(callId, { benchId, idem, director }) {
+export async function setBench(callId, { benchId, idem, mode, director }) {
   if (!isConfigured() || !callId) throw new Error("store not configured");
   const row = {
     call_id: callId,
@@ -470,7 +485,11 @@ export async function setBench(callId, { benchId, idem, director }) {
     director_user_id: director ?? null,
     idempotency_key: idem ?? null,
     status: "pending",
-    payload: { bench_id: benchId ?? null, sent_turn: null },
+    // mode (Aug 8): "weave" (default, folds the line into the host's own
+    // turn) or "takeover" (the bench character's own voice speaks, host
+    // silent that turn). Stored in payload alongside bench_id — no schema
+    // change, same jsonb column every other control already uses.
+    payload: { bench_id: benchId ?? null, sent_turn: null, mode: mode || "weave" },
   };
   const r = await fetch(`${URL}/rest/v1/${CONTROLS}`, {
     cache: "no-store",
@@ -484,6 +503,33 @@ export async function setBench(callId, { benchId, idem, director }) {
   if (r.status === 409) return true; // duplicate idem — idempotent
   if (!r.ok) throw new Error(`bench set failed: ${r.status} ${await r.text()}`);
   return true;
+}
+// CLEAR BENCH (Aug 8, found live — a real gap, not defensive extra). Same
+// pattern as clearDeathBlow: PATCH the row's status once it's actually
+// been consumed. Before this, nothing anywhere ever marked a sentBench row
+// non-live again — weave-in mostly got away with it because the
+// multi-turn arrival sequence and benchLog's 3-slot ceiling happened to
+// limit how often it could re-fire, but a takeover has no such natural
+// limit and would silently re-trigger every turn until someone noticed.
+// Called immediately once a takeover's line is generated (fire-and-forget
+// is NOT safe here — this has to land before the next turn reads
+// getControls again, so it's awaited, not waitUntil'd).
+export async function clearBench(callId, status = "fired") {
+  if (!isConfigured() || !callId) return false;
+  const r = await fetch(
+    `${URL}/rest/v1/${CONTROLS}?call_id=eq.${encodeURIComponent(callId)}` +
+      `&control_type=eq.bench`,
+    {
+      cache: "no-store",
+      method: "PATCH",
+      headers: {
+        apikey: KEY, authorization: `Bearer ${KEY}`,
+        "content-type": "application/json", prefer: "return=minimal",
+      },
+      body: JSON.stringify({ status }),
+    }
+  );
+  return r.ok;
 }
 export async function stampArm(id, payload) {
   if (!isConfigured() || !id) return false;

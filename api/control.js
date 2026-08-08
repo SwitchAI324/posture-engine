@@ -11,9 +11,14 @@
 //        fire time (no rung, no canned line). idempotent: one per call.
 //
 //   POST /api/control?action=bench
-//     body: { call_id, bench_id, director_user_id?, idempotency_key? }
+//     body: { call_id, bench_id, mode?, director_user_id?, idempotency_key? }
 //     -> Director sends in a specific bench character; the next host turn
 //        weaves them in (overrides the auto inject schedule). idempotent.
+//        mode: "weave" (default, existing behavior) or "takeover" (new,
+//        Aug 8 — the bench character's own voice speaks directly, host
+//        silent that turn, instead of their line being folded into the
+//        host's own speech). Takeover restricted to voice-wired characters
+//        (currently conrad/bea/tyler) — a 409 with the valid list if not.
 //
 //   POST /api/control?action=arm
 //     body: { call_id, bit_id?, hook_id?, director_user_id?, idempotency_key? }
@@ -64,6 +69,14 @@ const CANON_HOOKS = new Set([
   // booking-side browsed-calendar TMI (Fiji week) callback
   "browsed_tmi",
 ]);
+// TAKEOVER_VOICED (Aug 8, Voice) — only these bench characters currently
+// have real voice IDs wired on the agent side (BENCH_VOICE_IDS); anything
+// else has no voice to speak with. Weave-in has never had this
+// restriction (it's the host's own voice saying the line) and still
+// doesn't — this only gates the NEW takeover mode. Uppercase to match
+// benchId's own casing. Update as Voice adds more (bea/tyler are wired
+// but, per Voice's own note, only Conrad is proven live by ear so far).
+const TAKEOVER_VOICED = ["CONRAD", "BEA", "TYLER"];
 export const config = { runtime: "edge" };
 function jsonRes(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
@@ -245,12 +258,27 @@ export default async function handler(req) {
     if (!valid.includes(benchId)) {
       return jsonRes({ error: `unknown bench ${benchId} — valid: ${valid.join(", ")}` }, 404);
     }
+    // MODE (Aug 8) — "weave" (default, existing behavior: the bench line
+    // gets folded into the host's own turn) or "takeover" (new: the bench
+    // character's own voice speaks directly, host silent that turn). This
+    // is the Director-choosing path agreed on for takeover — a human
+    // picks it explicitly per send, same click as today, one new option.
+    // Only the agent's currently voice-wired characters can take over
+    // (anything else has no voice to speak with); weave never had this
+    // restriction and still doesn't.
+    const mode = b.mode === "takeover" ? "takeover" : "weave";
+    if (mode === "takeover" && !TAKEOVER_VOICED.includes(benchId)) {
+      return jsonRes(
+        { error: `${benchId} has no voice wired for takeover yet — valid: ${TAKEOVER_VOICED.join(", ")}` },
+        409
+      );
+    }
     const cur = await getControls(callId).catch(() => null);
     const idem = b.idempotency_key ? String(b.idempotency_key) : null;
     if (cur && cur.sentBench && idem && cur.sentBench.idem === idem) {
       return jsonRes({ ok: true, idempotent: true, sentBench: cur.sentBench }); // already queued
     }
-    try { await setBench(callId, { benchId, idem, director: b.director_user_id || null }); }
+    try { await setBench(callId, { benchId, idem, mode, director: b.director_user_id || null }); }
     catch (e) { return jsonRes({ error: "bench write failed", detail: String(e).slice(0, 200) }, 502); }
     return jsonRes({ ok: true, call_id: callId, sent_bench: benchId });
   }
