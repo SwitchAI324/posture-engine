@@ -64,6 +64,21 @@ function toEntry(id, j) {
     : (j.role || j.name || id);
   // signature: SEEN chars' own entrance, from beats.joining if present.
   const signature = j.beats && j.beats.joining ? j.beats.joining : undefined;
+  // VOICE PROFILE (Aug 9) — real, Canon-authored delivery guidance that was
+  // being computed and then silently discarded on every call before this:
+  // note only ever carried a bare role title ("The Boss"), never the rich
+  // rhythm/tic/register material actually sitting in the source json.
+  // voiceAndManner = HOW they talk (rhythm, verbal tics, register — e.g.
+  // Conrad: "Lockjaw patrician: clipped... never fills gaps"); absent only
+  // for phantoms, correctly, since they never speak. connectionToHost =
+  // their relationship TO the host specifically (e.g. Tyler: "Andrew is
+  // your lifeline... terrified of letting him down") — present for every
+  // seen/audio character. Both undefined (not empty string) when absent,
+  // so a consumer's `if (entry.voiceAndManner)` check degrades cleanly.
+  const voiceAndManner = j.passthrough && j.passthrough.voiceAndManner
+    ? j.passthrough.voiceAndManner : undefined;
+  const connectionToHost = j.malleable && j.malleable.connectionToHost
+    ? j.malleable.connectionToHost : undefined;
   return {
     tag: id.toUpperCase(),
     id,
@@ -71,6 +86,8 @@ function toEntry(id, j) {
     personality: PERSONALITY[id] || "smooth",
     note,
     signature,
+    voiceAndManner,
+    connectionToHost,
     raw: j, // full authored content: malleable/beats/passthrough (hostCover, theAbsence, invocation, ...)
   };
 }
@@ -166,8 +183,18 @@ export function stageDirective(state) {
   if (!state) return null;
   const entry = benchEntry(state.bench_id);
   const who = entry ? entry.note : state.bench_id;
-  const base = `You are ${state.bench_id}, joining a live call. Character: ${who}. ` +
-    `Speak ONLY as ${state.bench_id}, one short in-character turn (1-3 sentences). ` +
+  // VOICE PROFILE (Aug 9) — appended as its own labeled sentences, not
+  // folded into `who`, so it reads as clear delivery guidance rather than
+  // more backstory. Degrades to nothing when a character lacks either
+  // field (phantoms correctly have no voiceAndManner; connectionToHost
+  // is present for every seen/audio character today, but checked anyway
+  // rather than assumed).
+  const voiceGuidance =
+    (entry && entry.voiceAndManner ? ` VOICE AND MANNER: ${entry.voiceAndManner}` : "") +
+    (entry && entry.connectionToHost ? ` YOUR RELATIONSHIP TO THE HOST: ${entry.connectionToHost}` : "");
+  const base = `You are ${state.bench_id}, joining a live call. Character: ${who}.` +
+    voiceGuidance +
+    ` Speak ONLY as ${state.bench_id}, one short in-character turn (1-3 sentences). ` +
     `Do not narrate stage directions; perform them in speech.`;
   switch (state.stage) {
     case "entrance":
