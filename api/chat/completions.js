@@ -764,6 +764,27 @@ async function generateBenchLine(bench, messages) {
       .map((m) => (m.role === "user" ? "Caller: " : "Host: ") + m.content)
       .join("\n");
     const name = bench.tag.charAt(0) + bench.tag.slice(1).toLowerCase();
+    // VOICE AND MANNER (Aug 9, found not plumbed through) — Canon's own
+    // authored rhythm/tic/register material (bench.voiceAndManner, now
+    // surfaced by _bench_v2.js's toEntry()), previously never reaching
+    // this generation at all — bench.note alone is just a bare role title
+    // ("The Boss"), nowhere near enough to differentiate three characters'
+    // spoken voices. Appended as its own sentence, same shape as the
+    // stageDirective() fix in _bench_v2.js (the existing weave-in
+    // mechanism had the identical gap — fixed there too, same session).
+    // Degrades safely to nothing added if a character somehow lacks one.
+    const voiceNote = bench.voiceAndManner
+      ? " VOICE AND MANNER: " + bench.voiceAndManner
+      : "";
+    // connectionToHost (Aug 9, same fix as voiceAndManner, second field) —
+    // the character's authored relationship TO the host specifically.
+    // Matters for a takeover line because the character is often cutting
+    // in AT or ABOUT the host (Conrad: an authority over him; Tyler:
+    // terrified of letting him down) — the power dynamic changes what
+    // they'd actually say in that moment, not just how they'd say it.
+    const connectionNote = bench.connectionToHost
+      ? " YOUR RELATIONSHIP TO THE HOST: " + bench.connectionToHost
+      : "";
     // REWRITTEN (Aug 8, Andrew — "multi bit beat. no cameo of one line and
     // then silence"). Was: one ~25-word reaction line. Now: a genuine bit —
     // several distinct beats building on each other, taking over the floor
@@ -772,7 +793,8 @@ async function generateBenchLine(bench, messages) {
     // session.say() finishes — this doesn't touch that, just makes what
     // gets said in that one call substantially bigger).
     const sys =
-      "You are " + name + ", " + bench.note + ". You have just barged into " +
+      "You are " + name + ", " + bench.note + "." + voiceNote + connectionNote +
+      " You have just barged into " +
       "this live call, cutting the host off, and you're taking over the " +
       "floor for a real moment — not a quick interjection. Deliver an " +
       "actual bit: several distinct beats building on each other (not one " +
@@ -801,6 +823,65 @@ async function generateBenchLine(bench, messages) {
     // with room) — still a real cap against a runaway generation, not
     // removed entirely.
     if (!txt || txt.length > 900) return null;
+    return txt;
+  } catch {
+    return null;
+  }
+}
+
+// FOLLOW-UP TURN (Aug 9, "piece by piece" Step 1 — bench character stays
+// present for exactly one reply if the caller directly addresses them by
+// name right after a takeover, instead of the normal one-shot awareness
+// note handing straight back to the host). Deliberately a SEPARATE
+// function from generateBenchLine, not a parameter flag — the framing is
+// genuinely different: an opener is "you've just barged in, make it
+// land"; a reply is "you're already here, someone's talking TO you,
+// respond to THAT specifically." Same voice-profile wiring
+// (voiceAndManner/connectionToHost), same length/shape, same safety
+// checks — only the system prompt's framing and the inclusion of the
+// character's own prior line differ.
+async function generateBenchFollowup(bench, messages, priorLine) {
+  try {
+    const convo = messages
+      .slice(-6)
+      .map((m) => (m.role === "user" ? "Caller: " : "Host: ") + m.content)
+      .join("\n");
+    const name = bench.tag.charAt(0) + bench.tag.slice(1).toLowerCase();
+    const voiceNote = bench.voiceAndManner
+      ? " VOICE AND MANNER: " + bench.voiceAndManner
+      : "";
+    const connectionNote = bench.connectionToHost
+      ? " YOUR RELATIONSHIP TO THE HOST: " + bench.connectionToHost
+      : "";
+    const sys =
+      "You are " + name + ", " + bench.note + "." + voiceNote + connectionNote +
+      " You're STILL on this call — you spoke a moment ago (your own last " +
+      "line: \"" + priorLine + "\"), and now the caller has addressed YOU " +
+      "directly, by name. Respond to what they just said, in character, " +
+      "continuing naturally from your own prior line rather than repeating " +
+      "or contradicting it. This is your LAST word on this call for now — " +
+      "land it, then you're done; don't set up another exchange. Aim for " +
+      "roughly 2-4 sentences, ~40-90 words (shorter than your opening " +
+      "moment — this is a reply, not a fresh takeover). Output ONLY the " +
+      "spoken words — no name label, no quotes, no stage directions.";
+    const r = await fetch(ANTHROPIC_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": ANTHROPIC_VERSION,
+      },
+      body: JSON.stringify({
+        model: MODEL(),
+        max_tokens: 250,
+        system: sys,
+        messages: [{ role: "user", content: convo + "\n\n(" + name + " responds:)" }],
+      }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const txt = (j.content || []).map((c) => c.text || "").join("").trim();
+    if (!txt || txt.length > 700) return null;
     return txt;
   } catch {
     return null;
@@ -1622,6 +1703,64 @@ export default async function handler(req) {
   // (mimicking Anthropic's own SSE shape, empty text) reuses all of that
   // proven logic instead of duplicating it — the only thing skipped is
   // the actual slow network call to Anthropic.
+  // BENCH FOLLOW-UP SHORT-CIRCUIT (Aug 9, piece-by-piece Step 1) — checked
+  // BEFORE the original takeover check below, since they're genuinely
+  // separate, non-overlapping conditions: this fires only when a takeover
+  // happened LAST turn (stored.pendingBenchAwareness still set) AND the
+  // caller's own line this turn addresses that character by name. One
+  // shot only — firing this ALWAYS clears pendingBenchAwareness rather
+  // than setting it again, so a caller naming the character a second
+  // time gets normal host behavior, not an infinite bench thread. Name
+  // match is deliberately simple (case-insensitive word boundary) rather
+  // than reaching for anything smarter — a cheap, reliable signal beats a
+  // fragile clever one here.
+  if (stored && stored.pendingBenchAwareness && stored.pendingBenchAwareness.character) {
+    const awareChar = stored.pendingBenchAwareness.character; // lowercase, e.g. "conrad"
+    const lastUserMsg = [...(Array.isArray(messages) ? messages : [])]
+      .reverse().find((m) => m && m.role === "user");
+    const nameRe = new RegExp("\\b" + awareChar + "\\b", "i");
+    const addressed = lastUserMsg && typeof lastUserMsg.content === "string" && nameRe.test(lastUserMsg.content);
+    if (addressed && BENCH_VOICED_CHARACTERS.includes(awareChar)) {
+      const benchData = benchEntry(awareChar.toUpperCase());
+      if (benchData) {
+        const followupLine = await generateBenchFollowup(benchData, messages, stored.pendingBenchAwareness.line);
+        if (callId) {
+          waitUntil(setCall(callId, { pendingBenchAwareness: null }).catch(() => {})); // one-shot: consumed now, never re-armed
+        }
+        if (followupLine) {
+          console.log("bench FOLLOW-UP SHORT-CIRCUIT — character=" + awareChar + " addressed by name, replying then done");
+          const followupTakeover = { character: awareChar, line: followupLine };
+          const syntheticUpstream = syntheticAnthropicStream();
+          const followupMeta = {
+            id: "chatcmpl-" + crypto.randomUUID(),
+            created: Math.floor(Date.now() / 1000),
+            model: MODEL(),
+            callId,
+            turn: countUserTurns(messages),
+            hostName: hostNameFromBody(body),
+            targetId: stored?.targetId ?? null,
+            deathBlowFiring: false,
+            stall: false,
+            stallBit: null,
+            benchSpeak: followupTakeover,
+          };
+          return new Response(
+            anthropicToOpenAISSE(syntheticUpstream, followupMeta, benchAppend, null),
+            {
+              headers: {
+                "content-type": "text/event-stream; charset=utf-8",
+                "cache-control": "no-cache, no-transform",
+                connection: "keep-alive",
+              },
+            }
+          );
+        } else {
+          console.log("bench follow-up: line generation failed for " + awareChar + " — falling through to normal turn");
+        }
+      }
+    }
+  }
+
   if (benchTakeover && BENCH_VOICED_CHARACTERS.includes(benchTakeover.character)) {
     console.log("bench takeover SHORT-CIRCUIT — skipping host generation entirely, character=" + benchTakeover.character);
     const syntheticUpstream = syntheticAnthropicStream();
