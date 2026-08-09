@@ -2953,6 +2953,31 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // appearing; the underlying count is untouched and keeps accumulating
     // for whenever Bits' escalation logic wants it.
     if (MARKER_AWARENESS && stored && stored.markerLastTurn) {
+      // HARD CAP FOR THRESHOLD=1 MARKERS (Aug 9, found live — a real bug,
+      // not defensive extra). Confirmed on an actual call: [COFFEE_CUP_
+      // BREAK] fired and played TWICE despite threshold=1 (Bits' own
+      // intent: "one broken mug per call maximum" — a plausibility cap on
+      // the marker itself, not just on how the awareness system reacts to
+      // repeats). The earlier threshold=1 fix only ever governed whether a
+      // repeat counts as marquee-worthy — it never actually stopped the
+      // model from choosing to emit the marker again in the first place.
+      // This runs UNCONDITIONALLY (not gated behind the recent-window
+      // check below), checking the full persisted count, because the
+      // constraint needs to hold for the rest of the call, not just a
+      // 2-turn awareness window.
+      const allCounts = stored.markerCounts || {};
+      const usedUpMarkers = Object.keys(MARKER_FLAVOR_HINTS).filter(
+        (m) => MARKER_FLAVOR_HINTS[m].threshold === 1 && (allCounts[m] || 0) >= 1
+      );
+      if (usedUpMarkers.length) {
+        mutable +=
+          "\n\n[ALREADY USED THIS CALL, NEVER AGAIN: " +
+          usedUpMarkers.map((m) => "[" + m + "]").join(", ") +
+          " — this already happened once this call and would not be " +
+          "plausible a second time. Do not emit " +
+          (usedUpMarkers.length > 1 ? "any of these markers" : "this marker") +
+          " again, this call, under any circumstances.]";
+      }
       const AWARENESS_WINDOW_TURNS = 2; // fired this turn, or up to 2 turns ago
       const recent = Object.keys(stored.markerLastTurn).filter((marker) => {
         const lastTurn = stored.markerLastTurn[marker];
