@@ -757,9 +757,15 @@ const FIRST_TOKEN_FALLBACKS = [
 // live call. Fast non-streaming Haiku call (short cap). Returns the spoken line
 // or null (caller falls back to a canned line). Fired in PARALLEL with the host
 // reply so it adds ~no latency — it's awaited only at stream close.
-async function generateBenchLine(bench, messages) {
+async function generateBenchLine(bench, messages, priorMemory, callLog) {
   try {
+    // Same bench-line strip as the host's fix — a PRIOR bench character's
+    // line, unfiltered, would get mislabeled "Host: ..." below (the map
+    // only distinguishes user/assistant, not which assistant), wrongly
+    // attributing one character's words to the host. Simpler and safer
+    // to strip than to build correct multi-character labeling right now.
     const convo = messages
+      .filter((m) => !(m && m.character))
       .slice(-6)
       .map((m) => (m.role === "user" ? "Caller: " : "Host: ") + m.content)
       .join("\n");
@@ -785,6 +791,60 @@ async function generateBenchLine(bench, messages) {
     const connectionNote = bench.connectionToHost
       ? " YOUR RELATIONSHIP TO THE HOST: " + bench.connectionToHost
       : "";
+    // PRIOR MEMORY (Aug 9, round-robin Step 2) — this character's own
+    // past lines THIS CALL, if they've spoken before (persisted across
+    // the whole call, not just one exchange like the follow-up's single
+    // priorLine). Lets a character who interjects at turn 4 and again at
+    // turn 15 stay consistent — not repeat themselves, not contradict
+    // what they already established. Empty/absent for a character's
+    // first appearance — degrades to nothing added, same as the voice-
+    // profile fields.
+    const memoryNote = Array.isArray(priorMemory) && priorMemory.length
+      ? " EARLIER THIS CALL, YOU ALSO SAID: " + priorMemory.map((l) => "\"" + l + "\"").join(" ... then later: ") +
+        " — stay consistent with that; don't repeat yourself or contradict it."
+      : "";
+    // SHARED CALL LOG (Aug 9, round-robin Step 3 groundwork — Andrew's
+    // framing: "a transcript that is general... each bench character and
+    // host can tap into"). Distinct from priorMemory above (that's only
+    // THIS character's own lines) — this is every OTHER bench character's
+    // lines too, so e.g. Bea can react to something Conrad said earlier,
+    // not just stay consistent with her own prior words. Excludes THIS
+    // character's own entries (already covered by priorMemory, would be
+    // redundant). Deliberately NOT including host/caller turns here —
+    // those already arrive via `convo` above from the real `messages`;
+    // this only adds the piece that's otherwise invisible to a bench
+    // character: what OTHER bench characters have said.
+    const otherLines = Array.isArray(callLog)
+      ? callLog.filter((e) => e && e.speaker && e.speaker !== bench.id)
+      : [];
+    // CHARACTERIZE THE OTHERS — REVISED (Aug 9). First version tagged
+    // each quote with just the bare role title (bench.note, e.g. "The
+    // Vanguard") — Andrew correctly caught that a title alone isn't real
+    // characterization, just a label. Fixed properly this time: uses
+    // voiceAndManner (the actual rhythm/tics/register text, same field
+    // powering the character's OWN voice) instead. Restructured to
+    // GROUP BY SPEAKER rather than tag every line — introduces each
+    // unique other speaker ONCE with their real voice profile, then
+    // lists all their lines together, so a character who's spoken 3
+    // times doesn't get their full characterization repeated 3 times.
+    const otherSpeakers = [...new Set(otherLines.map((e) => e.speaker))];
+    const othersNote = otherSpeakers.length
+      ? " ELSEWHERE ON THIS CALL, OTHERS HAVE SPOKEN: " +
+        otherSpeakers.map((speaker) => {
+          const speakerEntry = benchEntry(speaker.toUpperCase());
+          const speakerName = speaker.charAt(0).toUpperCase() + speaker.slice(1);
+          const speakerVoice = speakerEntry && speakerEntry.voiceAndManner
+            ? " (" + speakerEntry.voiceAndManner + ")"
+            : speakerEntry && speakerEntry.note
+              ? " (" + speakerEntry.note + ")"
+              : "";
+          const theirLines = otherLines
+            .filter((e) => e.speaker === speaker)
+            .map((e) => "\"" + e.line + "\"")
+            .join(" ... then: ");
+          return speakerName + speakerVoice + " said: " + theirLines;
+        }).join(" | ")
+      : "";
     // REWRITTEN (Aug 8, Andrew — "multi bit beat. no cameo of one line and
     // then silence"). Was: one ~25-word reaction line. Now: a genuine bit —
     // several distinct beats building on each other, taking over the floor
@@ -793,7 +853,7 @@ async function generateBenchLine(bench, messages) {
     // session.say() finishes — this doesn't touch that, just makes what
     // gets said in that one call substantially bigger).
     const sys =
-      "You are " + name + ", " + bench.note + "." + voiceNote + connectionNote +
+      "You are " + name + ", " + bench.note + "." + voiceNote + connectionNote + memoryNote + othersNote +
       " You have just barged into " +
       "this live call, cutting the host off, and you're taking over the " +
       "floor for a real moment — not a quick interjection. Deliver an " +
@@ -842,7 +902,9 @@ async function generateBenchLine(bench, messages) {
 // character's own prior line differ.
 async function generateBenchFollowup(bench, messages, priorLine) {
   try {
+    // Same strip as generateBenchLine (see its comment for why).
     const convo = messages
+      .filter((m) => !(m && m.character))
       .slice(-6)
       .map((m) => (m.role === "user" ? "Caller: " : "Host: ") + m.content)
       .join("\n");
@@ -1673,11 +1735,33 @@ export default async function handler(req) {
     }
   }
 
+  // STRIP BENCH-SPOKEN LINES FROM THE HOST'S OWN CONTEXT (Aug 9, found
+  // live — a real, confirmed bug, not defensive extra). Root cause traced
+  // precisely from a real call: the agent's own session.history includes
+  // bench-character lines with role UNCHANGED ("assistant", per Voice's
+  // own transcript-attribution fix — only a "character" key distinguishes
+  // them), so on the very next turn the model saw Conrad's actual spoken
+  // words sitting in its own "things I said" history — indistinguishable
+  // from the host's real turns — and naturally continued speaking AS
+  // Conrad on a turn that was never a real takeover at all. Confirmed via
+  // RX msgs=7 asst=3 where only 2 real host turns had happened; the third
+  // "assistant" entry was Conrad's line, leaked straight into context.
+  // Fix: strip any message carrying a "character" key before it ever
+  // reaches the host's own generation — the host keeps its one-shot
+  // awareness note (a fact, not a transcript), never the bench
+  // character's actual words as if they were its own. Scoped to THIS
+  // (the host's own request) specifically — generateBenchLine/
+  // generateBenchFollowup build their OWN separate context from the raw
+  // `messages`, unfiltered, since a bench character plausibly SHOULD see
+  // what another bench character said; only the host's own voice needs
+  // this protection.
+  const messagesForHost = messagesForModel.filter((m) => !(m && m.character));
+
   const anthropicReq = {
     model: MODEL(),
     max_tokens: MAX_TOKENS(),
     stream: true,
-    messages: messagesForModel,
+    messages: messagesForHost,
     // Spike creativity on the Death Blow turn only — the comedy is in the
     // surprise. Every other turn stays at the model's default for consistency.
     ...(deathBlowFiring ? { temperature: 1 } : {}),
@@ -1730,6 +1814,39 @@ export default async function handler(req) {
         if (followupLine) {
           console.log("bench FOLLOW-UP SHORT-CIRCUIT — character=" + awareChar + " addressed by name, replying then done");
           const followupTakeover = { character: awareChar, line: followupLine };
+          // MEMORY WRITE (Aug 9, round-robin Step 2) — the follow-up's
+          // line is a real thing the character said too; persisted so a
+          // FUTURE, separate takeover of the same character later in the
+          // call (a new controls.sentBench, not this same episode) knows
+          // about both what they said originally AND in this reply. Same
+          // read-fresh-then-append pattern as the original takeover's
+          // memory write, same best-effort race caveat.
+          if (callId) {
+            waitUntil(
+              getCall(callId)
+                .then((fresh) => {
+                  const mem = (fresh && fresh.benchMemory) || {};
+                  const updated = { ...mem, [awareChar]: [...(mem[awareChar] || []), followupLine] };
+                  return setCall(callId, { benchMemory: updated });
+                })
+                .catch(() => {})
+            );
+          }
+          // SHARED LOG WRITE (Aug 9, round-robin Step 3 groundwork) — same
+          // field as the original takeover writes to, so the general log
+          // stays complete even though generateBenchFollowup itself
+          // doesn't currently READ from it (its narrow priorLine framing
+          // doesn't need to — see that function's own scope).
+          if (callId) {
+            waitUntil(
+              getCall(callId)
+                .then((fresh) => {
+                  const log = Array.isArray(fresh && fresh.callLog) ? fresh.callLog : [];
+                  return setCall(callId, { callLog: [...log, { speaker: awareChar, line: followupLine }] });
+                })
+                .catch(() => {})
+            );
+          }
           const syntheticUpstream = syntheticAnthropicStream();
           const followupMeta = {
             id: "chatcmpl-" + crypto.randomUUID(),
@@ -1945,10 +2062,16 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
     if (controls.sentBench.mode === "takeover") {
       const benchData = benchEntry(wantId);
       if (benchData) {
-        const line = await generateBenchLine(benchData, messages);
+        // PRIOR MEMORY READ (Aug 9, round-robin Step 2) — this
+        // character's own line history from earlier in THIS call, if
+        // any (persisted on stored.benchMemory, keyed lowercase).
+        // Undefined/empty for a character's first appearance.
+        const charKey = wantId.toLowerCase();
+        const priorMemory = stored && stored.benchMemory ? stored.benchMemory[charKey] : undefined;
+        const line = await generateBenchLine(benchData, messages, priorMemory, stored?.callLog);
         if (callId) await clearBench(callId, "fired").catch(() => {});
         if (line) {
-          benchTakeover = { character: wantId.toLowerCase(), line };
+          benchTakeover = { character: charKey, line };
           // AWARENESS FOR THE NEXT TURN (Aug 8) — without this the host
           // has zero knowledge a bench character even spoke; the line only
           // ever rides in metadata to the agent, never into the model's
@@ -1956,6 +2079,42 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
           // turn (see the mutable-block injection), then cleared.
           if (callId) {
             waitUntil(setCall(callId, { pendingBenchAwareness: benchTakeover }).catch(() => {}));
+          }
+          // MEMORY WRITE (Aug 9, round-robin Step 2) — append this line to
+          // the character's own persisted history, surviving the WHOLE
+          // call (unlike pendingBenchAwareness, which is one-shot). Reads
+          // the current value fresh rather than trusting a possibly-stale
+          // `stored` (a second takeover could happen turns later, after
+          // stored was last read) — but best-effort: an in-flight race
+          // where two writes land close together could still drop one
+          // append, an acceptable risk for what's fundamentally a
+          // continuity nicety, not correctness-critical state.
+          if (callId) {
+            waitUntil(
+              getCall(callId)
+                .then((fresh) => {
+                  const mem = (fresh && fresh.benchMemory) || {};
+                  const updated = { ...mem, [charKey]: [...(mem[charKey] || []), line] };
+                  return setCall(callId, { benchMemory: updated });
+                })
+                .catch(() => {})
+            );
+          }
+          // SHARED LOG WRITE (Aug 9, round-robin Step 3 groundwork) —
+          // separate field, separate write, from benchMemory above: this
+          // is the GENERAL log every character can read from (see
+          // generateBenchLine's own comment), not just this character's
+          // own history. Same read-fresh-then-append pattern; same
+          // best-effort race caveat.
+          if (callId) {
+            waitUntil(
+              getCall(callId)
+                .then((fresh) => {
+                  const log = Array.isArray(fresh && fresh.callLog) ? fresh.callLog : [];
+                  return setCall(callId, { callLog: [...log, { speaker: charKey, line }] });
+                })
+                .catch(() => {})
+            );
           }
           if (callId) {
             makeTrace(callId, benchTurn, waitUntil, stored?.targetId).emit(
@@ -2274,8 +2433,16 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       const engagementBefore = state.engagement;
       const firedLastTurn =
         stored && stored.lastBitTurn != null && stored.lastBitTurn === turn - 1;
+      // Same bench-line strip as the host's own generation (see that
+      // fix's own comment for the full root-cause trace) — the phase/
+      // pressure/engagement reader judges the conversation's dynamic,
+      // and a bench character's tone (e.g. Conrad's confrontational
+      // register) misread as the host's own turn could skew that
+      // judgment. Local filter here since messagesForHost isn't in this
+      // function's scope (messages is; that's enough).
+      const messagesForReader = messages.filter((m) => !(m && m.character));
       waitUntil(
-        readCall(messages, priorRead)
+        readCall(messagesForReader, priorRead)
           .then((read) => {
             // A SILENT reader is the one failure that matters: readCall returns
             // null on upstream !ok / no JSON / parse failure, and getCall's
@@ -4146,6 +4313,22 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
                       cache_read: u.cache_read_input_tokens,
                     })
                 );
+                // TURN-1 CACHE MISS FLAG (Aug 10, opener-latency evaluation).
+                // Measured across recent calls: turn 1 hits a real cache
+                // miss (cache_creation > 0) roughly 3.5x more often than a
+                // normal turn (~22% vs ~6%), and when it does, the cache
+                // being built is much larger too — a real, structural
+                // contributor to why the opener sometimes runs slow. This
+                // line makes it trivially greppable on any future call's
+                // log, instead of needing a manual multi-file analysis
+                // each time someone asks "is the opener slow again."
+                if (meta.turn === 1 && u.cache_creation_input_tokens > 0) {
+                  console.log(
+                    "TURN-1 CACHE MISS — this call's opener paid the cache-build " +
+                    "cost (cache_creation=" + u.cache_creation_input_tokens + " tokens), " +
+                    "not just prompt complexity. callId=" + (meta.callId || "?")
+                  );
+                }
               }
               if (!roleSent) {
                 send({ role: "assistant" });
