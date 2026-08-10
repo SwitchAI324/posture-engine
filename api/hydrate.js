@@ -36,7 +36,68 @@
 // guaranteed to be. (Earlier ../compiler/ pointed at the root compiler/ folder
 // and failed to bundle: "Cannot find module".)
 const { assemblePrefix } = require("./compiler/assemble.js");
+// CACHE WARMING (Aug 10, opener-latency investigation). waitUntil is
+// documented as working on Node.js serverless functions too, not just
+// Edge — but this is the FIRST time hydrate.js (a Node function, unlike
+// completions.js's Edge runtime) uses this pattern, so it's worth
+// confirming via a real deploy that the warming request actually
+// completes rather than getting cut off when the function instance
+// tears down after the response returns.
+const { waitUntil } = require("@vercel/functions");
 
+const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_VERSION = "2023-06-01";
+const MODEL = () => process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
+
+// CACHE WARM (Aug 10) — measured across 46 real turn-1s: turn 1 hits a
+// genuine cache miss (cache_creation > 0) ~22% of the time vs ~6% on a
+// normal turn, and pays a real, live latency cost when it does (turn 1
+// averaged 8.4s vs 5.7s normal). Root cause: hydrate never made this
+// call's prefix known to Anthropic before now — the REAL turn-1 request
+// was always the first time Anthropic ever saw it, so it sometimes had
+// to build the cache entry live, in front of the caller. Fix: fire a
+// minimal, throwaway request with the SAME prefix text + SAME
+// cache_control structure the real turn-1 request will later use,
+// during the genuinely idle window between hydrate finishing and the
+// caller's first real words (measured median ~16s, avg ~20s — comfortably
+// enough time). By the time the real request arrives, Anthropic already
+// has the cache entry, so it gets a cache_read instead of paying the
+// creation cost live. Must exactly match completions.js's cache_control
+// placement (same baseSystem text, same { type: "ephemeral" } marker,
+// same model) or Anthropic won't recognize it as the same cacheable
+// prefix at all. Best-effort in every sense: never awaited by the
+// caller, any failure here must never affect hydrate's own response.
+async function warmCache(prefix, callId) {
+  try {
+    const r = await fetch(ANTHROPIC_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": ANTHROPIC_VERSION,
+      },
+      body: JSON.stringify({
+        model: MODEL(),
+        max_tokens: 1, // throwaway — only the cache side effect matters
+        system: [{ type: "text", text: prefix, cache_control: { type: "ephemeral" } }],
+        messages: [{ role: "user", content: "." }],
+      }),
+    });
+    if (!r.ok) {
+      console.log("cache warm FAILED — status=" + r.status + " callId=" + (callId || "?"));
+      return;
+    }
+    const j = await r.json();
+    const u = j.usage || {};
+    console.log(
+      "cache warm OK callId=" + (callId || "?") +
+      " cache_creation=" + u.cache_creation_input_tokens +
+      " cache_read=" + u.cache_read_input_tokens
+    );
+  } catch (e) {
+    console.log("cache warm THREW — " + (e && e.message) + " callId=" + (callId || "?"));
+  }
+}
 // All-active bit ids for the loadout. _bits_registry.js exports BITS (records
 // with a status field); active = not parked. require() at runtime (Node).
 function activeBitIds() {
@@ -393,6 +454,14 @@ module.exports = async function handler(req, res) {
     if (callId) {
       await writePrefix(callId, prefix, cfg.tactic, initialPosture, cfg.target, overlays);
     }
+
+    // CACHE WARM — fired here, non-blocking, so it never delays hydrate's
+    // own response to the agent (the agent needs this response quickly to
+    // proceed with call setup). See warmCache()'s own comment for the
+    // full reasoning. process.env.ANTHROPIC_API_KEY confirmed available
+    // in this file already (completions.js's own generateBenchLine uses
+    // the identical env var, same account/deploy).
+    waitUntil(warmCache(prefix, callId));
 
     console.log(
       "hydrate OK slug=" +
