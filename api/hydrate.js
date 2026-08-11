@@ -18,8 +18,10 @@
 // It has slug (-> booking_token: archetype/host_name/target) + call_id.
 //
 // cfg DECISIONS (locked with the other chats):
-//   posture    = env SV_DEFAULT_POSTURE (neutral/warm default) — gears move it
-//                per turn; the token carries no posture.
+//   posture    = CUT (Aug 10) — was env SV_DEFAULT_POSTURE, "which of the
+//                Eight" per call; the host is now a single constant
+//                character, nothing selects a posture anymore. See the
+//                comment at cfg's construction below for the full cut.
 //   bits       = ALL ACTIVE bit ids (non-parked) — the per-turn scorer picks;
 //                the Director arms specific ones live via Mead Hall.
 //   armedBench = [] — room starts empty; bench is sent in live via Mead Hall.
@@ -256,7 +258,7 @@ async function readDossierFloor(targetId) {
 // Write the compiled prefix to call_prefix via the store. setCall handles the
 // upsert; we pass prefix + archetype (+ the initial posture line so turn 1 has
 // one before the engine sets its own).
-async function writePrefix(callId, prefix, archetype, postureLine, targetId, overlays) {
+async function writePrefix(callId, prefix, archetype, postureLine, targetId, overlays, latestCallId) {
   const { setCall } = require("./_store.js");
   // targetId rides the same path archetype does: resolved once here from the
   // booking token, frozen on the call_prefix row, read back by completions on
@@ -266,6 +268,11 @@ async function writePrefix(callId, prefix, archetype, postureLine, targetId, ove
   // overlays = { openerOverlay, businessOverlay } — the two swappable phase
   // blocks, stored frozen on the row; completions reads them and appends the
   // phase-selected one at send time. Optional (older callers omit -> null).
+  // latestCallId (Aug 10, self-correcting call_id fix): OPTIONAL, only ever
+  // passed when writing the "slug:<slug>" row — stamps the real, current
+  // call_id onto that row so anyone who only knows the slug (Mead Hall, a
+  // console command) can look up the current live call without risking a
+  // stale, manually-copied id from an earlier test.
   await setCall(callId, {
     prefix,
     archetype,
@@ -273,6 +280,7 @@ async function writePrefix(callId, prefix, archetype, postureLine, targetId, ove
     targetId: targetId ?? null,
     openerOverlay: (overlays && overlays.openerOverlay) ?? null,
     businessOverlay: (overlays && overlays.businessOverlay) ?? null,
+    ...(latestCallId !== undefined ? { latestCallId } : {}),
   });
 }
 
@@ -339,7 +347,18 @@ module.exports = async function handler(req, res) {
     // anything about this read fails or the target has no scout_facts yet.
     const dossierFloor = await readDossierFloor(token.target_id);
 
-    const posture = process.env.SV_DEFAULT_POSTURE || "skald"; // neutral/warm
+    // CUT (Aug 10, PE code-cut certification) — was: const posture =
+    // process.env.SV_DEFAULT_POSTURE || "skald", a genuine "which of the
+    // Eight" selection per call. The host is now a single constant
+    // character; nothing chooses a posture anymore. Kept as a fixed,
+    // non-selecting constant (not removed outright) specifically because
+    // this value still rides in the JSON response returned to the agent
+    // below (posture, postureLine) — I can't verify from this file alone
+    // whether the agent's own code depends on those response fields
+    // existing, so the SELECTION is cut but the response SHAPE is left
+    // stable. Worth Voice confirming whether these two response fields
+    // can be dropped entirely, or should stay for backward compatibility.
+    const posture = "innocent"; // no longer selected; fixed, not chosen
     const cfg = {
       posture,
       // BITS: empty loadout in the prefix — intentional. The engine scores bits
@@ -450,7 +469,10 @@ module.exports = async function handler(req, res) {
     // ALWAYS write the slug key (pre-call safe, removes the race). Also write
     // the call_id row if we have it (the direct hit).
     const overlays = { openerOverlay, businessOverlay };
-    await writePrefix("slug:" + slug, prefix, cfg.tactic, initialPosture, cfg.target, overlays);
+    // latestCallId only ever passed here (the slug: row) — null when callId
+    // isn't known yet at this point in the request (still correct: means
+    // "no live call for this slug right now," which is real information).
+    await writePrefix("slug:" + slug, prefix, cfg.tactic, initialPosture, cfg.target, overlays, callId || null);
     if (callId) {
       await writePrefix(callId, prefix, cfg.tactic, initialPosture, cfg.target, overlays);
     }
