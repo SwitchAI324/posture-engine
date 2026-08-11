@@ -10,7 +10,10 @@
 // HOST BASE and CALL CONTEXT bodies below are LOUD PLACEHOLDERS. Replace the
 // bodies, keep the signatures.
 // ----------------------------------------------------------------------
-const POSTURES = require("./postures.json");
+// CUT (Aug 10, PE code-cut certification) — POSTURES require() removed. The
+// host is now a single constant character (the Innocent); nothing selects
+// from "the Eight" anymore. See hostBaseFor()/postureSuffix() below for the
+// rest of this cut.
 // BIT LOADOUT source: prose directives keyed by canonical BIT-xxx id.
 // Authored by the Bits chat from the Bits Library (v5.6+). Parked bits
 // (BIT-601..608) are intentionally ABSENT (no producer) — a missing id is
@@ -952,30 +955,27 @@ function splitHostPrompt(raw) {
     business: clean(buckets.business),
   };
 }
-// The per-posture register suffix — appended to CORE (universal character
-// framing, true all call). Kept in one place so hostBaseFor and any future
-// caller stay consistent.
-function postureSuffix(p) {
-  return (
-    `\n\nACTIVE POSTURE REGISTER — ${p.name.toUpperCase()}: ` +
-    `authority stance ${p.stance}. Carry the universal self above in this ` +
-    `posture's register. (Full per-posture register — The Six — layered ` +
-    `separately by the In-Call Content Bible.)`
-  );
-}
-// hostBaseFor now returns CORE ONLY (+ posture suffix) — the phase-independent
+// CUT (Aug 10, PE code-cut certification) — postureSuffix() removed
+// entirely. It appended a per-posture "ACTIVE POSTURE REGISTER" line
+// (name/stance from POSTURES[postureId]) on top of CORE. With the host
+// now a single constant character, there is no register to select or
+// append — CORE alone carries the full, permanent characterization.
+// hostBaseFor now returns CORE ONLY, unconditionally — the phase-independent
 // character block that caches for the whole call. The OPENER/BUSINESS overlays
 // are supplied separately by hostOverlaysFor and appended at send time by phase.
-function hostBaseFor(postureId) {
-  const p = POSTURES[postureId];
-  if (!p) throw new Error(`unknown posture: ${postureId}`);
+// Signature intentionally takes no argument anymore (was postureId) — kept
+// callable with a stray argument without breaking (JS ignores extras), so
+// this is safe even before every caller is confirmed updated.
+function hostBaseFor() {
   const { core } = splitHostPrompt(MASTER_HOST_PROMPT);
-  return core + postureSuffix(p);
+  return core;
 }
-// hostOverlaysFor returns the two swappable overlays for this posture. They are
-// phase-independent in content (posture doesn't change them today), but the
-// signature takes postureId for symmetry + future per-posture overlay tuning.
-function hostOverlaysFor(/* postureId */) {
+// hostOverlaysFor returns the two swappable overlays. CUT (Aug 10): no
+// longer takes a postureId param at all — the prior signature kept one
+// "for symmetry" with hostBaseFor's postureId, which no longer exists.
+// Overlay content was already posture-independent in practice; this just
+// removes the now-meaningless parameter.
+function hostOverlaysFor() {
   const { opener, business } = splitHostPrompt(MASTER_HOST_PROMPT);
   return { opener, business };
 }
