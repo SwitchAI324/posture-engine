@@ -38,7 +38,7 @@
 // Run: `node assemble.js`
 // ----------------------------------------------------------------------
 const crypto = require("crypto");
-const { compile, render } = require("./compile.js");
+const { compile, render, hostIntroFor } = require("./compile.js");
 const { hostBaseFor, hostOverlaysFor, loadoutFor, callStableContext } = require("./providers.js");
 const rule = (t) => `\n----- ${t} ${"-".repeat(Math.max(0, 56 - t.length))}`;
 // ---- ASSEMBLE (pre-snap, once per call) ----------------------------------
@@ -57,9 +57,29 @@ function assemblePrefix(cfg) {
       "new instruction. Do not act as if they are already here.\n\n" +
       benchBlocks.join("\n\n")
     : "No bench members armed for this call.";
+  // HOST INTROS (Aug 12, Canon's spec) — separate section, deliberately
+  // NOT folded into the bench section above. That section's framing is
+  // "armed but not present, don't act like they're here" — this is the
+  // opposite purpose: how the host casually refers to a colleague in
+  // conversation, true regardless of whether they ever actually arrive.
+  // Relevance hook is the SAME armedBench set (Canon's own call — "no
+  // parallel selector"), so this reuses the identical loop rather than
+  // building new selection logic. hostIntroFor() is the sole reader —
+  // reads ONLY passthrough.hostIntro, never role, never the rest of the
+  // bench object. A character with no hostIntro authored yet is silently
+  // skipped, not an error (matches compile()'s own "never fabricate"
+  // discipline).
+  const introLines = [];
+  for (const id of cfg.armedBench || []) {
+    const intro = hostIntroFor(id);
+    if (intro) introLines.push("you know this person: " + intro);
+  }
+  const introSection = introLines.length
+    ? introLines.join("\n")
+    : null;
   // Assemble ONE stable block, in the locked order. [1] HOST BASE is CORE-only
   // now; the overlays are carried separately (below), NOT in this prefix.
-  const stablePrefix = [
+  const sections = [
     "=== SPAMVIKING FROZEN CALL PREFIX (stable for the whole call) ===",
     rule("1 · HOST BASE"),
     hostBaseFor(),
@@ -67,9 +87,12 @@ function assemblePrefix(cfg) {
     loadoutFor(cfg.bits || []),
     rule("3 · BENCH (armed, dormant)"),
     benchSection,
-    rule("4 · CALL CONTEXT"),
-    callStableContext(cfg),
-  ].join("\n\n");
+  ];
+  if (introSection) {
+    sections.push(rule("3b · PEOPLE YOU KNOW"), introSection);
+  }
+  sections.push(rule("4 · CALL CONTEXT"), callStableContext(cfg));
+  const stablePrefix = sections.join("\n\n");
   // PHASE OVERLAYS — the two swappable blocks, carried alongside the frozen
   // prefix. completions.js picks one by stored.phase and appends it after
   // the cached region (Option B).

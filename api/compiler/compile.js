@@ -21,6 +21,25 @@
 
 const BENCH = require("./bench/index.js"); // { id: characterData, ... }
 
+// HOST-INTRO EXTRACTION (Aug 12, Canon's own spec: "read ONLY
+// passthrough.hostIntro... never dump the bench object, and never
+// surface `role`"). Deliberately isolated from compile()/render() —
+// those exist for the CHARACTER's own reframed content (what they'd say
+// if they arrived), a different purpose from this: the HOST's own
+// reference voice for a colleague who may never actually speak. render()
+// already generically iterates every key under passthrough, which would
+// leak hostIntro into the bench section mixed with voiceAndManner/exit/
+// hostCover — fields about the character's own behavior, wrong framing
+// entirely for "how you casually refer to this person." This function
+// touches nothing but passthrough.hostIntro — structurally incapable of
+// surfacing role or anything else, since it never reads them at all.
+function hostIntroFor(benchId) {
+  const base = BENCH[benchId];
+  if (!base || !base.passthrough) return null;
+  const intro = base.passthrough.hostIntro;
+  return typeof intro === "string" && intro.trim() ? intro.trim() : null;
+}
+
 // ---- THE COMPILER --------------------------------------------------------
 // No postureId parameter anymore — every bench member compiles the same
 // way: clean, unreframed, straight from their own authored file. The old
@@ -93,4 +112,4 @@ if (require.main === module) {
   for (const b of Object.keys(BENCH)) emitMember(b, cap(b).toUpperCase());
 }
 
-module.exports = { compile, render };
+module.exports = { compile, render, hostIntroFor };
