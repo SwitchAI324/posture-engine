@@ -1482,12 +1482,20 @@ export default async function handler(req) {
     waitUntil(saveTranscript(callId, slug, messages).catch(() => {}));
   }
   let earlyTargetId = null;
+  // UNCANCELLED-STACKING FIX (Aug 12) — myGeneration is this request's
+  // own supersession token. Stamped now (in the SAME Promise.all as the
+  // other prep reads, so it adds no serial latency), checked fresh
+  // right before the expensive Anthropic fetch below. See getCall()'s
+  // own comment in _store.js for the full mechanism and its known
+  // limits (best-effort, not airtight).
+  const myGeneration = crypto.randomUUID();
   try {
     const [s, a, ctl, directTargetId] = await Promise.all([
       getCall(callId).catch(() => null),
       readAmmunition(slug).catch(() => ({ ammunition: [], byHook: {} })),
       getControls(callId).catch(() => ({ deathBlow: null, armed: [], sentBench: null })),
       resolveTargetId(slug).catch(() => null),
+      setCall(callId, { activeGeneration: myGeneration }).catch(() => null),
     ]);
     stored = s;
     if (a) ammo = a;
@@ -2014,6 +2022,45 @@ export default async function handler(req) {
   // the fix is in OUR code, not the model or the network.
   const genStart = Date.now();
   console.log("LATENCY prep=" + (genStart - t0) + "ms");
+  // UNCANCELLED-STACKING FIX (Aug 12), continued — the actual abort
+  // point. A fresh read here (not the earlier Promise.all's, which ran
+  // concurrently with this request's own stamp and could be stale by
+  // now) — if a NEWER request has since stamped its own token over
+  // ours, bail out via the SAME synthetic-empty-stream pattern the
+  // bench-takeover short-circuit already uses, instead of burning a
+  // full multi-second Anthropic call nobody will ever hear. This is
+  // the single highest-value place to check: right before the
+  // expensive part, after all the cheap prep work is already done
+  // (no point re-checking earlier — a supersession that happens DURING
+  // the ~150-200ms of prep is rare and cheap to just let finish).
+  const supersedeCheck = await getCall(callId).catch(() => null);
+  if (supersedeCheck && supersedeCheck.activeGeneration && supersedeCheck.activeGeneration !== myGeneration) {
+    console.log("SUPERSEDED — a newer request took over this call, abandoning before the Anthropic call. mine=" + myGeneration + " current=" + supersedeCheck.activeGeneration);
+    const abandonedUpstream = syntheticAnthropicStream();
+    const abandonedMeta = {
+      id: "chatcmpl-" + crypto.randomUUID(),
+      created: Math.floor(Date.now() / 1000),
+      model: MODEL(),
+      callId,
+      turn: countUserTurns(messages),
+      hostName: hostNameFromBody(body),
+      targetId: stored?.targetId ?? null,
+      deathBlowFiring: false,
+      stall: false,
+      stallBit: null,
+      benchSpeak: null,
+    };
+    return new Response(
+      anthropicToOpenAISSE(abandonedUpstream, abandonedMeta, null, null),
+      {
+        headers: {
+          "content-type": "text/event-stream; charset=utf-8",
+          "cache-control": "no-cache, no-transform",
+          connection: "keep-alive",
+        },
+      }
+    );
+  }
   const firstTokenController = new AbortController();
   const upstream = await fetch(ANTHROPIC_URL, {
     method: "POST",
