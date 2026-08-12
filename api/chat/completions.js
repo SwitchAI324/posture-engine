@@ -900,7 +900,7 @@ async function generateBenchLine(bench, messages, priorMemory, callLog) {
 // (voiceAndManner/connectionToHost), same length/shape, same safety
 // checks — only the system prompt's framing and the inclusion of the
 // character's own prior line differ.
-async function generateBenchFollowup(bench, messages, priorLine) {
+async function generateBenchFollowup(bench, messages, priorLine, isFinal) {
   try {
     // Same strip as generateBenchLine (see its comment for why).
     const convo = messages
@@ -915,14 +915,25 @@ async function generateBenchFollowup(bench, messages, priorLine) {
     const connectionNote = bench.connectionToHost
       ? " YOUR RELATIONSHIP TO THE HOST: " + bench.connectionToHost
       : "";
+    // isFinal (Aug 10, round-robin cap-of-3) — this function now fires up
+    // to 3 times per thread, not just once, so it can no longer ALWAYS
+    // claim "this is your last word." Only true on the 3rd, genuinely
+    // final reply — earlier ones stay open-ended, letting the character
+    // leave room for another exchange if the caller keeps addressing
+    // them, without explicitly promising one either.
+    const closingNote = isFinal
+      ? " This is your LAST word on this call for now — land it, then " +
+        "you're done; don't set up another exchange."
+      : " Respond naturally to what they said — you don't know yet " +
+        "whether they'll come back to you again, so don't announce this " +
+        "as your final word, but don't drag it out either.";
     const sys =
       "You are " + name + ", " + bench.note + "." + voiceNote + connectionNote +
       " You're STILL on this call — you spoke a moment ago (your own last " +
       "line: \"" + priorLine + "\"), and now the caller has addressed YOU " +
       "directly, by name. Respond to what they just said, in character, " +
       "continuing naturally from your own prior line rather than repeating " +
-      "or contradicting it. This is your LAST word on this call for now — " +
-      "land it, then you're done; don't set up another exchange. Aim for " +
+      "or contradicting it." + closingNote + " Aim for " +
       "roughly 2-4 sentences, ~40-90 words (shorter than your opening " +
       "moment — this is a reply, not a fresh takeover). Output ONLY the " +
       "spoken words — no name label, no quotes, no stage directions.";
@@ -1787,32 +1798,56 @@ export default async function handler(req) {
   // (mimicking Anthropic's own SSE shape, empty text) reuses all of that
   // proven logic instead of duplicating it — the only thing skipped is
   // the actual slow network call to Anthropic.
-  // BENCH FOLLOW-UP SHORT-CIRCUIT (Aug 9, piece-by-piece Step 1) — checked
-  // BEFORE the original takeover check below, since they're genuinely
-  // separate, non-overlapping conditions: this fires only when a takeover
-  // happened LAST turn (stored.pendingBenchAwareness still set) AND the
-  // caller's own line this turn addresses that character by name. One
-  // shot only — firing this ALWAYS clears pendingBenchAwareness rather
-  // than setting it again, so a caller naming the character a second
-  // time gets normal host behavior, not an infinite bench thread. Name
-  // match is deliberately simple (case-insensitive word boundary) rather
-  // than reaching for anything smarter — a cheap, reliable signal beats a
+  // BENCH FOLLOW-UP SHORT-CIRCUIT (Aug 9, Step 1; extended to a cap-of-3
+  // thread Aug 10, Andrew's own number) — checked BEFORE the original
+  // takeover check below, since they're genuinely separate, non-
+  // overlapping conditions: this fires only when a takeover (or a prior
+  // follow-up in the same thread) happened LAST turn AND the caller's own
+  // line this turn addresses that character by name again. followupCount
+  // (0 on the original takeover, incremented each follow-up) tracks how
+  // many replies this thread has used — capped at BENCH_FOLLOWUP_CAP=3.
+  // Below the cap: fires, REUSES pendingBenchAwareness with the new line
+  // + incremented count (thread stays open for another address). At the
+  // cap: fires ONE LAST TIME (told explicitly it's final via isFinal),
+  // then clears for good — a caller naming the character a 4th time gets
+  // normal host behavior, not an unbounded thread. Name match is
+  // deliberately simple (case-insensitive word boundary) rather than
+  // reaching for anything smarter — a cheap, reliable signal beats a
   // fragile clever one here.
+  const BENCH_FOLLOWUP_CAP = 3;
   if (stored && stored.pendingBenchAwareness && stored.pendingBenchAwareness.character) {
     const awareChar = stored.pendingBenchAwareness.character; // lowercase, e.g. "conrad"
+    const followupCount = stored.pendingBenchAwareness.followupCount ?? 0;
     const lastUserMsg = [...(Array.isArray(messages) ? messages : [])]
       .reverse().find((m) => m && m.role === "user");
     const nameRe = new RegExp("\\b" + awareChar + "\\b", "i");
     const addressed = lastUserMsg && typeof lastUserMsg.content === "string" && nameRe.test(lastUserMsg.content);
-    if (addressed && BENCH_VOICED_CHARACTERS.includes(awareChar)) {
+    if (addressed && followupCount < BENCH_FOLLOWUP_CAP && BENCH_VOICED_CHARACTERS.includes(awareChar)) {
       const benchData = benchEntry(awareChar.toUpperCase());
       if (benchData) {
-        const followupLine = await generateBenchFollowup(benchData, messages, stored.pendingBenchAwareness.line);
-        if (callId) {
-          waitUntil(setCall(callId, { pendingBenchAwareness: null }).catch(() => {})); // one-shot: consumed now, never re-armed
+        const newCount = followupCount + 1;
+        const isFinal = newCount >= BENCH_FOLLOWUP_CAP;
+        const followupLine = await generateBenchFollowup(benchData, messages, stored.pendingBenchAwareness.line, isFinal);
+        // Only advance/clear the thread state on a REAL success — a
+        // failed generation shouldn't burn one of the 3 allowed
+        // exchanges on something that never actually got said. On
+        // failure, pendingBenchAwareness is left completely untouched
+        // (same character/line/count as before), so the caller
+        // addressing the character again can genuinely retry rather
+        // than finding the thread already one step closer to closed for
+        // no reason they caused.
+        if (callId && followupLine) {
+          waitUntil(
+            setCall(callId, {
+              // Below cap: keep the thread open with the new line + count.
+              // At cap: clear for good — a 4th address gets normal host
+              // behavior.
+              pendingBenchAwareness: isFinal ? null : { character: awareChar, line: followupLine, followupCount: newCount },
+            }).catch(() => {})
+          );
         }
         if (followupLine) {
-          console.log("bench FOLLOW-UP SHORT-CIRCUIT — character=" + awareChar + " addressed by name, replying then done");
+          console.log("bench FOLLOW-UP SHORT-CIRCUIT — character=" + awareChar + " addressed by name, reply " + newCount + "/" + BENCH_FOLLOWUP_CAP + (isFinal ? " (final)" : ""));
           const followupTakeover = { character: awareChar, line: followupLine };
           // MEMORY WRITE (Aug 9, round-robin Step 2) — the follow-up's
           // line is a real thing the character said too; persisted so a
@@ -2076,9 +2111,16 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
           // has zero knowledge a bench character even spoke; the line only
           // ever rides in metadata to the agent, never into the model's
           // own context. Persisted here, consumed once by the very next
-          // turn (see the mutable-block injection), then cleared.
+          // turn (see the mutable-block injection), then cleared — UNLESS
+          // the caller addresses the character by name (round-robin
+          // follow-up path below, which now REUSES this same field with a
+          // followupCount rather than clearing it outright — see that
+          // code for the cap-of-3 logic). followupCount:0 here marks a
+          // fresh thread, distinct from stored.pendingBenchAwareness being
+          // absent — see the follow-up detection's own comment for why
+          // that distinction matters.
           if (callId) {
-            waitUntil(setCall(callId, { pendingBenchAwareness: benchTakeover }).catch(() => {}));
+            waitUntil(setCall(callId, { pendingBenchAwareness: { ...benchTakeover, followupCount: 0 } }).catch(() => {}));
           }
           // MEMORY WRITE (Aug 9, round-robin Step 2) — append this line to
           // the character's own persisted history, surviving the WHOLE
