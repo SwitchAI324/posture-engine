@@ -1364,6 +1364,26 @@
   const directorUserId = qp.get('director') || 'director';
   const slug = s => String(s||'').replace(/[^a-z0-9]+/gi,'-').toLowerCase();
 
+  // STALE-CALL_ID GUARD (PE, Aug 10): callId is captured once (URL or first event). When we open
+  // by target_id on a target that carries events from a PRIOR call, we can capture an OLD call_id
+  // and every control action then writes to the dead call — control.js returns 200 either way, so
+  // it fails invisibly. PE exposes GET /api/control?slug=<slug> -> { latest_call_id } (stamped by
+  // hydrate.js on every real call). Before each control send we resolve the CURRENT call_id from
+  // the slug, so we never send to a stale one. Slug comes from ?slug= or is derived from the
+  // call_id (sv-<slug>-<suffix>); the slug part is stable across a target's calls, so even a stale
+  // callId derives the right slug and the lookup returns the live call_id.
+  let meetingSlug = qp.get('slug') || null;
+  function deriveSlug(cid){ const m=/^sv-(.+)-[a-z0-9]{5,}$/i.exec(String(cid||'')); return m?m[1]:null; }
+  async function refreshCallId(){
+    const sl = meetingSlug || deriveSlug(callId);
+    if(!sl) return callId;                       // nothing to resolve against — use what we have
+    try{ const r=await fetch(CONTROL_ENDPOINT+'?slug='+encodeURIComponent(sl),{cache:'no-store'});
+      if(r.ok){ const j=await r.json().catch(()=>null);
+        if(j && j.latest_call_id){ if(j.latest_call_id!==callId) console.info('[MeadHall] call_id self-corrected \u2192', j.latest_call_id); callId=j.latest_call_id; } } }
+    catch(e){ /* keep existing callId on any failure — best-effort */ }
+    return callId;
+  }
+
   /* ---- inlined poller (mirror of feed.js) ---- */
   function createFeed(o){
     let cursor=0, run=false, timer=null, busy=false, first=true, pacing=false; const seen=new Set();
@@ -1627,6 +1647,7 @@
   function clearFireWatchdog(){ clearTimeout(fireWatch); fireWatch=null; }
 
   async function postFire(bitId){
+    await refreshCallId();
     if(!callId){ toast('\u26A0 No call to fire into yet \u2014 waiting for the call to start'); console.warn('[MeadHall] Fire pressed but callId is null'); return; }
     if(inFlight){ toast('One already in flight \u2014 cancel it first'); return; }
     if(expiredBit===bitId) expiredBit=null;
@@ -1653,7 +1674,7 @@
   // CANCEL — in flight only. PE: bit_id optional (one in flight), idempotent, returns
   // was_in_flight so we can tell "cancelled" from "already fired". Race -> jump to fired,
   // never an error: nothing can be un-fired once spoken.
-  async function postCancel(bitId){ if(!callId || !inFlight) return;
+  async function postCancel(bitId){ if(!inFlight) return; await refreshCallId(); if(!callId) return;
     const body={ call_id:callId, bit_id:bitId||inFlight, director_user_id:directorUserId, idempotency_key:callId+':cancel:'+(bitId||inFlight)+':'+Date.now() };
     try{ const r=await fetch(CONTROL_ENDPOINT+'?action=cancel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       if(r.status===404||r.status===405){ toast('\u26A0 Cancel isn\u2019t wired on the engine yet \u2014 deploy completions.js'); return; }
@@ -1665,7 +1686,7 @@
   function showFired(bitId){ clearFireWatchdog(); inFlight=null; firedFlash=bitId; renderArmPanel();
     setTimeout(()=>{ if(firedFlash===bitId){ firedFlash=null; renderArmPanel(); } }, 2000); }
 
-  async function postDisarm(bitId){ if(!callId){ toast('No call_id'); return; }
+  async function postDisarm(bitId){ await refreshCallId(); if(!callId){ toast('No call_id'); return; }
     if(!setlist.some(s=>s.bit_id===bitId)) return;
     const body={ call_id:callId, bit_id:bitId, director_user_id:directorUserId, idempotency_key:callId+':unarm:'+bitId+':'+Date.now() };
     try{ const r=await fetch(CONTROL_ENDPOINT+'?action=unarm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -1674,7 +1695,7 @@
       setlist=setlist.filter(s=>s.bit_id!==bitId); renderArmPanel(); toast('Disarmed \u2014 slot freed'); }
     catch(e){ toast('\u26A0 Disarm failed: '+(e.message||e)); } }
 
-  async function postArm(sel){ if(!callId){ toast('No call_id'); return; }
+  async function postArm(sel){ await refreshCallId(); if(!callId){ toast('No call_id'); return; }
     if(setlist.length>=3){ toast('Setlist full (3) \u2014 wait for one to fire'); return; }
     const key=callId+':arm:'+(sel.bit_id||sel.hook_id);
     const body=Object.assign({ call_id:callId, director_user_id:directorUserId, idempotency_key:key }, sel);
@@ -1855,7 +1876,7 @@
 
   /* ---- Death Blow WRITE — the Director's one live control (live only) ---- */
   let dbSent=false;
-  async function postDeathBlow(){ if(dbSent){ toast('Blow already sent'); return; } if(!callId){ toast('No call_id to write to'); return; }
+  async function postDeathBlow(){ if(dbSent){ toast('Blow already sent'); return; } await refreshCallId(); if(!callId){ toast('No call_id to write to'); return; }
     dbSent=true; $('#armBtn').textContent='SENT'; $('#armBtn').style.background='var(--ink)';
     // No rung_id — the Director chooses the moment; PE chooses the closer.
     const body={ call_id:callId, director_user_id:directorUserId, idempotency_key:callId+':db' };
@@ -1870,6 +1891,7 @@
   // (line folded into the host's turn, no voice swap) — takeover is what actually swaps voices.
   // Voice-wired characters only: conrad | bea | tyler. Others get a clean 409 listing valid ones.
   async function sendBenchControl(benchId){
+    await refreshCallId();
     if(!callId){ toast('Send-in works during a live or sim call.'); return; }
     const bid=String(benchId||'').toLowerCase();   // PE keys on lowercase slugs
     const body={ call_id:callId, bench_id:bid, director_user_id:directorUserId,
