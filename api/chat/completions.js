@@ -1418,6 +1418,19 @@ export default async function handler(req) {
         " asst=" + asst +
         " last=" + (nonSys.length ? nonSys[nonSys.length - 1].role : "none")
       );
+      // RX CONTENT PROBE (Aug 12, Andrew's own ask — the RX count line
+      // alone can't distinguish "PE genuinely never received new caller
+      // speech" from "a misleading log line": counting messages doesn't
+      // prove what's actually IN them. This logs the real text of the
+      // last message so a future stuck-at-turn-1 case can be checked
+      // directly against what the caller was actually saying at that
+      // wall-clock moment, instead of inferring it from RX counts alone.
+      // Truncated (200 chars) — this is a diagnostic tell, not a full
+      // transcript dump every turn.
+      const lastMsg = nonSys[nonSys.length - 1];
+      if (lastMsg && typeof lastMsg.content === "string") {
+        console.log("RX last content: \"" + lastMsg.content.slice(0, 200) + "\"");
+      }
     } catch { /* probe must never break a turn */ }
     waitUntil(saveTranscript(callId, slug, messages).catch(() => {}));
   }
