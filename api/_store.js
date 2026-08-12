@@ -40,7 +40,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-   `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used,pending_bench_awareness,latest_call_id`;
+   `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used,pending_bench_awareness,latest_call_id,active_generation`;
   const r = await fetch(url, {
     cache: "no-store",
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
@@ -152,13 +152,28 @@ export async function getCall(callId) {
     // "slug:<slug>" row (stamped there by hydrate.js); null everywhere
     // else, which is correct — nothing else should set or read it.
     latestCallId: rows[0].latest_call_id ?? null,
+    // ACTIVE GENERATION (Aug 12, uncancelled-stacking fix) — a random
+    // token stamped by whichever completions.js request most recently
+    // STARTED for this call_id. Every request stamps its own token when
+    // it begins (see setCall's own comment on the write side), then
+    // re-reads this field right before the expensive Anthropic fetch —
+    // if it no longer matches the token it stamped, a NEWER request has
+    // since started for the same call, and this one abandons itself
+    // rather than burning a full generation nobody will use. Best-
+    // effort, not airtight (the write is async/waitUntil, so a rare
+    // ordering race could let a stale request "win") — but the failure
+    // mode is only ever "didn't cancel something it should have," never
+    // worse than the current baseline of cancelling nothing at all.
+    // null = no request has stamped this call yet (fresh call, or a
+    // call this feature predates).
+    activeGeneration: rows[0].active_generation ?? null,
   };
 }
 // WRITE (upsert) — used at pre-snap to freeze the prefix, and later by the
 // posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed, pendingBenchAwareness, latestCallId }
+  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed, pendingBenchAwareness, latestCallId, activeGeneration }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -231,6 +246,13 @@ export async function setCall(
   // pattern like everything else here — undefined leaves any existing
   // value alone, explicit null clears it.
   if (latestCallId !== undefined) row.latest_call_id = latestCallId;
+  // ACTIVE GENERATION: see getCall()'s own comment for the full
+  // mechanism. Written unconditionally by EVERY completions.js request
+  // as it starts (always overwrites — that's the point: "most recent
+  // write wins" is what makes an older request detect it's been
+  // superseded). "only write when provided" pattern like everything
+  // else here.
+  if (activeGeneration !== undefined) row.active_generation = activeGeneration;
   if (callerRedirected !== undefined) row.caller_redirected = callerRedirected;
   // CALLER-CRUDE: raw classification + the two running counts. Same "only
   // write when provided" pattern as every other field here.
