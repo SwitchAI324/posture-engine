@@ -47,7 +47,7 @@
 // Note: the engine detects the FOREGONE death blow (Trigger B) itself — this
 // endpoint is ONLY the Director's manual Trigger A.
 // ----------------------------------------------------------------------
-import { getControls, setDeathBlow, addArm, setBench, removeArm, forceBit, cancelForce } from "./_store.js";
+import { getControls, setDeathBlow, addArm, setBench, removeArm, forceBit, cancelForce, getCallBySlug } from "./_store.js";
 import { makeTrace } from "./_trace.js";
 import { BITS } from "./_bits_registry.js";
 import { benchIds } from "./_bench_v2.js";
@@ -87,6 +87,22 @@ function jsonRes(obj, status = 200) {
 export default async function handler(req) {
   const u = new URL(req.url);
   if (req.method === "GET") {
+    // LATEST-CALL-ID LOOKUP (Aug 10, self-correcting call_id fix). A
+    // DISTINCT query shape from the existing call_id lookup below — pass
+    // ?slug=... instead of ?call_id=... to ask "what's the current live
+    // call for this slug," not "what's the pending control status for
+    // this specific call." Reads latestCallId off the slug: row (stamped
+    // there by hydrate.js on every real call). Lets Mead Hall (or a
+    // console command) self-correct to the actual current call instead
+    // of relying on a manually-copied, possibly-stale id.
+    const slug = u.searchParams.get("slug");
+    if (slug) {
+      const row = await getCallBySlug(slug).catch(() => null);
+      return jsonRes({
+        slug,
+        latest_call_id: (row && row.latestCallId) || null,
+      });
+    }
     const callId = u.searchParams.get("call_id");
     if (!callId) return jsonRes({ error: "missing call_id" }, 400);
     const c = await getControls(callId).catch(() => null);
