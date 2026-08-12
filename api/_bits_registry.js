@@ -601,7 +601,7 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 2
   },
   {
     "archetypes": "universal",
@@ -611,9 +611,10 @@ export const BITS = [
     "lane": "stall",
     "stall_type": "hunt",
     "trigger": "commitment_push",
-    "status": "active",
+    "status": "parked",
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 1,
+    "park_reason": "Andrew review Aug 5 \u2014 too thin, forward reference without payoff"
   },
   {
     "id": "BIT-203",
@@ -643,7 +644,7 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 4,
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 3
   },
   {
     "id": "BIT-206",
@@ -666,27 +667,33 @@ export const BITS = [
     "cooldown": 3,
     "pool": "middle",
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 1,
+    "rungs": 3,
+    "rung_spacing": {
+      "min_between": 2
+    }
   },
   {
     "id": "BIT-208",
     "name": "The Forwarded Email Bit",
-    "status": "active",
+    "status": "parked",
     "archetypes": "universal",
     "cooldown": 4,
     "pool": "middle",
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 1,
+    "park_reason": "Andrew review Aug 5 \u2014 too thin"
   },
   {
     "id": "BIT-209",
     "name": "The Previous Call Bit",
-    "status": "active",
+    "status": "parked",
     "archetypes": "universal",
     "cooldown": 6,
     "pool": "early",
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 1,
+    "park_reason": "Andrew review Aug 5 \u2014 too thin"
   },
   {
     "archetypes": "universal",
@@ -968,6 +975,23 @@ export const BITS = [
     "max_fires_per_call": 5,
     "family": "stall",
     "absurdity": 1
+  },
+  {
+    "id": "BIT-234",
+    "name": "The Tip Of The Tongue",
+    "status": "active",
+    "archetypes": "universal",
+    "bit_type": "count",
+    "count_label": "question attempts",
+    "family": "structural",
+    "pool": "middle",
+    "cooldown": 3,
+    "rungs": 4,
+    "ceiling": "hard",
+    "rung_spacing": {
+      "min_between": 3
+    },
+    "absurdity": 4
   },
   {
     "archetypes": "universal",
