@@ -876,15 +876,32 @@ async function generateBenchLine(bench, messages, priorMemory, callLog) {
         messages: [{ role: "user", content: convo + "\n\n(" + name + " cuts in:)" }],
       }),
     });
-    if (!r.ok) return null;
+    if (!r.ok) {
+      // FAILURE-REASON LOGGING (Aug 12, Voice's own investigation —
+      // clearBench(callId, "fired") runs unconditionally right after this
+      // call returns, whether or not it produced a line, so the
+      // call_controls row shows "fired" even on a total generation
+      // failure — that status was never proof a real bench_speak signal
+      // was emitted. Every failure path here returned null completely
+      // silently before this fix; the only downstream trace was "bench
+      // takeover: line generation failed for <id>", with no reason.
+      // Same pattern as readCall's own failure-reason fix earlier this
+      // session.
+      console.log("generateBenchLine FAILED — http_not_ok status=" + r.status + " character=" + bench.id);
+      return null;
+    }
     const j = await r.json();
     const txt = (j.content || []).map((c) => c.text || "").join("").trim();
     // Ceiling raised to match the new length (~900 chars covers ~150 words
     // with room) — still a real cap against a runaway generation, not
     // removed entirely.
-    if (!txt || txt.length > 900) return null;
+    if (!txt || txt.length > 900) {
+      console.log("generateBenchLine FAILED — " + (!txt ? "empty_text" : "text_too_long len=" + txt.length) + " character=" + bench.id);
+      return null;
+    }
     return txt;
-  } catch {
+  } catch (e) {
+    console.log("generateBenchLine THREW — " + (e && e.message) + " character=" + (bench && bench.id));
     return null;
   }
 }
@@ -951,12 +968,19 @@ async function generateBenchFollowup(bench, messages, priorLine, isFinal) {
         messages: [{ role: "user", content: convo + "\n\n(" + name + " responds:)" }],
       }),
     });
-    if (!r.ok) return null;
+    if (!r.ok) {
+      console.log("generateBenchFollowup FAILED — http_not_ok status=" + r.status + " character=" + bench.id);
+      return null;
+    }
     const j = await r.json();
     const txt = (j.content || []).map((c) => c.text || "").join("").trim();
-    if (!txt || txt.length > 700) return null;
+    if (!txt || txt.length > 700) {
+      console.log("generateBenchFollowup FAILED — " + (!txt ? "empty_text" : "text_too_long len=" + txt.length) + " character=" + bench.id);
+      return null;
+    }
     return txt;
-  } catch {
+  } catch (e) {
+    console.log("generateBenchFollowup THREW — " + (e && e.message) + " character=" + (bench && bench.id));
     return null;
   }
 }
