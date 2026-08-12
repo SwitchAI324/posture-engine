@@ -40,7 +40,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-   `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used,pending_bench_awareness`;
+   `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used,pending_bench_awareness,latest_call_id`;
   const r = await fetch(url, {
     cache: "no-store",
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
@@ -143,13 +143,22 @@ export async function getCall(callId) {
     // absent read must never silently suppress all texture; only an
     // explicit false (this turn's reader judgment) does that.
     textureInvited: rows[0].texture_invited ?? true,
+    // LATEST CALL ID (Aug 12, completing the Aug 10 self-correcting
+    // call_id fix — was written by hydrate.js's writePrefix() this whole
+    // time but never actually persisted: missing from setCall()'s own
+    // destructured params below, AND missing from this function's SELECT
+    // clause above, so control.js's `?slug=` lookup always got null no
+    // matter what the caller did right. Only meaningful on the
+    // "slug:<slug>" row (stamped there by hydrate.js); null everywhere
+    // else, which is correct — nothing else should set or read it.
+    latestCallId: rows[0].latest_call_id ?? null,
   };
 }
 // WRITE (upsert) — used at pre-snap to freeze the prefix, and later by the
 // posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed, pendingBenchAwareness }
+  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed, pendingBenchAwareness, latestCallId }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -216,6 +225,12 @@ export async function setCall(
   // it's consumed (one-shot, same pattern as the expertise-dial transition
   // note — never re-injects after the first read).
   if (pendingBenchAwareness !== undefined) row.pending_bench_awareness = pendingBenchAwareness;
+  // LATEST CALL ID (Aug 12 fix — see getCall()'s own comment on this same
+  // field for the full story). Only ever passed by hydrate.js's
+  // writePrefix() on the "slug:<slug>" row. "only write when provided"
+  // pattern like everything else here — undefined leaves any existing
+  // value alone, explicit null clears it.
+  if (latestCallId !== undefined) row.latest_call_id = latestCallId;
   if (callerRedirected !== undefined) row.caller_redirected = callerRedirected;
   // CALLER-CRUDE: raw classification + the two running counts. Same "only
   // write when provided" pattern as every other field here.
