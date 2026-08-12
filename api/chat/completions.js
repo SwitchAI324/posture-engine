@@ -1331,6 +1331,13 @@ function effectiveBar(turn) {
 }
 
 export default async function handler(req) {
+  // LATENCY INSTRUMENTATION (Aug 12) — durationMs from Vercel's own logs is
+  // a black box: it can't tell prep time (DB reads + bit scoring before we
+  // ever call Anthropic) from model time-to-first-token from full-stream
+  // completion. t0 here is the anchor for all three; see the "LATENCY"
+  // console.log lines below (pre-fetch prep, TTFT, total) for the actual
+  // breakdown, each real call now prints.
+  const t0 = Date.now();
   // Browser health check — hit the URL to confirm the deploy is live.
   if (req.method === "GET") {
     return json({ ok: true, service: "posture-engine", phase: 1 });
@@ -1984,6 +1991,13 @@ export default async function handler(req) {
   // transform) because it must wrap the SAME fetch call it may need to cut
   // off — passing an already-fetched Response's body reader in isn't enough
   // to abort the underlying connection.
+  // LATENCY INSTRUMENTATION (Aug 12) — genStart anchors TTFT/total below.
+  // This log is EVERYTHING between request-in and hitting Anthropic: DB
+  // reads (getCall/readAmmunition/getControls/resolveTargetId), bit
+  // scoring, prompt/system-block assembly. If this number is the big one,
+  // the fix is in OUR code, not the model or the network.
+  const genStart = Date.now();
+  console.log("LATENCY prep=" + (genStart - t0) + "ms");
   const firstTokenController = new AbortController();
   const upstream = await fetch(ANTHROPIC_URL, {
     method: "POST",
@@ -2007,6 +2021,12 @@ export default async function handler(req) {
     id: "chatcmpl-" + crypto.randomUUID(),
     created: Math.floor(Date.now() / 1000),
     model: MODEL(),
+    // LATENCY INSTRUMENTATION (Aug 12) — carried into anthropicToOpenAISSE
+    // so it can log real TTFT/total against the SAME clock this request
+    // started on. Undefined on the synthetic takeover/synthetic paths
+    // (genStart/t0 not in scope there) — the logging below guards for that.
+    t0,
+    genStart,
     callId,
     turn: countUserTurns(messages),
     hostName: hostNameFromBody(body), // per-call host name for the utterance trace
@@ -4198,6 +4218,16 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
       // tagged content delta, THEN finish. Guarantees the [[NAME]] marker
       // reaches the agent/TTS regardless of what the model wrote.
       const finishUp = async () => {
+        // LATENCY INSTRUMENTATION (Aug 12) — total elapsed from request-in
+        // to stream-complete, i.e. the number closest to what actually
+        // gates the agent's speech-handle auth window (see bench-takeover
+        // item 1: 33% of handles timed out at 20s). Compare against the
+        // prep= and ttft= lines above for the SAME requestId to see which
+        // segment (our code / model start / full generation) is the real
+        // cost. Guarded — meta.t0 absent on synthetic streams.
+        if (meta && meta.t0) {
+          console.log("LATENCY total=" + (Date.now() - meta.t0) + "ms");
+        }
         // DIAGNOSTIC: log what PE is actually sending back to the agent to be
         // spoken. On a silence-nudge turn this reveals whether PE produced real
         // speakable words (=> problem is the agent not speaking them) or
@@ -4468,6 +4498,14 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
                 // First emitted chunk: also strip a leading wrapping quote.
                 if (!firstDeltaSeen && emit) {
                   firstDeltaSeen = true;
+                  // LATENCY INSTRUMENTATION (Aug 12) — real time-to-first-
+                  // token, measured from right before we hit Anthropic
+                  // (meta.genStart), not from Vercel's own black-box
+                  // durationMs. Guarded — genStart is absent on the
+                  // synthetic takeover/follow-up streams.
+                  if (meta && meta.genStart) {
+                    console.log("LATENCY ttft=" + (Date.now() - meta.genStart) + "ms");
+                  }
                   emit = emit.replace(/^\s*["'“”]+\s*/, "");
                 }
                 if (emit) send({ content: emit });
