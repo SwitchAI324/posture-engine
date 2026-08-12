@@ -1418,6 +1418,22 @@ export default async function handler(req) {
       vv.sv_slug ? "vv.sv_slug" : "NONE") +
     " callId=" + JSON.stringify(callId)
   );
+  // LATEST-CALL-ID BACKFILL (Aug 12) — completes the Aug 10
+  // self-correcting call_id fix. hydrate.js's writePrefix() only ever
+  // writes latestCallId on the pre-call "slug:<slug>" row, and only ever
+  // as callId||null — because hydrate.js genuinely never receives the
+  // real call_id (it fires BEFORE the call exists, by design). Nothing
+  // else in the current flow ever calls back to update that row once the
+  // real call_id is known a few seconds later, so control.js's `?slug=`
+  // self-correct lookup was always returning null downstream of that,
+  // no matter how correctly a caller (Mead Hall) used it. completions.js
+  // is the one place that reliably has BOTH slug and the real callId
+  // together, every single turn — so it backfills here instead. Cheap
+  // (one small upsert) and idempotent (same value every turn for a given
+  // call), fire-and-forget via waitUntil so it's never on the hot path.
+  if (slug && callId) {
+    waitUntil(setCall("slug:" + slug, { latestCallId: callId }).catch(() => {}));
+  }
   let stored = null;
   let ammo = { ammunition: [], byHook: {} };
   let controls = { deathBlow: null, armed: [], sentBench: null, forced: null };
