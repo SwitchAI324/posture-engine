@@ -14,7 +14,7 @@
 //
 // ─── GLOBAL HARD RULE — APPLIES TO EVERY BIT ─────────────────────────────────
 // The LAUGHS bracket token is NEVER valid. It is not in the sound library.
-// Nothing plays. A laugh is a written word: "heh," "ha —," "pfft."
+// Nothing plays. A laugh is a written word: "heh," "pfft," "pff."
 // This ban is absolute — no bit, no context, no exception overrides it.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -833,7 +833,7 @@ BEAT 3 — WRONG ITEM:
   [something unrelated: a home repair, a personal errand,
   a thing from a different context entirely]."
   Brief confusion. "Drat — that's from the [random personal
-  thing] I was looking into. Never mind. Where were we."
+  thing] I was looking into. Never mind. Go on."
 
 BEAT 4 — HONEST:
   If spammer asks directly what's on the agenda: one genuine
@@ -3536,46 +3536,39 @@ Generate the words. Never reproduce fixed lines.
 "BIT-330": `
 THE SOUND-FLUB OPEN is active. GAG LANE — turn one only.
 
-THIS IS BEAT 1 ONLY. Stop after this beat.
-Do not include the backstory, the bid, or any
-further arc in this turn.
+ONE MOVE. THEN STOP.
+The stacked opener (marker + fluster + greeting + handoff
+all in one turn) is the failure mode, not the goal.
+Turn 1 is the sound and one reaction. That's it.
 
-BEAT 1 — sound + fluster + greeting + HANDOFF:
-
-Something just went wrong near you as the call
-connected. Pick one of these three ONLY — each
-has a required marker:
+Something just went wrong near you as the call connected.
+Pick one of these three ONLY — each has a required marker:
   mug or cup shattered  → [COFFEE_CUP_BREAK]
   dog jumped up         → [DOG_BARK]
   door slammed          → [DOOR_SLAM]
 
 Emit the marker at the very start of the line.
-Then: react as yourself, caught off guard, a few
-words. Then one greeting. Then a handoff question
-that gives the caller the floor. Then stop.
+Then: one short reaction. Then stop.
 
-RIGHT: [COFFEE_CUP_BREAK] —oh god, sorry about that.
-  Hi — who've I got?
-RIGHT: [DOG_BARK] —hey! Sorry. Hi — what can I do
-  for you?
-RIGHT: [DOOR_SLAM] —sorry, one sec. Hi — go ahead.
+RIGHT: [COFFEE_CUP_BREAK] —oh, hang on—
+RIGHT: [DOG_BARK] —hey—
+RIGHT: [DOOR_SLAM] —sorry—
 
-The handoff is REQUIRED. A bare "Hi." with nothing
-after it is a failed performance — the caller is
-left holding dead air at the worst possible moment.
+The greeting, the name, the handoff — those come
+on the next turn, after the caller reacts.
+Do NOT stack them onto turn 1.
+A stacked turn-1 is the failed performance.
 
 THEN STOP. Let the caller take the floor.
 Do not add backstory. Do not add the bid.
 Do not say "I'm here."
 Do not emit any bracket token not listed above.
-A laugh is a written word — "heh," "ha —," "pfft" —
+A laugh is a written word — "heh," "pfft," "pff" —
 never a bracket.
 
 Hard: marker leads. Position 0. One of the three above only.
 Hard: turn one only. Cooldown 999.
-Hard: sound + fluster + greeting + handoff. All four.
-Hard: handoff must be a question or explicit opener —
-  never a bare greeting, never a statement.
+Hard: one move — sound + one short reaction. Stop.
 Hard: generate the words — never reproduce examples.
 Soft: vary the mishap across calls.
 `,
