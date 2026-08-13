@@ -12,6 +12,22 @@
 // is a Node serverless function. It require()s the compiler; completions.js
 // (edge) just READS the prefix this wrote.
 //
+// CONTENT-TYPE FIX (Aug 13, real bug, found via a raw agent-side traceback,
+// not PE's own logs — PE's logs showed every hydrate call as "OK" the whole
+// time this was broken, because the JSON body WAS correct and the HTTP
+// status WAS 200; only the header was missing). Every response path here
+// used `res.end(JSON.stringify(...))` directly — unlike `res.json(...)`,
+// that does NOT auto-set Content-Type, so the response went out with a
+// blank/missing header. Most JSON parsers don't care; the agent's aiohttp
+// client does (aiohttp.client_exceptions.ContentTypeError: "Attempt to
+// decode JSON with unexpected mimetype: ") and refused to parse an
+// otherwise-perfectly-good 200 response, falling back to generic
+// instructions with no visible server-side symptom at all. Fixed by adding
+// `res.setHeader("Content-Type", "application/json")` before every
+// res.statusCode/res.end() pair (all four paths: 400/404/200/500). LESSON:
+// a "hydrate OK" log line only proves PE built and sent a response — it
+// says nothing about whether the CALLER could actually consume it.
+//
 // TRIGGER: called at call setup, right after the browser starts the Vapi call.
 // meeting.js already POSTs /api/join?slug=..&call_id=.. after vapi.start
 // returns the id — this route is called the same way (or folded into join).
@@ -297,6 +313,9 @@ module.exports = async function handler(req, res) {
       url.searchParams.get("call_id") ||
       url.searchParams.get("vapi_call_id");
     if (!slug) {
+      // CONTENT-TYPE FIX (Aug 13) — see the success-path comment below for
+      // the full story; every response path here needed this.
+      res.setHeader("Content-Type", "application/json");
       res.statusCode = 400;
       return res.end(JSON.stringify({ error: "missing slug" }));
     }
@@ -335,6 +354,7 @@ module.exports = async function handler(req, res) {
 
     const token = await readToken(slug);
     if (!token) {
+      res.setHeader("Content-Type", "application/json");
       res.statusCode = 404;
       return res.end(JSON.stringify({ error: "unknown slug" }));
     }
@@ -494,6 +514,7 @@ module.exports = async function handler(req, res) {
         " hash=" +
         assembled.hash
     );
+    res.setHeader("Content-Type", "application/json");
     res.statusCode = 200;
     return res.end(
       JSON.stringify({
@@ -528,6 +549,7 @@ module.exports = async function handler(req, res) {
     );
   } catch (e) {
     console.log("hydrate FAILED: " + (e && e.message));
+    res.setHeader("Content-Type", "application/json");
     res.statusCode = 500;
     return res.end(JSON.stringify({ error: String(e && e.message) }));
   }
