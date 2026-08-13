@@ -1,16 +1,8 @@
 #!/usr/bin/env node
 /**
  * SpamViking — Bits Validator
- * 
  * Lints _bits_registry.js and _bits_directives.js before deploy.
- * Run this before every upload to catch structural bugs that would
- * break Vercel's build.
- * 
- * Usage:
- *   node validate_bits.js
- * 
- * Exit code 0 = clean. Exit code 1 = errors found (do not deploy).
- * Warnings are printed but do not block deploy.
+ * Exit 0 = clean. Exit 1 = errors found.
  */
 
 const fs = require('fs');
@@ -39,32 +31,27 @@ if (!arrMatch) {
 
   if (bits) {
     const seenIds = new Set();
-    let gearCount = 0;
-    let missingFields = 0;
 
     for (const b of bits) {
-      // Duplicate IDs
       if (seenIds.has(b.id)) fail(`Duplicate id: ${b.id}`);
       seenIds.add(b.id);
 
-      // Required fields
       for (const f of ['id','name','status','cooldown']) {
-        if (b[f] === undefined) { fail(`${b.id}: missing "${f}"`); missingFields++; }
+        if (b[f] === undefined) fail(`${b.id}: missing "${f}"`);
       }
 
-      // Status values
       if (!['active','parked','retired'].includes(b.status)) {
         fail(`${b.id}: invalid status "${b.status}"`);
       }
 
-      // Stale/dead fields — confirmed non-functional per PE Aug 5
+      // Dead fields
       const dead = ['gear','pressure','engagement','suspicion','accusations',
                     'tones','latest_turn','earliest_turn'];
       for (const f of dead) {
         if (b[f] !== undefined) fail(`${b.id}: dead field "${f}" — strip it`);
       }
 
-      // Brace bug detection: check that rung_spacing doesn't contain pool/phase_pref etc
+      // rung_spacing brace bug detection
       if (b.rung_spacing) {
         const illegal = ['pool','phase_pref','trigger','lane','stall_type','ceiling'];
         for (const f of illegal) {
@@ -78,8 +65,8 @@ if (!arrMatch) {
     const active = bits.filter(b=>b.status==='active').length;
     const parked = bits.filter(b=>b.status==='parked').length;
     ok(`Status breakdown: ${active} active, ${parked} parked`);
-    if (gearCount === 0) ok('No stale gear fields');
-    if (missingFields === 0) ok('All required fields present');
+    ok('No stale gear fields');
+    ok('All required fields present');
   }
 }
 
@@ -87,13 +74,11 @@ if (!arrMatch) {
 
 const dirSrc = fs.readFileSync('_bits_directives.js', 'utf8');
 
-// Check export default exists
 if (!dirSrc.includes('export default {')) {
   fail('_bits_directives.js: missing "export default {"');
 }
 
-// Check for missing commas between entries (the reported bug)
-// Pattern: backtick end of entry, blank line, then next key without comma
+// Missing commas between entries
 const missingCommas = [];
 const commaRe = /`\s*\n\n"BIT-/g;
 let cm;
@@ -102,42 +87,52 @@ while ((cm = commaRe.exec(dirSrc)) !== null) {
   missingCommas.push(lineNo);
 }
 if (missingCommas.length) {
-  fail(`_bits_directives.js: ${missingCommas.length} missing commas between entries (lines: ${missingCommas.slice(0,5).join(', ')}${missingCommas.length>5?'...':''})`);
+  fail(`_bits_directives.js: ${missingCommas.length} missing commas between entries`);
 } else {
   ok('Directives: no missing comma errors');
 }
 
-// Count directives
 const keyMatches = [...dirSrc.matchAll(/"(BIT-[0-9]+[a-z]?)"\s*:/g)];
 ok(`Directives: ${keyMatches.length} entries found`);
 
-// Check for banned phrases in directive text
-// Skip lines that are prohibition text (hard rules telling host NOT to say something)
+// Split into lines for per-line checks
+const dirLines = dirSrc.split('\n');
+
+// Lines that are prohibition text — skip for content checks
+const PROHIBITION_RE = /hard:|never\s|do not|banned|not.*say|avoid|no[t]?\s["']|prohibited|do not emit|not a real marker|^\/\//i;
+
+// ─── [LAUGHS] — HARD FAIL ─────────────────────────────────────────────────────
+// [LAUGHS] is not a real sound marker. Nothing plays. Zero tolerance.
+const laughsRe = /\[LAUGHS\]/i;
+const laughsHits = [];
+for (let i = 0; i < dirLines.length; i++) {
+  const line = dirLines[i];
+  if (PROHIBITION_RE.test(line)) continue;
+  if (laughsRe.test(line)) {
+    laughsHits.push(`Line ${i+1}: ${line.trim().slice(0,70)}`);
+  }
+}
+if (laughsHits.length) {
+  laughsHits.forEach(h => fail(`[LAUGHS] token — not a real marker, nothing plays: ${h}`));
+} else {
+  ok('No [LAUGHS] tokens in directives');
+}
+
+// ─── Banned phrases — WARNING ─────────────────────────────────────────────────
 const BANNED = [
-  // B - model voice
   'happy to help', 'glad to help', 'great question', 'good question',
   "that's a great point", 'I understand your concern', 'I appreciate that',
   'how can I help you today', 'is there anything else', 'let me assist',
-  // B - office status jargon
   'heads down', 'heads-down', 'circle back', 'touch base',
-  // C - dead air
-  "that makes sense", "I'm here",
-  // D - reset tics
+  "that makes sense", "I'm here", "phew", "\"ha\"",
   'anyway,', 'anyways', 'where were we', 'okay, so',
-  // E - call ending
   "I'll let you go", 'that about covers it', 'thanks for your time',
   "I should let you get back", 'have a good one',
-  // F - false familiarity
   'great to reconnect', 'good to hear your voice again',
-  // G - stage directions
-  '*laughs*', '*pauses*', '*sighs*', '[LAUGHS]',
+  '*laughs*', '*pauses*', '*sighs*',
 ];
 
-// Lines that are prohibition text — skip them
-const PROHIBITION_RE = /hard:|never\s|do not|banned|not.*say|avoid|no[t]?\s["']|prohibited/i;
-
 const bannedHits = [];
-const dirLines = dirSrc.split('\n');
 for (let i = 0; i < dirLines.length; i++) {
   const line = dirLines[i];
   if (PROHIBITION_RE.test(line)) continue;
