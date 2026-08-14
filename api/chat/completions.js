@@ -757,7 +757,7 @@ const FIRST_TOKEN_FALLBACKS = [
 // live call. Fast non-streaming Haiku call (short cap). Returns the spoken line
 // or null (caller falls back to a canned line). Fired in PARALLEL with the host
 // reply so it adds ~no latency — it's awaited only at stream close.
-async function generateBenchLine(bench, messages, priorMemory, callLog) {
+async function generateBenchLine(bench, messages, priorMemory, callLog, presenceState) {
   try {
     // Same bench-line strip as the host's fix — a PRIOR bench character's
     // line, unfiltered, would get mislabeled "Host: ..." below (the map
@@ -852,15 +852,45 @@ async function generateBenchLine(bench, messages, priorMemory, callLog) {
     // payload (the agent's resume mechanism is automatic the instant
     // session.say() finishes — this doesn't touch that, just makes what
     // gets said in that one call substantially bigger).
+    // PRESENCE STATE (Aug 14, Voice's join/continue/drop proposal) —
+    // varies ONLY the opening framing sentence and the length/shape
+    // guidance; everything else (voice/manner, relationship, memory,
+    // others-note) stays identical across all three states, since it's
+    // the same character regardless of why they're speaking this turn.
+    // "join" is byte-identical to the original pre-presence text (no
+    // behavior change for the existing single-appearance case). Default
+    // to "join" when presenceState is omitted — keeps every OTHER
+    // caller of this function (there are none yet outside the one
+    // takeover branch, but this is the safe default regardless).
+    const openingByState = {
+      join:
+        "You have just barged into this live call, cutting the host off, and you're taking over the " +
+        "floor for a real moment — not a quick interjection. Deliver an " +
+        "actual bit: several distinct beats building on each other (not one " +
+        "flat reaction), fully in character, landing something with real " +
+        "shape — a build, a turn, a punch. Aim for roughly 3-5 sentences, " +
+        "~60-120 words.",
+      continue:
+        "You're STILL on this call — you never left, this is not a re-arrival. " +
+        "It's your moment to speak again; pick up naturally, in the middle of " +
+        "things, no re-introduction, no re-explaining who you are or why " +
+        "you're here. React to what's actually happened since you last spoke. " +
+        "Aim for roughly 2-4 sentences, ~40-90 words — a real beat, but you " +
+        "don't need the full weight of a fresh arrival.",
+      drop:
+        "This is your EXIT — you're leaving the call now. Deliver a short, " +
+        "genuinely in-character sign-off: the way THIS character specifically " +
+        "would leave a call, not a generic goodbye (think about their own " +
+        "voice, manner, and relationship to the host — a sign-off should be " +
+        "recognizably THEM, not interchangeable with anyone else's exit). " +
+        "1-2 sentences, ~15-35 words. Do not start a new beat or bit — you " +
+        "are on your way out.",
+    };
+    const opening = openingByState[presenceState] || openingByState.join;
     const sys =
       "You are " + name + ", " + bench.note + "." + voiceNote + connectionNote + memoryNote + othersNote +
-      " You have just barged into " +
-      "this live call, cutting the host off, and you're taking over the " +
-      "floor for a real moment — not a quick interjection. Deliver an " +
-      "actual bit: several distinct beats building on each other (not one " +
-      "flat reaction), fully in character, landing something with real " +
-      "shape — a build, a turn, a punch. Aim for roughly 3-5 sentences, " +
-      "~60-120 words. Output ONLY the spoken words — no name label, no " +
+      " " + opening + " " +
+      "Output ONLY the spoken words — no name label, no " +
       "quotes, no stage directions.";
     const r = await fetch(ANTHROPIC_URL, {
       method: "POST",
@@ -2146,19 +2176,39 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
     // (null) is a real, deliberate no-op: better to silently skip a
     // takeover than emit an empty/broken one — logged either way so it's
     // visible, not silently absorbed.
-    if (controls.sentBench.mode === "takeover") {
+    if (controls.sentBench.mode === "takeover" || controls.sentBench.mode === "drop") {
       const benchData = benchEntry(wantId);
       if (benchData) {
+        // PRESENCE STATE (Aug 14, Voice's join/continue/drop proposal) —
+        // PE decides this, not the agent and not the model (Voice's own
+        // stated principle: don't infer an exit from line content). A
+        // "drop" send is always presenceState "drop" — Director-
+        // triggered, explicit. A "takeover" send is "continue" if this
+        // character is already marked present on stored.benchPresent,
+        // else "join" (first appearance, or re-appearing after a prior
+        // drop — benchPresent has no key or is explicitly "dropped").
+        // GUARD: dropping a character who was never present (or already
+        // dropped) is a no-op, not an error — same "make sure X is true"
+        // idempotency pattern used elsewhere in this file (unarm,
+        // cancel), not "there must have been a prior join."
+        const currentlyPresent = (stored && stored.benchPresent && stored.benchPresent[wantId]) === "present";
+        if (controls.sentBench.mode === "drop" && !currentlyPresent) {
+          if (callId) {
+            console.log("bench drop: " + wantId + " not currently present — no-op, control cleared");
+            await clearBench(callId, "fired").catch(() => {});
+          }
+        } else {
+        const presenceState = controls.sentBench.mode === "drop" ? "drop" : (currentlyPresent ? "continue" : "join");
         // PRIOR MEMORY READ (Aug 9, round-robin Step 2) — this
         // character's own line history from earlier in THIS call, if
         // any (persisted on stored.benchMemory, keyed lowercase).
         // Undefined/empty for a character's first appearance.
         const charKey = wantId.toLowerCase();
         const priorMemory = stored && stored.benchMemory ? stored.benchMemory[charKey] : undefined;
-        const line = await generateBenchLine(benchData, messages, priorMemory, stored?.callLog);
+        const line = await generateBenchLine(benchData, messages, priorMemory, stored?.callLog, presenceState);
         if (callId) await clearBench(callId, "fired").catch(() => {});
         if (line) {
-          benchTakeover = { character: charKey, line };
+          benchTakeover = { character: charKey, line, state: presenceState };
           // AWARENESS FOR THE NEXT TURN (Aug 8) — without this the host
           // has zero knowledge a bench character even spoke; the line only
           // ever rides in metadata to the agent, never into the model's
@@ -2173,6 +2223,21 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
           // that distinction matters.
           if (callId) {
             waitUntil(setCall(callId, { pendingBenchAwareness: { ...benchTakeover, followupCount: 0 } }).catch(() => {}));
+          }
+          // BENCH PRESENCE WRITE (Aug 14) — join/continue mark the
+          // character present; drop marks them dropped. Read-fresh-then-
+          // write, same best-effort race caveat as benchMemory/callLog
+          // below (a continuity nicety, not correctness-critical).
+          if (callId) {
+            waitUntil(
+              getCall(callId)
+                .then((fresh) => {
+                  const presence = (fresh && fresh.benchPresent) || {};
+                  const updated = { ...presence, [wantId]: presenceState === "drop" ? "dropped" : "present" };
+                  return setCall(callId, { benchPresent: updated });
+                })
+                .catch(() => {})
+            );
           }
           // MEMORY WRITE (Aug 9, round-robin Step 2) — append this line to
           // the character's own persisted history, surviving the WHOLE
@@ -2212,13 +2277,14 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
           }
           if (callId) {
             makeTrace(callId, benchTurn, waitUntil, stored?.targetId).emit(
-              "bench_joined",
-              { character_id: wantId, name: wantId, source: "director", manifestation: "takeover", joined_at: new Date().toISOString() },
+              presenceState === "drop" ? "bench_dropped" : presenceState === "continue" ? "bench_continued" : "bench_joined",
+              { character_id: wantId, name: wantId, source: "director", manifestation: "takeover", state: presenceState, at: new Date().toISOString() },
               "bench"
             );
           }
         } else if (callId) {
-          console.log("bench takeover: line generation failed for " + wantId + " — skipping this turn, control cleared");
+          console.log("bench " + controls.sentBench.mode + ": line generation failed for " + wantId + " — skipping this turn, control cleared");
+        }
         }
       } else if (callId) {
         console.log("bench takeover: unknown bench id " + wantId + " — control cleared, nothing fired");
