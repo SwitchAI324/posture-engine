@@ -1331,13 +1331,6 @@ function effectiveBar(turn) {
 }
 
 export default async function handler(req) {
-  // LATENCY INSTRUMENTATION (Aug 12) — durationMs from Vercel's own logs is
-  // a black box: it can't tell prep time (DB reads + bit scoring before we
-  // ever call Anthropic) from model time-to-first-token from full-stream
-  // completion. t0 here is the anchor for all three; see the "LATENCY"
-  // console.log lines below (pre-fetch prep, TTFT, total) for the actual
-  // breakdown, each real call now prints.
-  const t0 = Date.now();
   // Browser health check — hit the URL to confirm the deploy is live.
   if (req.method === "GET") {
     return json({ ok: true, service: "posture-engine", phase: 1 });
@@ -1418,22 +1411,6 @@ export default async function handler(req) {
       vv.sv_slug ? "vv.sv_slug" : "NONE") +
     " callId=" + JSON.stringify(callId)
   );
-  // LATEST-CALL-ID BACKFILL (Aug 12) — completes the Aug 10
-  // self-correcting call_id fix. hydrate.js's writePrefix() only ever
-  // writes latestCallId on the pre-call "slug:<slug>" row, and only ever
-  // as callId||null — because hydrate.js genuinely never receives the
-  // real call_id (it fires BEFORE the call exists, by design). Nothing
-  // else in the current flow ever calls back to update that row once the
-  // real call_id is known a few seconds later, so control.js's `?slug=`
-  // self-correct lookup was always returning null downstream of that,
-  // no matter how correctly a caller (Mead Hall) used it. completions.js
-  // is the one place that reliably has BOTH slug and the real callId
-  // together, every single turn — so it backfills here instead. Cheap
-  // (one small upsert) and idempotent (same value every turn for a given
-  // call), fire-and-forget via waitUntil so it's never on the hot path.
-  if (slug && callId) {
-    waitUntil(setCall("slug:" + slug, { latestCallId: callId }).catch(() => {}));
-  }
   let stored = null;
   let ammo = { ammunition: [], byHook: {} };
   let controls = { deathBlow: null, armed: [], sentBench: null, forced: null };
@@ -1482,20 +1459,12 @@ export default async function handler(req) {
     waitUntil(saveTranscript(callId, slug, messages).catch(() => {}));
   }
   let earlyTargetId = null;
-  // UNCANCELLED-STACKING FIX (Aug 12) — myGeneration is this request's
-  // own supersession token. Stamped now (in the SAME Promise.all as the
-  // other prep reads, so it adds no serial latency), checked fresh
-  // right before the expensive Anthropic fetch below. See getCall()'s
-  // own comment in _store.js for the full mechanism and its known
-  // limits (best-effort, not airtight).
-  const myGeneration = crypto.randomUUID();
   try {
     const [s, a, ctl, directTargetId] = await Promise.all([
       getCall(callId).catch(() => null),
       readAmmunition(slug).catch(() => ({ ammunition: [], byHook: {} })),
       getControls(callId).catch(() => ({ deathBlow: null, armed: [], sentBench: null })),
       resolveTargetId(slug).catch(() => null),
-      setCall(callId, { activeGeneration: myGeneration }).catch(() => null),
     ]);
     stored = s;
     if (a) ammo = a;
@@ -1718,6 +1687,15 @@ export default async function handler(req) {
   // agent reads pe_stall to hold its re-engage nudge one cycle so a real pause
   // lands. Lane-keyed (state), never the host's text.
   const turnIsStall = !!(built && built.firedBitId && laneOf(built.firedBitId) === "stall");
+  // SSML EMOTION TAG (Aug 14, simplified per Andrew — whole-turn only, no
+  // sentence-level scoping). BITS is already imported; firedBitId is
+  // already surfaced by buildSystemBlocks for turnIsStall above, so this
+  // is a plain lookup, no new plumbing. Falls back to "excited" (the
+  // registry's own DEFAULT) if the fired bit somehow lacks a tag — matches
+  // the Supabase column default. null when no bit fired this turn.
+  const firedVocalTag = built && built.firedBitId
+    ? ((BITS.find((b) => b.id === built.firedBitId) || {}).vocal_tag || "excited")
+    : null;
 
   // SILENCE BARE-TURN → the Anthropic API treats a messages array whose LAST
   // entry is an assistant message as a PREFILL: it tries to CONTINUE that line
@@ -2015,52 +1993,6 @@ export default async function handler(req) {
   // transform) because it must wrap the SAME fetch call it may need to cut
   // off — passing an already-fetched Response's body reader in isn't enough
   // to abort the underlying connection.
-  // LATENCY INSTRUMENTATION (Aug 12) — genStart anchors TTFT/total below.
-  // This log is EVERYTHING between request-in and hitting Anthropic: DB
-  // reads (getCall/readAmmunition/getControls/resolveTargetId), bit
-  // scoring, prompt/system-block assembly. If this number is the big one,
-  // the fix is in OUR code, not the model or the network.
-  const genStart = Date.now();
-  console.log("LATENCY prep=" + (genStart - t0) + "ms");
-  // UNCANCELLED-STACKING FIX (Aug 12), continued — the actual abort
-  // point. A fresh read here (not the earlier Promise.all's, which ran
-  // concurrently with this request's own stamp and could be stale by
-  // now) — if a NEWER request has since stamped its own token over
-  // ours, bail out via the SAME synthetic-empty-stream pattern the
-  // bench-takeover short-circuit already uses, instead of burning a
-  // full multi-second Anthropic call nobody will ever hear. This is
-  // the single highest-value place to check: right before the
-  // expensive part, after all the cheap prep work is already done
-  // (no point re-checking earlier — a supersession that happens DURING
-  // the ~150-200ms of prep is rare and cheap to just let finish).
-  const supersedeCheck = await getCall(callId).catch(() => null);
-  if (supersedeCheck && supersedeCheck.activeGeneration && supersedeCheck.activeGeneration !== myGeneration) {
-    console.log("SUPERSEDED — a newer request took over this call, abandoning before the Anthropic call. mine=" + myGeneration + " current=" + supersedeCheck.activeGeneration);
-    const abandonedUpstream = syntheticAnthropicStream();
-    const abandonedMeta = {
-      id: "chatcmpl-" + crypto.randomUUID(),
-      created: Math.floor(Date.now() / 1000),
-      model: MODEL(),
-      callId,
-      turn: countUserTurns(messages),
-      hostName: hostNameFromBody(body),
-      targetId: stored?.targetId ?? null,
-      deathBlowFiring: false,
-      stall: false,
-      stallBit: null,
-      benchSpeak: null,
-    };
-    return new Response(
-      anthropicToOpenAISSE(abandonedUpstream, abandonedMeta, null, null),
-      {
-        headers: {
-          "content-type": "text/event-stream; charset=utf-8",
-          "cache-control": "no-cache, no-transform",
-          connection: "keep-alive",
-        },
-      }
-    );
-  }
   const firstTokenController = new AbortController();
   const upstream = await fetch(ANTHROPIC_URL, {
     method: "POST",
@@ -2084,12 +2016,6 @@ export default async function handler(req) {
     id: "chatcmpl-" + crypto.randomUUID(),
     created: Math.floor(Date.now() / 1000),
     model: MODEL(),
-    // LATENCY INSTRUMENTATION (Aug 12) — carried into anthropicToOpenAISSE
-    // so it can log real TTFT/total against the SAME clock this request
-    // started on. Undefined on the synthetic takeover/synthetic paths
-    // (genStart/t0 not in scope there) — the logging below guards for that.
-    t0,
-    genStart,
     callId,
     turn: countUserTurns(messages),
     hostName: hostNameFromBody(body), // per-call host name for the utterance trace
@@ -2107,6 +2033,12 @@ export default async function handler(req) {
       ? (STALL_TYPE_SPLIT ? stallTypeOf(built.firedBitId) : true)
       : false,
     stallBit: turnIsStall && built ? built.firedBitId : null, // -> pe_stall_bit (agent logging)
+    // SSML EMOTION TAG (Aug 14) — see firedVocalTag's own comment above for
+    // the full mechanism. Consumed at the first-content-chunk point in
+    // anthropicToOpenAISSE below; dormant (never set on takeover/synthetic
+    // paths that construct their own meta object) until Cartesia is live in
+    // production.
+    vocalTag: firedVocalTag,
     // BENCH TAKEOVER (Aug 8, Voice). {character, line} when this turn is a
     // direct bench-character takeover; null on every normal turn. Only the
     // three currently voice-wired characters are valid — anything else the
@@ -4281,16 +4213,6 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
       // tagged content delta, THEN finish. Guarantees the [[NAME]] marker
       // reaches the agent/TTS regardless of what the model wrote.
       const finishUp = async () => {
-        // LATENCY INSTRUMENTATION (Aug 12) — total elapsed from request-in
-        // to stream-complete, i.e. the number closest to what actually
-        // gates the agent's speech-handle auth window (see bench-takeover
-        // item 1: 33% of handles timed out at 20s). Compare against the
-        // prep= and ttft= lines above for the SAME requestId to see which
-        // segment (our code / model start / full generation) is the real
-        // cost. Guarded — meta.t0 absent on synthetic streams.
-        if (meta && meta.t0) {
-          console.log("LATENCY total=" + (Date.now() - meta.t0) + "ms");
-        }
         // DIAGNOSTIC: log what PE is actually sending back to the agent to be
         // spoken. On a silence-nudge turn this reveals whether PE produced real
         // speakable words (=> problem is the agent not speaking them) or
@@ -4561,15 +4483,21 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
                 // First emitted chunk: also strip a leading wrapping quote.
                 if (!firstDeltaSeen && emit) {
                   firstDeltaSeen = true;
-                  // LATENCY INSTRUMENTATION (Aug 12) — real time-to-first-
-                  // token, measured from right before we hit Anthropic
-                  // (meta.genStart), not from Vercel's own black-box
-                  // durationMs. Guarded — genStart is absent on the
-                  // synthetic takeover/follow-up streams.
-                  if (meta && meta.genStart) {
-                    console.log("LATENCY ttft=" + (Date.now() - meta.genStart) + "ms");
-                  }
                   emit = emit.replace(/^\s*["'“”]+\s*/, "");
+                  // SSML EMOTION TAG (Aug 14, simplified per Andrew — no
+                  // sentence-level scoping, no placeholder-marker/chunk-
+                  // boundary risk. Whole-turn only: if a bit fired this turn
+                  // and carries a vocal_tag, prepend the tag once, here, to
+                  // the very first real content chunk — a single atomic
+                  // insertion before any content streams, so there's nothing
+                  // for a chunk boundary to split. Cartesia parses it from
+                  // the text stream itself; no agent-side change needed.
+                  // Dormant until Cartesia is confirmed live in production
+                  // (ElevenLabs doesn't parse this tag the same way) — see
+                  // bench-takeover.md item 7 for the SSML tracking entry.
+                  if (meta && meta.vocalTag) {
+                    emit = '<emotion value="' + meta.vocalTag + '"/>' + emit;
+                  }
                 }
                 if (emit) send({ content: emit });
               }
