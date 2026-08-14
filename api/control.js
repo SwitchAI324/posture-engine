@@ -274,18 +274,22 @@ export default async function handler(req) {
     if (!valid.includes(benchId)) {
       return jsonRes({ error: `unknown bench ${benchId} — valid: ${valid.join(", ")}` }, 404);
     }
-    // MODE (Aug 8) — "weave" (default, existing behavior: the bench line
-    // gets folded into the host's own turn) or "takeover" (new: the bench
-    // character's own voice speaks directly, host silent that turn). This
-    // is the Director-choosing path agreed on for takeover — a human
-    // picks it explicitly per send, same click as today, one new option.
-    // Only the agent's currently voice-wired characters can take over
-    // (anything else has no voice to speak with); weave never had this
-    // restriction and still doesn't.
-    const mode = b.mode === "takeover" ? "takeover" : "weave";
-    if (mode === "takeover" && !TAKEOVER_VOICED.includes(benchId)) {
+    // MODE (Aug 8, extended Aug 14 for bench presence) — "weave" (default:
+    // bench line folded into the host's own turn), "takeover" (bench
+    // character's own voice speaks directly, host silent that turn), or
+    // "drop" (Aug 14, Voice's presence proposal — this character is
+    // leaving the call; PE generates their own personality-flavored
+    // sign-off rather than inferring an exit from line content, per
+    // Voice's explicit ask not to pattern-match "have to hop" style
+    // phrasing agent-side OR PE-side). Director picks explicitly per
+    // send, same click as today. Drop needs the SAME voice restriction as
+    // takeover — a sign-off is still spoken in the character's own voice,
+    // so a character with no voice wired can't deliver one any more than
+    // they could take over.
+    const mode = b.mode === "takeover" ? "takeover" : b.mode === "drop" ? "drop" : "weave";
+    if ((mode === "takeover" || mode === "drop") && !TAKEOVER_VOICED.includes(benchId)) {
       return jsonRes(
-        { error: `${benchId} has no voice wired for takeover yet — valid: ${TAKEOVER_VOICED.join(", ")}` },
+        { error: `${benchId} has no voice wired for ${mode} yet — valid: ${TAKEOVER_VOICED.join(", ")}` },
         409
       );
     }
