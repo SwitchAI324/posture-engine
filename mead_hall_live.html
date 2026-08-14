@@ -924,7 +924,15 @@
     const contd=!!(prev && prev.classList && prev.classList.contains('tl') && prev.classList.contains(side) && prev.getAttribute('data-who')===name);
     const l=document.createElement('div'); l.className='tl '+side+(contd?' contd':''); l.setAttribute('data-who',name);
     l.innerHTML='<b>'+name+':</b> '+txt; log.appendChild(l); log.scrollTop=log.scrollHeight; }
-  function showJarl(txt){ const e=$('#capJarl'); e.textContent='\u201C'+txt+'\u201D'; e.classList.add('show'); setSpeak('host'); }
+  // TILE CAPTIONS ("the screens"). OFF by request: we don't want the transcript feed running
+  // through the tiles while testing. LEFT FULLY WIRED for later — when real call audio comes
+  // over from LiveKit, flip CAPTIONS_ON=true (or have the audio layer call showCap directly) and
+  // the same tiles light up. Every caption write below routes through showCap, so the source is
+  // decoupled: today nothing drives them; tomorrow LiveKit audio does. Not active yet.
+  const CAPTIONS_ON = false;
+  function showCap(id, txt){ if(!CAPTIONS_ON) return; const e=$('#'+id); if(!e) return;
+    e.textContent='\u201C'+txt+'\u201D'; e.classList.add('show'); }
+  function showJarl(txt){ showCap('capJarl', txt); setSpeak('host'); }
 
   tline('d', convo[0].content); tline('j', convo[1].content); showJarl(convo[1].content);
 
@@ -1188,7 +1196,7 @@
     try{
       const ctx=transcriptText()+"\n\nYou are "+name+", "+BENCH[name].role+", a colleague who has "+(entrance?"just joined":"been listening to")+" this call. Say your next line now, in character — plain text only, 1-2 sentences.";
       const line=(await callClaude(BENCH[name].sys, [{role:'user', content:ctx}]))||"\u2026";
-      const cap=$('#cap-'+name); if(cap){ cap.textContent='\u201C'+line+'\u201D'; cap.classList.add('show'); }
+      showCap('cap-'+name, line);
       tline('j', line, name);
       await speak(name, line);
     }catch(e){ callFail('bench ('+name+')', e, false); } finally{ setStatus(''); }
@@ -1230,7 +1238,7 @@
     catch(e){ callFail('spammer call', e); return; }
     if(!line) line="So… are you interested or not?";
     convo.push({role:'user', content:line}); exchanges++;
-    const cap=$('#capDerek'); if(cap){ cap.textContent='\u201C'+line+'\u201D'; cap.classList.add('show'); }
+    showCap('capDerek', line);
     tline('d', line); refreshHud();
     await speak('DEREK', line);
   }
@@ -1779,8 +1787,8 @@
         else if(role==='spammer'){
           const sn=p.speaker_name||'Caller';  // honest neutral label when Scouting has no name — NEVER a placeholder
           const nl=$('#spammerName'); if(nl) nl.textContent=sn;
-          const c=$('#capDerek'); if(c){c.textContent='\u201C'+txt+'\u201D';c.classList.add('show');} setSpeak('spam'); $('#capJarl').classList.remove('show'); tline('d', txt, sn); }
-        else { const nm=p.speaker_name||'Bench'; const tile=liveBenchTile(nm,p.role,p.glyph); speakOur(tile); const c=$('#cap-'+slug(nm)); if(c){c.textContent='\u201C'+txt+'\u201D';c.classList.add('show');} tline('j', txt, nm); }
+          showCap('capDerek', txt); setSpeak('spam'); $('#capJarl').classList.remove('show'); tline('d', txt, sn); }
+        else { const nm=p.speaker_name||'Bench'; const tile=liveBenchTile(nm,p.role,p.glyph); speakOur(tile); showCap('cap-'+slug(nm), txt); tline('j', txt, nm); }
         // speak each utterance at most once — key on event id/seq (falls back to role+text) so a
         // re-dispatched or re-polled event never re-voices a line already spoken this session.
         const spk = ev.id || ev.seq || (role+':'+(p.turn_index!=null?p.turn_index:txt.slice(0,40)));
