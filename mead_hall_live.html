@@ -181,8 +181,8 @@
   .brank{font-family:var(--mono);font-size:8px;font-weight:700;color:var(--gold);margin-right:-3px}
   /* bit about to fire (engine says will_fire) vs actually firing (bit_deployed) */
   .bitrow{border-radius:5px;padding-left:5px !important;padding-right:5px !important;transition:background .2s}
-  .bitrow.pending{animation:bitPending 1s ease-in-out infinite}
-  .bitrow.firing{animation:bitFiring .5s ease-in-out 6}
+  .bitrow.pending .fire-bit{animation:btnPending 1s ease-in-out infinite}
+  .bitrow.firing .fire-bit,.bitrow.firing .cancel-fire{animation:btnFiring .5s ease-in-out 6}
   /* in flight: slow organic double-thump. Alive and working, not an alarm. */
   .bitrow.inflight{background:#fbecec;box-shadow:0 0 0 1px var(--blood) inset;border-radius:5px;
     animation:heartbeat 2.4s ease-in-out infinite}
@@ -199,9 +199,9 @@
   #armPanel .chip.cancel-fire{border-color:var(--blood);background:var(--blood);color:#fff;font-weight:700}
   #armPanel .chip.fired-tag{border-color:var(--green);background:var(--green);color:#fff;font-weight:700;opacity:1}
   @media (prefers-reduced-motion:reduce){ .bitrow.inflight{animation:none} }
-  @keyframes bitPending{0%,100%{background:transparent}50%{background:#fdf0d2;box-shadow:0 0 0 1px #e3a93f inset}}
-  @keyframes bitFiring{0%,100%{background:#fdeaea}50%{background:var(--gold2);box-shadow:0 0 0 2px var(--blood) inset}}
-  @media (prefers-reduced-motion:reduce){ .bitrow.pending,.bitrow.firing{animation:none;background:#fdf0d2} }
+  @keyframes btnPending{0%,100%{box-shadow:0 0 0 0 rgba(227,169,63,0)}50%{box-shadow:0 0 0 2px #e3a93f}}
+  @keyframes btnFiring{0%,100%{box-shadow:0 0 0 0 rgba(140,59,43,0)}50%{box-shadow:0 0 0 2px var(--blood)}}
+  @media (prefers-reduced-motion:reduce){ .bitrow.pending .fire-bit,.bitrow.firing .fire-bit,.bitrow.firing .cancel-fire{animation:none} }
   .gearpanel{border:1px solid var(--bone2);border-radius:7px;padding:9px 10px;margin:0 0 10px;background:#faf8f3}
   .gptop{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px}
   .gplab{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate)}
@@ -1343,6 +1343,13 @@
   const directorUserId = qp.get('director') || 'director';
   const slug = s => String(s||'').replace(/[^a-z0-9]+/gi,'-').toLowerCase();
 
+  // FOLLOW-LIVE: when we're watching by target_id (no explicit call_id pinned in the URL), the
+  // newest event's call_id IS the current call. We track it live instead of capturing once —
+  // capturing once froze callId to a PRIOR call's id on a target that still carries old events,
+  // and every control then wrote to the dead call (200 OK, invisible fail). With a real call_id
+  // pinned in the URL, we respect it and don't follow.
+  const followLive = (!callId && !!targetId);
+
   // STALE-CALL_ID GUARD (PE, Aug 10): callId is captured once (URL or first event). When we open
   // by target_id on a target that carries events from a PRIOR call, we can capture an OLD call_id
   // and every control action then writes to the dead call — control.js returns 200 either way, so
@@ -1730,7 +1737,10 @@
 
   /* ---- THE DISPATCHER: one engagement_events row -> the render ---- */
   function applyEvent(ev){ const p=ev.payload||{};
-    if(!callId && ev.call_id){ callId=ev.call_id; }   // capture real call_id once the call lands (target_id-opened calls)
+    if(ev.call_id){
+      if(followLive){ if(callId!==ev.call_id){ if(callId) console.info('[MeadHall] call_id follows live \u2192', ev.call_id); callId=ev.call_id; } }
+      else if(!callId){ callId=ev.call_id; }   // call_id-pinned mode: capture once
+    }
     switch(ev.event_type){
       case 'call_started': {
         const firstStart = !callHasStarted;   // the proxy can emit call_started per turn — only the
@@ -1872,19 +1882,20 @@
   async function sendBenchControl(benchId, mode){
     mode = mode || 'takeover';
     await refreshCallId();
-    if(!callId){ toast('Bench controls work during a live or sim call.'); return; }
     const bid=String(benchId||'').toLowerCase();   // PE keys on lowercase slugs
+    if(!callId){ toast('\u26A0 No live call detected \u2014 '+bid.toUpperCase()+' was NOT sent. Wait for the call to connect, or open with ?slug=<meeting>.'); console.warn('[MeadHall] bench '+mode+' aborted \u2014 no callId'); return; }
     const body={ call_id:callId, bench_id:bid, director_user_id:directorUserId,
       idempotency_key:callId+':bench:'+mode+':'+bid+':'+Date.now(), mode:mode };
+    console.info('[MeadHall] bench '+mode+' \u2192 call_id='+callId+' bench_id='+bid);
     try{ const r=await fetch(CONTROL_ENDPOINT+'?action=bench',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       if(r.status===409){ const j=await r.json().catch(()=>({})); const v=j.valid||j.valid_characters;
         toast('\u201C'+bid+'\u201D has no voice wired'+(v?' \u2014 try '+(Array.isArray(v)?v.join(', '):v):'')); return; }
-      if(r.status===404||r.status===405){ toast('Bench '+(mode==='drop'?'drop':'takeover')+' isn\u2019t wired yet \u2014 deploy control.js'); return; }
+      if(r.status===404||r.status===405){ toast('\u26A0 Bench '+(mode==='drop'?'drop':'takeover')+' isn\u2019t wired yet \u2014 deploy control.js'); return; }
       if(!r.ok){ const t=await r.text().catch(()=> ''); throw new Error('HTTP '+r.status+(t?' \u2014 '+t.slice(0,120):'')); }
       const j=await r.json().catch(()=>({}));
-      if(mode==='drop'){ toast((j.sent_bench||bid)+' \u2014 signing off, then gone.');
+      if(mode==='drop'){ toast('\u2713 '+(j.sent_bench||bid)+' \u2014 signing off, then gone.');
         if(window.__mh_setBenchState) window.__mh_setBenchState(bid, null); }
-      else { toast('Sent in '+(j.sent_bench||bid)+' \u2014 takes over on the next host turn.');
+      else { toast('\u2713 Sent '+(j.sent_bench||bid)+' \u2192 takes over on the next host turn.');
         if(window.__mh_setBenchState) window.__mh_setBenchState(bid, 'standby'); } }
     catch(e){ toast('\u26A0 Bench '+(mode==='drop'?'drop':'send-in')+' failed: '+(e.message||e)); } }
   window.__mh_sendBench = function(id){ return sendBenchControl(id,'takeover'); };
