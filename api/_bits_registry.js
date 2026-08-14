@@ -19,7 +19,8 @@ export const BITS = [
       "rung_3_earliest_turn": 6
     },
     "family": "verbal",
-    "absurdity": 2
+    "absurdity": 2,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-102",
@@ -33,7 +34,8 @@ export const BITS = [
     },
     "pool": "middle",
     "family": "verbal",
-    "absurdity": 2
+    "absurdity": 2,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-103",
@@ -44,7 +46,8 @@ export const BITS = [
     "cooldown": 4,
     "pool": "middle",
     "family": "video",
-    "absurdity": 3
+    "absurdity": 3,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-104",
@@ -56,7 +59,8 @@ export const BITS = [
     "cooldown": 2,
     "pool": "middle",
     "family": "verbal",
-    "absurdity": 3
+    "absurdity": 3,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-105",
@@ -68,7 +72,8 @@ export const BITS = [
     "cooldown": 3,
     "pool": "middle",
     "family": "verbal",
-    "absurdity": 2
+    "absurdity": 2,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-106",
@@ -88,7 +93,8 @@ export const BITS = [
     "cooldown": 4,
     "pool": "middle",
     "family": "verbal",
-    "absurdity": 2
+    "absurdity": 2,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-108",
@@ -98,7 +104,8 @@ export const BITS = [
     "cooldown": 3,
     "pool": "middle",
     "family": "verbal",
-    "absurdity": 4
+    "absurdity": 4,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-109",
@@ -118,7 +125,8 @@ export const BITS = [
     "cooldown": 4,
     "pool": "middle",
     "family": "verbal",
-    "absurdity": 2
+    "absurdity": 2,
+    "vocal_tag": "surprised"
   },
   {
     "id": "BIT-111",
@@ -153,7 +161,8 @@ export const BITS = [
     "trigger": "extended_stall",
     "family": "verbal",
     "absurdity": 1,
-    "max_fires_per_call": 3
+    "max_fires_per_call": 3,
+    "vocal_tag": "surprised"
   },
   {
     "id": "BIT-113",
@@ -163,7 +172,8 @@ export const BITS = [
     "cooldown": 5,
     "pool": "middle",
     "family": "verbal",
-    "absurdity": 2
+    "absurdity": 2,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-114",
@@ -173,7 +183,8 @@ export const BITS = [
     "cooldown": 5,
     "pool": "middle",
     "family": "verbal",
-    "absurdity": 2
+    "absurdity": 2,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-115",
@@ -210,7 +221,8 @@ export const BITS = [
     },
     "pool": "middle",
     "family": "verbal",
-    "absurdity": 3
+    "absurdity": 3,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-118",
@@ -224,7 +236,8 @@ export const BITS = [
     "phase_pref": "pitching",
     "trigger": "caller_made_claim",
     "family": "verbal",
-    "absurdity": 2
+    "absurdity": 2,
+    "vocal_tag": "surprised"
   },
   {
     "id": "BIT-119",
@@ -238,7 +251,8 @@ export const BITS = [
     "trigger": "caller_pitched",
     "pool": "middle",
     "family": "verbal",
-    "absurdity": 4
+    "absurdity": 4,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-120",
@@ -250,7 +264,8 @@ export const BITS = [
     "cooldown": 5,
     "pool": "middle",
     "family": "verbal",
-    "absurdity": 3
+    "absurdity": 3,
+    "vocal_tag": "sad"
   },
   {
     "id": "BIT-121",
@@ -291,7 +306,8 @@ export const BITS = [
     "cooldown": 5,
     "pool": "middle",
     "family": "verbal",
-    "absurdity": 3
+    "absurdity": 3,
+    "vocal_tag": "mysterious"
   },
   {
     "id": "BIT-125",
@@ -313,7 +329,8 @@ export const BITS = [
     "cooldown": 4,
     "pool": "middle",
     "family": "verbal",
-    "absurdity": 3
+    "absurdity": 3,
+    "vocal_tag": "neutral"
   },
   {
     "id": "BIT-127",
@@ -375,7 +392,8 @@ export const BITS = [
     "cooldown": 4,
     "trigger": "phase:opening",
     "family": "structural",
-    "absurdity": 3
+    "absurdity": 3,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-132",
@@ -386,7 +404,8 @@ export const BITS = [
     "max_fires_per_call": 1,
     "family": "structural",
     "absurdity": 3,
-    "pool": "middle"
+    "pool": "middle",
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-133",
@@ -398,7 +417,8 @@ export const BITS = [
     "cooldown": 3,
     "trigger": "phase:opening",
     "family": "structural",
-    "absurdity": 4
+    "absurdity": 4,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-134",
@@ -408,7 +428,8 @@ export const BITS = [
     "cooldown": 5,
     "family": "structural",
     "absurdity": 1,
-    "pool": "middle"
+    "pool": "middle",
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-135",
@@ -418,7 +439,8 @@ export const BITS = [
     "cooldown": 5,
     "trigger": "phase:opening",
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "content"
   },
   {
     "id": "BIT-136",
@@ -465,7 +487,8 @@ export const BITS = [
     "cooldown": 5,
     "pool": "middle",
     "family": "personal",
-    "absurdity": 2
+    "absurdity": 2,
+    "vocal_tag": "content"
   },
   {
     "id": "BIT-140",
@@ -475,7 +498,8 @@ export const BITS = [
     "cooldown": 5,
     "pool": "middle",
     "family": "personal",
-    "absurdity": 2
+    "absurdity": 2,
+    "vocal_tag": "sad"
   },
   {
     "id": "BIT-141",
@@ -485,7 +509,8 @@ export const BITS = [
     "cooldown": 5,
     "pool": "middle",
     "family": "personal",
-    "absurdity": 2
+    "absurdity": 2,
+    "vocal_tag": "sad"
   },
   {
     "id": "BIT-142",
@@ -495,7 +520,8 @@ export const BITS = [
     "cooldown": 5,
     "pool": "middle",
     "family": "personal",
-    "absurdity": 2
+    "absurdity": 2,
+    "vocal_tag": "sad"
   },
   {
     "id": "BIT-143",
@@ -516,7 +542,8 @@ export const BITS = [
     "cooldown": 5,
     "pool": "middle",
     "family": "personal",
-    "absurdity": 2
+    "absurdity": 2,
+    "vocal_tag": "content"
   },
   {
     "id": "BIT-145",
@@ -527,7 +554,8 @@ export const BITS = [
     "pool": "middle",
     "family": "verbal",
     "absurdity": 3,
-    "max_fires_per_call": 3
+    "max_fires_per_call": 3,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-146",
@@ -544,7 +572,8 @@ export const BITS = [
     },
     "pool": "middle",
     "family": "personal",
-    "absurdity": 3
+    "absurdity": 3,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-147",
@@ -561,7 +590,8 @@ export const BITS = [
     },
     "pool": "middle",
     "family": "personal",
-    "absurdity": 2
+    "absurdity": 2,
+    "vocal_tag": "sad"
   },
   {
     "id": "BIT-148",
@@ -579,7 +609,8 @@ export const BITS = [
     },
     "pool": "middle",
     "family": "verbal",
-    "absurdity": 2
+    "absurdity": 2,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-149",
@@ -591,7 +622,8 @@ export const BITS = [
     "cooldown": 4,
     "pool": "middle",
     "family": "verbal",
-    "absurdity": 3
+    "absurdity": 3,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-201",
@@ -601,7 +633,8 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "family": "structural",
-    "absurdity": 2
+    "absurdity": 2,
+    "vocal_tag": "excited"
   },
   {
     "archetypes": "universal",
@@ -623,7 +656,8 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 3,
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "archetypes": "universal",
@@ -635,7 +669,8 @@ export const BITS = [
     "trigger": "commitment_push",
     "status": "active",
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "mysterious"
   },
   {
     "id": "BIT-205",
@@ -644,7 +679,8 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 4,
     "family": "structural",
-    "absurdity": 3
+    "absurdity": 3,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-206",
@@ -655,7 +691,8 @@ export const BITS = [
     ],
     "cooldown": 4,
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-207",
@@ -671,7 +708,8 @@ export const BITS = [
     "rungs": 3,
     "rung_spacing": {
       "min_between": 2
-    }
+    },
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-208",
@@ -705,7 +743,8 @@ export const BITS = [
     "trigger": "commitment_push|pricing_raised",
     "status": "active",
     "family": "stall",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "calm"
   },
   {
     "id": "BIT-211",
@@ -717,7 +756,8 @@ export const BITS = [
     "cooldown": 3,
     "pool": "middle",
     "family": "stall",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "calm"
   },
   {
     "archetypes": "universal",
@@ -747,7 +787,8 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "surprised"
   },
   {
     "archetypes": "universal",
@@ -774,7 +815,8 @@ export const BITS = [
     "trigger": "phase:probing",
     "status": "active",
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "archetypes": "universal",
@@ -791,7 +833,8 @@ export const BITS = [
       "rung_4_earliest_turn": 14
     },
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "mysterious"
   },
   {
     "archetypes": "universal",
@@ -811,7 +854,8 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-220",
@@ -821,7 +865,8 @@ export const BITS = [
     "lane": "gag",
     "status": "active",
     "family": "stall",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-221",
@@ -831,7 +876,8 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "surprised"
   },
   {
     "id": "BIT-222",
@@ -863,7 +909,8 @@ export const BITS = [
     },
     "pool": "middle",
     "family": "stall",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "calm"
   },
   {
     "id": "BIT-224",
@@ -873,7 +920,8 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-225",
@@ -884,7 +932,8 @@ export const BITS = [
     "trigger": "phase:probing",
     "status": "active",
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-226",
@@ -904,7 +953,8 @@ export const BITS = [
     "pool": "late",
     "status": "active",
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-228",
@@ -926,7 +976,8 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "calm"
   },
   {
     "id": "BIT-230",
@@ -949,7 +1000,8 @@ export const BITS = [
     "trigger": "phase:probing",
     "status": "active",
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-232",
@@ -959,7 +1011,8 @@ export const BITS = [
     "trigger": "phase:opening",
     "status": "active",
     "family": "structural",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-233",
@@ -974,7 +1027,8 @@ export const BITS = [
     "status": "active",
     "max_fires_per_call": 5,
     "family": "stall",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-234",
@@ -991,7 +1045,8 @@ export const BITS = [
     "rung_spacing": {
       "min_between": 3
     },
-    "absurdity": 4
+    "absurdity": 4,
+    "vocal_tag": "excited"
   },
   {
     "archetypes": "universal",
@@ -1001,7 +1056,8 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-302",
@@ -1010,7 +1066,8 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 4,
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-303",
@@ -1019,7 +1076,8 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 5,
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "archetypes": [
@@ -1032,7 +1090,8 @@ export const BITS = [
     "trigger": "commitment_push",
     "status": "active",
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-305",
@@ -1041,7 +1100,8 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 3,
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-306",
@@ -1050,7 +1110,8 @@ export const BITS = [
     "archetypes": "universal",
     "cooldown": 3,
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "archetypes": "universal",
@@ -1061,7 +1122,8 @@ export const BITS = [
     "status": "active",
     "max_fires_per_call": 1,
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "neutral"
   },
   {
     "id": "BIT-308",
@@ -1080,7 +1142,8 @@ export const BITS = [
     "cooldown": 5,
     "trigger": "call_turn_1",
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "surprised"
   },
   {
     "archetypes": "universal",
@@ -1089,7 +1152,8 @@ export const BITS = [
     "name": "The Scapegoat",
     "status": "active",
     "family": "personal",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-311",
@@ -1098,7 +1162,8 @@ export const BITS = [
     "cooldown": 5,
     "status": "active",
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-312",
@@ -1108,7 +1173,8 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "family": "personal",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-313",
@@ -1118,7 +1184,8 @@ export const BITS = [
     "lane": "gag",
     "status": "active",
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-314",
@@ -1129,7 +1196,8 @@ export const BITS = [
     "status": "active",
     "max_fires_per_call": 1,
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "surprised"
   },
   {
     "id": "BIT-315",
@@ -1139,7 +1207,8 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-317",
@@ -1149,7 +1218,8 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-318",
@@ -1161,7 +1231,8 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-319",
@@ -1171,7 +1242,8 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-320",
@@ -1182,7 +1254,8 @@ export const BITS = [
     "status": "active",
     "max_fires_per_call": 1,
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-321",
@@ -1192,7 +1265,8 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-322",
@@ -1202,7 +1276,8 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-323",
@@ -1212,7 +1287,8 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-324",
@@ -1223,7 +1299,8 @@ export const BITS = [
     "trigger": "extended_stall",
     "status": "active",
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "calm"
   },
   {
     "id": "BIT-325",
@@ -1234,7 +1311,8 @@ export const BITS = [
     "trigger": "extended_stall",
     "status": "active",
     "family": "personal",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "calm"
   },
   {
     "id": "BIT-326",
@@ -1244,7 +1322,8 @@ export const BITS = [
     "status": "active",
     "family": "environment",
     "absurdity": 1,
-    "pool": "middle"
+    "pool": "middle",
+    "vocal_tag": "content"
   },
   {
     "id": "BIT-327",
@@ -1254,7 +1333,8 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "family": "personal",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "content"
   },
   {
     "id": "BIT-328",
@@ -1265,7 +1345,8 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "family": "personal",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-329",
@@ -1276,7 +1357,8 @@ export const BITS = [
     "status": "active",
     "max_fires_per_call": 2,
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "neutral"
   },
   {
     "id": "BIT-330",
@@ -1289,7 +1371,8 @@ export const BITS = [
     "status": "active",
     "max_fires_per_call": 1,
     "family": "environment",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "neutral"
   },
   {
     "id": "BIT-401",
@@ -1299,7 +1382,8 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "family": "video",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "archetypes": "universal",
@@ -1310,7 +1394,8 @@ export const BITS = [
     "status": "active",
     "channel": "video",
     "family": "video",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-403",
@@ -1322,7 +1407,8 @@ export const BITS = [
     "channel": "video",
     "trigger": "caller_questioned_humanity",
     "family": "video",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-404",
@@ -1332,7 +1418,8 @@ export const BITS = [
     "cooldown": 3,
     "pool": "middle",
     "family": "video",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-405",
@@ -1343,7 +1430,8 @@ export const BITS = [
     "pool": "middle",
     "channel": "video",
     "family": "video",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "archetypes": "universal",
@@ -1354,7 +1442,8 @@ export const BITS = [
     "pool": "middle",
     "channel": "video",
     "family": "video",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-407",
@@ -1365,7 +1454,8 @@ export const BITS = [
     "status": "active",
     "channel": "video",
     "family": "video",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-408",
@@ -1378,7 +1468,8 @@ export const BITS = [
     "status": "active",
     "channel": "video",
     "family": "video",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-501",
@@ -1388,7 +1479,8 @@ export const BITS = [
     "cooldown": 4,
     "pool": "middle",
     "family": "dossier",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-502",
@@ -1408,7 +1500,8 @@ export const BITS = [
     "cooldown": 4,
     "pool": "middle",
     "family": "dossier",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "archetypes": "universal",
@@ -1418,7 +1511,8 @@ export const BITS = [
     "pool": "late",
     "status": "active",
     "family": "dossier",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-505",
@@ -1438,7 +1532,8 @@ export const BITS = [
     "pool": "late",
     "status": "active",
     "family": "dossier",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-507",
@@ -1451,7 +1546,8 @@ export const BITS = [
     "trigger": "browsed_tmi",
     "status": "active",
     "family": "dossier",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "mysterious"
   },
   {
     "id": "BIT-508",
@@ -1464,7 +1560,8 @@ export const BITS = [
     "trigger": "has_prior_contact",
     "status": "active",
     "family": "dossier",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-509",
@@ -1477,7 +1574,8 @@ export const BITS = [
     "trigger": "has_prior_contact",
     "status": "active",
     "family": "dossier",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-510",
@@ -1490,7 +1588,8 @@ export const BITS = [
     "trigger": "has_prior_contact",
     "status": "active",
     "family": "dossier",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-511",
@@ -1503,7 +1602,8 @@ export const BITS = [
     "trigger": "has_prior_contact",
     "status": "active",
     "family": "dossier",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-512",
@@ -1516,7 +1616,8 @@ export const BITS = [
     "trigger": "has_prior_contact",
     "status": "active",
     "family": "dossier",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-513",
@@ -1529,7 +1630,8 @@ export const BITS = [
     "trigger": "has_prior_contact",
     "status": "active",
     "family": "dossier",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-514",
@@ -1539,7 +1641,8 @@ export const BITS = [
     "pool": "late",
     "status": "active",
     "family": "dossier",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-515",
@@ -1557,7 +1660,8 @@ export const BITS = [
     "status": "active",
     "max_fires_per_call": 4,
     "family": "dossier",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-516",
@@ -1574,7 +1678,8 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "family": "dossier",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-517",
@@ -1589,7 +1694,8 @@ export const BITS = [
     "bit_type": "count",
     "count_label": "callbacks",
     "family": "dossier",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-601",
@@ -1693,7 +1799,8 @@ export const BITS = [
     "trigger": "call_phase_late",
     "status": "active",
     "family": "death_blow",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-702",
@@ -1704,7 +1811,8 @@ export const BITS = [
     "trigger": "call_phase_late",
     "status": "active",
     "family": "death_blow",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-703",
@@ -1715,7 +1823,8 @@ export const BITS = [
     "trigger": "call_phase_late",
     "status": "active",
     "family": "death_blow",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-704",
@@ -1726,7 +1835,8 @@ export const BITS = [
     "intensity": 0.5,
     "trigger": "call_phase_late",
     "family": "death_blow",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   },
   {
     "id": "BIT-705",
@@ -1737,6 +1847,7 @@ export const BITS = [
     "trigger": "call_phase_late",
     "status": "active",
     "family": "death_blow",
-    "absurdity": 1
+    "absurdity": 1,
+    "vocal_tag": "excited"
   }
 ];
