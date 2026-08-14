@@ -1,6 +1,6 @@
 // SpamViking — Bits Registry
 // Source of truth: SpamViking_BitsRegistry.json + session edits
-// Last updated: August 5, 2026
+// Last updated: August 14, 2026
 // DO NOT HAND-EDIT — run export_bits.js to regenerate
 
 export const BITS = [
@@ -1047,6 +1047,45 @@ export const BITS = [
     },
     "absurdity": 4,
     "vocal_tag": "excited"
+  },
+  {
+    "id": "BIT-235",
+    "name": "The Weather Remark",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "structural",
+    "pool": "early",
+    "trigger": "call_turn_1",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 1,
+    "vocal_tag": "content"
+  },
+  {
+    "id": "BIT-236",
+    "name": "The Back-To-Back",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "structural",
+    "pool": "early",
+    "trigger": "call_turn_1",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 1,
+    "vocal_tag": "calm"
+  },
+  {
+    "id": "BIT-237",
+    "name": "The Room Observation",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "structural",
+    "pool": "early",
+    "trigger": "call_turn_1",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 1,
+    "vocal_tag": "content"
   },
   {
     "archetypes": "universal",
