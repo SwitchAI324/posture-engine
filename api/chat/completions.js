@@ -3812,6 +3812,21 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         BIT_DIRECTIVES && BIT_DIRECTIVES[top.id] && String(BIT_DIRECTIVES[top.id]).trim()
           ? String(BIT_DIRECTIVES[top.id]).trim()
           : null;
+      // INJECTION-SIZE LOGGING (Aug 15) — settles "was the directive
+      // actually injected" directly, instead of inferring it from
+      // Anthropic's aggregate `input` token count (tried once, found too
+      // imprecise — turn-to-turn conversation growth alone produces
+      // 200-400 token noise, easily masking a short bit's own directive).
+      // Logs the REAL character length of what's about to be appended to
+      // `mutable` for this fire, present or absent, so a future
+      // investigation can grep this exact line instead of re-deriving it.
+      console.log(
+        "BIT-INJECT id=" + top.id + " turn=" + turn +
+        " forced=" + forcedFire +
+        " directiveChars=" + (bitDirective ? bitDirective.length : 0) +
+        " hasDirective=" + !!bitDirective
+      );
+      const preInjectLen = mutable.length;
       mutable +=
         '\n\n[BIT ACTIVE: ' + top.id + ' — "' + top.name + '"]\n' +
         "A specific routine has been selected and MUST be performed this turn. " +
@@ -3869,6 +3884,15 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           ". Work that specific real detail into the bit's performance — " +
           "quote the real fact, never invent one.";
       }
+      // INJECTION-SIZE LOGGING (Aug 15), continued — the real total: this
+      // is the number that would actually need to line up with a future
+      // `input`/cache_creation check on this turn, if that's ever tried
+      // again. Includes the [BIT ACTIVE] wrapper, hunt-window elaboration,
+      // and fact hint — not just the bare directive logged above.
+      console.log(
+        "BIT-INJECT-TOTAL id=" + top.id + " turn=" + turn +
+        " totalChars=" + (mutable.length - preInjectLen)
+      );
       const bitBase = {
         bit_id: top.id,
         name: top.name,
