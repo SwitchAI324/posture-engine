@@ -689,6 +689,7 @@ export async function saveTranscript(callId, slug, messages) {
   // the guard only suppresses a write it can POSITIVELY confirm would shrink
   // the record; it never blocks a legitimate save. Best-effort (called under
   // waitUntil), so the read-then-write race is harmless.
+  let storedMessages = [];
   try {
     const g = await fetch(
       `${URL}/rest/v1/call_transcripts?call_id=eq.${encodeURIComponent(
@@ -699,20 +700,40 @@ export async function saveTranscript(callId, slug, messages) {
     );
     if (g.ok) {
       const rows = await g.json().catch(() => null);
-      const stored =
+      storedMessages =
         Array.isArray(rows) && rows[0] && Array.isArray(rows[0].messages)
-          ? rows[0].messages.length
-          : 0;
-      if (stored > convo.length) return true; // would shrink — skip, not an error
+          ? rows[0].messages
+          : [];
+      if (storedMessages.length > convo.length) return true; // would shrink — skip, not an error
     }
   } catch {
-    /* read failed — fall through and write */
+    /* read failed — fall through and write; storedMessages stays [] */
   }
+  // PER-MESSAGE TIMESTAMPS (Aug 14) — real answer to "when did this line
+  // actually happen," not just updated_at (which only ever reflects the
+  // LAST turn's save time for the WHOLE array — useless for reconstructing
+  // a call's real timeline, which every debugging session tonight had to
+  // do by hand cross-referencing the Vercel log instead). Reuses the SAME
+  // read this function already does for the clobber guard above — no
+  // second round-trip. Messages already saved keep their original
+  // timestamp (positional match against storedMessages, guarded by a role
+  // check so a shifted/mismatched array degrades to "treat as new" instead
+  // of silently reusing the wrong timestamp); only genuinely NEW messages
+  // (beyond what was stored, or a role mismatch) get stamped with now.
+  // This is "when the message first reached PE," not "when it was
+  // literally spoken" — a small, real propagation lag, but monotonic and
+  // far better than nothing.
+  const nowIso = new Date().toISOString();
+  const stamped = convo.map((m, i) => {
+    const prior = storedMessages[i];
+    const reuseTs = prior && prior.role === m.role && prior.timestamp;
+    return { ...m, timestamp: reuseTs || nowIso };
+  });
   const row = {
     call_id: callId,
     slug: slug || null,
-    messages: convo,
-    updated_at: new Date().toISOString(),
+    messages: stamped,
+    updated_at: nowIso,
   };
   const r = await fetch(`${URL}/rest/v1/call_transcripts`, {
     cache: "no-store",
