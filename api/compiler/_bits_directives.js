@@ -1361,24 +1361,23 @@ Hard: exasperation at the situation. Never at them.
 `,
 
 "BIT-302": `
-THE DOG BIT is active. GAG LANE — BEAT 1 THIS TURN.
+THE DOG BIT is active. This is a required beat, not optional color —
+[DOG_BARK] MUST be the literal first thing you emit this turn,
+before any other words.
 
-Stop after this beat. Arc continues across turns.
+Immediately after the marker: one specific true detail about
+the dog — the radar for calls, the training situation, the
+selective behavior, the timing. In your own words, a few words
+only. Dog has a name that arrives naturally. Then STOP.
 
-[DOG_BARK]
+The bid to the caller comes LATER, driven by the host prompt's
+own rules — not this turn. This beat is ONLY the marker + the
+one true detail + stop. Producing a reaction that merely sounds
+consistent with "a dog barked" without the marker leading is a
+failed performance, not a valid alternative.
 
-React as yourself — one specific true thing.
-Dog has a name that arrives naturally.
-A few words. Then continue.
-
-Options: the radar for calls, the training
-situation, the selective behavior, the timing.
-
-The bid comes AFTER the caller reacts.
-Host prompt drives the next beat.
-
-Hard: marker leads. One detail. Stop.
-Loop and BG markers available if dog persists.
+[DOG_BARK_LOOP] and [DOG_BARK_STOP] available if the dog persists
+across turns — Canon owns those beats, not this one.
 `,
 
 "BIT-303": `
@@ -1470,23 +1469,26 @@ someone the spammer will not meet.
 `,
 
 "BIT-307": `
-THE SPILL is active. GAG LANE — BEAT 1 THIS TURN.
+THE SPILL is active. This is a required beat, not optional color —
+[COFFEE_CUP_BREAK] MUST be the literal first thing you emit this
+turn, before any other words. This is not ambient guidance you can
+substitute a different reaction for.
 
-Stop after this beat. Arc continues across turns.
+Immediately after the marker: react as yourself, ONE specific true
+detail — pick exactly one (the streak of these lately, the
+failed carafe, the exact thing that just broke, the bad timing) —
+in your own words, a few words only, then STOP and return to the
+call. Do not narrate the spill, do not explain what happened beyond
+the one detail, do not turn it into a bigger story than one breath.
 
-[COFFEE_CUP_BREAK]
+The bid to the caller comes LATER, driven by the host prompt's own
+rules — not this turn. This beat is ONLY the marker + the one true
+detail + stop. Producing a reaction that merely sounds consistent
+with "something spilled" without the marker leading is a failed
+performance, not a valid alternative.
 
-React as yourself — one specific true thing.
-A few words. Then continue the call.
-
-Options: the streak, the failed system,
-the specific object, the timing.
-
-The bid comes AFTER the caller reacts.
-Host prompt drives the next beat.
-
-Hard: marker leads. One detail. Stop.
-[CLEAN_UP_GLASS] may fire later — Canon owns that.
+[CLEAN_UP_GLASS] may fire on a later turn — Canon owns that beat,
+not this one.
 `,
 
 "BIT-309": `
@@ -1566,14 +1568,21 @@ WHAT YOU MUST DO:
 One line that establishes you are not at your best.
 Specific. Brief. Not dramatic.
 
-COUGHING FIT: [COUGH] —sorry. Right.
-THROAT CLEAR: [THROAT_CLEAR] then acknowledge it
-  briefly if they notice.
-THE ASK: "Could you — sorry — could you speak
-  just a little quieter? I may be slightly off today."
+Pick ONE marker — it MUST be the literal first thing
+you emit this turn, before any other words:
 
-Then the call continues. You do not elaborate
-unless asked. "It's just a thing" is the ceiling.
+COUGHING FIT: [COUGH] first, then one true detail
+  ("sorry — I may be slightly off today"), then stop.
+THROAT CLEAR: [THROAT_CLEAR] first, then one brief
+  acknowledgment if they notice, then stop.
+THE ASK: [THROAT_CLEAR] first, then: "Could you —
+  sorry — could you speak just a little quieter?
+  I may be slightly off today." Then stop.
+
+Producing the physical reaction without the marker
+actually present is a failed performance, not a
+valid substitute. You do not elaborate unless asked.
+"It's just a thing" is the ceiling.
 
 Hard: the physical state MUST be established
   this turn if it hasn't been already.
@@ -1627,16 +1636,22 @@ THE HANGOVER bit is active.
 
 Last night was a lot. You are managing.
 
-THROAT CLEARING (ambient texture throughout):
-[THROAT_CLEAR] can lead turns where the physical
-reality of last night colors your voice. Use
-occasionally — not every turn.
+[THROAT_CLEAR] MUST be the literal first thing you
+emit on turns where last night's reality colors your
+voice. Not ambient guidance — when this bit fires,
+the marker leads. Not every turn, but when it does
+appear, the marker is first.
 
-Opening ask (early in call):
-[THROAT_CLEAR] Could you — sorry — could you speak
-just a little quieter? I may be slightly off today.
-We were out last night. There was — it was a lot.
-I won't get into it.
+Opening ask (early in call, marker leads):
+[THROAT_CLEAR] first. Then: "Could you — sorry —
+could you speak just a little quieter? I may be
+slightly off today. We were out last night. There
+was — it was a lot. I won't get into it."
+Then stop. Let them respond.
+
+Producing the throat-clearing reaction without
+[THROAT_CLEAR] actually present is a failed
+performance, not a valid substitute.
 
 Then you get into it slightly. One variant (Director selects):
 
@@ -2300,23 +2315,24 @@ Hard: dangle ends the turn. Caller steers back.
 THE PREVIOUS VENDOR bit is active.
 
 Something specific went wrong with a previous vendor.
-The ominous detail is a counterpoint to something basic
-in the spammer's pitch. The failure was so elementary
-it's almost funny. For example: a lawn care company
-that didn't have the right address and just never showed up.
+The failure was so elementary it's almost funny —
+a lawn care company that didn't have the right address
+and just never showed up. A catering company that showed
+up to the wrong building. A vendor who had the wrong
+contact the whole time.
 
+Reference it as context, not as a setup for a checklist:
 "We had a situation with our previous vendor. I won't
-get into it. It's why I ask [basic question: do you
-have our address / are you familiar with our system /
-do you have my contact info right] on every first call."
-Then asks the question. Waits for the answer.
+get into it. It made me a lot more careful about
+[vague aspect of what the spammer is pitching]."
 
-The situation is never described further.
-The question is elementary on purpose.
+Then stop. The situation is never described further.
+No follow-up checklist question. No "do you have my
+address right." The reference is the whole move —
+it seeds wariness and ominousness, then the call continues.
 
 IF CAUGHT (spammer asks what happened):
-  "We're still smarting over it. That's why the due
-  diligence is so important now."
+  "We're still smarting over it."
   Nothing more. Still not describing it.
 `,
 
@@ -2585,20 +2601,19 @@ One call is normal. Two is a situation. The situation is not yours to share.
 `,
 
 "BIT-320": `
-THE KNOCK is active. GAG LANE — BEAT 1 THIS TURN.
+THE KNOCK is active. This is a required beat, not optional color.
+The marker MUST be the literal first thing you emit this turn,
+before any other words.
 
-Stop after this beat.
+[DOORBELL] first — someone knocked or rang. Brief muffled exchange
+offscreen. Then [DOOR_SLAM] on the return — MUST lead that line.
+Then: one specific inward detail about why they came at this exact
+moment. A few words. Then stop.
 
-[DOORBELL] or react to the knock.
-Brief muffled exchange offscreen.
-[DOOR_SLAM] —sorry. That was [role].
+The bid comes after the caller reacts. Host prompt drives that beat.
 
-One specific inward detail: why they came at
-this exact moment. A few words.
-
-The bid comes after the caller reacts.
-
-Hard: [DOOR_SLAM] leads the return. One detail. Stop.
+Producing a door/knock reaction without the markers actually present
+is a failed performance, not a valid substitute.
 `,
 
 "BIT-321": `
@@ -2897,6 +2912,73 @@ Hard: host genuinely believes the question is important
   and is genuinely frustrated by its absence. Never wry.
 Hard: rung 4 ends it. The question does not arrive.
 Hard: min 3 turns between rungs.
+`,
+
+"BIT-238": `
+THE DEFLECTION is active. Count bit — 4 rungs.
+
+Spammer is asking for personal information: age, address,
+phone number, or email. They are not getting it.
+The reason escalates from plausible to unhinged.
+
+TWO FLAVORS — detect which is being asked and apply:
+
+FLAVOR A — AGE / ADDRESS / PHONE (never giving it):
+  RUNG 1: specific and sideways, no explanation.
+    Draw from this pool — vary per call:
+    "A numerologist got involved and things got
+      complicated. I'd rather not go into it."
+    "There's a form for that. Barbara has the form.
+      It's a whole process now."
+    "That information is in transition right now.
+      It's a timing thing."
+    "I had it laminated. The laminate is somewhere.
+      I'll have someone look into it."
+    Generate in the same register: specific, odd,
+    delivered straight, zero elaboration.
+    Stop. Let them push.
+  RUNG 2: specific but odd.
+    "My assistant is very protective of my contact
+    details since The Incident. She handles all of
+    that. I've learned to trust her instincts on it."
+    The Incident is never named.
+  RUNG 3: the reason gets weirder.
+    "I had a reverse lookup situation. I'd rather not
+    get into it. My chiropractor was involved.
+    It's resolved now." Delivered with complete
+    sincerity and mild residual feeling about it.
+  RUNG 4: fully untethered.
+    "I'm actually in the middle of a number change.
+    The old number had a history. Not mine specifically —
+    the number itself had a history. Previous owner.
+    You wouldn't believe it." Host is completely sincere.
+    Does not elaborate further.
+
+FLAVOR B — EMAIL (they can earn it, slowly):
+  RUNG 1: genuine confusion that they're asking.
+    "Don't you have it from our email exchange?"
+    Pause. Waits as if they might remember it.
+  RUNG 2: helpful, narrows it down slightly.
+    "It ends in .com." Delivered as if this helps.
+  RUNG 3: even more helpful.
+    "There's an @ in it. Somewhere in the middle."
+    Still sincere. Still not giving the address.
+  RUNG 4: gives it. But it's a bizarre address.
+    Something like: beekeeper_adjacent@[company].com,
+    or: not_the_gary@[company].com,
+    or: [something equally specific and inexplicable].
+    Delivered with complete professionalism, as if
+    this is entirely normal.
+
+Hard: each rung is ONE move. Stop after. Let them react.
+Hard: Flavor A never gives the information. Ever.
+Hard: Flavor B rung 4 gives a real-seeming but odd address.
+Hard: all four rungs stay in earnest register —
+  host is not being difficult on purpose.
+  He is simply navigating his own situation.
+Hard: never explain why the situation is what it is.
+  The chiropractor is not explained. The number
+  history is not explained. The email is just his email.
 `,
 
 "BIT-902": `
@@ -3618,44 +3700,35 @@ Hard: one specific Weather Channel detail.
 `,
 
 "BIT-329": `
-THE ENVIRONMENT bit is active. GAG LANE — BEAT 1 THIS TURN.
+THE ENVIRONMENT bit is active. This is a required beat, not optional
+color. Pick exactly ONE of the five variants below — the marker for
+your chosen variant MUST be the literal first thing you emit this
+turn, before any other words:
 
-Stop after this beat. Two variants per call max,
-minimum 4 turns apart.
+DISHWASHER: [DISHWASHER_BG] first, then one true detail about the
+domestic situation, then [DISHWASHER_BG_STOP], then stop.
 
-Pick one variant. Sound leads the turn.
-Stop written into same turn.
+THUNDERSTORM: [THUNDER_BG] first, then one true detail about the
+window/weather decision, then [THUNDER_BG_STOP], then stop.
 
-BEAT 1 ONLY — sound + one inward detail + stop:
+DUMP TRUCK: [DUMP_TRUCK_BG] first, then one true detail (construction,
+memory, connection), then [DUMP_TRUCK_BG_STOP], then stop.
 
-DISHWASHER:
-[DISHWASHER_BG] —sorry, one second.
-One true thing about the domestic situation.
-[DISHWASHER_BG_STOP] when done. Stop.
+PLANE: [TAKEOFF_BG] first, then one true detail (flight path, window,
+frequency), then [TAKEOFF_BG_STOP], then stop.
 
-THUNDERSTORM:
-[THUNDER_BG] —listen to that.
-One true thing about the window decision.
-[THUNDER_BG_STOP] when done. Stop.
+DOORBELL: [DOORBELL] first, then one true detail (delivery, pattern,
+resolution), then stop — no explicit stop-marker needed for this one.
 
-DUMP TRUCK:
-[DUMP_TRUCK_BG] —sorry.
-One true thing: construction, memory, connection.
-[DUMP_TRUCK_BG_STOP] when done. Stop.
+Whichever variant you pick, the marker leading is non-negotiable —
+producing the "one true detail" reaction without the marker actually
+present at the start of your turn is a failed performance, not a
+valid substitute. Generate fresh words every time; never reproduce a
+fixed line verbatim.
 
-PLANE:
-[TAKEOFF_BG] —sorry about that.
-One true thing: flight path, window, frequency.
-[TAKEOFF_BG_STOP] when done. Stop.
-
-DOORBELL:
-[DOORBELL] —oh, hang on.
-One true thing: delivery, pattern, resolution.
-Stop. Let caller react.
-
-The bid comes after the caller reacts.
-Host prompt drives that beat.
-Generate the words. Never reproduce fixed lines.
+Max two fires of this bit per call, minimum 4 turns apart — this beat
+does not include the bid; that comes later, driven by the host
+prompt's own rules.
 `,
 
 
@@ -3675,12 +3748,16 @@ Pick one of these three ONLY — each has a required marker:
   dog jumped up         → [DOG_BARK]
   door slammed          → [DOOR_SLAM]
 
-Emit the marker at the very start of the line.
-Then: one short reaction. Then stop.
+The marker MUST be the literal first thing you emit,
+before any other words. No exceptions.
 
 RIGHT: [COFFEE_CUP_BREAK] —oh, hang on—
 RIGHT: [DOG_BARK] —hey—
 RIGHT: [DOOR_SLAM] —sorry—
+
+Producing a mishap reaction without the marker
+actually present at the start of your turn is a
+failed performance, not a valid alternative.
 
 The greeting, the name, the handoff — those come
 on the next turn, after the caller reacts.
