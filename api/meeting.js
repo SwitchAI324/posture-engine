@@ -308,7 +308,15 @@ function wireRoom(rm){
       var txt = (segments || []).map(function(s){ return s.text; }).join(" ").trim();
       if(txt){
         $("caption").style.display = "block";
-        $("captionText").textContent = txt.replace(/\\[\\[[^\\]]*\\]\\]/g, "").trim();
+        // Strip Cartesia's inline <emotion value="..."/> control tags -
+        // meant to be consumed silently by TTS to shape delivery, never
+        // meant to be seen. These are separate from the [[...]] pattern
+        // already stripped below (different syntax entirely - angle
+        // brackets vs double square brackets). Without this, the raw tag
+        // flashes in the caption for a moment before the rest of the
+        // line catches up (confirmed live, Aug 15).
+        var clean = txt.replace(/<emotion\s+value="[^"]*"\s*\/>/g, "");
+        $("captionText").textContent = clean.replace(/\\[\\[[^\\]]*\\]\\]/g, "").trim();
       }
     } catch(e){}
   });
