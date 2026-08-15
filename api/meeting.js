@@ -321,6 +321,20 @@ function wireRoom(rm){
         // character before [[, which real captions never contain,
         // meaning that strip was silently a no-op the whole time.
         var noEmotion = txt.replace(new RegExp('<emotion\\s+value="[^"]*"\\s*/>', 'g'), "");
+        // IN-FLIGHT TAG HOLD (Aug 15, same day) — TranscriptionReceived has
+        // no final/interim flag; it fires repeatedly as text grows, so the
+        // regex above (which only matches a CLOSED tag) lets a partial
+        // "<emotion value=\"" or "<emotion value=\"excited\"" — no closing
+        // "/>" yet — render on screen for one or more events before the
+        // close arrives. Fix: after stripping any complete tag, look for a
+        // still-open "<emotion" with no "/>" anywhere after it and cut the
+        // string right there. The held fragment simply reappears (complete,
+        // and then stripped) once enough text has streamed in — nothing is
+        // lost, it just never renders half-formed.
+        var openTagIdx = noEmotion.lastIndexOf("<emotion");
+        if (openTagIdx >= 0 && noEmotion.indexOf("/>", openTagIdx) === -1) {
+          noEmotion = noEmotion.slice(0, openTagIdx);
+        }
         var noBrackets = noEmotion.replace(new RegExp('\\[\\[[^\\]]*\\]\\]', 'g'), "");
         $("captionText").textContent = noBrackets.trim();
       }
