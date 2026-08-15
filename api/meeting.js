@@ -308,15 +308,21 @@ function wireRoom(rm){
       var txt = (segments || []).map(function(s){ return s.text; }).join(" ").trim();
       if(txt){
         $("caption").style.display = "block";
-        // Strip Cartesia's inline <emotion value="..."/> control tags -
-        // meant to be consumed silently by TTS to shape delivery, never
-        // meant to be seen. These are separate from the [[...]] pattern
-        // already stripped below (different syntax entirely - angle
-        // brackets vs double square brackets). Without this, the raw tag
-        // flashes in the caption for a moment before the rest of the
-        // line catches up (confirmed live, Aug 15).
-        var clean = txt.replace(/<emotion\s+value="[^"]*"\s*\/>/g, "");
-        $("captionText").textContent = clean.replace(/\\[\\[[^\\]]*\\]\\]/g, "").trim();
+        // EMOTION TAG STRIP (Aug 15) — uses RegExp(string) instead of a
+        // /.../ literal on purpose: a literal regex with an internal
+        // unescaped "/" throws "Uncaught SyntaxError: Invalid regular
+        // expression: missing /" at PAGE LOAD (breaks the whole script,
+        // not just captions — this is what blocked the join screen
+        // entirely last time). A string pattern has no delimiter to
+        // mismatch, so this class of error can't happen here again.
+        // Also fixes a latent bug in the original bracket-strip: it used
+        // \\[ (an escaped literal backslash + bracket) instead of \[ (an
+        // escaped bracket) — so it only ever matched a literal backslash
+        // character before [[, which real captions never contain,
+        // meaning that strip was silently a no-op the whole time.
+        var noEmotion = txt.replace(new RegExp('<emotion\\s+value="[^"]*"\\s*/>', 'g'), "");
+        var noBrackets = noEmotion.replace(new RegExp('\\[\\[[^\\]]*\\]\\]', 'g'), "");
+        $("captionText").textContent = noBrackets.trim();
       }
     } catch(e){}
   });
