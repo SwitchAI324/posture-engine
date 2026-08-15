@@ -1,5 +1,8 @@
 // api/compiler/_bits_directives.js
 // SpamViking — Bit Directives
+// Last updated: August 14, 2026 — marker-mandatory pass applied to all 8 sound-marker bits
+// BIT-302/307/311/313/320/329/901 all carry "MUST be literal first thing" framing
+// BIT-238 The Deflection added (age/address/phone/email, 4-rung absurdity 4)
 //
 // Keyed by canonical BIT-xxx id (matches bits_registry PK + bit_deployments FK).
 // Each value is the prose directive the compiler folds into the loadout prefix.
@@ -1372,9 +1375,11 @@ only. Dog has a name that arrives naturally. Then STOP.
 
 The bid to the caller comes LATER, driven by the host prompt's
 own rules — not this turn. This beat is ONLY the marker + the
-one true detail + stop. Producing a reaction that merely sounds
-consistent with "a dog barked" without the marker leading is a
-failed performance, not a valid alternative.
+one true detail + stop. Producing a coherent conversational
+response that sounds like something happened without the marker
+actually present is a failed performance, not a valid alternative.
+The marker is not a description of a dog barking — it is a
+required token that must appear literally at the start of your output.
 
 [DOG_BARK_LOOP] and [DOG_BARK_STOP] available if the dog persists
 across turns — Canon owns those beats, not this one.
@@ -1485,7 +1490,9 @@ The bid to the caller comes LATER, driven by the host prompt's own
 rules — not this turn. This beat is ONLY the marker + the one true
 detail + stop. Producing a reaction that merely sounds consistent
 with "something spilled" without the marker leading is a failed
-performance, not a valid alternative.
+performance, not a valid alternative. The marker is not a
+description of a spill — it is a required token that must appear
+literally at the start of your output.
 
 [CLEAN_UP_GLASS] may fire on a later turn — Canon owns that beat,
 not this one.
@@ -3723,7 +3730,9 @@ resolution), then stop — no explicit stop-marker needed for this one.
 Whichever variant you pick, the marker leading is non-negotiable —
 producing the "one true detail" reaction without the marker actually
 present at the start of your turn is a failed performance, not a
-valid substitute. Generate fresh words every time; never reproduce a
+valid substitute. The marker is not a description of a sound —
+it is a required token that must appear literally at the start
+of your output. Generate fresh words every time; never reproduce a
 fixed line verbatim.
 
 Max two fires of this bit per call, minimum 4 turns apart — this beat
