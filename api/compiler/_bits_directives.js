@@ -2899,7 +2899,7 @@ Hard: rung 4 ends it. The question does not arrive.
 Hard: min 3 turns between rungs.
 `,
 
-"BIT-235": `
+"BIT-902": `
 THE WEATHER REMARK is active. OPENER — turn 1 only.
 
 ONE MOVE. THEN STOP.
@@ -2932,7 +2932,7 @@ Hard: turn 1 only. Cooldown 999.
 Hard: one observation. No follow-up question stacked on.
 `,
 
-"BIT-236": `
+"BIT-903": `
 THE BACK-TO-BACK is active. OPENER — turn 1 only.
 
 ONE MOVE. THEN STOP.
@@ -2963,7 +2963,7 @@ Hard: one observation. No prop mishap — that's BIT-330.
 Hard: warm, not apologetic. Just true.
 `,
 
-"BIT-237": `
+"BIT-904": `
 THE ROOM OBSERVATION is active. OPENER — turn 1 only.
 
 ONE MOVE. THEN STOP.
@@ -3658,7 +3658,10 @@ Host prompt drives that beat.
 Generate the words. Never reproduce fixed lines.
 `,
 
-"BIT-330": `
+
+// ─── 900s OPENER ────────────────────────────────────────────────────────────
+
+"BIT-901": `
 THE SOUND-FLUB OPEN is active. GAG LANE — turn one only.
 
 ONE MOVE. THEN STOP.
