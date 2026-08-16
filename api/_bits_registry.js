@@ -1049,6 +1049,23 @@ export const BITS = [
     "vocal_tag": "excited"
   },
   {
+    "id": "BIT-238",
+    "name": "The Deflection",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "structural",
+    "pool": "middle",
+    "cooldown": 2,
+    "rungs": 4,
+    "ceiling": "soft_dead_end",
+    "rung_spacing": {
+      "min_between": 1
+    },
+    "absurdity": 4,
+    "vocal_tag": "mysterious",
+    "trigger": "commitment_push"
+  },
+  {
     "archetypes": "universal",
     "cooldown": 3,
     "id": "BIT-301",
