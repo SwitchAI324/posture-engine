@@ -1744,6 +1744,19 @@ export default async function handler(req) {
   // stored (a prefix hydrated before this shipped, mid-deploy), skip the append
   // entirely — baseSystem stays the whole-prompt prefix = current behavior, no
   // crash. This is what makes the deploy transition safe for in-flight calls.
+  // OPENER-OVERLAY-GATE DIAGNOSTIC (Aug 16) — settles, instead of inferring,
+  // whether this call's stored even HAS overlays to select between at all.
+  // A call that never got the phase-overlay split (bySlug.openerOverlay/
+  // businessOverlay never written by hydrate for this slug, or the merge
+  // above didn't carry them) skips the entire block below silently by
+  // design (see the FALLBACK note) - which looks IDENTICAL from the
+  // outside to useBusiness simply staying false. This log tells them apart.
+  console.log(
+    "OVERLAY-GATE hasPrefix=" + !!(stored && stored.prefix) +
+    " hasOpener=" + !!(stored && stored.openerOverlay) +
+    " hasBusiness=" + !!(stored && stored.businessOverlay) +
+    " willEnterBlock=" + !!(stored && stored.prefix && (stored.openerOverlay || stored.businessOverlay))
+  );
   if (stored && stored.prefix && (stored.openerOverlay || stored.businessOverlay)) {
     const phase = stored.phase || "opening";
     // BACKSTOP (added 2026-07-23 after the first live test): the phase reader
@@ -1774,6 +1787,16 @@ export default async function handler(req) {
       (phase && phase !== "opening") ||
       (OPENER_MAX_TURNS > 0 && turnNow > OPENER_MAX_TURNS) ||
       silentTooLong;
+    console.log(
+      "OVERLAY-DECISION turnNow=" + turnNow +
+      " phase=" + phase +
+      " businessLatched=" + !!stored.businessLatched +
+      " OPENER_SILENCE_RESOLVE=" + OPENER_SILENCE_RESOLVE +
+      " firstSeenAt=" + (stored.firstSeenAt || null) +
+      " elapsedMs=" + (stored.firstSeenAt ? Date.now() - stored.firstSeenAt : null) +
+      " silentTooLong=" + silentTooLong +
+      " useBusiness=" + useBusiness
+    );
     const overlay = useBusiness ? stored.businessOverlay : stored.openerOverlay;
     if (overlay) baseSystem = baseSystem + "\n\n" + overlay;
   }
