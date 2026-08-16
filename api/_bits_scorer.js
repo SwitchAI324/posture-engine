@@ -190,6 +190,15 @@ const EMITTED_TRIGGERS = new Set([
                         // BIT-507 (the Fiji Callback) — the fuel-hook side
                         // (content-arming) was already live; this is the
                         // eligibility-gate half that was missing.
+  "caller_presenting",  // out.callerPresenting (the reader), ONE-WAY LATCH —
+                        // same shape as pricing_raised. Added Aug 16 per
+                        // pe_spec_aug16_triggers_and_archetypes.md. This IS
+                        // caller_pitched (collapsed to one name per that
+                        // spec) — caller_pitched was never actually built on
+                        // PE's side, so this is the real first
+                        // implementation, not a rename of live code. Covers
+                        // BIT-113, 119, 203, 206, 207, 216, 229, 334, 503,
+                        // 515, 516.
   // NOTE: call_phase_late is intentionally NOT here. It tags only the 700-series
   // death-blows, which never pass through normal loadout() — they fire via
   // selectDeathBlow() (separate end-of-call path, threshold bypassed). The
@@ -197,8 +206,10 @@ const EMITTED_TRIGGERS = new Set([
   // needs no PE emitter and no gate here; the tag is descriptive only.
   // NOT yet emitted (stay gear-scored until PE adds each emitter — do NOT add
   // here until the emitter is live and logged):
-  //   caller_pitched, caller_made_claim, caller_named_competitor,
-  //   caller_named_hobby, caller_went_quiet
+  //   caller_made_claim, caller_named_competitor, caller_named_hobby,
+  //   caller_went_quiet
+  // (caller_pitched REMOVED from this list Aug 16 — collapsed into
+  // caller_presenting above, not a separate pending item anymore)
   // NOT an event (lane marker, never add): ambient
 ]);
 // Is this bit's trigger PRESENT in the current call state? Only called for a
@@ -431,8 +442,22 @@ function fitScore(bit, state) {
   // shape the texture lottery already uses), where these small bonuses
   // don't have an obvious job left. WEIGHTS.archetypeMatch/universal/
   // accusation/tone are now unused — removed from WEIGHTS below.
+  // FAIL-CLOSED INCIDENT (Aug 16) — Bits briefly stripped `archetypes` from
+  // all 161 registry entries. Before this fix, `arch` would be `undefined`
+  // on every bit, matching NONE of the three eligibility checks below
+  // (not the "universal" string, not the array check, TEST_UNSCOPE_BITS
+  // empty in production) — every bit returned -Infinity, a full outage of
+  // the bits system. Confirmed via real logs this never actually shipped
+  // (149 organic fires across 17 bits found in every export on hand,
+  // spanning Aug 15-16 — if the broken combination had been live, zero
+  // organic fires would exist anywhere). Bits restored `archetypes:
+  // "universal"` on all 161 entries as the immediate fix; this
+  // `arch === undefined` clause is the longer-term one — makes the
+  // registry field genuinely OPTIONAL going forward instead of a required
+  // no-op that a future edit could silently strip again.
   const arch = bit.archetypes;
   const eligible =
+    arch === undefined ||
     arch === "universal" ||
     (Array.isArray(arch) && arch.includes(state.archetype)) ||
     TEST_UNSCOPE_BITS.has(bit.id);
