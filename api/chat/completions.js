@@ -1761,7 +1761,12 @@ export default async function handler(req) {
     // never speaks on, so this is the one signal that still advances.
     const silentTooLong =
       OPENER_SILENCE_RESOLVE &&
-      turnNow === 0 &&
+      // turnNow<=1, NOT ===0: countUserTurns counts the permanent
+      // "(call connected)" placeholder message too (RX msgs=1 user=1 on
+      // every request of a fully silent call, confirmed live msv321nln7gw
+      // - turn is stuck at 1, never 0, so ===0 never matched and this
+      // branch silently never fired the first time it was tested).
+      turnNow <= 1 &&
       stored.firstSeenAt &&
       Date.now() - stored.firstSeenAt >= OPENER_SILENCE_RESOLVE_MS;
     const useBusiness =
