@@ -712,6 +712,34 @@ function stallResolveReason(stored) {
 function stallShouldResolve(stored) {
   return stallResolveReason(stored) !== null;
 }
+// ── OPENER-SILENCE STALL RESOLVER (Aug 15) ────────────────────────────────
+// Same root mechanism as STALL_RESOLVE above, a different feature hitting
+// it: on a call where the caller never speaks at ALL, countUserTurns()
+// stays 0 and phase stays "opening" by fallback for the entire call — both
+// are turn/phase-count based, and turn/phase are exactly what's frozen
+// during pure silence. Result: the useBusiness gate below (phase!==
+// "opening" || turn>OPENER_MAX_TURNS) never flips true, so the OPENER
+// overlay keeps re-appending every silence nudge and the model reasonably
+// keeps regenerating an opener-shaped turn even though the nudge's own
+// system instruction asks for a small check-in. Confirmed live (Aug 15,
+// room msuteqemrnz5): 6 straight opener variants, never once advancing,
+// call ended still stuck on the opener.
+// FIX: an independent wall-clock signal, same shape as STALL_RESOLVE.
+// stored.firstSeenAt is stamped once per call (see the getCall/setCall
+// prep block) and never rewritten, so it's a stable "how long has this
+// call actually been open" clock, immune to turn/phase ever advancing.
+// Behind OPENER_SILENCE_RESOLVE (default OFF until proven live, same
+// discipline as every other flag in this file). MS default sits before
+// the agent's nudge ladder exhausts (observed nudges land ~5s/27s/58s;
+// 40s lands after nudge 2, before the ladder gives up at nudge 3) so the
+// overlay flips to business register BEFORE the model is forced through
+// a 4th consecutive opener regeneration.
+const OPENER_SILENCE_RESOLVE =
+  /^(1|true|yes|on)$/i.test(String(process.env.OPENER_SILENCE_RESOLVE || ""));
+const OPENER_SILENCE_RESOLVE_MS = parseInt(
+  process.env.OPENER_SILENCE_RESOLVE_MS || "40000",
+  10
+);
 const MAX_TOKENS = () => parseInt(process.env.MAX_TOKENS || "1024", 10);
 // ── FIRST-TOKEN WATCHDOG (Aug 4, live-call finding — CORRECTED same day) ───
 // A real call showed one generation taking 11.4s end-to-end on an ordinary
@@ -1530,6 +1558,14 @@ export default async function handler(req) {
     stored = s;
     if (a) ammo = a;
     if (ctl) controls = ctl;
+    // FIRST-SEEN STAMP (Aug 15) — stamped once, on the first request this
+    // call ever produces, never rewritten after. Feeds OPENER_SILENCE_
+    // RESOLVE above: a stable wall-clock "how long has this call actually
+    // been open" signal that stays accurate even when turn/phase are
+    // frozen by pure caller silence (see that comment for the full why).
+    if (!stored || !stored.firstSeenAt) {
+      waitUntil(setCall(callId, { firstSeenAt: Date.now() }).catch(() => {}));
+    }
     // KEPT SEPARATE from `stored` deliberately — do NOT synthesize a fake
     // stored object around this. `!stored` means "first turn of this call"
     // in several places downstream (e.g. the call_started trace emit); if
@@ -1720,10 +1756,19 @@ export default async function handler(req) {
     // So: force business past OPENER_MAX_TURNS regardless of what phase says.
     // A stuck reader can no longer strand the host in opener mode.
     const turnNow = countUserTurns(messages);
+    // See OPENER_SILENCE_RESOLVE comment (near STALL_RESOLVE) for why this
+    // exists: turnNow/phase both stay frozen forever on a call the caller
+    // never speaks on, so this is the one signal that still advances.
+    const silentTooLong =
+      OPENER_SILENCE_RESOLVE &&
+      turnNow === 0 &&
+      stored.firstSeenAt &&
+      Date.now() - stored.firstSeenAt >= OPENER_SILENCE_RESOLVE_MS;
     const useBusiness =
       !!stored.businessLatched ||
       (phase && phase !== "opening") ||
-      (OPENER_MAX_TURNS > 0 && turnNow > OPENER_MAX_TURNS);
+      (OPENER_MAX_TURNS > 0 && turnNow > OPENER_MAX_TURNS) ||
+      silentTooLong;
     const overlay = useBusiness ? stored.businessOverlay : stored.openerOverlay;
     if (overlay) baseSystem = baseSystem + "\n\n" + overlay;
   }
