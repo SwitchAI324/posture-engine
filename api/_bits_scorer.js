@@ -425,6 +425,66 @@ export function selectTextureBit(state, { pool = BITS } = {}) {
   }
   return shortlist[0]; // floating-point fallback, should never actually hit
 }
+// MEAD HALL why_excluded (Aug 17) — mirrors loadout()'s exact gate order so
+// the reported reason matches what actually excluded the bit, not a guess.
+// Same drift risk as rankTextureCandidates mirroring selectTextureBit's
+// filter: if loadout()'s gates ever change, this needs updating alongside
+// it — no shared source, deliberately (loadout() short-circuits per-bit
+// with early `return false`s inside a single filter callback; extracting a
+// reason from that without restructuring the hot path would risk breaking
+// the actual gating logic to serve a debug/display feature). Reason codes
+// match Mead Hall's spec exactly; falls through to a verbatim description
+// for anything not in their fixed list, which their own consumer already
+// handles via substring matching.
+export function explainExclusion(bit, state, pool = BITS) {
+  if (TEST_POOL_CAP.size > 0 && !TEST_POOL_CAP.has(bit.id)) return "test pool cap";
+  if (bit.status === "parked") return "parked";
+  if (isDeathBlow(bit)) return "death blow";
+  if ((TEXTURE_ROTATION || ALL_BITS_TIMING_ONLY) && isTextureBit(bit)) {
+    // Owned by the texture path now, not loadout() — check ITS gates
+    // instead. If rankTextureCandidates would include it, it's not
+    // excluded at all (caller shouldn't be asking about it); this branch
+    // only runs for bits absent from both scores AND texture candidates.
+    if (!fuelFit(bit, state).available) return "no fuel";
+    const eligiblePools = POOL_FOR_PHASE[state.phase] || ["middle"];
+    if (!eligiblePools.includes(bitPool(bit))) return "past window";
+    const history = state.bitFireHistory || {};
+    const turn = state.turn ?? 0;
+    const last = lastFiredTurnOf(history, bit.id);
+    if (last > 0 && turn - last < bitCooldown(bit)) return "capped";
+    if (bit.max_fires_per_call != null && totalFiresOf(history, bit.id) >= bit.max_fires_per_call) return "capped";
+    if (familyExcluded(bit, pool, history, turn)) return "capped";
+    if (state.absurdityCeiling != null && (bit.absurdity ?? 1) > state.absurdityCeiling) return "past window";
+    return "past window"; // fallback — texture-eligible bit not otherwise explained
+  }
+  if (!fuelFit(bit, state).available) return "no fuel";
+  if (TRIGGER_MATCH && bit.trigger) {
+    const parts = String(bit.trigger).split("|").map((s) => s.trim()).filter(Boolean);
+    const allowlistedParts = parts.filter((p) => EMITTED_TRIGGERS.has(p));
+    if (allowlistedParts.length && !allowlistedParts.some((p) => triggerPresent(p, state))) {
+      return "trigger not met: " + bit.trigger;
+    }
+  }
+  if (bit.latest_turn != null && (state.turn ?? 0) > bit.latest_turn) return "past window";
+  {
+    const history = state.bitFireHistory || {};
+    const fireEntry = history[bit.id];
+    const last = (fireEntry && fireEntry.lastFiredTurn) || 0;
+    const cd = bit.cooldown ?? 4;
+    if (last > 0 && (state.turn ?? 0) - last < cd) return "capped";
+    if (bit.max_fires_per_call != null && totalFiresOf(history, bit.id) >= bit.max_fires_per_call) return "capped";
+  }
+  // Passed loadout()'s gates — if still excluded, it's fitScore's archetype
+  // check (the only remaining -Infinity path in scoreBit for a non-parked,
+  // fueled bit).
+  const arch = bit.archetypes;
+  const eligible =
+    arch === undefined || arch === "universal" ||
+    (Array.isArray(arch) && arch.includes(state.archetype)) ||
+    TEST_UNSCOPE_BITS.has(bit.id);
+  if (!eligible) return "off-archetype";
+  return "unknown"; // shouldn't happen — bit should be in scores if we get here
+}
 // Debug/proof helper (same discipline as steps a-c: prove on a live log before
 // flipping TEXTURE_ROTATION on). Not called by production selection — a quick
 // way to confirm the registry's implicit texture set still matches Bits'
