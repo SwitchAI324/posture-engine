@@ -22,7 +22,7 @@ export const config = { runtime: "edge" };
 
 import { getCall, getCallBySlug, setCall, isConfigured, appendGearEvent, appendBitEvent, clearDeathBlow, getControls, stampArm, fireArm, fireForce, saveTranscript, clearBench } from "../_store.js";
 import { directiveFor } from "../_host_directives.js";
-import { selectBit, rankBits, DEPLOY_THRESHOLD, selectTextureBit } from "../_bits_scorer.js";
+import { selectBit, rankBits, DEPLOY_THRESHOLD, selectTextureBit, rankTextureCandidates } from "../_bits_scorer.js";
 import { archetypeFromBody } from "../_archetype.js";
 // ── ACCUSATION DETECTION (Aug 5, extracted from _gears_tells.js/_gears.js as
 // part of removing gears entirely) ────────────────────────────────────────
@@ -386,6 +386,33 @@ const PRICING_RAISED_DETECT =
 // selectTextureBit() runs exactly as it does today.
 const TEXTURE_INVITES_DETECT =
   /^(1|true|yes|on)$/i.test(String(process.env.TEXTURE_INVITES_DETECT || ""));
+// ── CALLER_PRESENTING ("caller is showing/telling, not asking") ───────────
+// Per pe_spec_aug16_triggers_and_archetypes.md. Distinct dimension from
+// commitment_push (caller asking FOR something) — this is caller SHOWING/
+// TELLING something (product, pitch, credentials). Collapses the old
+// `caller_pitched` name (registered for BIT-119 but never actually built on
+// PE's side — nothing to migrate, this is the real first implementation).
+// PE's emission half only; the registry's trigger:"caller_presenting"
+// declaration on the 11 bits that need it (BIT-113, 119, 203, 206, 207,
+// 216, 229, 334, 503, 515, 516) is only matchable once someone adds
+// "caller_presenting" to the EMITTED_TRIGGERS allowlist in _bits_scorer.js
+// — not this file, that array lives there. OFF by default; when off,
+// readCall's prompt/output are byte-for-byte unchanged.
+const CALLER_PRESENTING_DETECT =
+  /^(1|true|yes|on)$/i.test(String(process.env.CALLER_PRESENTING_DETECT || ""));
+// ── REQUIRES_CONTEXT ("has anything relevant actually been said?") ────────
+// Same spec, item 3. PE's half is deliberately narrow: one cumulative,
+// plain-English running summary of what the caller has concretely
+// described so far (pitchSummary), NOT 27 individual per-bit yes/no
+// judgments — asking one reader call to check every bit's requires_context
+// string every turn would be both expensive and error-prone. The actual
+// fuzzy match (does bit X's requires_context describe something covered by
+// this summary) belongs on the scorer side, which has each bit's
+// requires_context text from the registry; this file only produces the
+// summary being matched against. OFF by default; when off, readCall's
+// prompt/output are byte-for-byte unchanged.
+const REQUIRES_CONTEXT_DETECT =
+  /^(1|true|yes|on)$/i.test(String(process.env.REQUIRES_CONTEXT_DETECT || ""));
 // ── TEXTURE POST-EVENT COOLDOWN ("don't stack texture right on top of a
 // bigger moment") ──────────────────────────────────────────────────────────
 // Two triggers, one cooldown mechanism: right after a sound/gag marker fires
@@ -1141,6 +1168,45 @@ async function readCall(messages, prior) {
           "unsure, report true — most ordinary turns DO have room for a " +
           "little texture.\n"
         : "") +
+      // CALLER_PRESENTING (Aug 16, per PE spec pe_spec_aug16_triggers_and_
+      // archetypes.md) — distinct from commitment_push: this is the caller
+      // SHOWING/TELLING something (their product, pitch, credentials), not
+      // ASKING for something. Deliberately reads the WHOLE conversation
+      // (unlike commitment_push/caller_redirected, which only look at the
+      // most recent turn) because the spec's own threshold is cumulative —
+      // "2+ substantive turns" — not a single-turn event.
+      (CALLER_PRESENTING_DETECT
+        ? "caller_presenting — across the WHOLE call so far (not just the " +
+          "most recent turn), has the caller given AT LEAST TWO substantive " +
+          "turns actively describing what they're selling — their product, " +
+          "service, technology, company, or credentials? This is them " +
+          "SHOWING/TELLING the host something, not asking the host for " +
+          "anything (that's commitment_push, a separate signal). A single " +
+          "pitch sentence is NOT enough — report false until a second real " +
+          "descriptive turn has landed. Once true, it should stay true for " +
+          "the rest of the call even if they stop describing later — this " +
+          "is a threshold that, once crossed, stays crossed.\n"
+        : "") +
+      // REQUIRES_CONTEXT (Aug 16, same spec) — a plain-English RUNNING
+      // summary of what the caller has actually said/described so far,
+      // separate from the phase/pressure/engagement judgments above. This
+      // is the PE-side half of the requires_context soft-filter: bits'
+      // requires_context strings (e.g. "spammer has described a product
+      // that maps to a film") get fuzzy-matched against THIS summary on
+      // the scorer side, not judged individually here — asking this one
+      // reader to check 27 separate per-bit conditions every turn would be
+      // both expensive and error-prone; one cumulative summary is cheap
+      // and lets the scorer do its own matching against each bit's text.
+      (REQUIRES_CONTEXT_DETECT
+        ? "pitch_summary — in ONE short plain-English sentence, what has " +
+          "the caller concretely described or claimed so far in this call " +
+          "(their product/service/company/industry, any specific claims " +
+          "made, anything personal they've asked for or been asked)? Be " +
+          "concrete and specific, not generic — \"solar panel financing, " +
+          "claims a partnership with the caller's utility company\" is " +
+          "useful; \"a business thing\" is not. If genuinely nothing " +
+          "concrete has been said yet, reply with an empty string.\n"
+        : "") +
       (() => {
         // Build the Reply-EXACTLY line from whichever flags are on, instead
         // of a nested ternary per combination — scales cleanly as more
@@ -1151,6 +1217,8 @@ async function readCall(messages, prior) {
         if (CALLER_CRUDE_DETECT) fields.push('"caller_crude":"none"|"impersonal"|"personal"');
         if (PRICING_RAISED_DETECT) fields.push('"pricing_raised":true|false');
         if (TEXTURE_INVITES_DETECT) fields.push('"texture_invited":true|false');
+        if (CALLER_PRESENTING_DETECT) fields.push('"caller_presenting":true|false');
+        if (REQUIRES_CONTEXT_DETECT) fields.push('"pitch_summary":".."');
         return "Reply EXACTLY: {" + fields.join(",") + "}";
       })();
     const r = await fetch(ANTHROPIC_URL, {
@@ -1245,6 +1313,22 @@ async function readCall(messages, prior) {
       );
       return null;
     }
+    // CALLREAD-RAW (Aug 17) — the exact, unmodified phase this turn's reader
+    // returned, logged BEFORE the legal-value filter below or any latch/merge
+    // logic in blendRead() ever touches it. Built specifically to settle the
+    // phase-stuck-at-opening question: was directly readable via the
+    // OVERLAY-DECISION logs that businessLatched never flips, but nothing
+    // showed whether the READER itself kept saying "opening" (a judgment
+    // question) or said something else that failed to persist (a write/merge
+    // bug) — those look identical from stored.phase alone. Also logs the
+    // prior phase this same call() was told, so a real transcript of
+    // "prior=X, reader said Y" exists across turns instead of inferring it.
+    console.log(
+      "CALLREAD-RAW priorPhase=" + (p.phase || "opening") +
+      " rawPhase=" + JSON.stringify(parsed.phase) +
+      " rawPressure=" + JSON.stringify(parsed.pressure) +
+      " rawEngagement=" + JSON.stringify(parsed.engagement)
+    );
     // Validate each field against legal values; drop anything illegal.
     const legal = {
       phase: ["opening", "pitching", "probing", "drifting"],
@@ -1283,6 +1367,20 @@ async function readCall(messages, prior) {
     // this turn's read only.
     if (TEXTURE_INVITES_DETECT) {
       out.textureInvited = parsed.texture_invited === true;
+    }
+    // CALLER_PRESENTING (flag-gated): strict boolean. blendRead below is
+    // what actually makes this one-way (see there) — this is just this
+    // turn's raw read.
+    if (CALLER_PRESENTING_DETECT) {
+      out.callerPresenting = parsed.caller_presenting === true;
+    }
+    // REQUIRES_CONTEXT (flag-gated): free text, defaults to empty string on
+    // anything not a real non-empty string. Not latched here either — the
+    // reader re-derives the full cumulative summary fresh each turn (it's
+    // told to look at the WHOLE call, not just this turn), so each new
+    // value is already a complete replacement, not an increment.
+    if (REQUIRES_CONTEXT_DETECT) {
+      out.pitchSummary = typeof parsed.pitch_summary === "string" ? parsed.pitch_summary.trim() : "";
     }
     return Object.keys(out).length ? out : null;
   } catch {
@@ -1334,6 +1432,23 @@ function blendRead(keywordState, read) {
   // for the rest of the call; this is read fresh every turn.
   if (typeof read.textureInvited === "boolean") {
     out.textureInvited = read.textureInvited;
+  }
+  // CALLER_PRESENTING: ONE-WAY LATCH, same pattern as pricingRaised above —
+  // only ever WRITE true, never explicitly write false. The spec's own
+  // framing ("2+ substantive turns... stays true even if they stop
+  // describing later") is exactly the pricingRaised shape: a threshold
+  // that, once crossed, stays known rather than a momentary event.
+  if (read.callerPresenting === true) {
+    out.callerPresenting = true;
+  }
+  // PITCH_SUMMARY: NOT latched — the reader re-derives the full cumulative
+  // summary from the whole call every turn (see readCall's prompt), so each
+  // new non-empty value is already a complete replacement of the prior one,
+  // not something to merge or append to. Only write when the reader
+  // actually returned something (avoids clobbering a real summary with an
+  // empty string on a turn the reader failed/skipped this field).
+  if (typeof read.pitchSummary === "string" && read.pitchSummary) {
+    out.pitchSummary = read.pitchSummary;
   }
   // ONE-WAY BUSINESS LATCH (phase-overlay split): the first turn the call is
   // read as non-"opening", latch businessLatched=true so completions serves the
@@ -1403,6 +1518,13 @@ export default async function handler(req) {
   if (req.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
   }
+  // MODEL-ACTIVE (Aug 16) — logs the model this specific request will run
+  // on. Moved to AFTER the GET/method checks (audit fix, Aug 16) - it was
+  // originally the very first line of the handler, which meant every
+  // health-check ping logged it too, not just real completions. Still
+  // fires before any other real processing (bit scoring, history prep,
+  // etc.) - just past the two branches that never reach a real call.
+  console.log("MODEL-ACTIVE model=" + MODEL());
 
   // Optional shared secret. If PROXY_SHARED_SECRET is set, the caller must
   // send it as `Authorization: Bearer <secret>`. Leave unset to skip auth
@@ -4084,11 +4206,32 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           phase: phaseOf(r.id), // raw phase_pref ("opening"/"pitching"/"probing"/
                                 //   "drifting"/"any") — Mead Hall groups live
         })),
-        scores: Object.fromEntries(ranked.map((r) => [r.id, +r.score.toFixed(2)])),
+        scores: (() => {
+          // MEAD HALL VISIBILITY FIX (Aug 17) — once TEXTURE_ROTATION/ALL_
+          // BITS_TIMING_ONLY is on, loadout() removes texture bits from
+          // `ranked` entirely (they're owned by selectTextureBit() instead,
+          // a completely separate pool). Mead Hall's shading is presence-
+          // in-`scores`-only, so those bits would show permanently gray —
+          // eligible in reality, invisible in the panel, indistinguishable
+          // from genuinely excluded. rankTextureCandidates() mirrors
+          // selectTextureBit()'s own filter exactly, just returns every
+          // eligible candidate instead of collapsing to one pick. Merged
+          // in here rather than a separate field so Mead Hall's existing
+          // "present = colored" rule keeps working with zero changes on
+          // their side.
+          const base = Object.fromEntries(ranked.map((r) => [r.id, +r.score.toFixed(2)]));
+          const texture = rankTextureCandidates(scorerState);
+          for (const t of texture) base[t.id] = t.score;
+          return base;
+        })(),
         // per-bit phase group, parallel to scores, so Mead Hall's opening-bits
         // panel can separate opening bits from the rest without a static list
         // (a static list goes stale whenever Bits adds an opening bit).
-        phases: Object.fromEntries(ranked.map((r) => [r.id, phaseOf(r.id)])),
+        phases: (() => {
+          const base = Object.fromEntries(ranked.map((r) => [r.id, phaseOf(r.id)]));
+          for (const t of rankTextureCandidates(scorerState)) base[t.id] = t.phase;
+          return base;
+        })(),
       },
       "engine"
     );
