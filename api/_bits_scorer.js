@@ -432,6 +432,46 @@ export function selectTextureBit(state, { pool = BITS } = {}) {
 export function textureBitIds(pool = BITS) {
   return pool.filter(isTextureBit).map((b) => b.id);
 }
+// MEAD HALL VISIBILITY (Aug 17) — the actual bug this fixes: once TEXTURE_
+// ROTATION/ALL_BITS_TIMING_ONLY is on, loadout() deliberately REMOVES texture
+// bits from the main scored pool (they're owned by selectTextureBit() instead)
+// — but selectTextureBit() only ever returns ONE winning pick or null, so
+// every OTHER eligible texture bit becomes invisible to anything reading
+// rankBits()'s output. Mead Hall's panel reads gear_state.scores, built from
+// exactly that output — so a texture bit could be genuinely eligible and
+// still show permanently gray, with no way to tell "excluded" from "just not
+// the winner this turn" apart. This mirrors selectTextureBit()'s own
+// candidate filter EXACTLY (same gates, same order) but returns the whole
+// eligible list instead of collapsing to one pick, so callers can surface
+// "these are live options" without duplicating or drifting from the real
+// selection logic. Score is wait-time (turns since last fire, or `turn` itself
+// if never fired) — an honest, meaningful number (longer wait = more likely
+// to be picked next), not a fabricated placeholder.
+export function rankTextureCandidates(state, { pool = BITS } = {}) {
+  if (!TEXTURE_ROTATION && !ALL_BITS_TIMING_ONLY) return [];
+  const eligiblePools = POOL_FOR_PHASE[state.phase] || ["middle"];
+  const history = state.bitFireHistory || {};
+  const turn = state.turn ?? 0;
+  const candidates = pool.filter((b) => {
+    if (!isTextureBit(b)) return false;
+    if (!fuelFit(b, state).available) return false;
+    if (!eligiblePools.includes(bitPool(b))) return false;
+    const last = lastFiredTurnOf(history, b.id);
+    if (last > 0 && turn - last < bitCooldown(b)) return false;
+    if (b.max_fires_per_call != null && totalFiresOf(history, b.id) >= b.max_fires_per_call) return false;
+    if (familyExcluded(b, pool, history, turn)) return false;
+    if (state.absurdityCeiling != null && (b.absurdity ?? 1) > state.absurdityCeiling) return false;
+    return true;
+  });
+  return candidates
+    .map((b) => ({
+      id: b.id,
+      name: b.name,
+      score: Math.max(1, turn - lastFiredTurnOf(history, b.id)),
+      phase: b.phase_pref || "any",
+    }))
+    .sort((a, b) => b.score - a.score);
+}
 // --- sequencing helpers ---------------------------------------------------
 const gv = (b, axis, st) => (b.gear && b.gear[axis] && b.gear[axis][st]) || 0;
 // amplify level = how much a bit pushes toward STUNNED vs BORED (the X axis of
