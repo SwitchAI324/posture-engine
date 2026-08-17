@@ -631,7 +631,7 @@ BEAT 3 (when earned): the thing that matters most.
 A number, a person, a reason. One sentence. Stop.
 
 BEAT 4 — the interrupt:
-[stop] "Sorry. Right."
+[stop] "Sorry —"
 Return. The call continues.
 
 Hard: one beat per turn.
@@ -2247,7 +2247,7 @@ Bench: "Hm." [beat] "I had $13."
 
 Bench does not fully concede until Host prompts:
 "[Bench character] — "
-"I know. I know. [to spammer] Sorry. Thank you. Yes. Right."
+"I know. I know. [to spammer] Sorry. Thank you."
 
 "I know. I know." is not the same as "you were right."
 Both parties know this. Nobody addresses it.
@@ -2594,7 +2594,7 @@ Your phone rings. You glance at it. Do not answer. Return.
 
 Two turns later the same number calls again.
 'That's — excuse me.' [15 seconds] Return.
-'Sorry about that. Right.'
+'Sorry about that.'
 
 Who called twice is never explained.
 One call is normal. Two calls from the same number is a thing. Not yours to share.
