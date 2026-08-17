@@ -271,7 +271,34 @@ const TEXTURE_LOTTERY =
   /^(1|true|yes|on)$/i.test(String(process.env.TEXTURE_LOTTERY || ""));
 const TEXTURE_LOTTERY_TOP_N = parseInt(process.env.TEXTURE_LOTTERY_TOP_N || "4", 10);
 const isTextureBit = (b) =>
-  b.status !== "parked" && !isDeathBlow(b) && !b.trigger && !b.lane;
+  ALL_BITS_TIMING_ONLY ||
+  (b.status !== "parked" && !isDeathBlow(b) && !b.trigger && !b.lane);
+// ── TEST_ALL_BITS_TIMING_ONLY (Aug 16) ─────────────────────────────────
+// Andrew's ask: every bit available, gated ONLY by phase/cooldown timing,
+// nothing else — no trigger required, no archetype required. TEST-MODE
+// ONLY, default off (never wanted on a real call — a spam call SHOULD
+// only get bits that fit what's actually happened, this is a deliberate
+// "hear everything" testing mode, not a production improvement).
+//
+// Widening isTextureBit() above (rather than adding a second, separate
+// bypass) means every non-parked, non-death-blow bit routes through
+// selectTextureBit()'s existing phase+cooldown LRU rotation — the exact
+// "limited only by timing" mechanism this file already has, just now
+// applied to all ~161 bits instead of the 73 that were structurally
+// texture-shaped. This flag alone is not enough on its own, though —
+// loadout()'s TEXTURE_ROTATION exclusion line only removes a bit from
+// gear-scoring when BOTH TEXTURE_ROTATION and isTextureBit(b) are true,
+// so this flag also forces TEXTURE_ROTATION on beneath it (see below) —
+// setting only TEST_ALL_BITS_TIMING_ONLY is sufficient, no need to also
+// set TEXTURE_ROTATION separately.
+//
+// Deliberately NOT bypassed: fuelFit() (missing dossier fuel is a real,
+// not artificial, hard requirement — a bit can't reference company_news
+// with no company_news regardless of timing) and TEST_POOL_CAP (a
+// separate, narrower test tool that should still work normally if both
+// are set at once).
+const ALL_BITS_TIMING_ONLY =
+  /^(1|true|yes|on)$/i.test(String(process.env.TEST_ALL_BITS_TIMING_ONLY || ""));
 // PHASE -> which pool(s) are eligible this turn. No grace on a phase flip: a
 // bit whose pool falls out of this set is immediately ineligible, per spec.
 // An unrecognized/absent state.phase falls back to ["middle"] so nothing goes
@@ -310,18 +337,22 @@ const totalFiresOf = (history, bitId) => {
 // design (Andrew: "so long as Bits knows it manages that too" — one
 // declaration on EITHER side is enough, PE checks both directions, Bits
 // should NOT duplicate an exclusion on both bits unless they genuinely want
-// belt-and-suspenders documentation — a single declaration already fully
-// enforces it): a bit is excluded if (a) ITS OWN excludes_family lists a
-// family that fired recently, OR (b) something that fired recently has an
-// excludes_family list naming THIS bit's own family. Window is
-// FAMILY_EXCLUSION_WINDOW turns (default 3) — same "recently" concept as
-// cooldown, but checking OTHER bits' fires, not this bit's own.
-const FAMILY_EXCLUSION_WINDOW = parseInt(process.env.FAMILY_EXCLUSION_WINDOW || "3", 10);
+// SIMPLIFIED (Aug 16, Andrew: don't want to manage a separate excludes_
+// family cross-reference field) — SAME-FAMILY membership alone is now
+// mutually exclusive. Two bits sharing any family value are treated as
+// "the same beat, already covered" — the second one is blocked for the
+// rest of the window once the first has fired. Old cross-reference
+// design (excludes_family) removed entirely: it had 0 entries anywhere
+// in the registry, so this changes nothing that was actually live.
+// Window is FAMILY_EXCLUSION_WINDOW turns, default effectively whole-
+// call (999 — no real call runs that many turns) since the actual ask
+// is "one per group per call," not a short cooldown-style window; still
+// tunable down if a shorter window is ever wanted instead.
+const FAMILY_EXCLUSION_WINDOW = parseInt(process.env.FAMILY_EXCLUSION_WINDOW || "999", 10);
 const asArray = (v) => (v == null ? [] : Array.isArray(v) ? v : [v]);
 function familyExcluded(b, pool, history, turn) {
   const myFamilies = asArray(b.family);
-  const myExcludes = asArray(b.excludes_family);
-  if (!myFamilies.length && !myExcludes.length) return null; // opts out entirely
+  if (!myFamilies.length) return null; // no family declared = opts out entirely
   for (const other of pool) {
     if (other.id === b.id) continue;
     const last = lastFiredTurnOf(history, other.id);
@@ -329,14 +360,9 @@ function familyExcluded(b, pool, history, turn) {
     const since = turn - last;
     if (since < 0 || since >= FAMILY_EXCLUSION_WINDOW) continue; // outside window
     const otherFamilies = asArray(other.family);
-    const otherExcludes = asArray(other.excludes_family);
-    // Direction A: THIS bit excludes a family the OTHER bit belongs to.
-    if (myExcludes.length && otherFamilies.some((f) => myExcludes.includes(f))) {
-      return { blockedBy: other.id, via: "my excludes_family -> their family" };
-    }
-    // Direction B: the OTHER bit excludes a family THIS bit belongs to.
-    if (otherExcludes.length && myFamilies.some((f) => otherExcludes.includes(f))) {
-      return { blockedBy: other.id, via: "their excludes_family -> my family" };
+    const shared = myFamilies.find((f) => otherFamilies.includes(f));
+    if (shared) {
+      return { blockedBy: other.id, via: "shared family: " + shared };
     }
   }
   return null;
@@ -366,7 +392,7 @@ function familyExcluded(b, pool, history, turn) {
 //     they rotate through LRU like any other texture bit; which rung they
 //     perform is a directive-side (prompt) decision, not a scorer one.
 export function selectTextureBit(state, { pool = BITS } = {}) {
-  if (!TEXTURE_ROTATION) return null;
+  if (!TEXTURE_ROTATION && !ALL_BITS_TIMING_ONLY) return null;
   const eligiblePools = POOL_FOR_PHASE[state.phase] || ["middle"];
   const history = state.bitFireHistory || {};
   const turn = state.turn ?? 0;
@@ -615,8 +641,10 @@ export function loadout(state, { pool = BITS } = {}) {
     // TEXTURE ROTATION (step d): once on, the texture bits are OWNED by
     // selectTextureBit()'s phase+cooldown LRU rotation, not gear-scored here
     // anymore. Off (default) -> this line is a no-op and loadout is byte-for-
-    // byte the same pool it was before this feature existed.
-    if (TEXTURE_ROTATION && isTextureBit(b)) return false;
+    // byte the same pool it was before this feature existed. ALL_BITS_
+    // TIMING_ONLY (Aug 16, test-mode) ORs in here too, rather than needing
+    // TEXTURE_ROTATION set separately — see that flag's own comment.
+    if ((TEXTURE_ROTATION || ALL_BITS_TIMING_ONLY) && isTextureBit(b)) return false;
     if (!fuelFit(b, state).available) return false; // missing ammo — hard gate
     // TRIGGER GATE (step b) — event-gated eligibility, ALLOWLIST-scoped.
     // Only bits whose trigger is in EMITTED_TRIGGERS are gated here; a bit with
