@@ -1514,9 +1514,29 @@
     if(!g.scores) return false;              // no scores map yet -> unknown, not excluded
     return g.scores[b.bit_id]==null;         // absent from the map -> not in play this call
   }
+  // Map PE's why_excluded reason codes to a short label + full tooltip. Reads
+  // gear_state.why_excluded = { "<bit_id>": "<code>" }. Non-breaking: when the field is absent
+  // we fall back to the generic "not in play". Codes are matched loosely so PE's exact spelling
+  // (parked / archetype / missing_fuel / past_window …) doesn't have to be pinned first.
+  function excludeReason(code){
+    const c=String(code||'').toLowerCase();
+    if(/park/.test(c))                 return ['parked','parked \u2014 deliberately unavailable this call'];
+    if(/arch/.test(c))                 return ['off-archetype','wrong archetype for this target \u2014 not scored on this call'];
+    if(/fuel|hook|fact|scout/.test(c)) return ['no fuel','missing the scouted fact it needs \u2014 not fuelled for this target'];
+    if(/window|phase|late|past/.test(c))return ['past window','its phase has passed \u2014 the window to fire it is closed'];
+    if(/cap|limit|used/.test(c))       return ['capped','hit its per-call cap \u2014 already used up'];
+    if(c)                              return [c.slice(0,14), 'not in play \u2014 '+c];
+    return null;
+  }
   function scoreCell(b){
     const s=bitScore(b); const bar=(lastGear||{}).deploy_bar;
-    if(bitExcluded(b)) return '<span class="bscore out" title="not in play this call \u2014 excluded from the pool (parked, wrong archetype, missing fuel, or past its window). Arming it will never fire.">not in play</span>';
+    if(bitExcluded(b)){
+      const why=((lastGear||{}).why_excluded||{})[b.bit_id];
+      const r=excludeReason(why);
+      const label=r?r[0]:'not in play';
+      const tip=(r?r[1]:'not in play this call \u2014 excluded from the pool (parked, wrong archetype, missing fuel, or past its window)')+'. Arming it will never fire.';
+      return '<span class="bscore out" title="'+tip.replace(/"/g,'')+'">'+label+'</span>';
+    }
     if(s==null) return '<span class="bscore dim">\u2014</span>';
     const n=(typeof s==='number')?s.toFixed(1):s;
     const clears=(typeof s==='number' && typeof bar==='number' && s>=bar);
