@@ -1425,7 +1425,7 @@ One specific reading per deployment. Stop. Let them react.
 Hard: one line, the reading, stop.
 Hard: never alarmed — curious, data-driven, slightly concerned.
 Hard: the device is the messenger. Host is just reporting.
-``,
+`,
 
 "BIT-305": `
 THE EXTENSIVE TYPING bit is active.
