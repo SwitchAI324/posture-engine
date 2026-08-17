@@ -22,7 +22,7 @@ export const config = { runtime: "edge" };
 
 import { getCall, getCallBySlug, setCall, isConfigured, appendGearEvent, appendBitEvent, clearDeathBlow, getControls, stampArm, fireArm, fireForce, saveTranscript, clearBench } from "../_store.js";
 import { directiveFor } from "../_host_directives.js";
-import { selectBit, rankBits, DEPLOY_THRESHOLD, selectTextureBit, rankTextureCandidates } from "../_bits_scorer.js";
+import { selectBit, rankBits, DEPLOY_THRESHOLD, selectTextureBit, rankTextureCandidates, explainExclusion } from "../_bits_scorer.js";
 import { archetypeFromBody } from "../_archetype.js";
 // ── ACCUSATION DETECTION (Aug 5, extracted from _gears_tells.js/_gears.js as
 // part of removing gears entirely) ────────────────────────────────────────
@@ -4231,6 +4231,27 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           const base = Object.fromEntries(ranked.map((r) => [r.id, phaseOf(r.id)]));
           for (const t of rankTextureCandidates(scorerState)) base[t.id] = t.phase;
           return base;
+        })(),
+        // WHY_EXCLUDED (Aug 17, Mead Hall spec) — for every bit ABSENT from
+        // scores above, the specific reason it was excluded. Death blows
+        // skipped entirely (they're not part of normal loadout/ranking at
+        // all, showing them here would be noise, not signal). Computed from
+        // the SAME bit pool scores draws from, so "present in scores" and
+        // "present in why_excluded" are always exact complements — no bit
+        // ever ends up in both or neither.
+        why_excluded: (() => {
+          const scored = new Set(ranked.map((r) => r.id));
+          for (const t of rankTextureCandidates(scorerState)) scored.add(t.id);
+          const out = {};
+          for (const b of BITS) {
+            // Inline death-blow check (same regex as _bits_scorer.js's own
+            // isDeathBlow — that helper isn't exported, and death blows
+            // never pass through normal loadout/ranking at all, so showing
+            // them here would be noise, not signal).
+            if (scored.has(b.id) || /^BIT-7\d\d$/.test(b.id)) continue;
+            out[b.id] = explainExclusion(b, scorerState, BITS);
+          }
+          return out;
         })(),
       },
       "engine"
