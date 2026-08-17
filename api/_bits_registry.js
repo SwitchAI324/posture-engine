@@ -1,7 +1,8 @@
 // SpamViking — Bits Registry
 // Source of truth: SpamViking_BitsRegistry.json + session edits
 // Last updated: August 16, 2026
-// CRITICAL: archetypes field restored — do not remove until PE updates scorer gate
+// CRITICAL: archetypes field restored — do not remove until PE confirms scorer gate update
+// family field: fine-grained 21-subgroup values on ALL 161 entries including parked
 
 export const BITS = [
   {
@@ -17,7 +18,7 @@ export const BITS = [
       "min_between": 2,
       "rung_3_earliest_turn": 6
     },
-    "family": "verbal",
+    "family": "echo_reflection",
     "absurdity": 3,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -32,7 +33,7 @@ export const BITS = [
       "min_between": 3
     },
     "pool": "middle",
-    "family": "verbal",
+    "family": "cultural_reference",
     "absurdity": 3,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -57,7 +58,7 @@ export const BITS = [
     "count_label": "substitutions",
     "cooldown": 2,
     "pool": "middle",
-    "family": "verbal",
+    "family": "language_mangling",
     "absurdity": 4,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -70,7 +71,7 @@ export const BITS = [
     "count_label": "eggcorns",
     "cooldown": 3,
     "pool": "middle",
-    "family": "verbal",
+    "family": "language_mangling",
     "absurdity": 3,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -81,7 +82,7 @@ export const BITS = [
     "status": "parked",
     "cooldown": 4,
     "pool": "early",
-    "family": "verbal",
+    "family": "language_mangling",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -91,7 +92,7 @@ export const BITS = [
     "status": "active",
     "cooldown": 4,
     "pool": "middle",
-    "family": "verbal",
+    "family": "language_mangling",
     "absurdity": 3,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -102,7 +103,7 @@ export const BITS = [
     "status": "active",
     "cooldown": 3,
     "pool": "middle",
-    "family": "verbal",
+    "family": "language_mangling",
     "absurdity": 4,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -113,7 +114,7 @@ export const BITS = [
     "status": "parked",
     "cooldown": 3,
     "pool": "middle",
-    "family": "verbal",
+    "family": "language_mangling",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -123,7 +124,7 @@ export const BITS = [
     "status": "parked",
     "cooldown": 4,
     "pool": "middle",
-    "family": "verbal",
+    "family": "name_trouble",
     "absurdity": 2,
     "vocal_tag": "surprised",
     "park_reason": "Andrew review Aug 16 \u2014 name trilogy too complex, parts absorbed elsewhere",
@@ -135,7 +136,7 @@ export const BITS = [
     "status": "parked",
     "cooldown": 4,
     "pool": "late",
-    "family": "verbal",
+    "family": "echo_reflection",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -146,7 +147,7 @@ export const BITS = [
     "cooldown": 3,
     "phase_pref": "drifting",
     "trigger": "extended_stall",
-    "family": "verbal",
+    "family": "social_awkward",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -159,7 +160,7 @@ export const BITS = [
     "cooldown": 3,
     "phase_pref": "drifting",
     "trigger": "extended_stall",
-    "family": "verbal",
+    "family": "social_awkward",
     "absurdity": 2,
     "max_fires_per_call": 3,
     "vocal_tag": "surprised",
@@ -171,7 +172,7 @@ export const BITS = [
     "status": "active",
     "cooldown": 5,
     "pool": "middle",
-    "family": "verbal",
+    "family": "cultural_reference",
     "absurdity": 3,
     "vocal_tag": "excited",
     "requires_context": "spammer has described a product, service, or situation that maps to a film",
@@ -184,7 +185,7 @@ export const BITS = [
     "status": "active",
     "cooldown": 5,
     "pool": "middle",
-    "family": "verbal",
+    "family": "cultural_reference",
     "absurdity": 3,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -195,7 +196,7 @@ export const BITS = [
     "status": "parked",
     "cooldown": 5,
     "pool": "middle",
-    "family": "verbal",
+    "family": "language_mangling",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -205,7 +206,7 @@ export const BITS = [
     "status": "parked",
     "cooldown": 3,
     "trigger": "caller_named_competitor",
-    "family": "verbal",
+    "family": "name_trouble",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -222,7 +223,7 @@ export const BITS = [
       "rung_4_earliest_turn": 14
     },
     "pool": "middle",
-    "family": "verbal",
+    "family": "cultural_reference",
     "absurdity": 4,
     "vocal_tag": "excited",
     "requires_context": "spammer has said something that contains a word or phrase matchable to a song lyric",
@@ -238,7 +239,7 @@ export const BITS = [
     "cooldown": 6,
     "phase_pref": "pitching",
     "trigger": "caller_made_claim",
-    "family": "verbal",
+    "family": "reactive_one_beat",
     "absurdity": 3,
     "vocal_tag": "surprised",
     "requires_context": "spammer has made a specific factual claim about their product or service",
@@ -252,7 +253,7 @@ export const BITS = [
     "phase_pref": "pitching",
     "trigger": "caller_presenting",
     "pool": "middle",
-    "family": "verbal",
+    "family": "surprisingly_knowing",
     "absurdity": 4,
     "vocal_tag": "excited",
     "requires_context": "spammer has actively pitched their product or service",
@@ -264,7 +265,7 @@ export const BITS = [
     "status": "active",
     "cooldown": 5,
     "pool": "middle",
-    "family": "verbal",
+    "family": "reactive_one_beat",
     "absurdity": 4,
     "vocal_tag": "sad",
     "requires_context": "spammer has said something with emotional or personal resonance",
@@ -276,7 +277,7 @@ export const BITS = [
     "status": "parked",
     "cooldown": 4,
     "pool": "early",
-    "family": "verbal",
+    "family": "name_trouble",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -286,7 +287,7 @@ export const BITS = [
     "status": "parked",
     "cooldown": 6,
     "pool": "middle",
-    "family": "verbal",
+    "family": "reactive_one_beat",
     "absurdity": 1,
     "park_reason": "Andrew review Aug 5 \u2014 too thin",
     "archetypes": "universal"
@@ -297,7 +298,7 @@ export const BITS = [
     "status": "parked",
     "cooldown": 4,
     "pool": "early",
-    "family": "verbal",
+    "family": "reactive_one_beat",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -307,7 +308,7 @@ export const BITS = [
     "status": "parked",
     "cooldown": 5,
     "pool": "middle",
-    "family": "verbal",
+    "family": "stall_buy_time",
     "absurdity": 3,
     "vocal_tag": "mysterious",
     "park_reason": "Andrew review Aug 16 \u2014 previous vendor beat moved to host prompt texture",
@@ -321,7 +322,7 @@ export const BITS = [
     "count_label": "tangents",
     "cooldown": 3,
     "pool": "middle",
-    "family": "verbal",
+    "family": "reactive_one_beat",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -331,7 +332,7 @@ export const BITS = [
     "status": "active",
     "cooldown": 4,
     "pool": "middle",
-    "family": "verbal",
+    "family": "reactive_one_beat",
     "absurdity": 4,
     "vocal_tag": "neutral",
     "archetypes": "universal"
@@ -344,7 +345,7 @@ export const BITS = [
     "count_label": "self-corrections",
     "cooldown": 3,
     "pool": "middle",
-    "family": "verbal",
+    "family": "reactive_one_beat",
     "absurdity": 1,
     "park_reason": "Andrew review Aug 5 \u2014 too thin",
     "archetypes": "universal"
@@ -357,7 +358,7 @@ export const BITS = [
     "phase_pref": "drifting",
     "trigger": "extended_stall",
     "pool": "middle",
-    "family": "verbal",
+    "family": "stall_buy_time",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -369,7 +370,7 @@ export const BITS = [
     "phase_pref": "drifting",
     "trigger": "extended_stall",
     "pool": "middle",
-    "family": "verbal",
+    "family": "reactive_one_beat",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -381,7 +382,7 @@ export const BITS = [
     "count_label": "genuine answers",
     "cooldown": 5,
     "trigger": "phase:opening",
-    "family": "structural",
+    "family": "opening_texture",
     "absurdity": 2,
     "park_reason": "Andrew review Aug 5 \u2014 too thin",
     "archetypes": "universal"
@@ -394,7 +395,7 @@ export const BITS = [
     "count_label": "busy exchanges",
     "cooldown": 4,
     "trigger": "phase:opening",
-    "family": "structural",
+    "family": "opening_texture",
     "absurdity": 4,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -405,7 +406,7 @@ export const BITS = [
     "status": "parked",
     "cooldown": 6,
     "max_fires_per_call": 1,
-    "family": "structural",
+    "family": "opening_texture",
     "absurdity": 3,
     "pool": "middle",
     "vocal_tag": "excited",
@@ -415,22 +416,23 @@ export const BITS = [
   {
     "id": "BIT-133",
     "name": "Audio Verification",
-    "status": "active",
+    "status": "parked",
     "bit_type": "count",
     "count_label": "audio checks",
     "cooldown": 3,
     "trigger": "phase:opening",
-    "family": "structural",
+    "family": "opening_texture",
     "absurdity": 4,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "park_reason": "Andrew review Aug 16 \u2014 audio verification is too thin, covered by opener texture"
   },
   {
     "id": "BIT-134",
     "name": "Six Degrees",
     "status": "active",
     "cooldown": 5,
-    "family": "structural",
+    "family": "social_awkward",
     "absurdity": 2,
     "pool": "middle",
     "vocal_tag": "excited",
@@ -442,7 +444,7 @@ export const BITS = [
     "status": "parked",
     "park_reason": "superseded by BIT-326",
     "cooldown": 4,
-    "family": "personal",
+    "family": "personal_history",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -452,7 +454,7 @@ export const BITS = [
     "status": "parked",
     "park_reason": "superseded by BIT-327",
     "cooldown": 4,
-    "family": "personal",
+    "family": "personal_history",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -469,7 +471,7 @@ export const BITS = [
       "rung_3_earliest_turn": 8,
       "rung_4_earliest_turn": 14
     },
-    "family": "personal",
+    "family": "personal_history",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -479,7 +481,7 @@ export const BITS = [
     "status": "active",
     "cooldown": 5,
     "pool": "middle",
-    "family": "personal",
+    "family": "personal_history",
     "absurdity": 3,
     "vocal_tag": "content",
     "archetypes": "universal"
@@ -490,7 +492,7 @@ export const BITS = [
     "status": "active",
     "cooldown": 5,
     "pool": "middle",
-    "family": "personal",
+    "family": "personal_history",
     "absurdity": 3,
     "vocal_tag": "sad",
     "archetypes": "universal"
@@ -501,7 +503,7 @@ export const BITS = [
     "status": "active",
     "cooldown": 5,
     "pool": "middle",
-    "family": "personal",
+    "family": "personal_history",
     "absurdity": 3,
     "vocal_tag": "sad",
     "archetypes": "universal"
@@ -512,7 +514,7 @@ export const BITS = [
     "status": "active",
     "cooldown": 5,
     "pool": "middle",
-    "family": "personal",
+    "family": "personal_history",
     "absurdity": 3,
     "vocal_tag": "sad",
     "archetypes": "universal"
@@ -523,7 +525,7 @@ export const BITS = [
     "status": "parked",
     "cooldown": 5,
     "pool": "middle",
-    "family": "personal",
+    "family": "personal_history",
     "absurdity": 2,
     "park_reason": "Andrew review Aug 5 \u2014 too thin",
     "archetypes": "universal"
@@ -534,7 +536,7 @@ export const BITS = [
     "status": "active",
     "cooldown": 5,
     "pool": "middle",
-    "family": "personal",
+    "family": "personal_history",
     "absurdity": 3,
     "vocal_tag": "content",
     "archetypes": "universal"
@@ -545,7 +547,7 @@ export const BITS = [
     "status": "active",
     "cooldown": 4,
     "pool": "middle",
-    "family": "verbal",
+    "family": "cultural_reference",
     "absurdity": 4,
     "max_fires_per_call": 3,
     "vocal_tag": "excited",
@@ -564,7 +566,7 @@ export const BITS = [
       "rung_4_earliest_turn": 14
     },
     "pool": "middle",
-    "family": "personal",
+    "family": "reactive_one_beat",
     "absurdity": 4,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -582,7 +584,7 @@ export const BITS = [
       "rung_4_earliest_turn": 16
     },
     "pool": "middle",
-    "family": "personal",
+    "family": "personal_history",
     "absurdity": 3,
     "vocal_tag": "sad",
     "archetypes": "universal"
@@ -601,7 +603,7 @@ export const BITS = [
       "rung_4_earliest_turn": 6
     },
     "pool": "middle",
-    "family": "verbal",
+    "family": "name_trouble",
     "absurdity": 3,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -614,7 +616,7 @@ export const BITS = [
     "count_label": "vernacular_uses",
     "cooldown": 4,
     "pool": "middle",
-    "family": "verbal",
+    "family": "language_mangling",
     "absurdity": 4,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -625,7 +627,7 @@ export const BITS = [
     "cooldown": 4,
     "pool": "middle",
     "status": "parked",
-    "family": "structural",
+    "family": "surprisingly_knowing",
     "absurdity": 2,
     "vocal_tag": "excited",
     "park_reason": "Andrew review Aug 16 \u2014 competitor reference too thin",
@@ -640,7 +642,7 @@ export const BITS = [
     "stall_type": "hunt",
     "trigger": "commitment_push",
     "status": "parked",
-    "family": "structural",
+    "family": "process_bureaucracy",
     "absurdity": 1,
     "park_reason": "Andrew review Aug 5 \u2014 too thin, forward reference without payoff",
     "archetypes": "universal"
@@ -650,7 +652,7 @@ export const BITS = [
     "name": "The Agenda Bit",
     "status": "active",
     "cooldown": 3,
-    "family": "structural",
+    "family": "process_bureaucracy",
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "spammer has been pitching for at least 2 turns",
@@ -665,7 +667,7 @@ export const BITS = [
     "stall_type": "hunt",
     "trigger": "documentation_mentioned",
     "status": "active",
-    "family": "structural",
+    "family": "process_bureaucracy",
     "absurdity": 2,
     "vocal_tag": "mysterious",
     "archetypes": "universal"
@@ -675,7 +677,7 @@ export const BITS = [
     "name": "The Reschedule Bit",
     "status": "parked",
     "cooldown": 4,
-    "family": "structural",
+    "family": "process_bureaucracy",
     "absurdity": 3,
     "vocal_tag": "excited",
     "park_reason": "Andrew review Aug 16 \u2014 reschedule bit too procedural, absorbed into stall family",
@@ -686,7 +688,7 @@ export const BITS = [
     "name": "The Document Request + Photo Bit",
     "status": "active",
     "cooldown": 4,
-    "family": "structural",
+    "family": "process_bureaucracy",
     "absurdity": 2,
     "vocal_tag": "excited",
     "trigger": "caller_presenting",
@@ -701,7 +703,7 @@ export const BITS = [
     "count_label": "check-ins",
     "cooldown": 3,
     "pool": "middle",
-    "family": "structural",
+    "family": "missing_person",
     "absurdity": 2,
     "rungs": 3,
     "rung_spacing": {
@@ -718,7 +720,7 @@ export const BITS = [
     "status": "parked",
     "cooldown": 4,
     "pool": "middle",
-    "family": "structural",
+    "family": "process_bureaucracy",
     "absurdity": 1,
     "park_reason": "Andrew review Aug 5 \u2014 too thin",
     "archetypes": "universal"
@@ -729,7 +731,7 @@ export const BITS = [
     "status": "parked",
     "cooldown": 6,
     "pool": "early",
-    "family": "structural",
+    "family": "echo_reflection",
     "absurdity": 1,
     "park_reason": "Andrew review Aug 5 \u2014 too thin",
     "archetypes": "universal"
@@ -742,7 +744,7 @@ export const BITS = [
     "stall_type": "hunt",
     "trigger": "commitment_push|pricing_raised",
     "status": "active",
-    "family": "stall",
+    "family": "stall_buy_time",
     "absurdity": 2,
     "vocal_tag": "calm",
     "requires_context": "spammer has raised pricing or asked for a commitment",
@@ -756,7 +758,7 @@ export const BITS = [
     "count_label": "silences",
     "cooldown": 3,
     "pool": "middle",
-    "family": "stall",
+    "family": "stall_buy_time",
     "absurdity": 2,
     "vocal_tag": "calm",
     "archetypes": "universal"
@@ -767,7 +769,7 @@ export const BITS = [
     "name": "The Join",
     "pool": "middle",
     "status": "parked",
-    "family": "structural",
+    "family": "missing_person",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -777,7 +779,7 @@ export const BITS = [
     "name": "The Accidental Joiner",
     "pool": "middle",
     "status": "parked",
-    "family": "structural",
+    "family": "missing_person",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -787,7 +789,7 @@ export const BITS = [
     "name": "The Two Spammers",
     "pool": "middle",
     "status": "parked",
-    "family": "structural",
+    "family": "process_bureaucracy",
     "absurdity": 1,
     "vocal_tag": "surprised",
     "park_reason": "Andrew review Aug 16 \u2014 two spammers situation too rare",
@@ -803,7 +805,7 @@ export const BITS = [
     "stall_type": "hold",
     "trigger": "caller_went_quiet",
     "status": "parked",
-    "family": "stall",
+    "family": "stall_buy_time",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -814,7 +816,7 @@ export const BITS = [
     "phase_pref": "probing",
     "trigger": "caller_presenting",
     "status": "active",
-    "family": "structural",
+    "family": "process_bureaucracy",
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "spammer has been pitching for at least 3 turns \u2014 probing phase underway",
@@ -833,7 +835,7 @@ export const BITS = [
       "rung_3_earliest_turn": 8,
       "rung_4_earliest_turn": 14
     },
-    "family": "structural",
+    "family": "missing_person",
     "absurdity": 1,
     "vocal_tag": "mysterious",
     "park_reason": "Andrew review Aug 16 \u2014 Bench system work not a bit",
@@ -845,7 +847,7 @@ export const BITS = [
     "name": "The Introduction",
     "pool": "early",
     "status": "parked",
-    "family": "stall",
+    "family": "stall_buy_time",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -855,7 +857,7 @@ export const BITS = [
     "cooldown": 4,
     "pool": "middle",
     "status": "parked",
-    "family": "structural",
+    "family": "process_bureaucracy",
     "absurdity": 1,
     "vocal_tag": "excited",
     "park_reason": "Andrew review Aug 16 \u2014 terrible notes too thin",
@@ -867,7 +869,7 @@ export const BITS = [
     "cooldown": 4,
     "lane": "gag",
     "status": "active",
-    "family": "environment",
+    "family": "reactive_one_beat",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -878,7 +880,7 @@ export const BITS = [
     "cooldown": 5,
     "pool": "early",
     "status": "active",
-    "family": "structural",
+    "family": "name_trouble",
     "absurdity": 2,
     "vocal_tag": "surprised",
     "archetypes": "universal"
@@ -891,7 +893,7 @@ export const BITS = [
     "cooldown": 3,
     "pool": "middle",
     "status": "parked",
-    "family": "stall",
+    "family": "stall_buy_time",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -911,7 +913,7 @@ export const BITS = [
       "rung_3_earliest_turn": 10
     },
     "pool": "middle",
-    "family": "stall",
+    "family": "stall_buy_time",
     "absurdity": 2,
     "vocal_tag": "calm",
     "requires_context": "spammer has been pushing for a decision for at least 2 turns",
@@ -923,7 +925,7 @@ export const BITS = [
     "cooldown": 5,
     "pool": "early",
     "status": "parked",
-    "family": "structural",
+    "family": "name_trouble",
     "absurdity": 1,
     "vocal_tag": "excited",
     "park_reason": "Andrew review Aug 16 \u2014 CC mistake needs to come earlier, parked pending retrigger",
@@ -936,7 +938,7 @@ export const BITS = [
     "phase_pref": "probing",
     "trigger": "documentation_mentioned",
     "status": "active",
-    "family": "structural",
+    "family": "process_bureaucracy",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -947,7 +949,7 @@ export const BITS = [
     "cooldown": 5,
     "pool": "middle",
     "status": "parked",
-    "family": "structural",
+    "family": "missing_person",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -957,7 +959,7 @@ export const BITS = [
     "cooldown": 4,
     "pool": "late",
     "status": "active",
-    "family": "structural",
+    "family": "echo_reflection",
     "absurdity": 2,
     "vocal_tag": "excited",
     "trigger": "documentation_mentioned",
@@ -971,7 +973,7 @@ export const BITS = [
     "cooldown": 3,
     "pool": "middle",
     "status": "parked",
-    "family": "stall",
+    "family": "stall_buy_time",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -981,7 +983,7 @@ export const BITS = [
     "cooldown": 4,
     "pool": "middle",
     "status": "active",
-    "family": "structural",
+    "family": "echo_reflection",
     "absurdity": 2,
     "vocal_tag": "calm",
     "requires_context": "spammer has said at least 3 substantive things \u2014 something to return to",
@@ -996,7 +998,7 @@ export const BITS = [
     "trigger": "phase:probing",
     "pool": "late",
     "status": "parked",
-    "family": "stall",
+    "family": "stall_buy_time",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -1007,7 +1009,7 @@ export const BITS = [
     "phase_pref": "probing",
     "trigger": "phase:probing",
     "status": "parked",
-    "family": "structural",
+    "family": "process_bureaucracy",
     "absurdity": 1,
     "vocal_tag": "excited",
     "park_reason": "Andrew review Aug 16 \u2014 competing vendor too thin outside probing phase",
@@ -1019,7 +1021,7 @@ export const BITS = [
     "cooldown": 4,
     "trigger": "phase:opening",
     "status": "parked",
-    "family": "structural",
+    "family": "opening_texture",
     "absurdity": 1,
     "vocal_tag": "excited",
     "park_reason": "Superseded by BIT-902 (The Weather Remark) in 900s opener block",
@@ -1036,7 +1038,7 @@ export const BITS = [
     "trigger": "documentation_mentioned",
     "status": "active",
     "max_fires_per_call": 5,
-    "family": "stall",
+    "family": "stall_buy_time",
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "spammer has been pushing for commitment \u2014 approval hunt is warranted",
@@ -1045,10 +1047,10 @@ export const BITS = [
   {
     "id": "BIT-234",
     "name": "The Tip Of The Tongue",
-    "status": "active",
+    "status": "parked",
     "bit_type": "count",
     "count_label": "question attempts",
-    "family": "structural",
+    "family": "stall_buy_time",
     "pool": "middle",
     "cooldown": 3,
     "rungs": 4,
@@ -1059,13 +1061,14 @@ export const BITS = [
     "absurdity": 4,
     "vocal_tag": "excited",
     "trigger": "documentation_mentioned",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "park_reason": "Andrew review Aug 16 \u2014 tip of tongue bit too thin without stronger arc"
   },
   {
     "id": "BIT-238",
     "name": "The Deflection",
     "status": "active",
-    "family": "structural",
+    "family": "stall_buy_time",
     "pool": "middle",
     "cooldown": 2,
     "rungs": 4,
@@ -1083,7 +1086,7 @@ export const BITS = [
     "id": "BIT-239",
     "name": "The Camera Reason",
     "status": "active",
-    "family": "structural",
+    "family": "opening_texture",
     "pool": "early",
     "trigger": "none",
     "cooldown": 999,
@@ -1103,7 +1106,7 @@ export const BITS = [
     "name": "Technical Difficulties",
     "pool": "middle",
     "status": "active",
-    "family": "environment",
+    "family": "tech_setup",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1113,7 +1116,7 @@ export const BITS = [
     "name": "The Dog Bit",
     "status": "active",
     "cooldown": 4,
-    "family": "environment",
+    "family": "environment_persistent",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1123,7 +1126,7 @@ export const BITS = [
     "name": "The Insect Bit",
     "status": "active",
     "cooldown": 5,
-    "family": "environment",
+    "family": "environment_persistent",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1135,7 +1138,7 @@ export const BITS = [
     "phase_pref": "pitching",
     "trigger": "commitment_push",
     "status": "active",
-    "family": "environment",
+    "family": "body_health",
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "spammer has asked for a credit card, payment, or high-stakes commitment",
@@ -1146,7 +1149,7 @@ export const BITS = [
     "name": "The Extensive Typing Bit",
     "status": "active",
     "cooldown": 3,
-    "family": "environment",
+    "family": "tech_setup",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1156,7 +1159,7 @@ export const BITS = [
     "name": "Room Presence Bits",
     "status": "active",
     "cooldown": 3,
-    "family": "environment",
+    "family": "other_people",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1168,7 +1171,7 @@ export const BITS = [
     "lane": "gag",
     "status": "active",
     "max_fires_per_call": 1,
-    "family": "environment",
+    "family": "environment_oneshot",
     "absurdity": 2,
     "vocal_tag": "neutral",
     "archetypes": "universal"
@@ -1178,7 +1181,7 @@ export const BITS = [
     "name": "The Snot-Burst / Laughter Reaction",
     "status": "parked",
     "cooldown": 5,
-    "family": "environment",
+    "family": "environment_oneshot",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -1188,7 +1191,10 @@ export const BITS = [
     "status": "active",
     "cooldown": 5,
     "trigger": "call_turn_1",
-    "family": "environment",
+    "family": [
+      "environment_oneshot",
+      "opening_texture"
+    ],
     "absurdity": 2,
     "vocal_tag": "surprised",
     "archetypes": "universal"
@@ -1198,7 +1204,7 @@ export const BITS = [
     "id": "BIT-310",
     "name": "The Scapegoat",
     "status": "active",
-    "family": "personal",
+    "family": "missing_person",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1208,7 +1214,10 @@ export const BITS = [
     "name": "The Sick Day",
     "cooldown": 5,
     "status": "active",
-    "family": "environment",
+    "family": [
+      "environment_persistent",
+      "body_health"
+    ],
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1219,7 +1228,7 @@ export const BITS = [
     "cooldown": 4,
     "pool": "middle",
     "status": "active",
-    "family": "personal",
+    "family": "missing_person",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1230,7 +1239,10 @@ export const BITS = [
     "cooldown": 5,
     "lane": "gag",
     "status": "active",
-    "family": "environment",
+    "family": [
+      "environment_persistent",
+      "body_health"
+    ],
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1242,7 +1254,7 @@ export const BITS = [
     "lane": "gag",
     "status": "active",
     "max_fires_per_call": 1,
-    "family": "environment",
+    "family": "environment_oneshot",
     "absurdity": 2,
     "vocal_tag": "surprised",
     "archetypes": "universal"
@@ -1253,7 +1265,7 @@ export const BITS = [
     "cooldown": 4,
     "pool": "middle",
     "status": "active",
-    "family": "environment",
+    "family": "tech_setup",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1264,7 +1276,7 @@ export const BITS = [
     "cooldown": 5,
     "pool": "middle",
     "status": "active",
-    "family": "environment",
+    "family": "tech_setup",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1276,11 +1288,12 @@ export const BITS = [
     "count_label": "mute incidents",
     "cooldown": 3,
     "pool": "middle",
-    "status": "active",
-    "family": "environment",
+    "status": "parked",
+    "family": "tech_setup",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "park_reason": "Andrew review Aug 16 \u2014 parked"
   },
   {
     "id": "BIT-319",
@@ -1288,7 +1301,7 @@ export const BITS = [
     "cooldown": 5,
     "pool": "middle",
     "status": "active",
-    "family": "environment",
+    "family": "other_people",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1300,7 +1313,7 @@ export const BITS = [
     "lane": "gag",
     "status": "active",
     "max_fires_per_call": 1,
-    "family": "environment",
+    "family": "environment_oneshot",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1311,7 +1324,7 @@ export const BITS = [
     "cooldown": 5,
     "pool": "middle",
     "status": "active",
-    "family": "environment",
+    "family": "other_people",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1322,7 +1335,7 @@ export const BITS = [
     "cooldown": 5,
     "pool": "middle",
     "status": "active",
-    "family": "environment",
+    "family": "other_people",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1333,7 +1346,7 @@ export const BITS = [
     "cooldown": 4,
     "pool": "middle",
     "status": "active",
-    "family": "environment",
+    "family": "other_people",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1345,7 +1358,7 @@ export const BITS = [
     "phase_pref": "drifting",
     "trigger": "extended_stall",
     "status": "active",
-    "family": "environment",
+    "family": "stall_buy_time",
     "absurdity": 2,
     "vocal_tag": "calm",
     "archetypes": "universal"
@@ -1357,7 +1370,7 @@ export const BITS = [
     "phase_pref": "drifting",
     "trigger": "extended_stall",
     "status": "active",
-    "family": "personal",
+    "family": "stall_buy_time",
     "absurdity": 2,
     "vocal_tag": "calm",
     "archetypes": "universal"
@@ -1367,7 +1380,7 @@ export const BITS = [
     "name": "The Commute",
     "cooldown": 4,
     "status": "active",
-    "family": "environment",
+    "family": "reactive_one_beat",
     "absurdity": 2,
     "pool": "middle",
     "vocal_tag": "content",
@@ -1379,7 +1392,7 @@ export const BITS = [
     "cooldown": 4,
     "pool": "middle",
     "status": "parked",
-    "family": "personal",
+    "family": "personal_history",
     "absurdity": 1,
     "vocal_tag": "content",
     "park_reason": "Andrew review Aug 16 \u2014 directive not yet authored",
@@ -1392,7 +1405,7 @@ export const BITS = [
     "trigger": "caller_named_hobby",
     "pool": "middle",
     "status": "active",
-    "family": "personal",
+    "family": "personal_history",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1404,7 +1417,7 @@ export const BITS = [
     "lane": "gag",
     "status": "parked",
     "max_fires_per_call": 2,
-    "family": "environment",
+    "family": "environment_persistent",
     "absurdity": 2,
     "vocal_tag": "neutral",
     "park_reason": "Split into BIT-330 (Dishwasher), BIT-331 (Thunderstorm), BIT-332 (Dump Truck), BIT-333 (Plane Overhead)",
@@ -1514,7 +1527,7 @@ export const BITS = [
     "status": "active",
     "cooldown": 4,
     "pool": "middle",
-    "family": "dossier",
+    "family": "dossier_call_context",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1525,7 +1538,7 @@ export const BITS = [
     "status": "parked",
     "cooldown": 4,
     "park_reason": "target_background hook unconfirmed \u2014 no Scouting producer yet",
-    "family": "dossier",
+    "family": "dossier_call_context",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -1535,7 +1548,7 @@ export const BITS = [
     "status": "active",
     "cooldown": 4,
     "pool": "middle",
-    "family": "dossier",
+    "family": "dossier_call_context",
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "spammer has mentioned their company or title",
@@ -1548,7 +1561,7 @@ export const BITS = [
     "name": "The Linkedin Bit",
     "pool": "late",
     "status": "active",
-    "family": "dossier",
+    "family": "dossier_call_context",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1559,7 +1572,7 @@ export const BITS = [
     "status": "parked",
     "cooldown": 3,
     "park_reason": "sender_linkedin hook confirmed dead \u2014 no producer",
-    "family": "dossier",
+    "family": "dossier_call_context",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -1569,7 +1582,7 @@ export const BITS = [
     "name": "The Oversight Bit",
     "pool": "late",
     "status": "active",
-    "family": "dossier",
+    "family": "dossier_call_context",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1583,7 +1596,7 @@ export const BITS = [
     "cooldown": 6,
     "trigger": "browsed_tmi",
     "status": "active",
-    "family": "dossier",
+    "family": "dossier_prior_contact",
     "absurdity": 2,
     "vocal_tag": "mysterious",
     "requires_context": "browsed_tmi hook confirmed \u2014 Fiji or travel data available",
@@ -1598,7 +1611,7 @@ export const BITS = [
     "cooldown": 5,
     "trigger": "has_prior_contact",
     "status": "active",
-    "family": "dossier",
+    "family": "dossier_prior_contact",
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "prior contact confirmed in dossier",
@@ -1613,7 +1626,7 @@ export const BITS = [
     "cooldown": 4,
     "trigger": "has_prior_contact",
     "status": "active",
-    "family": "dossier",
+    "family": "dossier_prior_contact",
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "prior contact confirmed, spammer made a commitment",
@@ -1628,7 +1641,7 @@ export const BITS = [
     "cooldown": 5,
     "trigger": "has_prior_contact",
     "status": "active",
-    "family": "dossier",
+    "family": "dossier_prior_contact",
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "prior contact confirmed, spammer made a claim",
@@ -1643,7 +1656,7 @@ export const BITS = [
     "cooldown": 5,
     "trigger": "has_prior_contact",
     "status": "active",
-    "family": "dossier",
+    "family": "dossier_prior_contact",
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "prior contact confirmed, spammer committed to send materials",
@@ -1658,7 +1671,7 @@ export const BITS = [
     "cooldown": 4,
     "trigger": "has_prior_contact",
     "status": "active",
-    "family": "dossier",
+    "family": "dossier_prior_contact",
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "prior contact confirmed, location known",
@@ -1673,7 +1686,7 @@ export const BITS = [
     "cooldown": 4,
     "trigger": "has_prior_contact",
     "status": "active",
-    "family": "dossier",
+    "family": "dossier_prior_contact",
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "prior contact confirmed, materials received",
@@ -1685,7 +1698,7 @@ export const BITS = [
     "cooldown": 5,
     "pool": "late",
     "status": "active",
-    "family": "dossier",
+    "family": "dossier_call_context",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1704,7 +1717,7 @@ export const BITS = [
     "pool": "middle",
     "status": "active",
     "max_fires_per_call": 4,
-    "family": "dossier",
+    "family": "dossier_call_context",
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "spammer has described a narrative arc in their pitch",
@@ -1724,7 +1737,7 @@ export const BITS = [
     },
     "pool": "middle",
     "status": "active",
-    "family": "dossier",
+    "family": "dossier_call_context",
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "spammer has mentioned a credential, certification, or qualification",
@@ -1742,7 +1755,7 @@ export const BITS = [
     "pool": "middle",
     "bit_type": "count",
     "count_label": "callbacks",
-    "family": "dossier",
+    "family": "dossier_call_context",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal"
@@ -1754,7 +1767,7 @@ export const BITS = [
     "park_reason": "no_producer",
     "fuel_hooks": [],
     "cooldown": 4,
-    "family": "dossier",
+    "family": "dossier_call_context",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -1768,7 +1781,7 @@ export const BITS = [
     "park_reason": "no_producer",
     "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026.",
     "status": "parked",
-    "family": "dossier",
+    "family": "dossier_call_context",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -1779,7 +1792,7 @@ export const BITS = [
     "park_reason": "no_producer",
     "fuel_hooks": [],
     "cooldown": 4,
-    "family": "dossier",
+    "family": "dossier_call_context",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -1791,7 +1804,7 @@ export const BITS = [
     "park_reason": "no_producer",
     "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026.",
     "status": "parked",
-    "family": "dossier",
+    "family": "dossier_call_context",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -1802,7 +1815,7 @@ export const BITS = [
     "park_reason": "no_producer",
     "fuel_hooks": [],
     "cooldown": 4,
-    "family": "dossier",
+    "family": "dossier_call_context",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -1813,7 +1826,7 @@ export const BITS = [
     "park_reason": "no_producer",
     "fuel_hooks": [],
     "cooldown": 4,
-    "family": "dossier",
+    "family": "dossier_call_context",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -1825,7 +1838,7 @@ export const BITS = [
     "park_reason": "no_producer",
     "park_note": "fuel hook has no live Scouting producer. Person/LinkedIn enrichment not yet built. Re-activate only when a producer writes this hook to targets. Option A \u2014 June 2026.",
     "status": "parked",
-    "family": "dossier",
+    "family": "dossier_call_context",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -1836,7 +1849,7 @@ export const BITS = [
     "park_reason": "no_producer",
     "fuel_hooks": [],
     "cooldown": 3,
-    "family": "dossier",
+    "family": "dossier_call_context",
     "absurdity": 1,
     "archetypes": "universal"
   },
@@ -1909,7 +1922,10 @@ export const BITS = [
     "trigger": "call_turn_1",
     "status": "active",
     "max_fires_per_call": 1,
-    "family": "environment",
+    "family": [
+      "environment_oneshot",
+      "opening_texture"
+    ],
     "absurdity": 2,
     "vocal_tag": "neutral",
     "category": "900s \u2014 Opener",
@@ -1919,7 +1935,7 @@ export const BITS = [
     "id": "BIT-902",
     "name": "The Weather Remark",
     "status": "active",
-    "family": "structural",
+    "family": "opening_texture",
     "pool": "early",
     "trigger": "call_turn_1",
     "cooldown": 999,
@@ -1933,7 +1949,7 @@ export const BITS = [
     "id": "BIT-903",
     "name": "The Back-To-Back",
     "status": "active",
-    "family": "structural",
+    "family": "opening_texture",
     "pool": "early",
     "trigger": "call_turn_1",
     "cooldown": 999,
@@ -1947,7 +1963,7 @@ export const BITS = [
     "id": "BIT-904",
     "name": "The Room Observation",
     "status": "active",
-    "family": "structural",
+    "family": "opening_texture",
     "pool": "early",
     "trigger": "call_turn_1",
     "cooldown": 999,
@@ -1963,7 +1979,7 @@ export const BITS = [
     "status": "active",
     "cooldown": 999,
     "trigger": "call_turn_1",
-    "family": "structural",
+    "family": "opening_texture",
     "absurdity": 2,
     "vocal_tag": "content",
     "pool": "early",
@@ -1974,7 +1990,7 @@ export const BITS = [
     "id": "BIT-330",
     "name": "The Dishwasher",
     "status": "active",
-    "family": "environment",
+    "family": "environment_persistent",
     "pool": "none",
     "trigger": "none",
     "cooldown": 6,
@@ -1992,7 +2008,7 @@ export const BITS = [
     "id": "BIT-331",
     "name": "The Thunderstorm",
     "status": "active",
-    "family": "environment",
+    "family": "environment_persistent",
     "pool": "none",
     "trigger": "none",
     "cooldown": 6,
@@ -2010,7 +2026,7 @@ export const BITS = [
     "id": "BIT-332",
     "name": "The Dump Truck",
     "status": "active",
-    "family": "environment",
+    "family": "environment_persistent",
     "pool": "none",
     "trigger": "none",
     "cooldown": 6,
@@ -2028,7 +2044,7 @@ export const BITS = [
     "id": "BIT-333",
     "name": "The Plane Overhead",
     "status": "active",
-    "family": "environment",
+    "family": "environment_persistent",
     "pool": "none",
     "trigger": "none",
     "cooldown": 7,
@@ -2049,7 +2065,7 @@ export const BITS = [
     "id": "BIT-334",
     "name": "The Due Diligence",
     "status": "active",
-    "family": "structural",
+    "family": "surprisingly_knowing",
     "pool": "middle",
     "trigger": "caller_presenting",
     "cooldown": 5,
