@@ -1816,8 +1816,7 @@ export default async function handler(req) {
   // ===== BENCH v2: STAGED ARRIVAL MACHINE ================================
   // Shared by handler (the live call) AND runHostTurn (sim) so both paths weave
   // the bench in identically. See runBenchArrival() below.
-  const benchResult = await runBenchArrival({ stored, controls, messages, callId, benchTurn, waitUntil });
-  const benchAppend = benchResult.benchAppend;
+  const benchResult = await runBenchArrival({ stored, controls, messages, callId, benchTurn, waitUntil, hostName: hostNameFromBody(body) });
   const benchPhantomInvoke = benchResult.benchPhantomInvoke;
   const benchTakeover = benchResult.benchTakeover;
 
@@ -2405,7 +2404,7 @@ function factHint(bit, byHook) {
 // turn-floor), invokes phantoms, persists arrival state, emits bench events.
 // Returns the per-turn
 // { benchAppend (promise->tagged line | null), benchPhantomInvoke (directive|null) }.
-async function runBenchArrival({ stored, controls, messages, callId, benchTurn, waitUntil }) {
+async function runBenchArrival({ stored, controls, messages, callId, benchTurn, waitUntil, hostName }) {
   let arrival = stored && stored.arrivalState ? stored.arrivalState : null;
   let benchLog = stored && Array.isArray(stored.benchLog) ? stored.benchLog : [];
   let benchAppend = null;
@@ -2431,7 +2430,7 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
     if (arrival.stage === "resolved") {
       arrival = null; // sequence complete; clear state, reopen the gate
     } else {
-      benchAppend = generateBenchBeat(arrival, messages).catch(() => null);
+      benchAppend = generateBenchBeat(arrival, messages, hostName).catch(() => null);
       if (callId) {
         makeTrace(callId, benchTurn, waitUntil, stored?.targetId).emit(
           "bench_stage",
@@ -2599,7 +2598,7 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
           if (arrival) {
             arrivalDirty = true;
             benchLog = benchLog.concat([{ bench_id: arrival.bench_id, arrived_turn: benchTurn }]);
-            benchAppend = generateBenchBeat(arrival, messages).catch(() => null);
+            benchAppend = generateBenchBeat(arrival, messages, hostName).catch(() => null);
             if (callId) {
               makeTrace(callId, benchTurn, waitUntil, stored?.targetId).emit(
                 "bench_joined",
@@ -2646,7 +2645,7 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
       if (arrival) {
         arrivalDirty = true;
         benchLog = benchLog.concat([{ bench_id: arrival.bench_id, arrived_turn: benchTurn }]);
-        benchAppend = generateBenchBeat(arrival, messages).catch(() => null);
+        benchAppend = generateBenchBeat(arrival, messages, hostName).catch(() => null);
         if (callId) makeTrace(callId, benchTurn, waitUntil, stored?.targetId).emit(
           "bench_joined",
           { character_id: arrival.bench_id, name: arrival.bench_id, source: "auto", manifestation: arrival.type, stage: "entrance", why: auto.why, joined_at: new Date().toISOString() },
@@ -2661,7 +2660,7 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
         if (arrival) {
           arrivalDirty = true;
           benchLog = benchLog.concat([{ bench_id: arrival.bench_id, arrived_turn: benchTurn }]);
-          benchAppend = generateBenchBeat(arrival, messages).catch(() => null);
+          benchAppend = generateBenchBeat(arrival, messages, hostName).catch(() => null);
         }
       }
     }
@@ -3160,22 +3159,35 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     let forcedFire = false;
     const forcedCtl = controls && controls.forced ? controls.forced : null;
     if (forcedCtl && forcedCtl.bit_id) {
-      const forcedBit = ranked.find(
-        (r) => r.id === forcedCtl.bit_id && !r.excluded && r.score > -Infinity
-      );
+      // REAL FORCE (Aug 17, Andrew: "basically no gates should block this") —
+      // previously searched `ranked`, which is rankBits()'s OUTPUT after
+      // loadout() already dropped every hard-gated bit (parked, missing
+      // fuel, trigger not matched, texture-ownership removal) — meaning
+      // "force" could only ever pick a bit that had ALREADY survived every
+      // gate on its own. That's not a bypass, that's just picking from the
+      // same eligible set Mead Hall's panel shows as colored. Fixed: look
+      // the bit up directly in the FULL registry (BITS), so force genuinely
+      // overrides parked status, missing fuel, unmatched triggers, and
+      // texture-pool ownership — everything except the bit simply not
+      // existing (a real typo/bad ID, which force can't and shouldn't
+      // pretend to fix). Synthesizes a ranked-shape object (score/breakdown)
+      // for downstream code that reads top.score/top.breakdown — score 999
+      // matches the existing convention this codebase already uses for
+      // override-fired bits (see the card-ask sync trigger).
+      const forcedBit = BITS.find((b) => b.id === forcedCtl.bit_id);
       if (forcedBit) {
-        top = forcedBit;
+        top = { ...forcedBit, score: 999, excluded: false, breakdown: {} };
         fire = true;
         forcedFire = true;
         console.log(
           "force FIRING bit=" + forcedCtl.bit_id + " turn=" + turn +
-          " (bypassing bar=" + bar + " gap=" + gap + ")"
+          " (real bypass — parked/fuel/trigger/texture gates all overridden, " +
+          "was bar=" + bar + " gap=" + gap + ")"
         );
       } else {
         console.log(
           "force UNFIRABLE bit=" + forcedCtl.bit_id + " turn=" + turn +
-          " — not an eligible candidate in this call's pool " +
-          "(archetype/cap/phase gate); force stays pending"
+          " — no bit with this id exists in the registry (check for a typo)"
         );
       }
     }
@@ -4007,19 +4019,34 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         BIT_DIRECTIVES && BIT_DIRECTIVES[top.id] && String(BIT_DIRECTIVES[top.id]).trim()
           ? String(BIT_DIRECTIVES[top.id]).trim()
           : null;
-      // INJECTION-SIZE LOGGING (Aug 15) — settles "was the directive
-      // actually injected" directly, instead of inferring it from
-      // Anthropic's aggregate `input` token count (tried once, found too
-      // imprecise — turn-to-turn conversation growth alone produces
-      // 200-400 token noise, easily masking a short bit's own directive).
-      // Logs the REAL character length of what's about to be appended to
-      // `mutable` for this fire, present or absent, so a future
-      // investigation can grep this exact line instead of re-deriving it.
+      // RUNG TRACKING (Aug 17, per Bits' committed-arc spec) — a rungs>1 bit
+      // (BIT-302/303/311/313/331/332/333 today) carries ALL its rung text in
+      // one directive block; without this, the model has no way to know
+      // which rung it's actually on and — per Bits' own report — defaults to
+      // re-performing rung 1 every time, missing the story shape entirely.
+      // Rung number is derived from the SAME fire-count data already
+      // tracked for the circuit-breaker above (bitFireHistory[id].totalFires)
+      // — no new tracking field needed, this call's prior-fire count IS the
+      // rung count: 0 prior fires = rung 1, 1 prior fire = rung 2, etc.,
+      // capped at the bit's own declared `rungs` (so a 4-rung bit stays on
+      // rung 4 for any fire beyond that, rather than going out of bounds).
+      // Deliberately does NOT try to parse/slice the directive text into
+      // per-rung sections — the "RUNG N —" headers aren't guaranteed to be
+      // machine-parseable across every bit's authored formatting, and a
+      // parse that silently breaks on one bit's text would be worse than
+      // this: the full directive still reaches the model unchanged, just
+      // with an explicit instruction on top telling it which beat to
+      // actually perform.
+      const topRegistryEntry = BITS.find((b) => b.id === top.id);
+      const rungTotal = (topRegistryEntry && topRegistryEntry.rungs) || 1;
+      const priorFiresForRung = (scorerState.bitFireHistory || {})[top.id]?.totalFires || 0;
+      const currentRung = rungTotal > 1 ? Math.min(priorFiresForRung + 1, rungTotal) : null;
       console.log(
         "BIT-INJECT id=" + top.id + " turn=" + turn +
         " forced=" + forcedFire +
         " directiveChars=" + (bitDirective ? bitDirective.length : 0) +
-        " hasDirective=" + !!bitDirective
+        " hasDirective=" + !!bitDirective +
+        (currentRung ? " rung=" + currentRung + "/" + rungTotal : "")
       );
       const preInjectLen = mutable.length;
       mutable +=
@@ -4027,6 +4054,18 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         "A specific routine has been selected and MUST be performed this turn. " +
         "This is not ambient guidance and not a tone suggestion — a bit has " +
         "fired. " +
+        // CURRENT RUNG (Aug 17) — for a committed-arc bit (rungs>1), the
+        // directive text below contains ALL rungs in one block. This line
+        // is what actually tells the model which one to perform THIS turn —
+        // without it, the model has no signal and defaults to rung 1 every
+        // time, per Bits' own report. Absent entirely for rungs===1 bits
+        // (currentRung stays null), so this is a pure no-op addition for
+        // every bit that isn't a committed arc.
+        (currentRung
+          ? "CURRENT RUNG: " + currentRung + " of " + rungTotal + ". Perform ONLY " +
+            "the RUNG " + currentRung + " beat below — ignore the other rungs' " +
+            "text this turn, they're for later (or already happened).\n\n"
+          : "") +
         (bitDirective
           ? "Its directive follows. Perform ITS specific structure: hit its " +
             "beats, its required moves, its sequence. Do NOT produce behavior " +
@@ -5037,7 +5076,7 @@ export async function runHostTurn({ messages, callId, meta }) {
 
   const benchTurn = countUserTurns(messages);
   // BENCH v2: same staged-arrival logic as the live handler (shared fn).
-  const benchResult = await runBenchArrival({ stored, controls, messages, callId, benchTurn, waitUntil });
+  const benchResult = await runBenchArrival({ stored, controls, messages, callId, benchTurn, waitUntil, hostName: meta.hostName });
   const benchPhantomInvoke = benchResult.benchPhantomInvoke;
 
   // No pre-snap prefix in sim (no caller-supplied system prompt) -> base is a
