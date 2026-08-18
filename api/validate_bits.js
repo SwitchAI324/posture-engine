@@ -99,10 +99,11 @@ ok(`Directives: ${keyMatches.length} entries found`);
 const dirLines = dirSrc.split('\n');
 
 // Lines that are prohibition text — skip for content checks
-const PROHIBITION_RE = /hard:|never\s|do not|banned|not.*say|avoid|no[t]?\s["']|prohibited|do not emit|not a real marker|^\/\//i;
+// NOTE: tightened — "recommendation framing" (e.g. "use 'ha'" as a suggestion)
+// is NOT a prohibition and must NOT skip. Only actual ban/never/hard: lines skip.
+const PROHIBITION_RE = /^\/\/|hard:|do not|not a real marker|is banned|is never valid|no "of course"|no "have a good/i;
 
 // ─── [LAUGHS] — HARD FAIL ─────────────────────────────────────────────────────
-// [LAUGHS] is not a real sound marker. Nothing plays. Zero tolerance.
 const laughsRe = /\[LAUGHS\]/i;
 const laughsHits = [];
 for (let i = 0; i < dirLines.length; i++) {
@@ -118,13 +119,14 @@ if (laughsHits.length) {
   ok('No [LAUGHS] tokens in directives');
 }
 
-// ─── Banned phrases — WARNING ─────────────────────────────────────────────────
+// ─── Banned phrases — lint directives ────────────────────────────────────────
 const BANNED = [
   'happy to help', 'glad to help', 'great question', 'good question',
   "that's a great point", 'I understand your concern', 'I appreciate that',
   'how can I help you today', 'is there anything else', 'let me assist',
   'heads down', 'heads-down', 'circle back', 'touch base',
-  "that makes sense", "I'm here", "phew", "\"ha\"",
+  "that makes sense", "I'm here", 'phew',
+  '"ha"', "'ha'", '"ha —"', "'ha —'",
   'anyway,', 'anyways', 'where were we', 'okay, so',
   "I'll let you go", 'that about covers it', 'thanks for your time',
   "I should let you get back", 'have a good one',
@@ -132,18 +134,25 @@ const BANNED = [
   '*laughs*', '*pauses*', '*sighs*',
 ];
 
-const bannedHits = [];
-for (let i = 0; i < dirLines.length; i++) {
-  const line = dirLines[i];
-  if (PROHIBITION_RE.test(line)) continue;
-  for (const phrase of BANNED) {
-    if (line.toLowerCase().includes(phrase.toLowerCase())) {
-      bannedHits.push(`Line ${i+1}: "${phrase}" — ${line.trim().slice(0,60)}`);
+function lintLines(lines, filename) {
+  const hits = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (PROHIBITION_RE.test(line)) continue;
+    for (const phrase of BANNED) {
+      if (line.toLowerCase().includes(phrase.toLowerCase())) {
+        hits.push(`${filename} line ${i+1}: "${phrase}" — ${line.trim().slice(0,60)}`);
+      }
     }
   }
+  return hits;
 }
-if (bannedHits.length) {
-  bannedHits.forEach(h => warn(`Banned phrase in directive: ${h}`));
+
+const dirBanned = lintLines(dirLines, '_bits_directives.js');
+
+const allBanned = [...dirBanned];
+if (allBanned.length) {
+  allBanned.forEach(h => warn(`Banned phrase: ${h}`));
 } else {
   ok('No banned phrases found in directives');
 }
