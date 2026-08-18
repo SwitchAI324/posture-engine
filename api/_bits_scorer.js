@@ -53,6 +53,11 @@ export const WEIGHTS = {
                   // phase (opening/pitching/probing/drifting — judged by the
                   // async phase reader) scores higher. Phase-neutral bits (no
                   // phase_pref) are unaffected. Bias, not a gate.
+  arcInProgress: 3.0, // Aug 17: a committed-arc bit (rungs>1) that's already
+                  // fired at least once this call and hasn't hit its final
+                  // rung yet. Deliberately larger than phasePref/chain — the
+                  // whole point is this should usually win once eligible,
+                  // not just get a soft nudge.
 };
 // Mid-call deploy bar: a bit fires only if its top score clears this (it must
 // beat "just keep talking"). Death blows bypass it. Env-tunable (DEPLOY_THRESHOLD)
@@ -615,6 +620,26 @@ function recencyPenalty(bit, state) {
   const pen = WEIGHTS.recencyBase * Math.max(0, 1 - since / cd);
   return { pen, why: pen > 0 ? [`used ${since} call(s) ago -${pen.toFixed(1)}`] : [] };
 }
+// ARC PRIORITY (Aug 17, Bits' committed-arc spec) — a rungs>1 bit
+// (BIT-302/303/311/313/331/332/333 today) should feel like a single
+// continuing story once started, not a bit that might randomly lose to
+// something else for 20 turns once it's eligible to continue. This ONLY
+// applies once the bit has fired at least once THIS CALL and hasn't yet
+// reached its final rung — a bit that's never fired gets no boost (it's
+// not "in progress" yet), and one that's already hit its last rung gets
+// no boost either (its arc is done, it competes normally like anything
+// else). Deliberately does NOT bypass cooldown/min_between — recencyPenalty
+// and the hard cooldown gate elsewhere still control WHEN it can fire
+// again; this only affects how strongly it wins ONCE it's eligible.
+function arcBonus(bit, state) {
+  const rungs = bit.rungs || 1;
+  if (rungs <= 1) return { bonus: 0, why: [] };
+  const history = state.bitFireHistory || {};
+  const priorFires = history[bit.id]?.totalFires || 0;
+  if (priorFires <= 0 || priorFires >= rungs) return { bonus: 0, why: [] };
+  const bonus = WEIGHTS.arcInProgress;
+  return { bonus, why: [`committed arc in progress (rung ${priorFires + 1}/${rungs}) +${bonus}`] };
+}
 // Score one bit -> full auditable breakdown. Death blows add their intensity
 // as a mild ranking term (gear vitality still dominates soft-vs-scorched).
 export function scoreBit(bit, state) {
@@ -675,7 +700,8 @@ export function scoreBit(bit, state) {
   const ARM_BASE = 3, ARM_STEP = 2;
   const armWaited = state.armed ? state.armed[bit.id] : undefined;
   const armBoost = armWaited != null ? ARM_BASE + ARM_STEP * armWaited : 0;
-  let score = fitTotal + g.bias - r.pen + intent + seq + armBoost + phaseBias;
+  const arc = arcBonus(bit, state);
+  let score = fitTotal + g.bias - r.pen + intent + seq + armBoost + phaseBias + arc.bonus;
   // EXTENDED_STALL: when the call has gone content-less/social too long
   // (state.extended_stall, set by the engine off the turns_since_pitch_or_ask
   // streak), lift the stall-breaker family above the general pool for this
@@ -696,6 +722,7 @@ export function scoreBit(bit, state) {
       intensity: intent || undefined,
       armed: armBoost || undefined,
       phase: phaseBias || undefined,
+      arc: arc.bonus || undefined,
       stall: stallBoost ? +stallBoost.toFixed(2) : undefined,
       why: [...f.why,
             ...(fuel.boost ? [`fuel x${fuel.count} +${fuel.boost}`] : []),
@@ -703,6 +730,7 @@ export function scoreBit(bit, state) {
             ...(intent ? [`intensity +${intent}`] : []),
             ...(armBoost ? [`armed (waited ${armWaited}) +${armBoost}`] : []),
             ...(phaseBias ? [`phase:${bit.phase_pref} +${phaseBias}`] : []),
+            ...arc.why,
             ...(stallBoost ? [`extended_stall x${STALL_MULTIPLIER}`] : [])],
     },
   };
