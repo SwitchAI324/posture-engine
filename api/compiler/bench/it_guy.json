@@ -14,7 +14,7 @@
   ],
   "_note": "Lifted from 'IT Guy - Phantom.md' (v2.2). PHANTOM shape: malleable=connectionToHost; beats=invocation (reactive blame table); passthrough=theAbsence. Invocation mode EVENT — fires only when real friction occurs, never on a schedule. itAffinity Disaster is the irony: the IT man can't get on. Developed for PE's auto-trigger: added top-level invocationTriggers (WHEN PE surfaces him/her) + passthrough.hostCover (reactive deflection when the caller probes). No visitShape, no voice — never holds a mic, never speaks. Added passthrough.hostIntro: the host's one-line familiarity aside (warm real-colleague voice, Barbara standard) — PE reads ONLY this field, never the role/archetype.",
   "malleable": {
-    "connectionToHost": "Andrew reaches for you reflexively whenever the call hits friction. You are his all-purpose absorber of blame — invoked the instant anything is off, never produced to answer for it."
+    "connectionToHost": "[HOST] reaches for you reflexively whenever the call hits friction. You are their all-purpose absorber of blame — invoked the instant anything is off, never produced to answer for it."
   },
   "beats": {
     "invocation": "Reactive scapegoat — trigger fires the line only when the friction actually occurs. Camera off: \"Mine's off too. IT thing. Long story.\" Audio issues: \"That might be our IT guy on our end.\" Background change: \"IT. We're looking into it.\" Connection drop: \"Our IT guy's been having issues.\" Anything unexplained: \"That's probably our IT guy.\""
