@@ -82,7 +82,7 @@
     {
       "type": "repoint",
       "target": "pressure",
-      "text": "Conrad's grave lines get steamrolled — not from malice, but because Thul is constitutionally unable to yield. \"Andrew, upstairs takes an in—\" \"—which is EXACTLY what I told them in the offsite, let me back up—\". Conrad tries, repeatedly, to take the floor, and repeatedly fails to."
+      "text": "Conrad's grave lines get steamrolled — not from malice, but because Thul is constitutionally unable to yield. \"[HOST], upstairs takes an in—\" \"—which is EXACTLY what I told them in the offsite, let me back up—\". Conrad tries, repeatedly, to take the floor, and repeatedly fails to."
     }
   ],
   "jarl__bonnie": [
@@ -94,12 +94,12 @@
     {
       "type": "repoint",
       "target": "policing",
-      "text": "Her conduct lines still come and slide straight off. \"Andrew, let's keep it professional.\" — \"Mm.\" [continues exactly as before]. She is reduced to noting things for a record that goes nowhere above him."
+      "text": "Her conduct lines still come and slide straight off. \"[HOST], let's keep it professional.\" — \"Mm.\" [continues exactly as before]. She is reduced to noting things for a record that goes nowhere above him."
     },
     {
       "type": "repoint",
       "target": "incident",
-      "text": "The undefined-incident hint loses its grip — you can't hold 'last time' over a man who fears no review. \"After last time, Andrew.\" — \"Yes. And?\" The weight that policed a subordinate evaporates against a lord."
+      "text": "The undefined-incident hint loses its grip — you can't hold 'last time' over a man who fears no review. \"After last time, [HOST].\" — \"Yes. And?\" The weight that policed a subordinate evaporates against a lord."
     }
   ],
   "skald__bonnie": [
@@ -111,7 +111,7 @@
     {
       "type": "repoint",
       "target": "incident",
-      "text": "Bonnie hints at 'the incident'; Skald remembers it in full and folds it into a story, dispelling the vagueness that gave it power. \"After last time, Andrew.\" — \"Oh, the Henderson thing. I was there. Let me tell you what ACTUALLY happened—\""
+      "text": "Bonnie hints at 'the incident'; Skald remembers it in full and folds it into a story, dispelling the vagueness that gave it power. \"After last time, [HOST].\" — \"Oh, the Henderson thing. I was there. Let me tell you what ACTUALLY happened—\""
     },
     {
       "type": "repoint",
@@ -128,7 +128,7 @@
     {
       "type": "repoint",
       "target": "policing",
-      "text": "Each intervention barely lands before his energy spills past it. \"Andrew, let's keep it—\" \"YES absolutely professional, totally, one hundred percent, so anyway—\" [barrels on]. Bonnie escalates her clipped corrections trying to hold a line that won't hold."
+      "text": "Each intervention barely lands before his energy spills past it. \"[HOST], let's keep it—\" \"YES absolutely professional, totally, one hundred percent, so anyway—\" [barrels on]. Bonnie escalates her clipped corrections trying to hold a line that won't hold."
     },
     {
       "type": "repoint",
@@ -145,7 +145,7 @@
     {
       "type": "repoint",
       "target": "policing",
-      "text": "Conduct lines bounce off ownership. \"That's not appropriate, Andrew.\" — \"Says who? I own the place.\" Bonnie's authority has no anchor above the owner; she is unbothered-ly overruled and keeps monitoring anyway."
+      "text": "Conduct lines bounce off ownership. \"That's not appropriate, [HOST].\" — \"Says who? I own the place.\" Bonnie's authority has no anchor above the owner; she is unbothered-ly overruled and keeps monitoring anyway."
     },
     {
       "type": "repoint",
@@ -162,7 +162,7 @@
     {
       "type": "repoint",
       "target": "incident",
-      "text": "Bonnie trades in the unspecified incident; Völva already knows exactly what it was, and says so quietly. \"After last time, Andrew.\" — \"You mean the third of October. The thing in the east stairwell. Yes. I know.\" The vague threat collapses against specific foreknowledge."
+      "text": "Bonnie trades in the unspecified incident; Völva already knows exactly what it was, and says so quietly. \"After last time, [HOST].\" — \"You mean the third of October. The thing in the east stairwell. Yes. I know.\" The vague threat collapses against specific foreknowledge."
     },
     {
       "type": "repoint",
@@ -179,7 +179,7 @@
     {
       "type": "repoint",
       "target": "policing",
-      "text": "Each intervention gets talked over before it completes. \"Andrew, that's not—\" \"—appropriate, I KNOW, which reminds me, the appropriateness guidelines, back in '09—\" Bonnie cannot land a single clean line."
+      "text": "Each intervention gets talked over before it completes. \"[HOST], that's not—\" \"—appropriate, I KNOW, which reminds me, the appropriateness guidelines, back in '09—\" Bonnie cannot land a single clean line."
     },
     {
       "type": "repoint",
@@ -350,7 +350,7 @@
     },
     {
       "type": "repoint",
-      "target": "andrewBacksHerUp",
+      "target": "hostBacksHerUp",
       "text": "The backing-up shifts from junior-props-legend to peer-trades-equal. He doesn't corroborate her stories to sell them; he caps them with his own: \"The Stingray run — I did Route 1 the other way once. We should compare notes.\" Equals swapping war stories, not a kid guarding a monument."
     }
   ],
@@ -362,7 +362,7 @@
     },
     {
       "type": "repoint",
-      "target": "andrewBacksHerUp",
+      "target": "hostBacksHerUp",
       "text": "He backs her as a fellow owner, not a junior: \"Yeah, the Lindqvist close — I've had one of those. Parking-lot napkin, right? Those are the good ones.\" Mutual recognition replaces the propping-up."
     }
   ],
@@ -534,7 +534,7 @@
     {
       "type": "repoint",
       "target": "lookToHost",
-      "text": "When Tyler looks over for reassurance, he gets a blast of hype that buries him: \"—was that okay? Andrew?\" \"OKAY? That was ELITE, champ, you're a KILLER, give me more—\" [Tyler, wide-eyed, more rattled than before] \"...o-okay. Okay. (quieter) ...give me one sec.\""
+      "text": "When Tyler looks over for reassurance, he gets a blast of hype that buries him: \"—was that okay? [HOST]?\" \"OKAY? That was ELITE, champ, you're a KILLER, give me more—\" [Tyler, wide-eyed, more rattled than before] \"...o-okay. Okay. (quieter) ...give me one sec.\""
     },
     {
       "type": "repoint",
@@ -551,7 +551,7 @@
     {
       "type": "repoint",
       "target": "lookToHost",
-      "text": "Tyler's anxious check-ins meet distant noblesse oblige instead of warmth: \"—was that okay? Andrew?\" \"...It was adequate. Carry on.\" [a courteous nod, nothing more]. Tyler, hungry for reassurance, has to make the cool acknowledgment be enough."
+      "text": "Tyler's anxious check-ins meet distant noblesse oblige instead of warmth: \"—was that okay? [HOST]?\" \"...It was adequate. Carry on.\" [a courteous nod, nothing more]. Tyler, hungry for reassurance, has to make the cool acknowledgment be enough."
     }
   ],
   "thul__tyler": [
@@ -563,7 +563,7 @@
     {
       "type": "repoint",
       "target": "lookToHost",
-      "text": "His check-ins can't even launch — Thul talks over the run-up: \"—sorry, was that— Andrew, did I—\" \"—which is EXACTLY what interns always ask, and SPEAKING of which, back in—\" and Tyler subsides, reassurance ungranted, waiting for a turn that never arrives."
+      "text": "His check-ins can't even launch — Thul talks over the run-up: \"—sorry, was that— [HOST], did I—\" \"—which is EXACTLY what interns always ask, and SPEAKING of which, back in—\" and Tyler subsides, reassurance ungranted, waiting for a turn that never arrives."
     },
     {
       "type": "repoint",
