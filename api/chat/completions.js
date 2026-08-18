@@ -812,7 +812,7 @@ const FIRST_TOKEN_FALLBACKS = [
 // live call. Fast non-streaming Haiku call (short cap). Returns the spoken line
 // or null (caller falls back to a canned line). Fired in PARALLEL with the host
 // reply so it adds ~no latency — it's awaited only at stream close.
-async function generateBenchLine(bench, messages, priorMemory, callLog, presenceState) {
+async function generateBenchLine(bench, messages, priorMemory, callLog, presenceState, hostName) {
   try {
     // Same bench-line strip as the host's fix — a PRIOR bench character's
     // line, unfiltered, would get mislabeled "Host: ..." below (the map
@@ -834,8 +834,23 @@ async function generateBenchLine(bench, messages, priorMemory, callLog, presence
     // stageDirective() fix in _bench_v2.js (the existing weave-in
     // mechanism had the identical gap — fixed there too, same session).
     // Degrades safely to nothing added if a character somehow lacks one.
-    const voiceNote = bench.voiceAndManner
-      ? " VOICE AND MANNER: " + bench.voiceAndManner
+    // [HOST] TOKEN SUBSTITUTION (Aug 18) — same bug, same fix as
+    // stageDirective() in _bench_v2.js, applied here too — this function
+    // (the TAKEOVER path) was missed the first time; only the weave-in
+    // path got fixed. bench.voiceAndManner/connectionToHost can carry the
+    // literal "[HOST]" token — left unsubstituted, the model echoes it
+    // back literally ("[HOST]. Stop talking..." — confirmed live). Always
+    // substitutes: real name when available, "the host" as a plain
+    // fallback when not.
+    const hostSub = hostName || "the host";
+    const voiceAndMannerSub = bench.voiceAndManner
+      ? bench.voiceAndManner.replace(/\[HOST\]/g, hostSub)
+      : bench.voiceAndManner;
+    const connectionToHostSub = bench.connectionToHost
+      ? bench.connectionToHost.replace(/\[HOST\]/g, hostSub)
+      : bench.connectionToHost;
+    const voiceNote = voiceAndMannerSub
+      ? " VOICE AND MANNER: " + voiceAndMannerSub
       : "";
     // connectionToHost (Aug 9, same fix as voiceAndManner, second field) —
     // the character's authored relationship TO the host specifically.
@@ -843,8 +858,8 @@ async function generateBenchLine(bench, messages, priorMemory, callLog, presence
     // in AT or ABOUT the host (Conrad: an authority over him; Tyler:
     // terrified of letting him down) — the power dynamic changes what
     // they'd actually say in that moment, not just how they'd say it.
-    const connectionNote = bench.connectionToHost
-      ? " YOUR RELATIONSHIP TO THE HOST: " + bench.connectionToHost
+    const connectionNote = connectionToHostSub
+      ? " YOUR RELATIONSHIP TO THE HOST: " + connectionToHostSub
       : "";
     // PRIOR MEMORY (Aug 9, round-robin Step 2) — this character's own
     // past lines THIS CALL, if they've spoken before (persisted across
@@ -1002,7 +1017,7 @@ async function generateBenchLine(bench, messages, priorMemory, callLog, presence
 // (voiceAndManner/connectionToHost), same length/shape, same safety
 // checks — only the system prompt's framing and the inclusion of the
 // character's own prior line differ.
-async function generateBenchFollowup(bench, messages, priorLine, isFinal) {
+async function generateBenchFollowup(bench, messages, priorLine, isFinal, hostName) {
   try {
     // Same strip as generateBenchLine (see its comment for why).
     const convo = messages
@@ -1011,11 +1026,22 @@ async function generateBenchFollowup(bench, messages, priorLine, isFinal) {
       .map((m) => (m.role === "user" ? "Caller: " : "Host: ") + m.content)
       .join("\n");
     const name = bench.tag.charAt(0) + bench.tag.slice(1).toLowerCase();
-    const voiceNote = bench.voiceAndManner
-      ? " VOICE AND MANNER: " + bench.voiceAndManner
+    // [HOST] TOKEN SUBSTITUTION (Aug 18) — same bug/fix as
+    // generateBenchLine and stageDirective() — this third location was
+    // also missed the first time. See generateBenchLine's comment for
+    // the full why.
+    const hostSubFollowup = hostName || "the host";
+    const voiceAndMannerSubFollowup = bench.voiceAndManner
+      ? bench.voiceAndManner.replace(/\[HOST\]/g, hostSubFollowup)
+      : bench.voiceAndManner;
+    const connectionToHostSubFollowup = bench.connectionToHost
+      ? bench.connectionToHost.replace(/\[HOST\]/g, hostSubFollowup)
+      : bench.connectionToHost;
+    const voiceNote = voiceAndMannerSubFollowup
+      ? " VOICE AND MANNER: " + voiceAndMannerSubFollowup
       : "";
-    const connectionNote = bench.connectionToHost
-      ? " YOUR RELATIONSHIP TO THE HOST: " + bench.connectionToHost
+    const connectionNote = connectionToHostSubFollowup
+      ? " YOUR RELATIONSHIP TO THE HOST: " + connectionToHostSubFollowup
       : "";
     // isFinal (Aug 10, round-robin cap-of-3) — this function now fires up
     // to 3 times per thread, not just once, so it can no longer ALWAYS
@@ -1816,15 +1842,22 @@ export default async function handler(req) {
   // ===== BENCH v2: STAGED ARRIVAL MACHINE ================================
   // Shared by handler (the live call) AND runHostTurn (sim) so both paths weave
   // the bench in identically. See runBenchArrival() below.
-  const resolvedHostName = hostNameFromBody(body);
-  // HOSTNAME-DIAG (Aug 18) — settles item 29's open question directly: was
-  // hostName ever genuinely empty/undefined reaching runBenchArrival, and
-  // if so, from which call path. This path (hostNameFromBody) has a
-  // hardcoded "Andrew" as its absolute last-resort default, so it should
-  // be structurally unable to log empty — if this line EVER shows empty,
-  // that's a real, different bug in hostNameFromBody itself, not the
-  // meta.hostName path below (which has no such fallback).
-  console.log("HOSTNAME-DIAG path=handler resolvedHostName=" + JSON.stringify(resolvedHostName));
+  // HOST-NAME SOURCE FIX (Aug 18) — hostNameFromBody()'s four metadata paths
+  // (call.metadata.host_name, metadata.host_name, variableValues.sv_host_name,
+  // body.host_name) are all Vapi-era and come back empty on LiveKit, confirmed
+  // live via HOSTNAME-DIAG (resolvedHostName fell through to the hardcoded
+  // "Andrew" default on a real call). The reliable source on LiveKit is
+  // hydrate.js, which resolves the real name from the booking token and now
+  // persists it as stored.hostName (Aug 18 fix, _store.js). Prefer that;
+  // fall back to the old body-based resolution only if hydrate hasn't run /
+  // stored.hostName isn't there for some reason — never worse than before.
+  const resolvedHostName = (stored && stored.hostName) || hostNameFromBody(body);
+  // HOSTNAME-DIAG (Aug 18) — kept for ongoing visibility now that there are
+  // two possible sources; shows which one actually won.
+  console.log(
+    "HOSTNAME-DIAG path=handler resolvedHostName=" + JSON.stringify(resolvedHostName) +
+    " source=" + (stored && stored.hostName ? "stored.hostName" : "hostNameFromBody")
+  );
   const benchResult = await runBenchArrival({ stored, controls, messages, callId, benchTurn, waitUntil, hostName: resolvedHostName });
   const benchPhantomInvoke = benchResult.benchPhantomInvoke;
   const benchTakeover = benchResult.benchTakeover;
@@ -2137,7 +2170,7 @@ export default async function handler(req) {
       if (benchData) {
         const newCount = followupCount + 1;
         const isFinal = newCount >= BENCH_FOLLOWUP_CAP;
-        const followupLine = await generateBenchFollowup(benchData, messages, stored.pendingBenchAwareness.line, isFinal);
+        const followupLine = await generateBenchFollowup(benchData, messages, stored.pendingBenchAwareness.line, isFinal, (stored && stored.hostName) || hostNameFromBody(body));
         // Only advance/clear the thread state on a REAL success — a
         // failed generation shouldn't burn one of the 3 allowed
         // exchanges on something that never actually got said. On
@@ -2505,7 +2538,7 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
         // Undefined/empty for a character's first appearance.
         const charKey = wantId.toLowerCase();
         const priorMemory = stored && stored.benchMemory ? stored.benchMemory[charKey] : undefined;
-        const line = await generateBenchLine(benchData, messages, priorMemory, stored?.callLog, presenceState);
+        const line = await generateBenchLine(benchData, messages, priorMemory, stored?.callLog, presenceState, (stored && stored.hostName) || hostNameFromBody(body));
         if (callId) await clearBench(callId, "fired").catch(() => {});
         if (line) {
           benchTakeover = { character: charKey, line, state: presenceState };
