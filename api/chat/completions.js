@@ -2198,7 +2198,17 @@ export default async function handler(req) {
             benchSpeak: followupTakeover,
           };
           return new Response(
-            anthropicToOpenAISSE(syntheticUpstream, followupMeta, benchAppend, null),
+            // BUG FIX (Aug 18) — was `benchAppend`, a variable that doesn't
+            // exist in this scope at all: this short-circuit runs BEFORE
+            // runBenchArrival() (where benchAppend actually gets declared,
+            // much later in the function) is ever called. Confirmed via a
+            // real crash log: ReferenceError: benchAppend is not defined.
+            // This branch's response is already complete via followupLine/
+            // syntheticUpstream above — it never needed an append; the
+            // `benchAppend` reference here looks like it was copy-pasted
+            // from the main-flow call site (correctly scoped, near the end
+            // of the handler) without noticing this branch runs earlier.
+            anthropicToOpenAISSE(syntheticUpstream, followupMeta, null, null),
             {
               headers: {
                 "content-type": "text/event-stream; charset=utf-8",
@@ -2231,7 +2241,11 @@ export default async function handler(req) {
       benchSpeak: benchTakeover,
     };
     return new Response(
-      anthropicToOpenAISSE(syntheticUpstream, takeoverMeta, benchAppend, null),
+      // Same bug/fix as the follow-up short-circuit above — this branch
+      // also runs before runBenchArrival() declares benchAppend, and its
+      // response is already complete via benchTakeover baked into
+      // takeoverMeta.benchSpeak above. No append needed.
+      anthropicToOpenAISSE(syntheticUpstream, takeoverMeta, null, null),
       {
         headers: {
           "content-type": "text/event-stream; charset=utf-8",
