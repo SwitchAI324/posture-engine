@@ -178,6 +178,8 @@
   .bscore.dim{color:#c3bcae;font-weight:400}
   .bscore.clears{background:var(--green);color:#fff}
   .bscore.out{background:transparent;border:1px dashed #cfc8ba;color:#b3ab9c;font-weight:400;font-size:8.5px;min-width:0;cursor:help}
+  .bscore.forceable{background:#fbf3e2;border:1px dashed #caa23f;color:#9a7d3f;font-weight:400;font-size:8.5px;min-width:0;cursor:help}
+  .bscore.blocked{background:#efece6;border:1px solid #ddd6c8;color:#b3ab9c;font-weight:400;font-size:8.5px;min-width:0;cursor:help}
   .brank{font-family:var(--mono);font-size:8px;font-weight:700;color:var(--gold);margin-right:-3px}
   /* bit about to fire (engine says will_fire) vs actually firing (bit_deployed) */
   .bitrow{border-radius:5px;padding-left:5px !important;padding-right:5px !important;transition:background .2s}
@@ -1528,14 +1530,28 @@
     if(c)                              return [c.slice(0,14), 'not in play \u2014 '+c];
     return null;
   }
+  // Which exclusion reasons does Force OVERRIDE? PE made Force a genuine bypass for parked /
+  // missing-fuel / trigger-not-met / texture-pool-ownership. A bit out for one of those is still
+  // FORCEABLE (dashed, clickable) — not flat "blocked". Reasons Force can't override (archetype,
+  // past window, per-call cap) stay solid gray. Unknown reason (no why_excluded yet) => assume
+  // forceable, since Force now overrides the common cases and we don't want to imply "can't click".
+  function forceBypasses(code){
+    const c=String(code||'').toLowerCase();
+    if(/arch|window|phase|late|past|cap|limit|used/.test(c)) return false;  // Force does NOT override these
+    return true;   // parked / fuel / hook / trigger / texture-pool ownership — and unknown
+  }
   function scoreCell(b){
     const s=bitScore(b); const bar=(lastGear||{}).deploy_bar;
     if(bitExcluded(b)){
       const why=((lastGear||{}).why_excluded||{})[b.bit_id];
       const r=excludeReason(why);
-      const label=r?r[0]:'not in play';
-      const tip=(r?r[1]:'not in play this call \u2014 excluded from the pool (parked, wrong archetype, missing fuel, or past its window)')+'. Arming it will never fire.';
-      return '<span class="bscore out" title="'+tip.replace(/"/g,'')+'">'+label+'</span>';
+      const canForce=forceBypasses(why);
+      const label=canForce?(r?r[0]:'force-only'):(r?r[0]:'blocked');
+      const base=r?r[1]:(canForce?'not naturally winning this turn':'not in play this call');
+      const tip=canForce
+        ? base+' \u2014 but Force overrides this; click Fire to send it anyway.'
+        : base+' \u2014 Force can\u2019t override this one, so it won\u2019t fire.';
+      return '<span class="bscore '+(canForce?'forceable':'blocked')+'" title="'+tip.replace(/"/g,'')+'">'+label+'</span>';
     }
     if(s==null) return '<span class="bscore dim">\u2014</span>';
     const n=(typeof s==='number')?s.toFixed(1):s;
@@ -1589,16 +1605,21 @@
       const parked=(b.status==='parked');
       const flying=(inFlight===b.bit_id);
       const justFired=(firedFlash===b.bit_id);
+      // A bit that's excluded but force-bypassable is still fireable — don't gray it like a dead row.
+      const whyEx=((lastGear||{}).why_excluded||{})[b.bit_id];
+      const forceable=excluded && forceBypasses(whyEx);
       const tip=ok?'':(b._placeholder?'placeholder \u2014 waiting for the engine\u2019s real bit pool'
-        :(excluded?'not in play this call \u2014 excluded from the engine\u2019s pool; it can never fire'
+        :(forceable?'not naturally winning \u2014 but Force can still fire it; click Fire'
+        :(excluded?'not in play \u2014 Force can\u2019t override this one, so it won\u2019t fire'
         :(parked?'parked \u2014 unavailable this call'
-        :('needs '+(missingHook(b)||'a scouted fact')+' \u2014 not scouted for this target'))));
+        :('needs '+(missingHook(b)||'a scouted fact')+' \u2014 not scouted for this target')))));
       const blocked=(busy && !flying);
       // Only DISABLE for transient states (one in flight elsewhere). Excluded/parked bits stay
       // clickable — the click POSTs and the engine returns the reason, so pressing Fire ALWAYS
       // does something visible instead of being a silent dead click.
       const dis=(blocked||b._placeholder)?'disabled':'';
-      const op=(!ok&&!flying)?';opacity:.4':'';
+      // Dim only genuinely-dead rows. A forceable bit reads normal (it IS clickable).
+      const op=((!ok && !flying && !forceable))?';opacity:.5':'';
       const isTop=(g.top_bit && (g.top_bit===b.name || g.top_bit===b.bit_id));
       const pending=(g.will_fire===true && isTop);
       const firing=(firingBit && firingBit===b.bit_id);
