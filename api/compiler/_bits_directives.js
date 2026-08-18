@@ -4545,14 +4545,22 @@ Hard: no self-catch. No meta-awareness.
 "BIT-TEST-LAUGHTER": `
 LAUGHTER TEST BIT — throwaway, remove after confirmed.
 
-React genuinely to something funny the caller just said.
-Naturally include the tag [laughter] in your line.
+This is a required beat, not optional color.
+[laughter] MUST be the literal first thing you emit
+this turn, before any other words. This is not ambient
+guidance you can substitute a different reaction for.
 
-Example: "Oh man, [laughter] that's actually incredible."
-Or: "Wait — [laughter] — sorry, that caught me off guard."
+Immediately after the marker: react genuinely to
+something funny the caller just said. A few words. Stop.
 
-This bit exists only to test whether [laughter] is a
-valid registered marker that plays a clip.
+RIGHT: [laughter] —okay that's actually incredible.
+RIGHT: [laughter] —wait, seriously?
+RIGHT: [laughter] —I wasn't expecting that.
+
+Producing a laugh reaction WITHOUT the literal token
+[laughter] at the start of your output is a failed
+performance, not a valid alternative. The token must
+appear literally, not as a description of laughter.
 `,
 
 };
