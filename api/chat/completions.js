@@ -1816,7 +1816,16 @@ export default async function handler(req) {
   // ===== BENCH v2: STAGED ARRIVAL MACHINE ================================
   // Shared by handler (the live call) AND runHostTurn (sim) so both paths weave
   // the bench in identically. See runBenchArrival() below.
-  const benchResult = await runBenchArrival({ stored, controls, messages, callId, benchTurn, waitUntil, hostName: hostNameFromBody(body) });
+  const resolvedHostName = hostNameFromBody(body);
+  // HOSTNAME-DIAG (Aug 18) — settles item 29's open question directly: was
+  // hostName ever genuinely empty/undefined reaching runBenchArrival, and
+  // if so, from which call path. This path (hostNameFromBody) has a
+  // hardcoded "Andrew" as its absolute last-resort default, so it should
+  // be structurally unable to log empty — if this line EVER shows empty,
+  // that's a real, different bug in hostNameFromBody itself, not the
+  // meta.hostName path below (which has no such fallback).
+  console.log("HOSTNAME-DIAG path=handler resolvedHostName=" + JSON.stringify(resolvedHostName));
+  const benchResult = await runBenchArrival({ stored, controls, messages, callId, benchTurn, waitUntil, hostName: resolvedHostName });
   const benchPhantomInvoke = benchResult.benchPhantomInvoke;
   const benchTakeover = benchResult.benchTakeover;
 
@@ -5090,6 +5099,13 @@ export async function runHostTurn({ messages, callId, meta }) {
 
   const benchTurn = countUserTurns(messages);
   // BENCH v2: same staged-arrival logic as the live handler (shared fn).
+  // HOSTNAME-DIAG (Aug 18) — this path has NO fallback at all, unlike
+  // hostNameFromBody() (which always resolves to at least "Andrew").
+  // meta.hostName undefined/empty here means whatever CALLS runHostTurn()
+  // (outside this file — the sim-call orchestrator) never populated it on
+  // the meta object it passed in. This is the leading suspect for item
+  // 29's "no host" observation — confirms or rules it out directly.
+  console.log("HOSTNAME-DIAG path=runHostTurn metaHostName=" + JSON.stringify(meta.hostName));
   const benchResult = await runBenchArrival({ stored, controls, messages, callId, benchTurn, waitUntil, hostName: meta.hostName });
   const benchPhantomInvoke = benchResult.benchPhantomInvoke;
 
