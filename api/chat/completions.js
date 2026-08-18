@@ -1859,6 +1859,18 @@ export default async function handler(req) {
     " source=" + (stored && stored.hostName ? "stored.hostName" : "hostNameFromBody")
   );
   const benchResult = await runBenchArrival({ stored, controls, messages, callId, benchTurn, waitUntil, hostName: resolvedHostName });
+  // REAL ROOT CAUSE, FOUND AUG 18 (via Vercel's own deployed Source tab,
+  // not GitHub, not an upload — this is what finally caught it): this
+  // extraction line never existed. benchPhantomInvoke got pulled off
+  // benchResult right below; benchAppend never did, anywhere in this
+  // function. Every earlier "fix" this session (the two short-circuit
+  // branches) was real and correct, but this — the actual main-flow
+  // variable simply never being declared at all — is what every crash
+  // log traced back to. node --check could never catch this: an
+  // undeclared-variable reference is a RUNTIME ReferenceError, not a
+  // syntax error, so every syntax-level verification this session passed
+  // clean while this sat broken the whole time.
+  const benchAppend = benchResult.benchAppend;
   const benchPhantomInvoke = benchResult.benchPhantomInvoke;
   const benchTakeover = benchResult.benchTakeover;
 
