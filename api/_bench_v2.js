@@ -193,18 +193,20 @@ export function stageDirective(state, hostName) {
     (entry && entry.voiceAndManner ? ` VOICE AND MANNER: ${entry.voiceAndManner}` : "") +
     (entry && entry.connectionToHost ? ` YOUR RELATIONSHIP TO THE HOST: ${entry.connectionToHost}` : "");
   let whoText = who;
-  // [HOST] TOKEN SUBSTITUTION (Aug 17, corrected) — the permanent version
-  // of the Aug 17 host-name fix. Confirmed against Bench's ACTUAL authored
-  // content (regenerated _bench_roster.js, Aug 17): they used the literal
-  // token "[HOST]" throughout — Conrad's connectionToHost reads "[HOST]
-  // works for you. They are performing for you..." — paired with they/them
-  // pronouns, not a [HOST NAME] token as originally guessed here. Fixed to
-  // match their real token rather than asking them to redo 11 files to
-  // match a guess.
-  if (hostName) {
-    voiceGuidance = voiceGuidance.replace(/\[HOST\]/g, hostName);
-    whoText = whoText.replace(/\[HOST\]/g, hostName);
-  }
+  // [HOST] TOKEN SUBSTITUTION (Aug 18, corrected again) — real bug found
+  // live: when hostName isn't available for some reason, the raw "[HOST]"
+  // token was left completely untouched in voiceGuidance/who, and the
+  // model just echoed it back literally ("[HOST]. Stop talking...").
+  // Confirmed against Bench's actual authored content (_bench_roster.js):
+  // they use the literal token "[HOST]" throughout — Conrad's
+  // connectionToHost reads "[HOST] works for you. They are performing for
+  // you..." — paired with they/them pronouns. Fix: ALWAYS substitute the
+  // token, real name when available, a generic gender-neutral fallback
+  // ("the host") when not — the raw bracket text must never reach the
+  // model either way.
+  const hostSub = hostName || "the host";
+  voiceGuidance = voiceGuidance.replace(/\[HOST\]/g, hostSub);
+  whoText = whoText.replace(/\[HOST\]/g, hostSub);
   // HOST NAME OVERRIDE (Aug 17) — real bug: character content above
   // (voiceGuidance/who, authored in bench/<id>.json) can carry a specific
   // hardcoded host name that's gone stale (found live: "Andrew" for a host
