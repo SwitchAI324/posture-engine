@@ -1,0 +1,41 @@
+name: Build Bench Roster
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "api/compiler/bench/**"
+jobs:
+  build-roster:
+    runs-on: ubuntu-latest
+    # Skip if this push's only change is the bot's own prior commit to
+    # _bench_roster.js — avoids an infinite loop (regenerate -> commit ->
+    # triggers push -> regenerate -> ...). The paths filter above already
+    # only fires on compiler/bench/** changes, and the generated file lives
+    # at api/_bench_roster.js (outside that path), so a bot-only commit
+    # never matches the trigger in the first place — this check is a second,
+    # explicit safety net in case that ever changes.
+    if: github.event.head_commit.author.name != 'github-actions[bot]'
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run the bench roster generator
+        run: node api/compiler/bench/build_roster.js
+
+      - name: Commit the regenerated roster, if it changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- api/_bench_roster.js; then
+            echo "No change to api/_bench_roster.js — nothing to commit."
+          else
+            git add api/_bench_roster.js
+            git commit -m "chore: regenerate _bench_roster.js [skip ci]"
+            git push
+          fi
