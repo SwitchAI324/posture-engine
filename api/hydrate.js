@@ -274,7 +274,7 @@ async function readDossierFloor(targetId) {
 // Write the compiled prefix to call_prefix via the store. setCall handles the
 // upsert; we pass prefix + archetype (+ the initial posture line so turn 1 has
 // one before the engine sets its own).
-async function writePrefix(callId, prefix, archetype, postureLine, targetId, overlays, latestCallId) {
+async function writePrefix(callId, prefix, archetype, postureLine, targetId, overlays, latestCallId, hostName) {
   const { setCall } = require("./_store.js");
   // targetId rides the same path archetype does: resolved once here from the
   // booking token, frozen on the call_prefix row, read back by completions on
@@ -297,6 +297,14 @@ async function writePrefix(callId, prefix, archetype, postureLine, targetId, ove
     openerOverlay: (overlays && overlays.openerOverlay) ?? null,
     businessOverlay: (overlays && overlays.businessOverlay) ?? null,
     ...(latestCallId !== undefined ? { latestCallId } : {}),
+    // HOST-NAME PERSISTENCE (Aug 18) — resolved here from the booking token
+    // (the only place it's reliably known on LiveKit; completions.js's own
+    // hostNameFromBody() checks four metadata paths that are all Vapi-era
+    // and empty on LiveKit, confirmed live via HOSTNAME-DIAG). Persisting
+    // it here lets completions.js read stored.hostName directly instead of
+    // those broken checks — same "resolve once at hydrate time, read many
+    // times" pattern prefix/targetId already use.
+    ...(hostName !== undefined ? { hostName } : {}),
   });
 }
 
@@ -492,9 +500,9 @@ module.exports = async function handler(req, res) {
     // latestCallId only ever passed here (the slug: row) — null when callId
     // isn't known yet at this point in the request (still correct: means
     // "no live call for this slug right now," which is real information).
-    await writePrefix("slug:" + slug, prefix, cfg.tactic, initialPosture, cfg.target, overlays, callId || null);
+    await writePrefix("slug:" + slug, prefix, cfg.tactic, initialPosture, cfg.target, overlays, callId || null, hostName);
     if (callId) {
-      await writePrefix(callId, prefix, cfg.tactic, initialPosture, cfg.target, overlays);
+      await writePrefix(callId, prefix, cfg.tactic, initialPosture, cfg.target, overlays, undefined, hostName);
     }
 
     // CACHE WARM — fired here, non-blocking, so it never delays hydrate's

@@ -40,7 +40,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-   `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used,pending_bench_awareness,latest_call_id,active_generation,bench_present,first_seen_at`;
+   `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used,pending_bench_awareness,latest_call_id,active_generation,bench_present,first_seen_at,caller_presenting,pitch_summary,host_name`;
   const r = await fetch(url, {
     cache: "no-store",
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
@@ -178,13 +178,16 @@ export async function getCall(callId) {
     // Number() for the same PostgREST bigint-as-string reason as lastBitAt
     // above — OPENER_SILENCE_RESOLVE does arithmetic on this.
     firstSeenAt: rows[0].first_seen_at != null ? Number(rows[0].first_seen_at) : null,
+    callerPresenting: rows[0].caller_presenting ?? false,
+    pitchSummary: rows[0].pitch_summary ?? "",
+    hostName: rows[0].host_name || null,
   };
 }
 // WRITE (upsert) — used at pre-snap to freeze the prefix, and later by the
 // posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed, pendingBenchAwareness, latestCallId, activeGeneration, benchPresent, firstSeenAt }
+  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed, pendingBenchAwareness, latestCallId, activeGeneration, benchPresent, firstSeenAt, callerPresenting, pitchSummary, hostName }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -272,6 +275,17 @@ export async function setCall(
   // that stays accurate even when turn/phase are frozen by pure caller
   // silence. Same "only write when provided" pattern as every field here.
   if (firstSeenAt !== undefined) row.first_seen_at = firstSeenAt;
+  // CALLER_PRESENTING / PITCH_SUMMARY (Aug 16) — per PE spec
+  // pe_spec_aug16_triggers_and_archetypes.md, items 1 and 3. Same "only
+  // write when provided" pattern as every field above.
+  if (callerPresenting !== undefined) row.caller_presenting = callerPresenting;
+  if (pitchSummary !== undefined) row.pitch_summary = pitchSummary;
+  // HOST-NAME PERSISTENCE (Aug 18) — resolved once at hydrate time from the
+  // booking token (the reliable source on LiveKit; completions.js's own
+  // metadata-path checks are Vapi-era and empty on LiveKit, confirmed via
+  // HOSTNAME-DIAG). Same "only write when provided" pattern as every field
+  // here.
+  if (hostName !== undefined) row.host_name = hostName;
   if (callerRedirected !== undefined) row.caller_redirected = callerRedirected;
   // CALLER-CRUDE: raw classification + the two running counts. Same "only
   // write when provided" pattern as every other field here.
