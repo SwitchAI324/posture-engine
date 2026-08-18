@@ -179,7 +179,7 @@ export function advanceArrival(state) {
 
 // Build the staging directive for the CURRENT stage — the instruction the
 // dedicated bench call performs. The character's persona rides in `note`.
-export function stageDirective(state) {
+export function stageDirective(state, hostName) {
   if (!state) return null;
   const entry = benchEntry(state.bench_id);
   const who = entry ? entry.note : state.bench_id;
@@ -189,13 +189,50 @@ export function stageDirective(state) {
   // field (phantoms correctly have no voiceAndManner; connectionToHost
   // is present for every seen/audio character today, but checked anyway
   // rather than assumed).
-  const voiceGuidance =
+  let voiceGuidance =
     (entry && entry.voiceAndManner ? ` VOICE AND MANNER: ${entry.voiceAndManner}` : "") +
     (entry && entry.connectionToHost ? ` YOUR RELATIONSHIP TO THE HOST: ${entry.connectionToHost}` : "");
-  const base = `You are ${state.bench_id}, joining a live call. Character: ${who}.` +
-    voiceGuidance +
+  let whoText = who;
+  // [HOST] TOKEN SUBSTITUTION (Aug 17, corrected) — the permanent version
+  // of the Aug 17 host-name fix. Confirmed against Bench's ACTUAL authored
+  // content (regenerated _bench_roster.js, Aug 17): they used the literal
+  // token "[HOST]" throughout — Conrad's connectionToHost reads "[HOST]
+  // works for you. They are performing for you..." — paired with they/them
+  // pronouns, not a [HOST NAME] token as originally guessed here. Fixed to
+  // match their real token rather than asking them to redo 11 files to
+  // match a guess.
+  if (hostName) {
+    voiceGuidance = voiceGuidance.replace(/\[HOST\]/g, hostName);
+    whoText = whoText.replace(/\[HOST\]/g, hostName);
+  }
+  // HOST NAME OVERRIDE (Aug 17) — real bug: character content above
+  // (voiceGuidance/who, authored in bench/<id>.json) can carry a specific
+  // hardcoded host name that's gone stale (found live: "Andrew" for a host
+  // now named "Andrea" — Conrad's own connectionToHost field says it
+  // outright). Fixing this by editing every character's JSON to say
+  // "Andrea" would just swap one hardcoded name for another — the actual
+  // host name varies per call/slug and should never be baked into content
+  // at all. Real fix: thread the ACTUAL per-call host name in as a
+  // parameter (hostNameFromBody()/meta.hostName, both already computed
+  // elsewhere in completions.js) and EXPLICITLY tell the model to use it,
+  // overriding anything the character's own background material says.
+  // Gender-neutral, name-neutral fallback when hostName isn't available
+  // for some reason — never assumes a specific name or gender by default.
+  const hostNameLine = hostName
+    ? ` The host's actual name this call is ${hostName}. If anything above ` +
+      `uses a different name for the host, that's outdated — use ${hostName} ` +
+      `instead, every time.`
+    : ` Refer to the host by role ("the host", "boss", whatever fits your ` +
+      `relationship) rather than guessing a name if none is given to you.`;
+  const base = `You are ${state.bench_id}, joining a live call. Character: ${whoText}.` +
+    voiceGuidance + hostNameLine +
     ` Speak ONLY as ${state.bench_id}, one short in-character turn (1-3 sentences). ` +
-    `Do not narrate stage directions; perform them in speech.`;
+    `Do not narrate stage directions — no "[beat]", no "[pause]", no bracketed ` +
+    `notation of any kind, no describing what you're doing. Perform everything ` +
+    `directly as spoken dialogue, nothing else. Use the caller's name AT MOST ` +
+    `ONCE in this turn, regardless of length. If the host has just used it ` +
+    `(check the recent conversation you're given), prefer zero — this cap is ` +
+    `shared across all speakers, not one use per speaker.`;
   switch (state.stage) {
     case "entrance":
       return base + ` THIS BEAT — your entrance: ${state.join_move}. ` +
@@ -218,8 +255,8 @@ export function stageDirective(state) {
 // character's voice (NOT the host's). This is how the staging is actually
 // performed: a separate call, not a cue the host persona would ignore.
 // Returns the tagged line "[[TAG]] <line>" or null on failure (best-effort).
-export async function generateBenchBeat(state, history) {
-  const directive = stageDirective(state);
+export async function generateBenchBeat(state, history, hostName) {
+  const directive = stageDirective(state, hostName);
   if (!directive) return null;
   // Give the bench model the recent conversation for context (host-perspective
   // history: spammer=user, host=assistant). The bench character is a third party
@@ -243,8 +280,16 @@ export async function generateBenchBeat(state, history) {
     });
     if (!r.ok) return null;
     const data = await r.json();
-    const line = (data.content || [])
+    let line = (data.content || [])
       .filter((b) => b.type === "text").map((b) => b.text).join(" ").trim();
+    if (!line) return null;
+    // DEFENSIVE STRIP (Aug 17) — the directive above explicitly forbids
+    // bracketed stage-direction notation ("[beat]", "[pause]", etc.), but
+    // directive-strength alone isn't reliable — confirmed live, the model
+    // sometimes emits it anyway. Strip any leftover single-bracket notation
+    // here as a backstop BEFORE the real [[TAG]] wrapper gets added below,
+    // so a stray "[beat]" never reaches the agent as literal spoken text.
+    line = line.replace(/\[[^\[\]]*\]/g, "").replace(/ {2,}/g, " ").trim();
     if (!line) return null;
     return "\n\n[[" + state.bench_id + "]] " + line;
   } catch {
