@@ -2550,7 +2550,7 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
         // Undefined/empty for a character's first appearance.
         const charKey = wantId.toLowerCase();
         const priorMemory = stored && stored.benchMemory ? stored.benchMemory[charKey] : undefined;
-        const line = await generateBenchLine(benchData, messages, priorMemory, stored?.callLog, presenceState, (stored && stored.hostName) || hostNameFromBody(body));
+        const line = await generateBenchLine(benchData, messages, priorMemory, stored?.callLog, presenceState, hostName);
         if (callId) await clearBench(callId, "fired").catch(() => {});
         if (line) {
           benchTakeover = { character: charKey, line, state: presenceState };
