@@ -102,6 +102,8 @@ export async function dissect({ body = '', signature = '', subject = '', attachm
   const factRows = [];
   const bodyFacts = {
     name: resolvedName,
+    first_name: firstNameFrom(resolvedName), // derived; null when it can't split
+    last_name: lastNameFrom(resolvedName),   // derived; null when it can't split
     name_source: nameSource, // which source the name came from (confidence hint)
     title: llm.title || null,
     company: llm.company || null,
@@ -228,6 +230,45 @@ async function extractPdfText(a) {
 function anyValue(o) {
   return Object.values(o).some((v) => v && (!Array.isArray(v) || v.length));
 }
+// Strip a full name down to its core tokens: drop a trailing comma-suffix
+// ("...., Esq."), leading titles (Dr., Mr.), and standalone suffixes (Jr.,
+// PhD). Shared by first/last derivation so both agree on what a "token" is.
+function cleanNameParts(full) {
+  if (!full || typeof full !== 'string') return [];
+  let s = full.trim().split(',')[0].trim();
+  if (!s) return [];
+  const TITLES = new Set(['mr', 'mrs', 'ms', 'miss', 'dr', 'prof', 'professor',
+    'rev', 'sir', 'madam', 'mx', 'capt', 'captain', 'hon', 'honorable']);
+  const SUFFIXES = new Set(['jr', 'sr', 'ii', 'iii', 'iv', 'esq', 'esquire',
+    'phd', 'md', 'jd', 'llm', 'cpa', 'mba']);
+  return s.split(/\s+/)
+    .map((p) => p.replace(/\.$/, ''))
+    .filter(Boolean)
+    .filter((p) => !TITLES.has(p.toLowerCase().replace(/\./g, '')))
+    .filter((p) => !SUFFIXES.has(p.toLowerCase().replace(/\./g, '')));
+}
+
+// Best-effort first name. Same source/confidence tier as `name` (derived from
+// it). Returns the first core token; null only when there are no name tokens
+// (e.g. the name was all title/suffix). A lone name IS a valid first name.
+function firstNameFrom(full) {
+  const parts = cleanNameParts(full);
+  return parts.length ? parts[0] : null;
+}
+
+// Best-effort last name. Returns null rather than GUESS when the name can't
+// split cleanly — a lone token is a first name / mononym, not a last name.
+// Surname particles (van, der, de, bin, al...) are kept with the final token.
+function lastNameFrom(full) {
+  const parts = cleanNameParts(full);
+  if (parts.length < 2) return null;
+  const PARTICLES = new Set(['van', 'von', 'der', 'den', 'de', 'del', 'della',
+    'di', 'da', 'bin', 'ibn', 'al', 'el', 'la', 'le', 'mac', 'mc', "o'"]);
+  let i = parts.length - 1;
+  while (i > 1 && PARTICLES.has(parts[i - 1].toLowerCase())) i--;
+  return parts.slice(i).join(' ');
+}
+
 function num(v, d) {
   return typeof v === 'number' && v >= 0 && v <= 1 ? v : d;
 }
