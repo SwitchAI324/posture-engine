@@ -1929,6 +1929,10 @@
   window.__mh_sendBench = function(id){ return sendBenchControl(id,'takeover'); };
   window.__mh_dropBench = function(id){ return sendBenchControl(id,'drop'); };
   window.__mh_canSend = function(){ return !!callId; };
+  // Force-fire ANY bit_id from the console — for throwaway/test bits that have no panel button
+  // (e.g. BIT-TEST-LAUGHTER). Same action=force path as the Fire buttons. Usage on a live call:
+  //   __mh_fire('BIT-TEST-LAUGHTER')
+  window.__mh_fire = function(bitId){ return postFire(bitId); };
   // Open the full bits deck (companion page) — pass the live call_id so its tap-to-arm targets this call.
   (function(){ const b=document.getElementById('bitsDeckBtn'); if(b) b.addEventListener('click', function(){
     const u = location.origin + '/bits_flip_deck.html' + (callId ? ('?call_id='+encodeURIComponent(callId)) : '');
