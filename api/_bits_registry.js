@@ -1,6 +1,6 @@
 // SpamViking — Bits Registry
 // Source of truth: SpamViking_BitsRegistry.json + session edits
-// Last updated: August 16, 2026
+// Last updated: August 17, 2026
 // CRITICAL: archetypes field restored — do not remove until PE confirms scorer gate update
 // family field: 37 fine-grained subgroups based on directive content reads
 
@@ -1115,21 +1115,31 @@ export const BITS = [
     "id": "BIT-302",
     "name": "The Dog Bit",
     "status": "active",
-    "cooldown": 4,
+    "cooldown": 3,
     "family": "environment_animal",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "max_fires_per_call": 4,
+    "rungs": 4,
+    "rung_spacing": {
+      "min_between": 3
+    }
   },
   {
     "id": "BIT-303",
     "name": "The Insect Bit",
     "status": "active",
-    "cooldown": 5,
+    "cooldown": 3,
     "family": "environment_animal",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "max_fires_per_call": 4,
+    "rungs": 4,
+    "rung_spacing": {
+      "min_between": 3
+    }
   },
   {
     "cooldown": 5,
@@ -1212,7 +1222,7 @@ export const BITS = [
   {
     "id": "BIT-311",
     "name": "The Sick Day",
-    "cooldown": 5,
+    "cooldown": 3,
     "status": "active",
     "family": [
       "environment_body",
@@ -1220,7 +1230,12 @@ export const BITS = [
     ],
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "max_fires_per_call": 4,
+    "rungs": 4,
+    "rung_spacing": {
+      "min_between": 3
+    }
   },
   {
     "id": "BIT-312",
@@ -1236,7 +1251,7 @@ export const BITS = [
   {
     "id": "BIT-313",
     "name": "The Hangover",
-    "cooldown": 5,
+    "cooldown": 4,
     "lane": "gag",
     "status": "active",
     "family": [
@@ -1245,7 +1260,12 @@ export const BITS = [
     ],
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "max_fires_per_call": 4,
+    "rungs": 4,
+    "rung_spacing": {
+      "min_between": 4
+    }
   },
   {
     "id": "BIT-314",
@@ -2011,8 +2031,8 @@ export const BITS = [
     "family": "environment_weather",
     "pool": "none",
     "trigger": "none",
-    "cooldown": 6,
-    "max_fires_per_call": 1,
+    "cooldown": 4,
+    "max_fires_per_call": 4,
     "absurdity": 2,
     "vocal_tag": "content",
     "channel": "audio",
@@ -2020,7 +2040,11 @@ export const BITS = [
       "THUNDER_BG",
       "THUNDER_BG_STOP"
     ],
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 4,
+    "rung_spacing": {
+      "min_between": 4
+    }
   },
   {
     "id": "BIT-332",
@@ -2029,8 +2053,8 @@ export const BITS = [
     "family": "environment_traffic",
     "pool": "none",
     "trigger": "none",
-    "cooldown": 6,
-    "max_fires_per_call": 2,
+    "cooldown": 4,
+    "max_fires_per_call": 4,
     "absurdity": 2,
     "vocal_tag": "neutral",
     "channel": "audio",
@@ -2038,7 +2062,11 @@ export const BITS = [
       "DUMP_TRUCK_BG",
       "DUMP_TRUCK_BG_STOP"
     ],
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 4,
+    "rung_spacing": {
+      "min_between": 4
+    }
   },
   {
     "id": "BIT-333",
@@ -2047,8 +2075,8 @@ export const BITS = [
     "family": "environment_traffic",
     "pool": "none",
     "trigger": "none",
-    "cooldown": 7,
-    "max_fires_per_call": 2,
+    "cooldown": 5,
+    "max_fires_per_call": 4,
     "absurdity": 2,
     "vocal_tag": "content",
     "channel": "audio",
@@ -2057,9 +2085,10 @@ export const BITS = [
       "TAKEOFF_BG_STOP"
     ],
     "rung_spacing": {
-      "min_between": 7
+      "min_between": 5
     },
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 4
   },
   {
     "id": "BIT-334",
@@ -2075,5 +2104,19 @@ export const BITS = [
     "channel": "audio",
     "requires_context": "spammer has described their product, technology, or industry in specific terms",
     "archetypes": "universal"
+  },
+  {
+    "id": "BIT-TEST-LAUGHTER",
+    "name": "Laughter Test",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "reactive_verbal",
+    "pool": "middle",
+    "trigger": "none",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 2,
+    "vocal_tag": "excited",
+    "note": "THROWAWAY TEST BIT \u2014 for laughter tag testing only, remove after confirmed"
   }
 ];
