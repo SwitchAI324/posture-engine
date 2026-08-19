@@ -2837,6 +2837,17 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     const spammerNameConfidence =
       (ammo && ammo.byHook && ammo.byHook.sender_identity &&
         ammo.byHook.sender_identity.confidence) ?? 1;
+    // FIRST NAME (Aug 18, Scouting's sender_identity payload extension) —
+    // derived, null-on-ambiguity, particle-aware. Used for the SPOKEN
+    // greeting below instead of the raw name so a signature sign-off like
+    // "William Goldberg, Esq." never puts "Esq." in the host's mouth.
+    // Deliberately reuses the EXISTING confidence gate unchanged (Andrew's
+    // Aug 6 call: a low-confidence guess is never spoken, only asked for) —
+    // this only changes WHICH field gets spoken on the already-confident
+    // path, not the confidence policy itself.
+    const spammerFirstName =
+      (ammo && ammo.byHook && ammo.byHook.sender_identity &&
+        ammo.byHook.sender_identity.first_name) || null;
     trace.emit(
       "utterance",
       { speaker_role: "spammer", speaker_name: spammerName, character_id: null, text: lastUserText(messages), turn_index: turn },
@@ -3649,10 +3660,14 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     const NAME_CONFIDENCE_THRESHOLD = parseFloat(process.env.NAME_CONFIDENCE_THRESHOLD || "0.65");
     if (turn === 1) {
       if (spammerName && spammerNameConfidence >= NAME_CONFIDENCE_THRESHOLD) {
+        // Speak the first name when we have one (strips titles/suffixes);
+        // fall back to the raw name only in the rare case it's null (e.g.
+        // the presented name was all title/suffix, no core token to split).
+        const spokenSpammerName = spammerFirstName || spammerName;
         mutable +=
-          "\n\n[TURN 1 — the caller's name is known: " + spammerName + ". Use it " +
-          "naturally in your greeting this turn (e.g. \"" + spammerName +
-          ", good to talk to you\" / \"hey, " + spammerName + "\") — not a forced " +
+          "\n\n[TURN 1 — the caller's name is known: " + spokenSpammerName + ". Use it " +
+          "naturally in your greeting this turn (e.g. \"" + spokenSpammerName +
+          ", good to talk to you\" / \"hey, " + spokenSpammerName + "\") — not a forced " +
           "or robotic use, just a natural human greeting that includes their name.]";
       } else if (spammerName && spammerNameConfidence < NAME_CONFIDENCE_THRESHOLD) {
         // A guessed name (email-local-part tier) exists but isn't trustworthy
@@ -4031,10 +4046,18 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       const emailName =
         (ammo && ammo.byHook && ammo.byHook.sender_identity &&
           ammo.byHook.sender_identity.name) || null;
+      // Same first-name-for-speech swap as the TURN 1 block above (Aug 18) —
+      // this path has no confidence gate of its own (unchanged, pre-existing
+      // behavior), so the swap here is a straight substitution, not a new
+      // gate.
+      const emailFirstName =
+        (ammo && ammo.byHook && ammo.byHook.sender_identity &&
+          ammo.byHook.sender_identity.first_name) || null;
       if (emailName) {
+        const spokenEmailName = emailFirstName || emailName;
         mutable +=
           "\n\nTHEIR NAME: you know from their email that you're speaking with " +
-          emailName + ". Use their name naturally and confidently early on — do " +
+          spokenEmailName + ". Use their name naturally and confidently early on — do " +
           "NOT ask them to confirm it; you already know it.";
       } else {
         mutable +=
