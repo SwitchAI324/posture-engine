@@ -208,6 +208,14 @@ async function readDossierFloor(targetId) {
     const name = facts.name || null;
     const title = facts.title || null;
     const company = facts.company || null;
+    // LAST NAME (Aug 18, Andrew) — deliberately a SEPARATE field from name,
+    // not merged into it. Awareness-only: the host silently knows it, never
+    // volunteers it. Contract needed from Scouting: facts.last_name on the
+    // SAME body-lane row as name/title/company (Channel 2, sender_identity/
+    // email dissection) — same source, same reliability tier as name. Until
+    // Scouting populates it this is always null and the block below is a
+    // no-op, so shipping this now is safe.
+    const lastName = facts.last_name || null;
 
     // Best-effort prior-contact detail — see the function comment above.
     const callRow = rows.find((row) => row && row.source_lane === "call");
@@ -231,7 +239,7 @@ async function readDossierFloor(targetId) {
     const topicalSummary = dossier && dossier.summary ? dossier.summary : null;
     const topicalHook = dossier && dossier.hook ? dossier.hook : null;
 
-    if (!name && !title && !company && !priorDetail && !topicalSummary) return null;
+    if (!name && !title && !company && !priorDetail && !topicalSummary && !lastName) return null;
 
     // FORMAT: labeled, terse, hard-capped. This bakes into the CACHED prefix
     // and pays a token cost on every turn of every call — ruthlessly
@@ -249,6 +257,18 @@ async function readDossierFloor(targetId) {
     }
     if (priorDetail) {
       line += (line ? ". " : "") + "Prior contact: " + String(priorDetail).slice(0, 120);
+    }
+    // LAST NAME — appended LAST on purpose: it's the newest, lowest-priority
+    // addition, so if the 400-char cap ever bites, this is what gets
+    // truncated first, never the older/more-established identity/prior-
+    // contact content. Explicitly framed as private background, not a
+    // greeting cue — this must never collide with the separate, spoken
+    // "NAME AT OUTSET" logic in completions.js.
+    if (lastName) {
+      line += (line ? ". " : "") + "You also privately know their last name " +
+        "is \"" + String(lastName).slice(0, 60) + "\" (from their email) — " +
+        "background only, never volunteer or announce it; use it only if " +
+        "the conversation itself genuinely calls for it.";
     }
     // Hard cap widened (240 -> 400) to fit the topical-expertise sentence
     // alongside identity/prior-contact — still a floor, not the whole

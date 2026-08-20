@@ -517,7 +517,9 @@ export const BITS = [
     "family": "personal_competitive",
     "absurdity": 3,
     "vocal_tag": "sad",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-143",
@@ -539,7 +541,9 @@ export const BITS = [
     "family": "personal_observation",
     "absurdity": 3,
     "vocal_tag": "content",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-145",
@@ -872,7 +876,9 @@ export const BITS = [
     "family": "reactive_intrusion",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-221",
@@ -883,7 +889,9 @@ export const BITS = [
     "family": "name_trouble",
     "absurdity": 2,
     "vocal_tag": "surprised",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-222",
@@ -941,7 +949,9 @@ export const BITS = [
     "family": "process_documentation",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-226",
@@ -1109,7 +1119,9 @@ export const BITS = [
     "family": "tech_setup",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-302",
@@ -1162,7 +1174,9 @@ export const BITS = [
     "family": "tech_setup",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-306",
@@ -1172,7 +1186,9 @@ export const BITS = [
     "family": "other_people",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "cooldown": 4,
@@ -1217,7 +1233,9 @@ export const BITS = [
     "family": "missing_person",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-311",
@@ -1246,7 +1264,9 @@ export const BITS = [
     "family": "missing_person",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-313",
@@ -1288,7 +1308,9 @@ export const BITS = [
     "family": "tech_setup",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-317",
@@ -1324,7 +1346,9 @@ export const BITS = [
     "family": "other_people",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-320",
@@ -1347,7 +1371,9 @@ export const BITS = [
     "family": "other_people",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-322",
@@ -1358,7 +1384,9 @@ export const BITS = [
     "family": "other_people",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-323",
@@ -1464,7 +1492,9 @@ export const BITS = [
     "family": "video_text",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-403",
@@ -1477,7 +1507,9 @@ export const BITS = [
     "family": "video_identity",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-404",
@@ -1488,7 +1520,9 @@ export const BITS = [
     "family": "video_text",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-405",
@@ -1500,7 +1534,9 @@ export const BITS = [
     "family": "video_background",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "cooldown": 5,
@@ -1524,7 +1560,9 @@ export const BITS = [
     "family": "video_window",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-408",
@@ -1550,7 +1588,9 @@ export const BITS = [
     "family": "dossier_ambient",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-502",
@@ -1573,7 +1613,9 @@ export const BITS = [
     "vocal_tag": "excited",
     "requires_context": "spammer has mentioned their company or title",
     "trigger": "caller_presenting",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "cooldown": 4,
@@ -1584,7 +1626,9 @@ export const BITS = [
     "family": "dossier_host_deflection",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-505",
@@ -1605,7 +1649,9 @@ export const BITS = [
     "family": "dossier_host_deflection",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-507",
@@ -1721,7 +1767,9 @@ export const BITS = [
     "family": "dossier_content_reactive",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-515",
@@ -2098,12 +2146,13 @@ export const BITS = [
     "pool": "middle",
     "trigger": "caller_presenting",
     "cooldown": 5,
-    "max_fires_per_call": 1,
+    "max_fires_per_call": 3,
     "absurdity": 3,
     "vocal_tag": "mysterious",
     "channel": "audio",
     "requires_context": "spammer has described their product, technology, or industry in specific terms",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3
   },
   {
     "id": "BIT-TEST-LAUGHTER",
