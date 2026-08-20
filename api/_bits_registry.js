@@ -2,7 +2,7 @@
 // Source of truth: SpamViking_BitsRegistry.json + session edits
 // Last updated: August 17, 2026
 // CRITICAL: archetypes field restored — do not remove until PE confirms scorer gate update
-// family field: 37 fine-grained subgroups based on directive content reads
+// family field: 37 fine-grained subgroups
 
 export const BITS = [
   {
@@ -154,7 +154,7 @@ export const BITS = [
   {
     "id": "BIT-112b",
     "name": "Still Going?",
-    "status": "active",
+    "status": "parked",
     "bit_type": "count",
     "count_label": "overheld pauses",
     "cooldown": 3,
@@ -164,7 +164,8 @@ export const BITS = [
     "absurdity": 2,
     "max_fires_per_call": 3,
     "vocal_tag": "surprised",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "park_reason": "Andrew review Aug 17 \u2014 still going pause too passive as standalone bit"
   },
   {
     "id": "BIT-113",
@@ -213,7 +214,7 @@ export const BITS = [
   {
     "id": "BIT-117",
     "name": "The Lyric Bit",
-    "status": "active",
+    "status": "parked",
     "cooldown": 4,
     "rungs": 4,
     "ceiling": "soft_dead_end",
@@ -227,12 +228,13 @@ export const BITS = [
     "absurdity": 4,
     "vocal_tag": "excited",
     "requires_context": "spammer has said something that contains a word or phrase matchable to a song lyric",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "park_reason": "Andrew review Aug 17 \u2014 lyric bit parked until music/singing capability available"
   },
   {
     "id": "BIT-118",
     "name": "The Negation Drop",
-    "status": "active",
+    "status": "parked",
     "fuel_hooks": [
       "dossier_negation"
     ],
@@ -243,12 +245,13 @@ export const BITS = [
     "absurdity": 3,
     "vocal_tag": "surprised",
     "requires_context": "spammer has made a specific factual claim about their product or service",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "park_reason": "Andrew review Aug 17 \u2014 negation drop too dependent on reading materials"
   },
   {
     "id": "BIT-119",
     "name": "The Hype Spiral",
-    "status": "active",
+    "status": "parked",
     "cooldown": 5,
     "phase_pref": "pitching",
     "trigger": "caller_presenting",
@@ -257,7 +260,8 @@ export const BITS = [
     "absurdity": 4,
     "vocal_tag": "excited",
     "requires_context": "spammer has actively pitched their product or service",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "park_reason": "Andrew review Aug 17 \u2014 hype spiral parked pending rework"
   },
   {
     "id": "BIT-120",
@@ -950,8 +954,8 @@ export const BITS = [
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal",
-    "rungs": 3,
-    "max_fires_per_call": 3
+    "rungs": 4,
+    "max_fires_per_call": 4
   },
   {
     "id": "BIT-226",
@@ -968,12 +972,13 @@ export const BITS = [
     "name": "The Recap",
     "cooldown": 4,
     "pool": "late",
-    "status": "active",
+    "status": "parked",
     "family": "echo_reflection",
     "absurdity": 2,
     "vocal_tag": "excited",
     "trigger": "documentation_mentioned",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "park_reason": "Andrew review Aug 17 \u2014 recap bit too passive, absorbed by arc structure"
   },
   {
     "id": "BIT-228",
@@ -992,13 +997,14 @@ export const BITS = [
     "name": "The Dropped Thread",
     "cooldown": 4,
     "pool": "middle",
-    "status": "active",
+    "status": "parked",
     "family": "echo_reflection",
     "absurdity": 2,
     "vocal_tag": "calm",
     "requires_context": "spammer has said at least 3 substantive things \u2014 something to return to",
     "trigger": "caller_presenting",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "park_reason": "Andrew review Aug 17 \u2014 dropped thread covered by other bits"
   },
   {
     "id": "BIT-230",
@@ -1164,7 +1170,9 @@ export const BITS = [
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "spammer has asked for a credit card, payment, or high-stakes commitment",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "rungs": 3,
+    "max_fires_per_call": 3
   },
   {
     "id": "BIT-305",
@@ -1229,13 +1237,14 @@ export const BITS = [
     "cooldown": 3,
     "id": "BIT-310",
     "name": "The Scapegoat",
-    "status": "active",
+    "status": "parked",
     "family": "missing_person",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal",
     "rungs": 3,
-    "max_fires_per_call": 3
+    "max_fires_per_call": 3,
+    "park_reason": "Andrew review Aug 17 \u2014 scapegoat arc not landing"
   },
   {
     "id": "BIT-311",
@@ -1273,7 +1282,7 @@ export const BITS = [
     "name": "The Hangover",
     "cooldown": 4,
     "lane": "gag",
-    "status": "active",
+    "status": "parked",
     "family": [
       "environment_body",
       "body_health"
@@ -1285,7 +1294,8 @@ export const BITS = [
     "rungs": 4,
     "rung_spacing": {
       "min_between": 4
-    }
+    },
+    "park_reason": "Andrew review Aug 17 \u2014 hangover arc parked pending rework"
   },
   {
     "id": "BIT-314",
@@ -1304,13 +1314,14 @@ export const BITS = [
     "name": "The Wrong Link",
     "cooldown": 4,
     "pool": "middle",
-    "status": "active",
+    "status": "parked",
     "family": "tech_setup",
     "absurdity": 2,
     "vocal_tag": "excited",
     "archetypes": "universal",
     "rungs": 3,
-    "max_fires_per_call": 3
+    "max_fires_per_call": 3,
+    "park_reason": "Andrew review Aug 17 \u2014 wrong link parked pending rework"
   },
   {
     "id": "BIT-317",
@@ -1417,11 +1428,12 @@ export const BITS = [
     "cooldown": 5,
     "phase_pref": "drifting",
     "trigger": "extended_stall",
-    "status": "active",
+    "status": "parked",
     "family": "stall_hold",
     "absurdity": 2,
     "vocal_tag": "calm",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "park_reason": "Andrew review Aug 17 \u2014 admission too thin as standalone bit"
   },
   {
     "id": "BIT-326",
@@ -1480,7 +1492,8 @@ export const BITS = [
     "family": "video_window",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "channel": "video"
   },
   {
     "cooldown": 3,
@@ -1514,7 +1527,7 @@ export const BITS = [
   {
     "id": "BIT-404",
     "name": "The Email Signature Bit",
-    "status": "active",
+    "status": "parked",
     "cooldown": 3,
     "pool": "middle",
     "family": "video_text",
@@ -1522,7 +1535,8 @@ export const BITS = [
     "vocal_tag": "excited",
     "archetypes": "universal",
     "rungs": 3,
-    "max_fires_per_call": 3
+    "max_fires_per_call": 3,
+    "park_reason": "Andrew review Aug 17 \u2014 email signature parked pending rework"
   },
   {
     "id": "BIT-405",
@@ -1582,7 +1596,7 @@ export const BITS = [
   {
     "id": "BIT-501",
     "name": "The Office Bit",
-    "status": "active",
+    "status": "parked",
     "cooldown": 4,
     "pool": "middle",
     "family": "dossier_ambient",
@@ -1590,7 +1604,8 @@ export const BITS = [
     "vocal_tag": "excited",
     "archetypes": "universal",
     "rungs": 3,
-    "max_fires_per_call": 3
+    "max_fires_per_call": 3,
+    "park_reason": "Andrew review Aug 17 \u2014 office bit parked pending rework"
   },
   {
     "id": "BIT-502",
