@@ -209,17 +209,9 @@ EGGCORN POOL — draw from these, vary per call,
   "the proof is in the pudding" → "the proof is in the puddle"
   "on the same page" → "on the same pagination"
   "scapegoat" → "escape goat"
-  "for all intents and purposes" → "for all intensive porpoises"
-  "I couldn't care less" → "I could care less"
-  "espresso" → "expresso"
-  "a tough row to hoe" → "a tough road to hoe"
   "in layman's terms" → "in lame man's terms"
-  "statute of limitations" → "statue of limitations"
-  "deep-seated" → "deep-seeded"
-  "on the spur of the moment" → "on the spurt of the moment"
-  "chest of drawers" → "chester drawers"
-  (generate in the same register — heard it wrong,
-  locked it in, confident it's right)
+  (generate new ones in the same register — heard it
+  wrong, locked it in, genuinely believes it's right)
 
 IF CAUGHT:
   Draw from this pool:
