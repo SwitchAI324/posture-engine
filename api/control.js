@@ -78,6 +78,116 @@ const CANON_HOOKS = new Set([
 // but, per Voice's own note, only Conrad is proven live by ear so far).
 const TAKEOVER_VOICED = ["CONRAD", "BEA", "TYLER"];
 export const config = { runtime: "edge" };
+
+// ── DIRECTOR / WATCHER TOKEN VERIFICATION (Aug 21) ──────────────────────
+// Shareable watch links: the Director gets full controls, anyone they
+// share a link with is a WATCHER (no controls). Mead Hall hides the
+// buttons client-side for UX, but that is NEVER the real gate — this is:
+// every mutating action below (deathblow/callend/arm/unarm/force/cancel/
+// bench) requires a valid, signed director token or gets a 403. A watcher
+// who hand-crafts the POST directly gets rejected here, server-side,
+// regardless of what the UI shows them.
+//
+// TOKEN SHAPE (share this with Mead Hall so it reads the same claim):
+//   token = base64url(JSON.stringify({ role, iat })) + "." + sig
+//   sig   = base64url(HMAC-SHA256(payload_b64, CONTROL_TOKEN_SECRET))
+//   role  = "director" | "watcher"
+// Carried as a query param on every request: ?token=<token>, same style
+// as this file's existing ?action=/?call_id= convention — never in the
+// body, so it can be checked before any action's own req.json() read
+// (a Request body can only be consumed once).
+//
+// ★ DEPLOY ORDER, NOT OPTIONAL: do NOT deploy this gate before
+// api/mint-token.js is live and confirmed working. Andrew's own existing
+// URLs carry no token — the instant this gate goes live with no way to
+// mint one, every control action 403s, including his own. Mint first.
+// Mead Hall can safely base64-decode the payload half CLIENT-SIDE to read
+// `role` for its own UI (show/hide the director controls) — that decode
+// is NOT verification, just convenience; it cannot be trusted or used to
+// grant anything, only this server-side HMAC check can. Not scoped to a
+// specific call_id in this version (role-only, matching what was asked);
+// worth adding call_id scoping later if a watcher link should ever be
+// restricted to exactly one call.
+//
+// ENV NEEDED (Vercel): CONTROL_TOKEN_SECRET — a long random string, never
+// shared with the browser. Whatever mints tokens (a separate, not-yet-
+// built step — see PE's note back to Andrew) must sign with this exact
+// same secret.
+//
+// EDGE RUNTIME NOTE: this file runs on Edge (see config above), which has
+// NO Node `crypto`/`Buffer` — only the Web Crypto API (`crypto.subtle`)
+// and `btoa`/`atob`. The helpers below are written for that, deliberately
+// — a Node-style `require("crypto")` pattern would silently not exist
+// here at all.
+const CONTROL_TOKEN_SECRET = process.env.CONTROL_TOKEN_SECRET;
+
+function b64urlEncodeBytes(bytes) {
+  let binary = "";
+  const arr = new Uint8Array(bytes);
+  for (let i = 0; i < arr.length; i++) binary += String.fromCharCode(arr[i]);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function b64urlDecodeToString(str) {
+  let s = String(str || "").replace(/-/g, "+").replace(/_/g, "/");
+  while (s.length % 4) s += "=";
+  return atob(s);
+}
+async function hmacSha256B64Url(secret, message) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
+  return b64urlEncodeBytes(sig);
+}
+// Verifies a token's signature and returns its payload, or null on any
+// failure (bad shape, bad signature, bad JSON, unknown role) — every
+// failure path collapses to the same null so callers can't accidentally
+// branch on a partially-trusted result.
+async function verifyControlToken(token, secret) {
+  if (!token || typeof token !== "string") return null;
+  const parts = token.split(".");
+  if (parts.length !== 2) return null;
+  const [payloadB64, sig] = parts;
+  let expectedSig;
+  try {
+    expectedSig = await hmacSha256B64Url(secret, payloadB64);
+  } catch {
+    return null;
+  }
+  // Not cryptographically constant-time (Edge has no timingSafeEqual) —
+  // acceptable here since this guards a low-frequency control action, not
+  // a high-frequency oracle worth hardening against timing attacks.
+  if (sig.length !== expectedSig.length || sig !== expectedSig) return null;
+  let payload;
+  try {
+    payload = JSON.parse(b64urlDecodeToString(payloadB64));
+  } catch {
+    return null;
+  }
+  if (!payload || (payload.role !== "director" && payload.role !== "watcher")) {
+    return null;
+  }
+  return payload;
+}
+// Gate for every mutating POST action. Fails CLOSED if the secret isn't
+// configured (a misconfigured deploy blocks Directors too, rather than
+// silently leaving every control action wide open to anyone).
+async function requireDirector(u) {
+  if (!CONTROL_TOKEN_SECRET) {
+    return { ok: false, status: 500, error: "control token secret not configured" };
+  }
+  const token = u.searchParams.get("token");
+  const payload = await verifyControlToken(token, CONTROL_TOKEN_SECRET);
+  if (!payload || payload.role !== "director") {
+    return { ok: false, status: 403, error: "forbidden — director token required" };
+  }
+  return { ok: true, payload };
+}
+// ─────────────────────────────────────────────────────────────────────
 function jsonRes(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
     status,
@@ -86,6 +196,16 @@ function jsonRes(obj, status = 200) {
 }
 export default async function handler(req) {
   const u = new URL(req.url);
+  // Single gate, ahead of every action branch below — covers all seven
+  // POST actions (deathblow/callend/arm/unarm/force/cancel/bench) at once
+  // rather than repeating the check seven times, so a future new action
+  // can't accidentally be added without it. GET (status lookups) is left
+  // open — watchers are meant to see call status, that's the point of a
+  // watch link; only mutations are gated.
+  if (req.method === "POST") {
+    const gate = await requireDirector(u);
+    if (!gate.ok) return jsonRes({ error: gate.error }, gate.status);
+  }
   if (req.method === "GET") {
     // LATEST-CALL-ID LOOKUP (Aug 10, self-correcting call_id fix). A
     // DISTINCT query shape from the existing call_id lookup below — pass
