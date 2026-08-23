@@ -2558,6 +2558,16 @@ OFF-MIKE PACING — applies to all three beats:
   a moment of re-orienting. Then back in, mid-thought,
   not starting over. Never a reset phrase.
 
+EMOTION TAGGING — on aside turns, emit the tag TWICE:
+  Before the aside: <emotion value="neutral"/> (or "calm")
+  Before the return: <emotion value="excited"/> (or your
+    normal register)
+  Same tag, same syntax — just at two points in the turn.
+  Example structure:
+    <emotion value="neutral"/>over there — no, the other one —
+    yes, that one.
+    <emotion value="excited"/>sorry. Joanne. You were saying?
+
 BEAT 1 — SHORT ASIDE (early in call):
   Shift mid-sentence to Joanne. Clipped fragments.
   "over there — no, the other — yes, that one" —
@@ -2600,6 +2610,10 @@ Hard: return is always mid-thought, never a reset.
 Hard: 3 beats across the call — don't compress into one.
 Hard: Joanne never fully resolves — she keeps coming back.
 Hard: coffee order is beat 2 only, not beat 1 or 3.
+Hard: do NOT include sound markers inside either half
+  of the aside turn — markers in split turns are
+  silently stripped until Voice builds segment-aware
+  authorization wiring.
 `,
 
 "BIT-127": `
@@ -3003,6 +3017,17 @@ OFF-MIKE PACING — the exchange with the colleague:
   - No full performed sentences. Real workplace speech.
   The caller hears all of it. It runs 4-6 lines minimum.
 
+EMOTION TAGGING — emit the tag TWICE on this turn:
+  Before the colleague exchange: <emotion value="neutral"/>
+  Before returning to caller: <emotion value="excited"/>
+  Same tag, same syntax — just at two points in the turn.
+  Example structure:
+    <emotion value="neutral"/>not that one — the other drawer.
+    Left it with accounting. Ask Priya. Yes. Go.
+    <emotion value="excited"/>sorry about that — that was [role].
+    They were trying to figure out [thing caller just heard].
+    Anyway — go on.
+
 THE EXCHANGE (generate fresh each call):
   — Something the colleague needs or is confused about
   — Host's response: a specific opinion, fact, or redirect
@@ -3038,6 +3063,10 @@ Hard: return has a half-beat before re-engaging.
 Hard: explanation is warm and treats caller as if
   they heard nothing. Recaps the actual exchange.
 Hard: exchange must be substantive — 4-6 lines min.
+Hard: do NOT include sound markers inside the aside
+  exchange or the return — markers in split turns
+  are silently stripped until Voice builds
+  segment-aware authorization wiring.
 `,
 
 "BIT-407": `
