@@ -43,13 +43,39 @@
 // byte-for-byte equivalent so a token minted here verifies correctly
 // wherever it's checked.
 
+// TOKEN SHAPES:
+//   DIRECTOR: {role:"director", sub, did, iat} — sub is an identity string
+//     (e.g. email), did is a fresh random id mapping to a `director_tokens`
+//     row {did (PK), sub, revoked, created_by, created_at}. This makes each
+//     director token INDIVIDUALLY revocable, same mechanism watcher tokens
+//     already use via jti/watch_tokens — added Aug 22 once a second real
+//     person became plausible; a single shared secret with no identity or
+//     revocation was fine for "just Andrew," not fine past that.
+//   LEGACY DIRECTOR (still accepted, not minted by this file anymore):
+//     {role:"director", iat} with no did/sub — control.js treats a missing
+//     did as "skip the revocation check" for backward compatibility, so an
+//     already-issued legacy token keeps working. Never mint this shape again.
+//   WATCHER: {role:"watcher", iat, jti} — unchanged from before.
+//
+// TWO SEPARATE MINT SECRETS, DELIBERATELY:
+//   DIRECTOR_MINT_SECRET — required for role=director. Stays with whoever
+//     should be able to grant FULL control access. Never hand this to a
+//     button backend or anything automated.
+//   WATCHER_MINT_SECRET — required for role=watcher. Safe to hand to
+//     Publishing/Ops's "Share watch link" button backend — it can only ever
+//     produce a scoped, read-only, individually-revocable watcher link, never
+//     director access, even if that backend is fully compromised.
+//   (Both signed with the same CONTROL_TOKEN_SECRET regardless of which mint
+//   secret gated the request — that part's unchanged.)
 export const config = { runtime: "edge" };
 
 const DIRECTOR_MINT_SECRET = process.env.DIRECTOR_MINT_SECRET;
+const WATCHER_MINT_SECRET = process.env.WATCHER_MINT_SECRET;
 const CONTROL_TOKEN_SECRET = process.env.CONTROL_TOKEN_SECRET;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const WATCH_TOKENS_TABLE = "watch_tokens";
+const DIRECTOR_TOKENS_TABLE = "director_tokens";
 
 function jsonRes(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
@@ -94,9 +120,10 @@ async function signPayload(payloadObj) {
 // Same REST-write pattern _store.js already uses everywhere (plain fetch
 // to Supabase's PostgREST, not the @supabase/supabase-js client — this
 // file doesn't need Realtime, only an INSERT, so no reason to pull in the
-// heavier client library here).
-async function insertWatchToken(row) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${WATCH_TOKENS_TABLE}`, {
+// heavier client library here). Generic across both tables — same shape
+// of call, different table name.
+async function insertRow(table, row) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
     cache: "no-store",
     method: "POST",
     headers: {
@@ -109,27 +136,73 @@ async function insertWatchToken(row) {
   });
   if (!r.ok) {
     const errBody = await r.text().catch(() => "");
-    throw new Error(`watch_tokens insert failed: ${r.status} ${errBody.slice(0, 300)}`);
+    throw new Error(`${table} insert failed: ${r.status} ${errBody.slice(0, 300)}`);
   }
 }
 
 export default async function handler(req) {
-  if (!DIRECTOR_MINT_SECRET || !CONTROL_TOKEN_SECRET) {
+  if (!CONTROL_TOKEN_SECRET) {
     return jsonRes({ error: "mint secrets not configured" }, 500);
   }
   const u = new URL(req.url);
   const provided = u.searchParams.get("mint_secret");
-  if (!provided || provided !== DIRECTOR_MINT_SECRET) {
-    return jsonRes({ error: "forbidden" }, 403);
-  }
-
   const role = u.searchParams.get("role") || "director";
+
+  // Gate by the SECRET MATCHING THE REQUESTED ROLE — a watcher-mint secret
+  // can never authorize a director mint, even if someone tries role=director
+  // with the wrong secret. Checked per-role rather than one shared gate.
   if (role === "director") {
-    const token = await signPayload({ role: "director", iat: Date.now() });
-    return jsonRes({ token });
+    if (!DIRECTOR_MINT_SECRET) {
+      return jsonRes({ error: "DIRECTOR_MINT_SECRET not configured" }, 500);
+    }
+    if (!provided || provided !== DIRECTOR_MINT_SECRET) {
+      return jsonRes({ error: "forbidden" }, 403);
+    }
+    if (!SUPABASE_URL || !KEY) {
+      return jsonRes({ error: "Supabase env not configured" }, 500);
+    }
+    const sub = u.searchParams.get("sub");
+    if (!sub) {
+      return jsonRes({ error: "sub required for role=director (an identity — e.g. an email)" }, 400);
+    }
+    const createdBy = u.searchParams.get("created_by") || null;
+    const did = crypto.randomUUID();
+
+    try {
+      await insertRow(DIRECTOR_TOKENS_TABLE, {
+        did,
+        sub,
+        revoked: false,
+        created_by: createdBy,
+      });
+    } catch (e) {
+      return jsonRes({ error: "failed to create director grant", detail: String(e).slice(0, 200) }, 502);
+    }
+
+    const token = await signPayload({ role: "director", sub, did, iat: Date.now() });
+
+    // Same jti-style bridge assertion as the watcher path below — did is one
+    // local const used for both the insert and the sign, can't currently
+    // drift, but this guards a future edit that splits them.
+    const [signedPayloadB64] = token.split(".");
+    const signedDid = JSON.parse(b64urlDecodeToString(signedPayloadB64)).did;
+    if (signedDid !== did) {
+      return jsonRes(
+        { error: "internal: signed did does not match director_tokens row — refusing to issue" },
+        500
+      );
+    }
+
+    return jsonRes({ token, did, sub });
   }
 
   if (role === "watcher") {
+    if (!WATCHER_MINT_SECRET) {
+      return jsonRes({ error: "WATCHER_MINT_SECRET not configured" }, 500);
+    }
+    if (!provided || provided !== WATCHER_MINT_SECRET) {
+      return jsonRes({ error: "forbidden" }, 403);
+    }
     if (!SUPABASE_URL || !KEY) {
       return jsonRes({ error: "Supabase env not configured" }, 500);
     }
@@ -146,7 +219,7 @@ export default async function handler(req) {
     const jti = crypto.randomUUID();
 
     try {
-      await insertWatchToken({
+      await insertRow(WATCH_TOKENS_TABLE, {
         jti,
         target_id: targetId,
         created_by: createdBy,
@@ -166,6 +239,7 @@ export default async function handler(req) {
     // this into two calls, or regenerating jti inside signPayload) silently
     // reintroducing the exact bug Mead Hall flagged — a watcher token whose
     // signed jti doesn't match any watch_tokens row, which fails SILENTLY
+
     // (a blank board, no error) rather than loudly. Decode what was just
     // signed and confirm it matches the jti actually written to the DB
     // before ever returning it.

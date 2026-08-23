@@ -120,6 +120,26 @@ export const config = { runtime: "edge" };
 // — a Node-style `require("crypto")` pattern would silently not exist
 // here at all.
 const CONTROL_TOKEN_SECRET = process.env.CONTROL_TOKEN_SECRET;
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const DIRECTOR_TOKENS_TABLE = "director_tokens";
+
+// Same REST-read pattern _store.js/call-stream.js already use. Only called
+// when a token actually carries a `did` — legacy director tokens (minted
+// before Aug 22, {role:"director",iat} with no did) have nothing to look
+// up and skip this entirely, staying valid exactly as before.
+async function lookupDirectorToken(did) {
+  const url =
+    `${SUPABASE_URL}/rest/v1/${DIRECTOR_TOKENS_TABLE}?did=eq.${encodeURIComponent(did)}` +
+    `&select=did,sub,revoked`;
+  const r = await fetch(url, {
+    cache: "no-store",
+    headers: { apikey: SUPABASE_KEY, authorization: `Bearer ${SUPABASE_KEY}` },
+  });
+  if (!r.ok) return null;
+  const rows = await r.json();
+  return (rows && rows[0]) || null;
+}
 
 function b64urlEncodeBytes(bytes) {
   let binary = "";
@@ -176,6 +196,15 @@ async function verifyControlToken(token, secret) {
 // Gate for every mutating POST action. Fails CLOSED if the secret isn't
 // configured (a misconfigured deploy blocks Directors too, rather than
 // silently leaving every control action wide open to anyone).
+//
+// REVOCATION (Aug 22): a director token minted since the identity/did
+// upgrade gets checked against `director_tokens` — revoked or missing
+// row means refused, same treatment a bad signature gets. A LEGACY token
+// (no `did` field — anything minted before this upgrade) has nothing to
+// check and is accepted as before; this is a deliberate, one-way
+// backward-compat path, not a gap someone could exploit by omitting did
+// themselves — a forged token still fails the signature check first,
+// same as always, before this logic ever runs.
 async function requireDirector(u) {
   if (!CONTROL_TOKEN_SECRET) {
     return { ok: false, status: 500, error: "control token secret not configured" };
@@ -184,6 +213,15 @@ async function requireDirector(u) {
   const payload = await verifyControlToken(token, CONTROL_TOKEN_SECRET);
   if (!payload || payload.role !== "director") {
     return { ok: false, status: 403, error: "forbidden — director token required" };
+  }
+  if (payload.did) {
+    if (!SUPABASE_URL || !SUPABASE_KEY) {
+      return { ok: false, status: 500, error: "director revocation check misconfigured" };
+    }
+    const row = await lookupDirectorToken(payload.did).catch(() => null);
+    if (!row || row.revoked) {
+      return { ok: false, status: 403, error: "director grant not found or revoked" };
+    }
   }
   return { ok: true, payload };
 }
