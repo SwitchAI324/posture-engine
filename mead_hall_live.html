@@ -209,6 +209,25 @@
   .soundbeat.show{opacity:1}
   .soundbeat.ok{background:#e3f3e0;color:#2f7d3a;border:1px solid #a9d6a2}
   .soundbeat.no{background:#fbeee0;color:#9a6a1e;border:1px solid #e6c48c}
+  /* Host comms box — a live feed of Host-voiced updates below the bits (fired / MISSED / sound /
+     bench / death blow, plus PE host_aside chatter when it arrives). Keeps action feedback
+     front-and-center and reads like a live line to the Host. */
+  /* persistent explainer near the fire buttons — turns "mysterious frustration" into known behavior */
+  .firenote{font-size:9.5px;line-height:1.4;color:#9a8f79;font-style:italic;padding:6px 4px 2px}
+  .hostcomms{margin:8px 0 4px;border:1px solid var(--line);border-radius:9px;background:#fbf7ee;overflow:hidden}
+  .hc-head{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    color:#8a7b5c;padding:5px 9px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:5px;background:#f3ecdd}
+  .hc-live{color:#c25b3a;font-size:8px;animation:hcPulse 2s ease-in-out infinite}
+  @keyframes hcPulse{0%,100%{opacity:.35}50%{opacity:1}}
+  .hc-feed{max-height:150px;overflow-y:auto;padding:6px 9px;display:flex;flex-direction:column;gap:5px}
+  .hc-empty{font-family:var(--mono);font-size:9px;color:#b7afa0;text-align:center;padding:6px 0}
+  .hc-line{font-size:11px;line-height:1.4;color:#3a352d;padding:5px 9px;border-radius:7px;background:#fff;border:1px solid #eee4d0;
+    animation:hcIn .25s ease-out}
+  @keyframes hcIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+  .hc-line .hc-when{font-family:var(--mono);font-size:8px;color:#b7afa0;margin-left:6px}
+  .hc-line.aside{background:#fbf3e2;border-color:#e8d9b0;font-style:italic;color:#6f5b2e}
+  .hc-line.miss{background:#fbecec;border-color:#e6bcbc;color:#8c3b2b;font-weight:600}
+  .hc-line.win{background:#e9f4e6;border-color:#bcdcb2;color:#2f7d3a}
   /* "Missed" — a sound the Director fired got dropped. Flashes a few times (finite) then the
      button settles to "Fire again" (expiredBit). Alarming red, but never a forever-flash. */
   .fire-bit.missed-btn{background:var(--blood);border-color:var(--blood);color:#fff;animation:missedFlash .38s ease-in-out 5}
@@ -423,10 +442,11 @@
     padding:14px;text-align:center}
   .endframe .ff{font-family:var(--mono);font-size:9px;letter-spacing:.2em;color:var(--gold)}
   .endframe .em{font-family:var(--mono);font-weight:700;font-size:15px;color:var(--gold2);margin-top:6px}
-  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);
-    color:#fff;font-family:var(--mono);font-size:11px;padding:10px 16px;border-radius:8px;z-index:40;
-    opacity:0;transition:opacity .25s}
-  .toast.on{opacity:1}
+  .toast{position:fixed;top:64px;right:20px;left:auto;transform:none;max-width:320px;background:var(--ink);
+    color:#fff;font-family:var(--mono);font-size:11px;line-height:1.4;padding:10px 14px;border-radius:8px;z-index:40;
+    box-shadow:0 6px 20px rgba(0,0,0,.22);opacity:0;transition:opacity .2s,transform .2s;transform:translateY(-4px)}
+  .toast.on{opacity:1;transform:translateY(0)}
+  @media (max-width:900px){ .toast{top:auto;bottom:18px;right:50%;transform:translateX(50%)} }
   /* live conversation */
   .callbar{grid-area:callbar;display:flex;align-items:center;gap:10px;background:#fff;
     border:1px solid var(--line);border-radius:8px;padding:8px 12px}
@@ -731,6 +751,11 @@
     <div class="body">
       <!-- gear panel removed from the board; gear DATA still drives bit scores + flash -->
       <div id="armPanel" style="display:none"></div>
+      <div class="firenote" id="fireNote">Force-fires can lose to a recently-active bit&rsquo;s momentum. If it doesn&rsquo;t land, wait a beat and try again.</div>
+      <div class="hostcomms" id="hostComms">
+        <div class="hc-head">From the Host <span class="hc-live" id="hcLive">●</span></div>
+        <div class="hc-feed" id="hcFeed"><div class="hc-empty">\u2014 waiting for the call \u2014</div></div>
+      </div>
       <div class="bp-scope">
 <div class="bench-panel">
   <div class="panel-head">
@@ -882,6 +907,14 @@
 (function(){
   const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
   function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),1700);}
+  // Host comms feed — Host-voiced updates below the bits. kind: ''|'aside'|'miss'|'win'.
+  function hostSay(text, kind){ const feed=$('#hcFeed'); if(!feed||!text) return;
+    const empty=feed.querySelector('.hc-empty'); if(empty) empty.remove();
+    const when=new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    const l=document.createElement('div'); l.className='hc-line'+(kind?(' '+kind):'');
+    l.innerHTML=text.replace(/[<>]/g,'')+'<span class="hc-when">'+when+'</span>';
+    feed.appendChild(l); feed.scrollTop=feed.scrollHeight;
+    while(feed.children.length>40) feed.removeChild(feed.firstChild); }
   // MUST be first: top-level render calls further down reference `source`. A `let` read
   // before its declaration throws a TDZ ReferenceError and kills the entire script.
   const qp = new URLSearchParams(location.search);
@@ -1349,6 +1382,7 @@
   if($('#zoomOut')) $('#zoomOut').onclick=()=>{ zoom=Math.max(0.8, Math.round((zoom-0.1)*10)/10); applyZoom(); };
   if($('#listenBtn')) $('#listenBtn').onclick=()=>toggleListen();
   applyZoom();
+  loadRegistry();   // prefill bit names from PE's registry (non-blocking, degrades gracefully)
   // Watcher view: hide Director controls + relabel the badge. (Server still enforces; this is UX.)
   if(viewerRole==='watcher'){
     document.body.classList.add('role-watcher');
@@ -1536,14 +1570,16 @@
     const type=data.type, marker=String(data.marker||'').replace(/^\[|\]$/g,'').replace(/[_\-]+/g,' ').trim().toLowerCase();
     const nm=marker||'sound';
     if(type==='sound_played'){
-      toast('\uD83D\uDD0A '+nm+' \u2014 played \u2713');
-      soundBeat(data.marker, 'played');
+      // No confirmation on a successful play — the Director hears it via 🔊 Listen, so a beat/toast
+      // would just be redundant noise. We only surface the SILENT failure case below.
+      return;
     } else if(type==='sound_discarded'){
       const why = ({ discarded_generation:'superseded by a newer line',
                      no_clip_registered:'no clip registered for it',
                      bg_player_not_ready:'audio player wasn\u2019t ready' })[data.reason] || (data.reason||'discarded');
       toast('\uD83D\uDD07 '+nm+' \u2014 didn\u2019t play ('+why+')');
       soundBeat(data.marker, 'discarded');
+      hostSay('\uD83D\uDD07 '+nm+' didn\u2019t play (' + why + ').', 'miss');
       // If you just fired a bit and its sound got dropped, that's a MISS on the button you pressed.
       // Show "Missed" (flashes a few times) on that bit, then settle it into "Fire again".
       if(lastFired.bit && (Date.now()-lastFired.at < 25000)){
@@ -1650,7 +1686,7 @@
   // suspicion: alive|slipping|foregone, pressure: calm|pushing|extracting,
   // engagement: bored|hooked|stunned, slip:int, fit_score (bar-scale, not 0-1),
   // deploy_bar (number or "warmup"), pool:int, turn:int. Any field may be absent.
-  let lastGear={}, firingBit=null, inFlight=null, firedFlash=null, expiredBit=null, missedBit=null, lastFired={bit:null,at:0};
+  let lastGear={}, firingBit=null, inFlight=null, firedFlash=null, expiredBit=null, missedBit=null, heldBit=null, lastFired={bit:null,at:0};
   function renderGear(p){
     // Keep the gear DATA flowing even though the visible gear panel is removed — the bit scores,
     // flash (will_fire/top_bit), and opening-phase logic all read from lastGear.
@@ -1749,6 +1785,23 @@
   }
   // Names learned from PE's own events (top3 carries name+bit_id; bit_deployed too).
   const bitNames = {};
+  // Bit display names from PE's registry endpoint (GET /api/bits -> full array; ?id= for one).
+  // Prefilled into bitNames at boot, so EVERY name lookup (panel, toasts, bit_hold) resolves from
+  // the real registry — no hardcoded maps needed. Event-reported names (gear_state/bit_deployed)
+  // still override, since they land after. Degrades cleanly: if the endpoint isn't deployed, the
+  // static FIXED_BITS names + the 3-bit arc fallback still cover everything, no error.
+  const BITS_ENDPOINT = qp.get('bits_endpoint') || '/api/bits';
+  async function loadRegistry(){
+    try{
+      const r=await fetch(BITS_ENDPOINT,{cache:'default'});   // endpoint sets max-age=60
+      if(!r.ok) return;
+      const arr=await r.json().catch(()=>null);
+      if(!Array.isArray(arr)) return;
+      let n=0; arr.forEach(b=>{ const id=b&&(b.id||b.bit_id); const nm=b&&b.name;
+        if(id && nm && !bitNames[id]){ bitNames[id]=nm; n++; } });
+      if(n){ try{ renderArmPanel(); }catch(_){} console.info('[MeadHall] registry loaded \u2014 '+n+' bit names'); }
+    }catch(e){ /* not deployed / offline — static names + arc fallback still work */ }
+  }
   // SIX FIXED bits — stable order, never reshuffle. The AI still deploys from the whole
   // library independently; these are the Director's fixed manual handles. Scores update live
   // on each, but the ROWS never move (so you can actually track them). Swap ids freely.
@@ -1810,10 +1863,11 @@
       const firing=(firingBit && firingBit===b.bit_id);
       const cls='bitrow'+(pending?' pending':'')+(flying?' inflight':'')+(firing||justFired?' firing':'')+(missedBit===b.bit_id?' missed':'');
       const mark=b._placeholder?' <span style="color:#b7afa0;font-size:8px">\u00B7 placeholder</span>'
+        :(heldBit===b.bit_id?' <span class="fsub" style="color:#8a6d1e">waiting \u2014 yours is next</span>'
         :(flying?' <span class="fsub">waiting for a beat</span>'
         :(missedBit===b.bit_id?' <span class="fsub" style="color:var(--blood)">sound didn\u2019t play</span>'
         :(expiredBit===b.bit_id?' <span class="fsub">couldn\u2019t find a beat</span>'
-        :(parked?' <span style="color:#b7afa0;font-size:8px">\u00B7 parked</span>':''))));
+        :(parked?' <span style="color:#b7afa0;font-size:8px">\u00B7 parked</span>':'')))));
       const btn = justFired
         ? '<button class="chip fired-tag" disabled>Fired \u2713</button>'
         : (flying
@@ -1861,11 +1915,22 @@
   // completions log, not the response). There's no server-side fire window today, so this
   // client-side timeout is what clears a stuck "Firing…" and surfaces the likely gate.
   let fireWatch=null;
+  let inFlightEligible=true;
   function startFireWatchdog(bitId){ clearTimeout(fireWatch);
     fireWatch=setTimeout(()=>{
       if(inFlight!==bitId) return;                        // it landed or was cancelled — fine
       expiredBit=bitId; inFlight=null; renderArmPanel();
-      toast((bitNames[bitId]||bitId)+' didn\u2019t fire \u2014 likely not eligible this call (archetype, cap, or phase gate). Retry, or check the engine.');
+      const nm=(bitNames[bitId]||bitId);
+      if(!inFlightEligible){
+        // Type 1: it wasn't in the engine's pool — it likely never injected (parked/ineligible/gated).
+        toast('Bit MISSED \u2014 '+nm+' wasn\u2019t in the engine\u2019s pool, so it likely never injected.');
+        hostSay('Bit MISSED \u2014 '+nm+' wasn\u2019t in play this call, so it never went in.', 'miss');
+      } else {
+        // Type 2: it WAS eligible (injected fine) but the model didn't perform it — a recently-active
+        // bit's momentum usually won. This is known behavior, not a break. Wait a beat, relaunch.
+        toast('Bit MISSED \u2014 '+nm+' injected, but the model didn\u2019t perform it (a recent bit\u2019s momentum likely won). Wait a beat and relaunch.');
+        hostSay('Bit MISSED \u2014 '+nm+' went in but I couldn\u2019t land it \u2014 another bit had momentum. Give it a beat and run it again.', 'miss');
+      }
     }, 30000); }
   function clearFireWatchdog(){ clearTimeout(fireWatch); fireWatch=null; }
 
@@ -1887,7 +1952,9 @@
       // pending and the "UNFIRABLE" reason goes to the completions LOG, not this response. So a
       // 200 is NOT a guarantee it'll land. If we can see the bit isn't in the pool, say so; and
       // start a watchdog so a stuck "Firing…" doesn't hang forever with no explanation.
-      inFlight=bitId; lastFired={ bit:bitId, at:Date.now() }; renderArmPanel();
+      inFlight=bitId; lastFired={ bit:bitId, at:Date.now() };
+      inFlightEligible = !bitExcluded({bit_id:bitId});   // was it in the engine's pool when fired?
+      renderArmPanel();
       if(bitExcluded({bit_id:bitId})){
         toast((bitNames[bitId]||bitId)+' \u2014 sent, but it\u2019s not in the engine\u2019s pool this call, so it may not land');
       } else {
@@ -2027,6 +2094,7 @@
         break; }
       case 'bit_deployed': { const n=p.name||p.bit_id||'bit';
         if(p.bit_id && p.name) bitNames[p.bit_id]=p.name;
+        hostSay('Running '+n+' now.', (p.trigger==='injected'||p.trigger==='force')?'win':'');
         firingBit=p.bit_id||null; if(inFlight===p.bit_id) showFired(p.bit_id); renderArmPanel();
         setTimeout(()=>{ firingBit=null; renderArmPanel(); }, 3000);
         firedLog[n]=(firedLog[n]||0)+1; selectedBit=n; renderBoardBits(n); setTimeout(()=>renderBoardBits(null),2600);
@@ -2061,7 +2129,29 @@
         const log=$('#tlog'); if(log){ const d=document.createElement('div'); d.className='tl beat'+(man==='phantom'?' phantom':'');
           d.innerHTML='\u25C7 <b>'+how+' '+(p.name||'bench')+'</b>'+(p.why?' \u00B7 <span class="bmeta">'+p.why+'</span>':'')+(man&&man!=='seen'?' <span class="bmeta">('+man+')</span>':'');
           log.appendChild(d); log.scrollTop=log.scrollHeight; }
-        toast((p.name||'bench')+(src==='director'?' sent in':' joined')); break; }
+        toast((p.name||'bench')+(src==='director'?' sent in':' joined'));
+        hostSay((src==='director'?'Bringing '+(p.name||'a colleague')+' in.':(p.name||'A colleague')+' is stepping in.'), 'win'); break; }
+      // Host chatter (PE, when live): short in-character status lines — the flavor that makes this
+      // feel like a live line to the Host, e.g. "got him tangled in the bucket-list thing".
+      case 'host_aside': { const line=p.text||p.line||p.aside; if(line) hostSay(line, 'aside'); break; }
+      // PE arc protection: a committed arc bit (Dog/Insect/Thunder) is mid-arc with a confirmed
+      // rung, so a competing force-fire is HELD one turn while PE advances the arc instead. The
+      // event names the ARC bit + its confirmed rung; the held insertion is the Director's
+      // just-fired bit. Field shape not yet confirmed by PE — parsed defensively across likely keys.
+      case 'bit_hold': {
+        // Only the 3 arc-protected bits ever trigger this. Names from Bits' registry as a 3-entry
+        // map (Mead Hall has no registry data source; the flip-cards are bench, not bits). Kept
+        // deliberately simple for the SV user: which bit is running + that their fire is next.
+        // No rung / "insertion" / "turn" language.
+        const ARC_BITS={ 'BIT-302':'The Dog Bit', 'BIT-303':'The Insect Bit', 'BIT-331':'The Thunderstorm' };
+        const nameOf=(id)=>bitNames[id]||((FIXED_BITS.find(b=>b.bit_id===id)||{}).name)||id;
+        const arcId=p.arc_bit_id||p.arc_bit||p.bit_id;
+        const arcNm=p.arc_name||p.name||ARC_BITS[arcId]||nameOf(arcId)||'a bit';
+        const heldId=p.held_bit_id||p.held_bit||p.queued_bit_id||p.competing_bit_id||lastFired.bit;
+        hostSay('\u23F3 '+arcNm+' is mid-bit \u2014 I\u2019ll run yours next.', '');
+        if(heldId){ heldBit=heldId; renderArmPanel();
+          setTimeout(()=>{ if(heldBit===heldId){ heldBit=null; renderArmPanel(); } }, 6000); }
+        break; }
       case 'handoff_telegraph': { const log=$('#tlog'); if(log){ const d=document.createElement('div'); d.className='tl beat handoff';
           d.innerHTML='\uD83C\uDFA4 <b>Handoff coming</b> \u00B7 <span class="bmeta">host hands to '+(p.name||p.bench_id||'a colleague')+'\u2026</span>';
           log.appendChild(d); log.scrollTop=log.scrollHeight; } break; }
@@ -2106,6 +2196,7 @@
   let dbSent=false;
   async function postDeathBlow(){ if(dbSent){ toast('Blow already sent'); return; } await refreshCallId(); if(!callId){ toast('No call_id to write to'); return; }
     dbSent=true; $('#armBtn').textContent='SENT'; $('#armBtn').style.background='var(--ink)';
+    hostSay('Death Blow called \u2014 going for the close.', 'win');
     // No rung_id — the Director chooses the moment; PE chooses the closer.
     const body={ call_id:callId, director_user_id:directorUserId, idempotency_key:callId+':db' };
     try{ const r=await fetch(ctrlURL('deathblow'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
