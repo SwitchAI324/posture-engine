@@ -1108,6 +1108,70 @@ async function generateBenchFollowup(bench, messages, priorLine, isFinal, hostNa
 //
 // Returns { phase, pressure, engagement } with only LEGAL values, or null on
 // any failure (the prior turn's stored values simply carry forward — safe).
+// HOST_ASIDE (Aug 24) — short, in-character backstage status lines for
+// Mead Hall's "From the Host" comms feed, distinct from readCall(): that
+// reader produces structured state for PE's own scoring; this produces
+// ONE short line of flavor text purely for the Director's feed, never
+// used by PE itself and never spoken to the caller. Same async, non-
+// blocking shape as readCall (fire in waitUntil, off the critical path).
+//
+// VOICE (Aug 24, first draft): written from the two examples given so
+// far (Mead Hall's own + Bench's), pending Canon's fuller answer on
+// register — this is a placeholder good enough to ship, not a final
+// content decision. Swapping the SYSTEM string below is the only change
+// needed once Canon weighs in; no rebuild of the trigger/plumbing.
+async function generateHostAside(messages, hostName) {
+  try {
+    const convo = messages
+      .filter((m) => !(m && m.character)) // exclude bench lines, same as readCall
+      .slice(-8)
+      .map((m) => (m.role === "user" ? "Caller: " : "Host: ") + m.content)
+      .join("\n");
+    const sys =
+      "You are " + (hostName || "the host") + "'s backstage narrator — a " +
+      "stage manager fond of the show, watching this scam-baiting call from " +
+      "behind the scenes. Write ONE short line for the human operator running " +
+      "things, reporting how the call is actually going right now. Under 15 " +
+      "words. Voice: wry, affectionate, knowing — never neutral status-report " +
+      "tone, and never snide about the caller. The humor is about the " +
+      "situation and the mechanics of the bit, never about making fun of the " +
+      "human on the other end of the line.\n\n" +
+      "Examples of the exact register, across different situations:\n" +
+      "\"Caller's tangled in the bucket-list thing.\"\n" +
+      "\"Dog went off again. Caller didn't even blink.\"\n" +
+      "\"Approver hunt's dragging — caller's starting to notice.\"\n" +
+      "\"Caller's pushed the fee question twice now. Host is stalling " +
+      "beautifully.\"\n" +
+      "\"William's gone quiet. Real pause this time, not the fake kind.\"\n" +
+      "\"Conrad's about to barge in. Hope the caller's ready.\"\n\n" +
+      "Reply with ONLY the line — no quotes, no prose around it, nothing else.";
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: MODEL(),
+        max_tokens: 40,
+        system: sys,
+        messages: [{ role: "user", content: convo || "(call just started)" }],
+      }),
+    });
+    if (!r.ok) return null;
+    const data = await r.json();
+    const text = (data.content || [])
+      .filter((b) => b.type === "text")
+      .map((b) => b.text)
+      .join("")
+      .trim();
+    return text || null;
+  } catch {
+    return null;
+  }
+}
+
 async function readCall(messages, prior) {
   try {
     const convo = messages
@@ -3195,6 +3259,29 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     }
 
 
+    // CONFIRMED-FIRE COUNT (Aug 24) — shared by the arc-protection check
+    // right below AND the rung derivation further down, deliberately ONE
+    // function so both always agree on what "confirmed" means; letting
+    // them drift would reopen the exact class of bug that motivated this
+    // (a "fired but not performed" turn silently counting as real
+    // progress). Reads stored.markerCounts — built in finishUp by
+    // scanning the model's REAL output for [MARKER] tokens post-
+    // generation (search SELF-CAUSED MARKER AWARENESS below), genuinely
+    // confirmed, not an injection tally. Sums every non-_STOP marker a
+    // bit declares (a bit can have more than one). Returns 0 for a bit
+    // with no sound_markers field — callers decide what that means (rung
+    // derivation falls back to totalFires; arc protection simply can't
+    // protect what it can't measure, so an un-migrated bit is never a
+    // protected-in-progress candidate).
+    const confirmedFireCount = (bitRegistryEntry, s) => {
+      const declaredMarkers = (bitRegistryEntry && bitRegistryEntry.sound_markers) || null;
+      if (!declaredMarkers || !declaredMarkers.length) return 0;
+      const counts = (s && s.markerCounts) || {};
+      return declaredMarkers
+        .filter((m) => !String(m).endsWith("_STOP"))
+        .reduce((sum, m) => sum + (counts[m] || 0), 0);
+    };
+
     // ── FORCE CONSUMER ────────────────────────────────────────────────────
     // The Director's "fire THIS bit now" override, from Mead Hall via
     // POST /api/control?action=force. The endpoint writes a pending
@@ -3244,6 +3331,63 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       // override-fired bits (see the card-ask sync trigger).
       const forcedBit = BITS.find((b) => b.id === forcedCtl.bit_id);
       if (forcedBit) {
+        // ARC PROTECTION (Aug 24, per Bits' spec) — before letting the
+        // Director's force override anything, check whether a DIFFERENT
+        // arc_protection bit is already mid-arc and has actually been
+        // heard (confirmedFireCount >= 1) but hasn't finished
+        // (< its total rungs). Protects only the three bits Bits
+        // confirmed carry a real narrative promise at rung 1 (a named
+        // entity/ongoing situation) — 311/332/333 are deliberately NOT
+        // protected, their rung 1 is ambient texture with no unfulfilled-
+        // promise risk. Held for exactly ONE turn (stored.arcHoldOnce
+        // remembers which specific force request already got held, so
+        // the SAME request fires unconditionally next attempt rather
+        // than being held indefinitely if the arc is still going).
+        const alreadyHeldThisRequest =
+          stored && stored.arcHoldOnce &&
+          stored.arcHoldOnce.bitId === forcedCtl.bit_id;
+        let blockingArcBit = null;
+        if (!alreadyHeldThisRequest) {
+          for (const b of BITS) {
+            if (!b.arc_protection || b.id === forcedCtl.bit_id) continue;
+            const cf = confirmedFireCount(b, stored);
+            if (cf >= 1 && cf < (b.rungs || 1)) {
+              blockingArcBit = b;
+              break; // first match wins; simultaneous-multi-arc tie-break
+                     // is a known open edge case, not handled here
+            }
+          }
+        }
+        if (blockingArcBit) {
+          console.log(
+            "force HELD bit=" + forcedCtl.bit_id + " turn=" + turn +
+            " — " + blockingArcBit.id + " arc in progress (confirmed rung " +
+            confirmedFireCount(blockingArcBit, stored) + "/" + blockingArcBit.rungs +
+            "), insertion queued for next turn"
+          );
+          trace.emit(
+            "bit_hold",
+            {
+              held_bit: forcedCtl.bit_id,
+              blocking_bit: blockingArcBit.id,
+              blocking_bit_name: blockingArcBit.name,
+              confirmed_rung: confirmedFireCount(blockingArcBit, stored),
+              total_rungs: blockingArcBit.rungs,
+            },
+            "engine"
+          );
+          if (callId && isConfigured()) {
+            waitUntil(
+              setCall(callId, {
+                arcHoldOnce: { bitId: forcedCtl.bit_id, heldAtTurn: turn },
+              }).catch(() => {})
+            );
+          }
+          // Deliberately do NOT set fire/forcedFire/top here, and do NOT
+          // call fireForce() — forcedCtl stays pending (untouched, not
+          // marked "fired"), so getControls() surfaces it again next
+          // turn exactly like the existing unknown-id fallback below.
+        } else {
         top = { ...forcedBit, score: 999, excluded: false, breakdown: {} };
         fire = true;
         forcedFire = true;
@@ -3252,6 +3396,14 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           " (real bypass — parked/fuel/trigger/texture gates all overridden, " +
           "was bar=" + bar + " gap=" + gap + ")"
         );
+        // Clear any stale hold-marker now that this request actually
+        // fired — prevents leftover arcHoldOnce state from a PAST held-
+        // then-fired cycle incorrectly short-circuiting protection for
+        // some future, unrelated force request.
+        if (alreadyHeldThisRequest && callId && isConfigured()) {
+          waitUntil(setCall(callId, { arcHoldOnce: null }).catch(() => {}));
+        }
+        }
       } else {
         console.log(
           "force UNFIRABLE bit=" + forcedCtl.bit_id + " turn=" + turn +
@@ -3439,27 +3591,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       !fire && gap === 0 && lastIsCallerLine &&
       stored && stored.lastBitId && withinReinjectWindow
     ) {
-      // BUG FIX (Aug 20): this used to be `ranked.find(...)` only — but
-      // `ranked` is the pool AFTER normal gates (parked/fuel/trigger/
-      // texture-ownership) already filtered it. A FORCE-fired bit (Mead
-      // Hall's force-test path, line ~3245) deliberately bypasses those
-      // gates on its first fire — so on a sibling same-turn regeneration,
-      // that same bit is very often just absent from `ranked`, this find()
-      // silently returns undefined, and the turn falls through to an
-      // ordinary scored pick instead. Proven live (Aug 20): BIT-TEST-
-      // LAUGHTER and BIT-302 (Dog Bit) both force-fired correctly on one
-      // generation, then LOST a same-turn regeneration to a normal texture
-      // pick — Voice's own log confirmed the marker was "from a discarded
-      // generation - not played." Fix: fall back to the full BITS registry,
-      // same synthesized-ranked-shape pattern the force mechanism itself
-      // already uses (score 999, excluded:false, breakdown:{}), so a
-      // gate-bypassed bit can still be found and re-injected here too.
-      const same =
-        ranked.find((r) => r.id === stored.lastBitId) ||
-        (() => {
-          const b = BITS.find((x) => x.id === stored.lastBitId);
-          return b ? { ...b, score: 999, excluded: false, breakdown: {} } : null;
-        })();
+      const same = ranked.find((r) => r.id === stored.lastBitId);
       if (same) {
         top = same;
         fire = true;
@@ -4127,7 +4259,48 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       // actually perform.
       const topRegistryEntry = BITS.find((b) => b.id === top.id);
       const rungTotal = (topRegistryEntry && topRegistryEntry.rungs) || 1;
-      const priorFiresForRung = (scorerState.bitFireHistory || {})[top.id]?.totalFires || 0;
+      // CONFIRMED-FIRE RUNG DERIVATION (Aug 24, per Host/Bits' concern) —
+      // was: rung = injection count (bitFireHistory[id].totalFires + 1).
+      // Real gap found: totalFires bumps the moment PE decides to inject,
+      // NOT when the model can be confirmed to have actually performed it
+      // — so a "fired but not performed" turn (same failure as the dog-
+      // bark/bucket-list case) would silently advance the rung anyway,
+      // even though the caller never heard it. Several rungs explicitly
+      // reference the count ("that's TWICE") — wrong, not just unhelpful,
+      // if the count is inflated.
+      // FIX: for any bit with a registry-declared `sound_markers` array,
+      // derive the rung from stored.markerCounts instead — a count that's
+      // ALREADY built in finishUp, scanning the model's REAL final output
+      // for actual [MARKER] tokens post-generation (see "SELF-CAUSED
+      // MARKER AWARENESS" below) — genuinely confirmed, not an injection
+      // tally. Sums every non-_STOP marker the bit declares (a bit can
+      // have more than one valid marker); _STOP variants excluded, same
+      // convention finishUp's own counting already uses. Falls back to
+      // the OLD totalFires-based derivation for any bit WITHOUT a
+      // sound_markers field yet — not a regression for those, and this
+      // starts working automatically the moment Bits adds the field
+      // (confirmed today: 331/332/333 already have it; 302/303/311 don't
+      // yet — no second PE change needed once Bits adds theirs).
+      // CONFIRMED-FIRE COUNT (Aug 24) — shared by rung derivation AND arc
+      // protection below, deliberately ONE function so both always agree
+      // on what "confirmed" means; letting them drift would reopen the
+      // exact class of bug this fixed in the first place. Reads
+      // stored.markerCounts — built in finishUp by scanning the model's
+      // REAL output for [MARKER] tokens post-generation (search SELF-
+      // CAUSED MARKER AWARENESS below), genuinely confirmed, not an
+      // injection tally. Sums every non-_STOP marker a bit declares (a
+      // bit can have more than one). Returns 0 for a bit with no
+      // sound_markers field yet — callers decide what that means (rung
+      // derivation falls back to totalFires; arc protection can't
+      // protect what it can't measure, so it's simply never a protected-
+      // in-progress candidate until Bits adds the field).
+      const declaredMarkers = (topRegistryEntry && topRegistryEntry.sound_markers) || null;
+      let priorFiresForRung;
+      if (declaredMarkers && declaredMarkers.length) {
+        priorFiresForRung = confirmedFireCount(topRegistryEntry, stored);
+      } else {
+        priorFiresForRung = (scorerState.bitFireHistory || {})[top.id]?.totalFires || 0;
+      }
       const currentRung = rungTotal > 1 ? Math.min(priorFiresForRung + 1, rungTotal) : null;
       console.log(
         "BIT-INJECT id=" + top.id + " turn=" + turn +
@@ -4280,6 +4453,62 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       mutable +=
         "\n\nALSO — if it fits naturally, work in this real detail about them: " +
         armedHookFact + ". Quote the real fact, never invent one.";
+    }
+
+    // HOST_ASIDE trigger — EVENT-DRIVEN per Canon's spec (Aug 24), not a
+    // flat timer: fires when something actually happened this turn, not
+    // on a fixed cadence. Placed HERE deliberately — this is the first
+    // point in the function where `fire` is fully and finally resolved
+    // (an earlier draft referenced `fire` before its own declaration,
+    // caught before shipping — moved here specifically to fix that).
+    // Scoped to two concrete, already-reliable this-turn signals for v1
+    // — deliberately NOT attempting "phase transition" or "notable
+    // caller reaction" yet: phase updates lag a full turn behind the
+    // async reader, and "notable caller reaction" has no established
+    // detector to reuse without inventing a new heuristic unilaterally.
+    // Flagged to Canon as deferred, not silently dropped.
+    //   (a) fire === true — a bit landed this turn (covers BOTH "a bit
+    //       fired" and "a rung advanced", since rung advancement only
+    //       happens as part of a bit firing).
+    //   (b) a real silence beat this turn — covers Canon's own example
+    //       ("William's gone quiet. Real pause this time"). Re-derived
+    //       fresh from body here rather than reused from any variable
+    //       elsewhere in the file, on purpose — avoids the exact wrong-
+    //       scope risk already caught once this session.
+    // Both OR'd into ONE check, ONE generation call — satisfies "bias
+    // toward one combined line, not two" by construction: if both are
+    // true the same turn, there's still only one generateHostAside()
+    // call, with both events visible in the context it reads.
+    const HOST_ASIDE_ENABLED = process.env.HOST_ASIDE !== "0"; // default ON
+    const asideSilenceBeatRaw =
+      body?.metadata?.silence_beat ??
+      body?.extra_body?.metadata?.silence_beat ??
+      body?.call?.metadata?.silence_beat ??
+      null;
+    // BUG CAUGHT BY TESTING (Aug 24): Number(null) === 0, and 0 IS finite —
+    // so a naive Number.isFinite(Number(raw)) check treats "no silence_beat
+    // field at all" (raw === null, the ordinary case on most turns) as
+    // "silence beat present." That would have fired this on nearly every
+    // quiet turn, exactly the spam Canon's event-driven spec was meant to
+    // avoid. Must check raw != null FIRST.
+    const asideHasSilenceBeat =
+      asideSilenceBeatRaw != null && Number.isFinite(Number(asideSilenceBeatRaw));
+    if (
+      HOST_ASIDE_ENABLED && callId && isConfigured() &&
+      (fire === true || asideHasSilenceBeat)
+    ) {
+      // Recomputed fresh here (not reused from the earlier readCall
+      // trigger site) — deliberate, to avoid any cross-block scope
+      // uncertainty; this is a cheap re-filter, not a real cost.
+      const messagesForAside = messages.filter((m) => !(m && m.character));
+      const asideHostName = (stored && stored.hostName) || hostNameFromBody(body);
+      waitUntil(
+        generateHostAside(messagesForAside, asideHostName)
+          .then((text) => {
+            if (text) trace.emit("host_aside", { text }, "engine");
+          })
+          .catch(() => {})
+      );
     }
 
     blocks.push({ type: "text", text: mutable });
