@@ -1850,6 +1850,30 @@ export default async function handler(req) {
               businessOverlay: stored.businessOverlay || bySlug.businessOverlay,
               archetype: stored.archetype || bySlug.archetype }
           : bySlug;
+        // ★ SELF-HEAL (Aug 24) — the real fix for a confirmed standing
+        // inefficiency, not a one-off: checked a full call's logs and
+        // EVERY turn (35/35) hit this fallback with storedHasPrefix=
+        // false — never once found on the call_id row directly. Root
+        // cause, already documented above: PE's own per-turn writes
+        // create the call_id row WITHOUT ever copying the prefix over
+        // from the slug row, so every single turn of every call pays
+        // for two sequential Supabase round-trips instead of one,
+        // forever — this fallback was never really a "fallback," it
+        // was silently the primary path the whole time. Fix: the
+        // FIRST time this recovery succeeds, persist the prefix onto
+        // the call_id row too, so every turn AFTER this one can find
+        // it on the fast, single-lookup path — this fallback should
+        // now fire at most once per call, not on every turn. Fire-and
+        // -forget, off the hot path, matches this file's existing
+        // convention for every other non-blocking persistence write.
+        if (callId && isConfigured()) {
+          waitUntil(
+            setCall(callId, {
+              prefix: bySlug.prefix,
+              postureLine: stored.postureLine || bySlug.postureLine,
+            }).catch(() => {})
+          );
+        }
       }
     } catch { /* fall through to the flat fallback */ }
   }
