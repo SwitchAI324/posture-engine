@@ -1346,6 +1346,13 @@ Hard: beat 3 is acceptance either way — never frustration.
 
 "BIT-302": `
 THE DOG BIT is active. Committed arc — 4 rungs across the call.
+
+WHATEVER TOPIC WAS JUST BEING DISCUSSED IS INTERRUPTED.
+The dog has barked. This turn is the dog turn. Not a
+continuation of the previous topic — a new event has
+occurred in the room and this turn is entirely about that.
+The previous thread resumes after this beat.
+
 [DOG_BARK] MUST be the literal first thing on every rung.
 
 RUNG 1 — ESTABLISH:
