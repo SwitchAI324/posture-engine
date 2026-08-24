@@ -308,11 +308,11 @@ function wireRoom(rm){
       var txt = (segments || []).map(function(s){ return s.text; }).join(" ").trim();
       if(txt){
         $("caption").style.display = "block";
-        // EMOTION TAG STRIP (Aug 15) — uses RegExp(string) instead of a
-        // /.../ literal on purpose: a literal regex with an internal
-        // unescaped "/" throws "Uncaught SyntaxError: Invalid regular
-        // expression: missing /" at PAGE LOAD (breaks the whole script,
-        // not just captions — this is what blocked the join screen
+        // EMOTION TAG STRIP (Aug 15, extended Aug 24) — uses RegExp(string)
+        // instead of a /.../ literal on purpose: a literal regex with an
+        // internal unescaped "/" throws "Uncaught SyntaxError: Invalid
+        // regular expression: missing /" at PAGE LOAD (breaks the whole
+        // script, not just captions — this is what blocked the join screen
         // entirely last time). A string pattern has no delimiter to
         // mismatch, so this class of error can't happen here again.
         // Also fixes a latent bug in the original bracket-strip: it used
@@ -320,7 +320,17 @@ function wireRoom(rm){
         // escaped bracket) — so it only ever matched a literal backslash
         // character before [[, which real captions never contain,
         // meaning that strip was silently a no-op the whole time.
-        var noEmotion = txt.replace(new RegExp('<emotion\\s+value="[^"]*"\\s*/>', 'g'), "");
+        // EXTENDED (Aug 24) — Voice's proposed variable-pause signal adds
+        // an optional second attribute: <emotion value="content"
+        // pause="0.6"/>. Caught before it ever shipped: the OLD pattern
+        // only matched a tag ending in value="..." immediately followed
+        // by />; any extra attribute in between meant the whole tag
+        // failed to match at all and leaked into captions raw, unstripped
+        // — confirmed by direct execution, not just read. Fixed generally
+        // (any number of additional name="value" attributes, not just
+        // pause), so this doesn't need touching again if Voice/Canon add
+        // a third attribute later.
+        var noEmotion = txt.replace(new RegExp('<emotion\\s+value="[^"]*"(?:\\s+[a-zA-Z_-]+="[^"]*")*\\s*/>', 'g'), "");
         // IN-FLIGHT TAG HOLD (Aug 15, same day) — TranscriptionReceived has
         // no final/interim flag; it fires repeatedly as text grows, so the
         // regex above (which only matches a CLOSED tag) lets a partial
