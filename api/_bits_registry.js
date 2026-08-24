@@ -1142,7 +1142,13 @@ export const BITS = [
     "rungs": 4,
     "rung_spacing": {
       "min_between": 3
-    }
+    },
+    "sound_markers": [
+      "DOG_BARK",
+      "DOG_BARK_BG",
+      "DOG_BARK_STOP"
+    ],
+    "arc_protection": true
   },
   {
     "id": "BIT-303",
@@ -1157,7 +1163,11 @@ export const BITS = [
     "rungs": 4,
     "rung_spacing": {
       "min_between": 3
-    }
+    },
+    "sound_markers": [
+      "INSECT_BUZ"
+    ],
+    "arc_protection": true
   },
   {
     "cooldown": 5,
@@ -1262,7 +1272,12 @@ export const BITS = [
     "rungs": 4,
     "rung_spacing": {
       "min_between": 3
-    }
+    },
+    "sound_markers": [
+      "COUGH",
+      "SNEEZE",
+      "THROAT_CLEAR"
+    ]
   },
   {
     "id": "BIT-312",
@@ -2107,7 +2122,8 @@ export const BITS = [
     "rungs": 4,
     "rung_spacing": {
       "min_between": 4
-    }
+    },
+    "arc_protection": true
   },
   {
     "id": "BIT-332",
