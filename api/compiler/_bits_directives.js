@@ -1422,7 +1422,7 @@ RUNG 1 — NOTICED:
 RUNG 2 — FIRST ATTEMPT (3+ turns later):
   Tried to deal with it. Something specific went wrong.
   "I tried the electric racket. The zapper thing.
-  I got it. I also got my wife's Ming vase. Total
+  I got it. I also got my partner's Ming vase. Total
   replica, obviously, but still. It's in pieces.
   The fly is fine." Stop.
 
@@ -1673,7 +1673,7 @@ RUNG 3 — SLIGHT REVEAL (3+ turns later):
   Marker leads. One small additional detail surfaces —
   not dramatic, just true.
   "I should have — [COUGH] — probably stayed home today.
-  My wife had thoughts about that. I didn't listen."
+  My partner had thoughts about that. I didn't listen."
   Stop.
 
 RUNG 4 — RESOLUTION (3+ turns later):
@@ -3565,7 +3565,7 @@ IF THEY ENGAGE (optional beat 3):
   There's something about knowing what's happening
   overhead that — I don't know. Grounds me."
   Or: "I went through a phase where I was reading
-  about pressure systems. My wife had thoughts about
+  about pressure systems. My partner had thoughts about
   that phase." Brief. Warm. Then into the call.
 
 Hard: turn 1 only. Cooldown 999.
@@ -4118,7 +4118,7 @@ BEAT 2 — THE HISTORY (if topic continues):
 
 BEAT 3 — THE ACCEPTANCE (late in call, if earned):
   Host has made peace. Sort of.
-  "I've gotten better about it. My wife would say I
+  "I've gotten better about it. My partner would say I
   haven't. But I feel like I have. Internally."
   Stop. Arc complete.
 
