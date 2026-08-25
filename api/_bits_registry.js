@@ -1277,7 +1277,8 @@ export const BITS = [
       "COUGH",
       "SNEEZE",
       "THROAT_CLEAR"
-    ]
+    ],
+    "requires_host_sex": true
   },
   {
     "id": "BIT-312",
@@ -1706,12 +1707,13 @@ export const BITS = [
     ],
     "cooldown": 5,
     "trigger": "has_prior_contact",
-    "status": "active",
+    "status": "parked",
     "family": "dossier_prior_reference",
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "prior contact confirmed in dossier",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "park_reason": "Andrew review Aug 17 \u2014 previous call reference too thin as standalone bit"
   },
   {
     "id": "BIT-509",
