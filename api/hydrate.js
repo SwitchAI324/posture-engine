@@ -491,7 +491,12 @@ module.exports = async function handler(req, res) {
     // booking token) before shipping, or the model sees the raw "Andrew OR
     // Andrea" identity explanation and improvises a name. Substitute here at
     // hydrate time, where host_name is in hand.
-    const hostName = (cfg.host_name && String(cfg.host_name).trim()) || "Andrew";
+    // FALLBACK CHANGED (Aug 25, Andrew's explicit ask): was hardcoded
+    // "Andrew" — a broken/missing token.host_name would silently make
+    // every host on every call impersonate one specific real person.
+    // "Dude" is a genuinely generic placeholder instead, matching the
+    // same fallback change just made in meeting.js for consistency.
+    const hostName = (cfg.host_name && String(cfg.host_name).trim()) || "Dude";
     prefix = prefix.split("[HOST NAME]").join(hostName);
     // The token also appears in the OPENER overlay's empty-open example (the
     // BUSINESS overlay has none — the sub is a safe no-op there). Substitute in

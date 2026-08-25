@@ -19,9 +19,11 @@
 // HOST NAME: read off the booking token (the name the spammer emailed) and
 // threaded through the page, the call carrier (variableValues.sv_host_name),
 // AND the silence nudge prompts — so a booking made under any name reads as that
-// name end to end. "Andrew" appears ONLY as the pre-fetch placeholder in the
-// HTML; setHostName() overwrites it once join data arrives. Falls back to the
-// placeholder only if the token has no host_name.
+// name end to end. "Dude" (changed from a hardcoded real name, Aug 25) appears
+// ONLY as the pre-fetch placeholder in the HTML; setHostName() overwrites it
+// once join data arrives. Falls back to the placeholder only if the token has
+// no host_name — a genuinely generic fallback, not a specific real person's
+// name standing in for a broken/missing lookup.
 //
 // FAST-JOIN: a "today / next-available" booking minutes out (token.fast_join).
 // The host arrives at max(join+30s, slot-5min) — never sooner than 5 min before
@@ -153,8 +155,8 @@ function PAGE(pub, asst, testMode, silenceNudge) {
   </div>
   <div class="stage">
     <div class="tile" id="hostTile">
-      <div class="pfp host" id="hostPfp">A</div>
-      <div class="name"><span id="hostName">Andrew</span> ${micon_svg()}</div>
+      <div class="pfp host" id="hostPfp">D</div>
+      <div class="name"><span id="hostName">Dude</span> ${micon_svg()}</div>
     </div>
     <div class="tile" id="youTile">
       <div class="pfp you">Y</div>
@@ -207,9 +209,12 @@ function showWaitImage(){
 var room = null, started = null, tick = null, muted = false, callId = null;
 
 // Host name (the name the spammer emailed). Filled from the token in ensureJoin;
-// "Andrew" is only the pre-fetch placeholder. setHostName threads it everywhere
-// the page shows the host: tile name, pfp initial, waiting + late-join copy.
-var hostName = "Andrew";
+// "Dude" is only the pre-fetch placeholder (changed from a hardcoded real
+// name, Aug 25 — a broken/missing lookup should degrade to something
+// generic, never silently impersonate a specific real person). setHostName
+// threads it everywhere the page shows the host: tile name, pfp initial,
+// waiting + late-join copy.
+var hostName = "Dude";
 
 var $ = function(id){ return document.getElementById(id); };
 function toast(s){ var t = $("toast"); t.textContent = s; t.classList.add("show"); setTimeout(function(){ t.classList.remove("show"); }, 4200); }
@@ -219,7 +224,7 @@ function setHostName(name){
   hostName = String(name).trim();
   var first = hostName.split(/\\s+/)[0] || hostName;
   if($("hostName")) $("hostName").textContent = first;
-  if($("hostPfp")) $("hostPfp").textContent = (first[0] || "A").toUpperCase();
+  if($("hostPfp")) $("hostPfp").textContent = (first[0] || "D").toUpperCase();
 }
 
 // consent gate (entry point) -> reveal lobby
@@ -237,7 +242,16 @@ var joinData = null, bookedSlot = null, fastJoin = false;
 function parseSlot(s){ if(!s) return null; var t = Date.parse(s); return isNaN(t) ? null : t; }
 function fmtWhen(ms){ try { return new Date(ms).toLocaleString([], {weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}); } catch(e){ return ""; } }
 function ensureJoin(){
-  if(joinData) return Promise.resolve(joinData);
+  // CACHING BUG FIX (Aug 25) — this used to short-circuit on any cached
+  // joinData, meaning host_name (and everything else from /api/join) was
+  // only ever fetched ONCE per page load, forever after. This file's own
+  // host-arrival-timing logic expects a join page might sit open for a
+  // real stretch of time (waiting for a booked slot) — any change made
+  // to host_name after the FIRST fetch would silently never be picked up
+  // for the rest of that page load. Always fetch fresh now; the extra
+  // request costs nothing meaningful (this is called at most twice in a
+  // normal flow: the early gate, then again at join-click) against the
+  // real risk of showing/speaking a stale name.
   return fetch("/api/join?slug=" + encodeURIComponent(slug)).then(function(r){ return r.json(); })
     .then(function(j){
       joinData = j || {};
@@ -346,7 +360,24 @@ function wireRoom(rm){
           noEmotion = noEmotion.slice(0, openTagIdx);
         }
         var noBrackets = noEmotion.replace(new RegExp('\\[\\[[^\\]]*\\]\\]', 'g'), "");
-        $("captionText").textContent = noBrackets.trim();
+        // SOUND MARKER STRIP (Aug 25) — real, confirmed gap: this caption
+        // path only ever stripped [[double-bracket]] bench tags and
+        // <emotion.../> tags — it never touched single-bracket sound
+        // markers like [DOG_BARK]. Those are a normal, correct part of
+        // the model's own output (the agent's TTS pipeline scans for and
+        // strips them before speech, converting them to real audio) —
+        // but that stripping happens in a COMPLETELY SEPARATE pipeline
+        // from this live-caption renderer, which was never updated to
+        // match. Result: every sound marker, even ones playing correctly
+        // as real audio, ALSO showed up as literal, visible bracket text
+        // in the caption — confirmed as the direct cause of a live report
+        // ("the dog bark's in square brackets"). Same token shape already
+        // used elsewhere in this codebase for marker detection (all-caps
+        // letters/digits/underscores, 2-32 chars) — matched here rather
+        // than reinvented, so it only strips genuine markers, never
+        // legitimate bracketed text that happens to appear in dialogue.
+        var noMarkers = noBrackets.replace(new RegExp('\\[[A-Z0-9_]{2,32}\\]', 'g'), "");
+        $("captionText").textContent = noMarkers.trim();
       }
     } catch(e){}
   });
