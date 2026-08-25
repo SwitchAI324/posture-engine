@@ -1319,6 +1319,20 @@ function callStableContext(cfg) {
         `that exist; never emit one not on this list: [` +
         cfg.soundMarkers.join(", ") + `].`
       : "";
+  // HOST'S REAL WORK EMAIL (Aug 25, Andrew's ask) — same discipline as
+  // dossierFloor/soundMarkers: computed once at hydrate, passed straight
+  // through, no fetching or invention here. This closes a real gap — the
+  // host previously had NO true email to draw from if it ever decided to
+  // give out the real one (as opposed to the fake/personal-email gag,
+  // which is intentionally left improvised, not structured, per Andrew's
+  // narrowed scope). Absent/empty degrades to nothing added — a host with
+  // no hostEmail configured just never has grounds to claim a real
+  // address, matching the "never fabricate" discipline this whole file
+  // already follows for dossierFloor/soundMarkers.
+  const emailSection = cfg.host_email
+    ? ` HOST'S REAL WORK EMAIL (ground truth, only use if genuinely giving ` +
+      `out the real one, not the personal-email gag): ${cfg.host_email}.`
+    : "";
   return (
     `CALL CONTEXT: ` +
     (cfg.dossierFloor
@@ -1327,7 +1341,8 @@ function callStableContext(cfg) {
         `[[ no dossier floor yet for this target ]]`) +
     ` tactic=${cfg.tactic || "<classifier output>"}; ` +
     `second_call=${cfg.secondCall ? "yes" : "no"}.` +
-    markerSection
+    markerSection +
+    emailSection
   );
 }
 module.exports = { hostBaseFor, hostOverlaysFor, splitHostPrompt, loadoutFor, callStableContext };
