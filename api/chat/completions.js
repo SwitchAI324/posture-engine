@@ -3283,27 +3283,49 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     }
 
 
-    // CONFIRMED-FIRE COUNT (Aug 24) — shared by the arc-protection check
-    // right below AND the rung derivation further down, deliberately ONE
-    // function so both always agree on what "confirmed" means; letting
-    // them drift would reopen the exact class of bug that motivated this
-    // (a "fired but not performed" turn silently counting as real
-    // progress). Reads stored.markerCounts — built in finishUp by
-    // scanning the model's REAL output for [MARKER] tokens post-
-    // generation (search SELF-CAUSED MARKER AWARENESS below), genuinely
-    // confirmed, not an injection tally. Sums every non-_STOP marker a
-    // bit declares (a bit can have more than one). Returns 0 for a bit
-    // with no sound_markers field — callers decide what that means (rung
-    // derivation falls back to totalFires; arc protection simply can't
-    // protect what it can't measure, so an un-migrated bit is never a
-    // protected-in-progress candidate).
+    // CONFIRMED-FIRE COUNT (Aug 24, upgraded same day) — shared by the
+    // arc-protection check right below AND the rung derivation further
+    // down, deliberately ONE function so both always agree on what
+    // "confirmed" means; letting them drift would reopen the exact class
+    // of bug that motivated this (a "fired but not performed" turn
+    // silently counting as real progress).
+    // ★ REAL GAP FOUND AND FIXED SAME DAY, live on a real call: the
+    // original version below read stored.markerCounts, built by
+    // finishUp scanning the model's OWN generated text — but finishUp
+    // runs on EVERY generation attempt, including ones that LOSE the
+    // preemptive-generation race and never actually get spoken
+    // (documented in this file's own older comment: "every discarded
+    // candidate reaches this same finishUp too, not just whichever one
+    // the agent actually decides to speak... Real fix needs a race-
+    // proof signal... never built"). Confirmed live: a dog-bark
+    // candidate lost its race to a different winning generation, but
+    // still got counted toward rung advancement — the caller never
+    // actually heard rung 1, yet the system credited it.
+    // THE ACTUAL FIX: stored.confirmedMarkerCounts, populated ONLY by
+    // POST /api/confirm-marker — which the agent calls at the exact
+    // point it ALREADY, correctly, resolves this same race for its own
+    // sound-playback purposes (right before actually firing a marker,
+    // the same point it already logs "sound: _fire ENTER" and already
+    // knows to skip a marker "from a discarded generation"). That's a
+    // genuinely race-proof signal; markerCounts never was.
+    // PER-MARKER FALLBACK, deliberately not all-or-nothing: prefers the
+    // new field when it has DATA FOR THAT SPECIFIC MARKER, falls back to
+    // the old field otherwise — so this stays safe and non-regressive
+    // for every marker until Voice's agent-side call is deployed and
+    // has actually confirmed at least one real fire for that marker.
+    // Once Voice ships, each marker "graduates" to the trustworthy
+    // signal independently, no flag day, no big-bang cutover needed.
     const confirmedFireCount = (bitRegistryEntry, s) => {
       const declaredMarkers = (bitRegistryEntry && bitRegistryEntry.sound_markers) || null;
       if (!declaredMarkers || !declaredMarkers.length) return 0;
-      const counts = (s && s.markerCounts) || {};
+      const oldCounts = (s && s.markerCounts) || {};
+      const newCounts = (s && s.confirmedMarkerCounts) || {};
       return declaredMarkers
         .filter((m) => !String(m).endsWith("_STOP"))
-        .reduce((sum, m) => sum + (counts[m] || 0), 0);
+        .reduce(
+          (sum, m) => sum + (newCounts[m] !== undefined ? newCounts[m] : (oldCounts[m] || 0)),
+          0
+        );
     };
 
     // ── FORCE CONSUMER ────────────────────────────────────────────────────
