@@ -423,6 +423,16 @@ module.exports = async function handler(req, res) {
       soundMarkers, // NEW (Aug 7) — live marker inventory from the agent, or null
       tactic: token.archetype || "universal",
       host_name: token.host_name || null,
+      // HOST'S REAL EMAIL (Aug 25, Andrew's ask) — this exact extension
+      // point was already anticipated: "identity: deferred until
+      // owner_email lands on the token" (see comment right below).
+      // owner_email is that anticipated column, now landed and read.
+      // Same discipline as host_name — null when absent, never a
+      // hardcoded/fabricated fallback (unlike host_name's "Dude" default,
+      // there's no safe generic placeholder for an email; better the
+      // model has grounds to decline/deflect than invent a plausible-
+      // looking fake AS IF it were the real one).
+      host_email: token.owner_email || null,
       secondCall: false,
       // identity: deferred until owner_email lands on the token
     };
