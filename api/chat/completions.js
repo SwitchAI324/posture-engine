@@ -4995,8 +4995,28 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
       const utterTrace =
         meta.callId != null ? makeTrace(meta.callId, (Number(meta.turn) || 0) + 0.5, null, meta.targetId) : null;
 
-      const send = (delta, finish_reason = null) =>
-        controller.enqueue(encoder.encode(chunkStr(delta, finish_reason)));
+      // CHUNK-LEVEL DEBUG (Aug 25) — matches Voice's SV_CHUNK_DEBUG=1 on
+      // their side, so a coordinated test call can compare what PE sent
+      // chunk-by-chunk against what the agent received chunk-by-chunk.
+      // Logs the LITERAL string about to be enqueued — before any
+      // buffering, same framing as Voice's own flag — not the aggregated
+      // OUT text this file already logs elsewhere. Opt-in, off by
+      // default: this is real per-token volume on every turn, not
+      // something to leave running normally.
+      const CHUNK_DEBUG = process.env.PE_CHUNK_DEBUG === "1";
+      const send = (delta, finish_reason = null) => {
+        const raw = chunkStr(delta, finish_reason);
+        if (CHUNK_DEBUG) {
+          console.log(
+            "PE-CHUNK callId=" + JSON.stringify(meta.callId) +
+            " turn=" + meta.turn +
+            " t=" + Date.now() +
+            " bytes=" + raw.length +
+            " raw=" + JSON.stringify(raw)
+          );
+        }
+        return controller.enqueue(encoder.encode(raw));
+      };
       const done = () =>
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
 
