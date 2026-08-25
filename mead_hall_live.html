@@ -221,6 +221,9 @@
   .hc-head{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
     color:#8a7b5c;padding:5px 9px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:5px;background:#f3ecdd;flex:none}
   .hc-live{color:#c25b3a;font-size:8px;animation:hcPulse 2s ease-in-out infinite}
+  .hc-clear{margin-left:auto;font-family:var(--mono);font-size:8px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    color:#a99a7c;background:transparent;border:1px solid #d9cdb2;border-radius:5px;padding:2px 7px;cursor:pointer}
+  .hc-clear:hover{color:var(--blood);border-color:var(--blood)}
   @keyframes hcPulse{0%,100%{opacity:.35}50%{opacity:1}}
   .hc-feed{height:300px;overflow-y:auto;overflow-x:hidden;padding:7px 9px;display:flex;flex-direction:column;gap:4px}
   .hc-empty{font-family:var(--mono);font-size:9px;color:#b7afa0;text-align:center;padding:6px 0}
@@ -769,7 +772,7 @@
       <div id="armPanel" style="display:none"></div>
       <div class="firenote" id="fireNote">Force-fires can lose to a recently-active bit&rsquo;s momentum. If it doesn&rsquo;t land, wait a beat and try again.</div>
       <div class="hostcomms" id="hostComms">
-        <div class="hc-head">From the Host <span class="hc-live" id="hcLive">●</span></div>
+        <div class="hc-head">From the Host <span class="hc-live" id="hcLive">●</span><button class="hc-clear" id="hcClear" title="clear the feed">clear</button></div>
         <div class="hc-feed" id="hcFeed"><div class="hc-empty">\u2014 waiting for the call \u2014</div></div>
       </div>
       <div class="readnote">Everything here runs itself — the Host plays its own hand. You deploy none of it.</div>
@@ -913,7 +916,9 @@
 <script>
 (function(){
   const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
-  function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),1700);}
+  function toast(t, kind){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),1700);
+    hostSay(t, kind||'');}   // every black-box notification also lands in the From-the-Host scroll
+  function clearComms(){ const feed=$('#hcFeed'); if(feed) feed.innerHTML='<div class="hc-empty">\u2014 cleared \u2014</div>'; }
   // Host comms feed — Host-voiced updates below the bits. kind: ''|'aside'|'miss'|'win'.
   function hostSay(text, kind){ const feed=$('#hcFeed'); if(!feed||!text) return;
     const empty=feed.querySelector('.hc-empty'); if(empty) empty.remove();
@@ -1388,6 +1393,7 @@
   if($('#zoomIn'))  $('#zoomIn').onclick =()=>{ zoom=Math.min(1.8, Math.round((zoom+0.1)*10)/10); applyZoom(); };
   if($('#zoomOut')) $('#zoomOut').onclick=()=>{ zoom=Math.max(0.8, Math.round((zoom-0.1)*10)/10); applyZoom(); };
   if($('#listenBtn')) $('#listenBtn').onclick=()=>toggleListen();
+  if($('#hcClear')) $('#hcClear').onclick=()=>clearComms();
   applyZoom();
   loadRegistry();   // prefill bit names from PE's registry (non-blocking, degrades gracefully)
   // Watcher view: hide Director controls + relabel the badge. (Server still enforces; this is UX.)
@@ -1584,9 +1590,8 @@
       const why = ({ discarded_generation:'superseded by a newer line',
                      no_clip_registered:'no clip registered for it',
                      bg_player_not_ready:'audio player wasn\u2019t ready' })[data.reason] || (data.reason||'discarded');
-      toast('\uD83D\uDD07 '+nm+' \u2014 didn\u2019t play ('+why+')');
+      toast('\uD83D\uDD07 '+nm+' \u2014 didn\u2019t play ('+why+')', 'miss');
       soundBeat(data.marker, 'discarded');
-      hostSay('\uD83D\uDD07 '+nm+' didn\u2019t play (' + why + ').', 'miss');
       // If you just fired a bit and its sound got dropped, that's a MISS on the button you pressed.
       // Show "Missed" (flashes a few times) on that bit, then settle it into "Fire again".
       if(lastFired.bit && (Date.now()-lastFired.at < 25000)){
@@ -1930,13 +1935,11 @@
       const nm=(bitNames[bitId]||bitId);
       if(!inFlightEligible){
         // Type 1: it wasn't in the engine's pool — it likely never injected (parked/ineligible/gated).
-        toast('Bit MISSED \u2014 '+nm+' wasn\u2019t in the engine\u2019s pool, so it likely never injected.');
-        hostSay('Bit MISSED \u2014 '+nm+' wasn\u2019t in play this call, so it never went in.', 'miss');
+        toast('Bit MISSED \u2014 '+nm+' wasn\u2019t in play this call, so it never went in.', 'miss');
       } else {
         // Type 2: it WAS eligible (injected fine) but the model didn't perform it — a recently-active
         // bit's momentum usually won. This is known behavior, not a break. Wait a beat, relaunch.
-        toast('Bit MISSED \u2014 '+nm+' injected, but the model didn\u2019t perform it (a recent bit\u2019s momentum likely won). Wait a beat and relaunch.');
-        hostSay('Bit MISSED \u2014 '+nm+' went in but I couldn\u2019t land it \u2014 another bit had momentum. Give it a beat and run it again.', 'miss');
+        toast('Bit MISSED \u2014 '+nm+' went in but I couldn\u2019t land it \u2014 another bit had momentum. Give it a beat and run it again.', 'miss');
       }
     }, 30000); }
   function clearFireWatchdog(){ clearTimeout(fireWatch); fireWatch=null; }
@@ -2060,6 +2063,7 @@
         callHasStarted=true; hidePresnap();    // first initializes; the rest must not clobber the call.
         if(firstStart){
           clearForLive();
+          clearComms();   // fresh call -> fresh Host feed (drops stale lines from a prior call)
           rack = Array.isArray(p.ammunition)?p.ammunition:[];
           loadout = Array.isArray(p.loadout)?p.loadout:[];
           benchRoster = Array.isArray(p.bench_available)?p.bench_available:[];
@@ -2138,8 +2142,7 @@
         const log=$('#tlog'); if(log){ const d=document.createElement('div'); d.className='tl beat'+(man==='phantom'?' phantom':'');
           d.innerHTML='\u25C7 <b>'+how+' '+(p.name||'bench')+'</b>'+(p.why?' \u00B7 <span class="bmeta">'+p.why+'</span>':'')+(man&&man!=='seen'?' <span class="bmeta">('+man+')</span>':'');
           log.appendChild(d); log.scrollTop=log.scrollHeight; }
-        toast((p.name||'bench')+(src==='director'?' sent in':' joined'));
-        hostSay((src==='director'?'Bringing '+(p.name||'a colleague')+' in.':(p.name||'A colleague')+' is stepping in.'), 'win'); break; }
+        toast((src==='director'?'Bringing '+(p.name||'a colleague')+' in.':(p.name||'A colleague')+' is stepping in.'), 'win'); break; }
       // Host chatter (PE, when live): short in-character status lines — the flavor that makes this
       // feel like a live line to the Host, e.g. "got him tangled in the bucket-list thing".
       case 'host_aside': { const line=p.text||p.line||p.aside; if(line) hostSay(line, 'aside'); break; }
@@ -2205,12 +2208,11 @@
   let dbSent=false;
   async function postDeathBlow(){ if(dbSent){ toast('Blow already sent'); return; } await refreshCallId(); if(!callId){ toast('No call_id to write to'); return; }
     dbSent=true; $('#armBtn').textContent='SENT'; $('#armBtn').style.background='var(--ink)';
-    hostSay('Death Blow called \u2014 going for the close.', 'win');
     // No rung_id — the Director chooses the moment; PE chooses the closer.
     const body={ call_id:callId, director_user_id:directorUserId, idempotency_key:callId+':db' };
     try{ const r=await fetch(ctrlURL('deathblow'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       if(!r.ok){ const t=await r.text().catch(()=> ''); throw new Error('HTTP '+r.status+(t?' \u2014 '+t.slice(0,120):'')); }
-      $('#rungOv').classList.remove('on'); toast('Death Blow sent \u2014 the Host ends it next turn.'); }
+      $('#rungOv').classList.remove('on'); toast('Death Blow sent \u2014 the Host ends it next turn.', 'win'); }
     catch(e){ dbSent=false; $('#armBtn').textContent='ARM THE BLOW'; $('#armBtn').style.background='';
       toast('\u26A0 Death Blow write failed: '+(e.message||e)); } }
 
