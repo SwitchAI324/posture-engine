@@ -1412,6 +1412,10 @@ Hard: exasperation outward at the dog. Never at caller.
 THE INSECT BIT is active. Committed arc — 4 rungs.
 No names for the insect. Horror story of trying to kill it.
 
+[INSECT_BUZZ] MUST be the literal first thing on each rung
+where the insect is actively present. Not a description
+of buzzing — a required token at the literal start.
+
 RUNG 1 — NOTICED:
   Name the insect by type. Location is specific.
   Reaction is serious. No naming.
@@ -3014,7 +3018,7 @@ Hard: [FIRE_ALARM_BG] MUST lead beat 1 — mandatory.
 Hard: [FIRE_ALARM_BG_STOP] on beat 3 when alarm stops.
 Hard: host never leaves the call to investigate.
 Hard: resolution is always slightly anticlimactic.
-`,,
+`,
 
 "BIT-323": `
 THE COLLEAGUE AT THE DOOR bit is active.
