@@ -234,13 +234,26 @@ function jsonRes(obj, status = 200) {
 }
 export default async function handler(req) {
   const u = new URL(req.url);
-  // Single gate, ahead of every action branch below — covers all seven
-  // POST actions (deathblow/callend/arm/unarm/force/cancel/bench) at once
-  // rather than repeating the check seven times, so a future new action
-  // can't accidentally be added without it. GET (status lookups) is left
-  // open — watchers are meant to see call status, that's the point of a
-  // watch link; only mutations are gated.
-  if (req.method === "POST") {
+  // Single gate, ahead of every action branch below — covers the SIX real
+  // director-control POST actions (deathblow/arm/unarm/force/cancel/bench)
+  // at once rather than repeating the check six times, so a future new
+  // control action can't accidentally be added without it. GET (status
+  // lookups) is left open — watchers are meant to see call status, that's
+  // the point of a watch link; only mutations are gated.
+  //
+  // ★ CALLEND EXEMPTED (Aug 26) — real regression found and fixed. callend
+  // isn't a director-control action in the same sense as the other six —
+  // it's an automatic system event meeting.js's own call page fires the
+  // instant a call naturally ends (see meeting.js's callend fetch, no
+  // token attached, never meant to carry one). Gating it behind a director
+  // token meant every single call-end silently 403'd from the moment this
+  // gate went live — confirmed live, two real 403s on action=callend in
+  // production logs. Low-stakes, purely informational (records duration/
+  // ending_type, doesn't let anyone control anything), so excluding it
+  // from the gate is the correct fix, not a workaround — any legitimate
+  // call participant ending a call should be able to record that fact
+  // without needing a director's credential.
+  if (req.method === "POST" && u.searchParams.get("action") !== "callend") {
     const gate = await requireDirector(u);
     if (!gate.ok) return jsonRes({ error: gate.error }, gate.status);
   }
