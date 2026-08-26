@@ -1853,19 +1853,34 @@ export default async function handler(req) {
               " currentDBValue=" + JSON.stringify(freshHostName) +
               " — triggering rehydrate"
             );
-            const hydrateModule = await import("../hydrate.js");
-            const rehydrateSlug =
-              hydrateModule.rehydrateSlug ||
-              (hydrateModule.default && hydrateModule.default.rehydrateSlug);
-            if (typeof rehydrateSlug === "function") {
-              const refreshed = await rehydrateSlug(slug);
+            // ★ FIXED (Aug 26) — a real deploy bug caused by the original
+            // version of this fix. `await import("../hydrate.js")` is a
+            // statically-analyzable dynamic import; Vercel's bundler traced
+            // it and pulled hydrate.js's ENTIRE require chain (assemble.js
+            // -> compile.js -> fs/path/crypto) into bundles that should
+            // never have contained it — including api/bits.js, a completely
+            // unrelated EDGE function that broke with "unsupported modules:
+            // fs, path, crypto" as a direct result. A cross-module import
+            // of a Node-only file is the wrong tool here regardless of
+            // whether THIS specific case triggered the bug; a plain fetch()
+            // to hydrate.js's own HTTP endpoint is a network boundary, not
+            // a module boundary — the bundler has nothing to trace, so this
+            // can never leak into an unrelated function's bundle again.
+            try {
+              const rehydrateUrl =
+                (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://posture-engine.vercel.app") +
+                `/api/hydrate?slug=${encodeURIComponent(slug)}`;
+              const rehydrateRes = await fetch(rehydrateUrl, { method: "GET", cache: "no-store" });
+              const refreshed = rehydrateRes.ok ? await rehydrateRes.json() : null;
               if (refreshed && refreshed.prefix) {
                 bySlug.prefix = refreshed.prefix;
-                bySlug.hostName = refreshed.hostName;
+                bySlug.hostName = freshHostName;
                 bySlug.openerOverlay = refreshed.openerOverlay;
                 bySlug.businessOverlay = refreshed.businessOverlay;
-                console.log("HOST-NAME-DRIFT resolved slug=" + JSON.stringify(slug) + " newHostName=" + refreshed.hostName);
+                console.log("HOST-NAME-DRIFT resolved slug=" + JSON.stringify(slug) + " newHostName=" + freshHostName);
               }
+            } catch (rehydrateErr) {
+              console.log("HOST-NAME-DRIFT rehydrate call failed (non-fatal): " + (rehydrateErr && rehydrateErr.message));
             }
           }
         } catch (e) {
