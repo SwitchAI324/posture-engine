@@ -1165,7 +1165,10 @@ export const BITS = [
       "min_between": 3
     },
     "sound_markers": [
-      "INSECT_BUZ"
+      "INSECT_BUZZ_1",
+      "INSECT_BUZZ_2",
+      "INSECT_BUZZ_3",
+      "INSECT_BUZZ_4"
     ],
     "arc_protection": true
   },
@@ -1194,7 +1197,11 @@ export const BITS = [
     "vocal_tag": "excited",
     "archetypes": "universal",
     "rungs": 3,
-    "max_fires_per_call": 3
+    "max_fires_per_call": 3,
+    "sound_markers": [
+      "TYPEWRITER_BG",
+      "TYPEWRITER_BG_STOP"
+    ]
   },
   {
     "id": "BIT-306",
@@ -1214,11 +1221,16 @@ export const BITS = [
     "name": "The Spill",
     "lane": "gag",
     "status": "active",
-    "max_fires_per_call": 1,
+    "max_fires_per_call": 3,
     "family": "environment_oneshot",
     "absurdity": 2,
     "vocal_tag": "neutral",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "sound_markers": [
+      "COFFEE_CUP_BREAK",
+      "CLEAN_UP_GLASS"
+    ],
+    "rungs": 3
   },
   {
     "id": "BIT-308",
@@ -1413,7 +1425,11 @@ export const BITS = [
     "vocal_tag": "excited",
     "archetypes": "universal",
     "rungs": 3,
-    "max_fires_per_call": 3
+    "max_fires_per_call": 3,
+    "sound_markers": [
+      "FIRE_ALARM_BG",
+      "FIRE_ALARM_BG_STOP"
+    ]
   },
   {
     "id": "BIT-323",
@@ -2200,5 +2216,63 @@ export const BITS = [
     "absurdity": 2,
     "vocal_tag": "excited",
     "note": "THROWAWAY TEST BIT \u2014 for laughter tag testing only, remove after confirmed"
+  },
+  {
+    "id": "BIT-336",
+    "name": "The Nose",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "environment_body",
+    "pool": "middle",
+    "trigger": null,
+    "cooldown": 5,
+    "max_fires_per_call": 2,
+    "absurdity": 2,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "rungs": 2,
+    "sound_markers": [
+      "NOSE_BLOW"
+    ],
+    "requires_context": null
+  },
+  {
+    "id": "BIT-337",
+    "name": "The Creak",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "environment_oneshot",
+    "pool": "middle",
+    "trigger": null,
+    "cooldown": 8,
+    "max_fires_per_call": 2,
+    "absurdity": 3,
+    "vocal_tag": "mysterious",
+    "channel": "audio",
+    "rungs": 2,
+    "sound_markers": [
+      "DOOR_CREAK"
+    ],
+    "rung_spacing": {
+      "min_between": 6
+    }
+  },
+  {
+    "id": "BIT-338",
+    "name": "The Hair Dryer",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "environment_persistent",
+    "pool": "middle",
+    "trigger": null,
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 2,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "sound_markers": [
+      "HAIR_DRYER_BG",
+      "HAIR_DRYER_BG_STOP"
+    ]
   }
 ];

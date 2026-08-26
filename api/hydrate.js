@@ -328,6 +328,66 @@ async function writePrefix(callId, prefix, archetype, postureLine, targetId, ove
   });
 }
 
+// AUTO RE-HYDRATE (Aug 26) — the real fix for a drift found this
+// session: updating booking_tokens.host_name does NOT retroactively
+// refresh an already-baked, cached prefix — only an explicit re-hydrate
+// does, and nothing previously called this automatically. This function
+// is that re-hydrate, callable directly (not just via the HTTP endpoint)
+// so completions.js can self-heal a stale host name the same way it
+// already self-heals a missing prefix (item 55's fix) — same philosophy,
+// same call site, extended to catch a second kind of staleness.
+// Deliberately a SEPARATE, minimal function rather than refactoring the
+// full HTTP handler below — reuses the same building blocks (readToken/
+// readDossierFloor/assemblePrefix/writePrefix), duplicating just the
+// substitution sequence rather than risking a regression to the already-
+// working endpoint via an aggressive extraction. Skips the POST-body
+// sound-marker read (only meaningful for the live HTTP-triggered path —
+// an internal auto-heal call has no request body to read from); the
+// prefix just won't carry that section until the next real hydrate.js
+// HTTP call refreshes it with real markers, same as any hydrate that
+// runs without a body today.
+async function rehydrateSlug(slug) {
+  const token = await readToken(slug);
+  if (!token) return null;
+  const dossierFloor = await readDossierFloor(token.target_id);
+  const posture = "innocent";
+  const cfg = {
+    posture,
+    bits: [],
+    armedBench: [],
+    target: token.target_id || null,
+    dossierFloor,
+    soundMarkers: null,
+    tactic: token.archetype || "universal",
+    host_name: token.host_name || null,
+    host_email: token.owner_email || null,
+    secondCall: false,
+  };
+  const assembled = assemblePrefix(cfg);
+  let prefix = assembled.stablePrefix;
+  let openerOverlay = assembled.openerOverlay || "";
+  let businessOverlay = assembled.businessOverlay || "";
+  // Same substitution sequence as the HTTP handler below, kept identical
+  // on purpose — a drift-triggered rebuild must produce byte-for-byte the
+  // same shape of prefix a normal hydrate would, just with the current
+  // host_name instead of whatever was frozen in before.
+  const hostName = (cfg.host_name && String(cfg.host_name).trim()) || "Dude";
+  prefix = prefix.split("[HOST NAME]").join(hostName);
+  openerOverlay = openerOverlay.split("[HOST NAME]").join(hostName);
+  businessOverlay = businessOverlay.split("[HOST NAME]").join(hostName);
+  prefix = prefix.replace(
+    /YOUR IDENTITY[\s\S]*?same energy, different voice\./,
+    "YOUR IDENTITY\nYou are " + hostName + " — warm, distracted, genuine, and " +
+      "you remember the email thread."
+  );
+  prefix = prefix.split("Andrea").join(hostName);
+  const initialPosture = posture.toUpperCase() + " — warm and forward.";
+  const overlays = { openerOverlay, businessOverlay };
+  await writePrefix("slug:" + slug, prefix, cfg.tactic, initialPosture, cfg.target, overlays, null, hostName);
+  console.log("rehydrateSlug: refreshed slug=" + slug + " hostName=" + hostName);
+  return { prefix, hostName, openerOverlay, businessOverlay };
+}
+
 module.exports = async function handler(req, res) {
   // Accept POST /api/hydrate?slug=..[&call_id=..]
   // call_id is OPTIONAL: we ALWAYS write the prefix under a slug key
@@ -597,3 +657,12 @@ module.exports = async function handler(req, res) {
     return res.end(JSON.stringify({ error: String(e && e.message) }));
   }
 };
+
+// EXPORT ORDER MATTERS (Aug 26) — attaching a property to module.exports
+// BEFORE reassigning module.exports to the handler function silently
+// discards it (module.exports.x = ... sets a property on whatever object
+// module.exports currently is; a later module.exports = handler REPLACES
+// that whole object, taking the property with it — confirmed the hard way
+// once already this session, on call-stream.js's config). Attaching AFTER
+// the handler is already assigned avoids that exact bug.
+module.exports.rehydrateSlug = rehydrateSlug;
