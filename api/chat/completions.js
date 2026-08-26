@@ -877,7 +877,8 @@ async function generateBenchLine(bench, messages, priorMemory, callLog, presence
     // framing: "a transcript that is general... each bench character and
     // host can tap into"). Distinct from priorMemory above (that's only
     // THIS character's own lines) — this is every OTHER bench character's
-    // lines too, so e.g. Bea can react to something Conrad said earlier,
+    // lines too, so e.g. Jen (internal id still "bea") can react to
+    // something Conrad said earlier,
     // not just stay consistent with her own prior words. Excludes THIS
     // character's own entries (already covered by priorMemory, would be
     // redundant). Deliberately NOT including host/caller turns here —
@@ -1819,6 +1820,61 @@ export default async function handler(req) {
         " prefixLen=" + (bySlug && bySlug.prefix ? bySlug.prefix.length : 0)
       );
       if (bySlug && bySlug.prefix) {
+        // ★ HOST-NAME DRIFT CHECK (Aug 26) — the real fix for a confirmed
+        // gap: updating booking_tokens.host_name does NOT retroactively
+        // refresh this already-baked, cached prefix — only an explicit
+        // re-hydrate does, and nothing previously triggered that
+        // automatically. This runs exactly ONCE per call (this whole
+        // block only executes when the call_id row has no prefix yet —
+        // i.e. the first turn), so it adds no per-turn cost, matching the
+        // same "runs once, not every turn" discipline item 55 established
+        // for the analogous prefix-recovery fix. A single, targeted read
+        // (host_name only, not the full token) against the fresh DB value;
+        // if it disagrees with what's baked into the cached prefix,
+        // rebuild via hydrate.js's rehydrateSlug() instead of using the
+        // stale text for this whole call.
+        try {
+          const freshRes = await fetch(
+            `${process.env.SUPABASE_URL}/rest/v1/booking_tokens?slug=eq.${encodeURIComponent(slug)}&select=host_name`,
+            {
+              cache: "no-store",
+              headers: {
+                apikey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+                authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+              },
+            }
+          );
+          const freshRows = freshRes.ok ? await freshRes.json() : [];
+          const freshHostName = freshRows && freshRows[0] && freshRows[0].host_name;
+          if (freshHostName && bySlug.hostName && freshHostName !== bySlug.hostName) {
+            console.log(
+              "HOST-NAME-DRIFT slug=" + JSON.stringify(slug) +
+              " cachedPrefixHad=" + JSON.stringify(bySlug.hostName) +
+              " currentDBValue=" + JSON.stringify(freshHostName) +
+              " — triggering rehydrate"
+            );
+            const hydrateModule = await import("../hydrate.js");
+            const rehydrateSlug =
+              hydrateModule.rehydrateSlug ||
+              (hydrateModule.default && hydrateModule.default.rehydrateSlug);
+            if (typeof rehydrateSlug === "function") {
+              const refreshed = await rehydrateSlug(slug);
+              if (refreshed && refreshed.prefix) {
+                bySlug.prefix = refreshed.prefix;
+                bySlug.hostName = refreshed.hostName;
+                bySlug.openerOverlay = refreshed.openerOverlay;
+                bySlug.businessOverlay = refreshed.businessOverlay;
+                console.log("HOST-NAME-DRIFT resolved slug=" + JSON.stringify(slug) + " newHostName=" + refreshed.hostName);
+              }
+            }
+          }
+        } catch (e) {
+          // Fail-open: any problem in this check must never block the
+          // call from proceeding with whatever prefix it already has —
+          // worst case, this turn keeps the stale name and a future turn
+          // (or a manual re-hydrate) catches it, same as before this fix.
+          console.log("HOST-NAME-DRIFT check failed (non-fatal): " + (e && e.message));
+        }
         // Keep any live per-call state we already have; just borrow the prefix
         // (and posture line) from the slug row.
         stored = stored
