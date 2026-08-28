@@ -2147,11 +2147,11 @@ export const BITS = [
     "id": "BIT-332",
     "name": "The Dump Truck",
     "status": "active",
-    "family": "environment_traffic",
+    "family": "environment_oneshot",
     "pool": "none",
     "trigger": "none",
     "cooldown": 4,
-    "max_fires_per_call": 4,
+    "max_fires_per_call": 3,
     "absurdity": 2,
     "vocal_tag": "neutral",
     "channel": "audio",
@@ -2226,11 +2226,11 @@ export const BITS = [
     "pool": "middle",
     "trigger": null,
     "cooldown": 5,
-    "max_fires_per_call": 2,
+    "max_fires_per_call": 3,
     "absurdity": 2,
     "vocal_tag": "content",
     "channel": "audio",
-    "rungs": 2,
+    "rungs": 3,
     "sound_markers": [
       "NOSE_BLOW"
     ],
@@ -2239,7 +2239,7 @@ export const BITS = [
   {
     "id": "BIT-337",
     "name": "The Creak",
-    "status": "active",
+    "status": "parked",
     "archetypes": "universal",
     "family": "environment_oneshot",
     "pool": "middle",
@@ -2255,24 +2255,111 @@ export const BITS = [
     ],
     "rung_spacing": {
       "min_between": 6
-    }
+    },
+    "park_reason": "Andrew review Aug 17 \u2014 door creak clips not good enough quality"
   },
   {
     "id": "BIT-338",
     "name": "The Hair Dryer",
     "status": "active",
     "archetypes": "universal",
-    "family": "environment_persistent",
+    "family": "environment_oneshot",
     "pool": "middle",
     "trigger": null,
-    "cooldown": 999,
-    "max_fires_per_call": 1,
+    "cooldown": 6,
+    "max_fires_per_call": 2,
     "absurdity": 2,
     "vocal_tag": "content",
     "channel": "audio",
+    "rungs": 2,
     "sound_markers": [
       "HAIR_DRYER_BG",
       "HAIR_DRYER_BG_STOP"
     ]
+  },
+  {
+    "id": "BIT-339",
+    "name": "The Typewriter Burst",
+    "status": "parked",
+    "archetypes": "universal",
+    "family": "environment_oneshot",
+    "pool": "middle",
+    "trigger": "none",
+    "cooldown": 5,
+    "max_fires_per_call": 3,
+    "absurdity": 2,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "rungs": 3,
+    "rung_spacing": {
+      "min_between": 4
+    },
+    "sound_markers": [
+      "TYPEWRITER_BG"
+    ],
+    "park_reason": "Merged into BIT-305 \u2014 one typewriter bit"
+  },
+  {
+    "id": "BIT-340",
+    "name": "The Hiccup",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "environment_body",
+    "pool": "middle",
+    "trigger": null,
+    "cooldown": 4,
+    "max_fires_per_call": 4,
+    "absurdity": 3,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "rungs": 4,
+    "rung_spacing": {
+      "min_between": 3
+    },
+    "sound_markers": [
+      "HICCUP"
+    ],
+    "note": "HICCUP clips needed \u2014 not yet in library"
+  },
+  {
+    "id": "BIT-341",
+    "name": "The Burp",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "environment_body",
+    "pool": "middle",
+    "trigger": null,
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 3,
+    "vocal_tag": "neutral",
+    "channel": "audio",
+    "rungs": 1,
+    "sound_markers": [
+      "BURP"
+    ],
+    "note": "BURP clip needed \u2014 not yet in library"
+  },
+  {
+    "id": "BIT-342",
+    "name": "The Baby",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "other_people",
+    "pool": "middle",
+    "trigger": null,
+    "cooldown": 5,
+    "max_fires_per_call": 3,
+    "absurdity": 3,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "rungs": 3,
+    "rung_spacing": {
+      "min_between": 4
+    },
+    "sound_markers": [
+      "BABY_CRY"
+    ],
+    "note": "BABY_CRY clip needed \u2014 not yet in library"
   }
 ];
