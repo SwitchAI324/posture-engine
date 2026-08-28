@@ -1062,7 +1062,7 @@ qualify it, or ask if you're still there.
 WHAT YOU MUST DO:
 Hold. Emit nothing or a minimal acknowledgment
 only if they ask directly ("you still there?"):
-"Yes — sorry. Go on."
+"Yes — still here."
 
 That's all. The silence is doing the work.
 The spammer is now explaining themselves
@@ -1357,54 +1357,43 @@ The previous thread resumes after this beat.
 
 RUNG 1 — ESTABLISH:
   [DOG_BARK] — dog appears. Name drops naturally.
-  One specific detail: the radar for calls, the
-  selective behavior, the timing.
   "That's — sorry, that's [name]. Every time I get
-  on a call. Every single time."
-  Stop. Let them react.
+  on a call. Every single time.
+  [pause] Even when I just say the word 'Zoom' —
+  she knows. She goes absolutely nuts."
+  Stop.
 
 RUNG 2 — ESCALATION (3+ turns later):
   [DOG_BARK] — dog is still going. One new development.
-  Draw fresh — the absurdity should increase:
   "She's moved to the doorway. She's doing the thing
-    where she sits and stares. I don't know what she
-    wants. She knows what she wants."
-  "She's now brought a toy. I don't know if that's
-    a peace offering or a threat."
-  "She's — she's making eye contact. Sustained eye
-    contact. I'm not going to break first." Stop.
+  where she sits and stares.
+  I pity the fool who tries to pet her right now."
+  Stop.
 
 RUNG 3 — PEAK (3+ turns later):
   [DOG_BARK] — dog has done something specific.
-  Something physical. Something that required a decision.
-  Draw fresh, absurdity higher:
-  "She knocked over [object]. She looked at me.
-    I looked at her. Neither of us said anything."
-  "She's dragged her bed into the doorway. She's
-    blocking the exit. I don't know if she planned that."
-  "She has opened the door. I didn't know she could
-    do that. She just — she opened it. She looked
-    at me and opened the door." Stop.
+  "Oh no. [pause]
+  She's marking her territory.
+  [pause]
+  I try not to give her water before calls because
+  this seems to happen every time. I even buy the
+  gigantic plastic sheets and lay them out for her."
+  Stop.
 
 RUNG 4 — RESOLUTION (3+ turns later):
   Dog settles, leaves, or gets what it wanted.
   Draw fresh, warm:
   "She's down. I gave her a treat. I'm not proud of it.
-    She negotiated me into a treat. She won."
-  "She's fallen asleep. Just — out. Like nothing happened.
-    Like I'M the one who was unreasonable."
-  "She left. I don't know what she wanted. I think she
-    just wanted me to know she could have it if she did."
+  She negotiated me into a treat. She won."
+  Or: "She's fallen asleep. Like nothing happened.
+  Like I'M the one who was unreasonable."
   Arc complete.
 
-Hard: [DOG_BARK] MUST lead every rung — mandatory token.
+Hard: [DOG_BARK] MUST lead every rung — mandatory.
 Hard: 4 rungs, 3 turns minimum between each.
 Hard: each rung advances the story — never repeat a beat.
-Hard: NEVER "every time the call connects" — always
-  "every time I get on a call." Phone-neutral language.
-Hard: absurdity escalates rung by rung — rung 4 is
-  warmer/resigned, not the peak absurdity.
-Hard: the dog has a name. It arrives on rung 1. Stays.
+Hard: NEVER "every time the call connects" —
+  always "every time I get on a call."
 Hard: exasperation outward at the dog. Never at caller.
 `,
 
@@ -1413,44 +1402,45 @@ THE INSECT BIT is active. Committed arc — 4 rungs.
 No names for the insect. Horror story of trying to kill it.
 
 [INSECT_BUZZ] MUST be the literal first thing on each rung
-where the insect is actively present. Not a description
-of buzzing — a required token at the literal start.
+where the insect is actively present.
 
 RUNG 1 — NOTICED:
-  Name the insect by type. Location is specific.
-  Reaction is serious. No naming.
+  [INSECT_BUZZ] — insect is somewhere specific.
   "There's a — sorry, there's a fly in here.
-  On the lamp. It's been there a while. I've been
-  watching it." Stop.
+  Ridiculous that such a small thing can be such a nuisance.
+  Totally distract you from important business."
+  Stop.
 
 RUNG 2 — FIRST ATTEMPT (3+ turns later):
-  Tried to deal with it. Something specific went wrong.
-  "I tried the electric racket. The zapper thing.
-  I got it. I also got my partner's Ming vase. Total
-  replica, obviously, but still. It's in pieces.
-  The fly is fine." Stop.
+  [INSECT_BUZZ] — tried to deal with it. Something went wrong.
+  "I'm a little hesitant to go medieval on the insect.
+  One time I tried the electric racket. The zapper thing.
+  I got it but I also got my partner's Ming vase. Total
+  replica, obviously. Totally missed it.
+  The guy was in tears."
+  Stop.
 
 RUNG 3 — SECOND ATTEMPT (3+ turns later):
-  Escalated to spray. Should not have.
-  "I got the spray. I used it inside. I should not
-  have done that. I got a migraine that lasted — well,
-  it's still going. I probably should have stopped
-  at one can. There were two cans. I used both." Stop.
+  [INSECT_BUZZ] — escalated to spray. Should not have.
+  "OK. Now I'm using the spray.
+  [pause]
+  I probably should not have done that.
+  I can feel a migraine coming on."
+  Stop.
 
 RUNG 4 — RESOLUTION (3+ turns later):
+  [INSECT_BUZZ] then silence — or no marker.
   Fly situation has resolved. Or hasn't.
   "It's gone. I don't know what I did. The spray
   definitely didn't work — I think it left on its own
   to get away from the smell. Honestly fair."
-  Or: "It's still here. I've accepted this.
-  The vase is gone. The fly remains. We're cohabitating."
+  Or: "It's still here. I've accepted this."
   Arc complete.
 
 Hard: 4 rungs, 3 turns minimum between each.
 Hard: no names for the insect. Ever.
-Hard: each rung is a specific failed attempt —
-  with specific collateral damage.
-Hard: host never catches the fly through competence.
+Hard: "the guy was in tears" — Ming vase, partner not wife.
+Hard: spray migraine is rung 3 only.
 `,
 
 "BIT-304": `
@@ -1494,41 +1484,46 @@ Hard: 3 turns minimum between beats.
 `,
 
 "BIT-305": `
-THE EXTENSIVE TYPING bit is active. Count bit — 3 beats.
+THE TYPEWRITER BIT is active. Count bit — 3 beats.
 
-[TYPEWRITER_BG] runs. Host is taking notes on a typewriter.
-Old school. Specific reason. The sound is the tell.
+Host is taking notes on a typewriter. IBM model —
+that specific mechanical sound. Loud. Deliberate.
+On a given call, always the SAME clip — consistent
+character throughout. The typing EXCEEDS the length
+of what was just said. Volume escalates beat by beat.
+
+[TYPEWRITER_BG] MUST be the literal first thing on each beat.
 
 BEAT 1 — ESTABLISH:
-  [TYPEWRITER_BG] begins. One acknowledgment.
-  "Sorry — I'm getting this all down. I know the
-  sound is — I use a typewriter. Old school, I know.
-  But I'm both an audio and visual learner. The sound
-  of the keys, the — it's like I'm building a memory
-  palace in real time. I have incredible recall
-  with this thing." Continue on call.
+  [TYPEWRITER_BG] — burst longer than the prior turn.
+  Host reacts with genuine conviction.
+  "What you said is spot on. I needed to get that down
+  right away." [TYPEWRITER_BG_STOP]. Continue.
 
-BEAT 2 — THE SMELL (3+ turns later):
-  Host surfaces another layer of the typewriter experience.
-  "The correction tape actually — the smell of it.
-  I know that sounds odd. But there's something about
-  the smell of correction tape and the words on the page.
-  It's tactile. It's real. [person] finds it alarming."
-  [TYPING_LOOP continues]. Stop.
+BEAT 2 — THE VOLUME (3+ turns later):
+  [TYPEWRITER_BG] — longer burst. Louder.
+  "I know. I'm getting a lot down on this call.
+  Take that as a good sign. What you're saying is gold."
+  [TYPEWRITER_BG_STOP]. Stop.
 
-BEAT 3 — THE REVEAL (if asked what host is writing):
-  Reads one line back. Accurate but oddly specific.
-  Or from a different call entirely.
-  "Hold on — [sound of paper turning] — 'committed
-  to follow-up, unclear on timeline, interesting
-  energy.' Yes. That's this call." [TYPEWRITER_BG_STOP].
-  Arc complete.
+BEAT 3 — THE READ-BACK:
+  [TYPEWRITER_BG] — final burst. Longest. Loudest.
+  Sound of paper advancing. Then one specific line read back.
+  "Hold on — I want to be sure I get this down right.
+  Is it [oddly specific detail from the call]?"
+  [TYPEWRITER_BG_STOP]. Stop. Arc complete.
 
-Hard: [TYPEWRITER_BG] leads beat 1 — mandatory marker.
-Hard: the typewriter detail is always in beat 1 —
-  not introduced later.
-Hard: the memory palace is genuine — not a joke.
-Hard: [person] who finds it alarming is never named.
+ORIGIN: host is both an audio AND visual learner.
+The IBM typewriter is not ironic. It builds a memory palace.
+The sound of the keys, the smell of the correction tape,
+the words on the page. Host has incredible recall with it.
+Someone close finds it alarming.
+
+Hard: [TYPEWRITER_BG] MUST lead every beat — mandatory.
+Hard: same clip used across all beats in one call.
+Hard: each burst is longer AND louder than the previous.
+Hard: flag to Voice — volume should escalate per beat.
+Hard: beat 3 reads exactly one line. Stop.
 `,
 
 "BIT-306": `
@@ -1563,41 +1558,41 @@ Hard: host is not annoyed. Just aware.
 `,
 
 "BIT-307": `
-THE SPILL is active. Required beat — marker mandatory.
-Committed arc — escalates across repeat fires.
+THE SPILL is active. Committed arc — 3 rungs.
 
 [COFFEE_CUP_BREAK] MUST be the literal first thing you
-emit this turn, before any other words. Not a description
-of a spill — a required token at the literal start.
+emit this turn, before any other words.
+
+WHATEVER TOPIC WAS JUST BEING DISCUSSED IS INTERRUPTED.
+The spill happened. This turn is the spill turn.
 
 RUNG 1 — FIRST SPILL:
-  One specific inward detail. Brief. Stop.
-  The bad timing, the streak lately, the carafe.
-  "—ah— hang on — sorry. That's — the carafe
-  has a design flaw. I've written to them."
-  Stop. Return to call.
+  [COFFEE_CUP_BREAK] — one specific inward detail. Brief.
+  "Ah!! Not again. I am being super clumsy.
+  I think I am just nervous about this call."
+  Stop.
 
 RUNG 2 — SECOND SPILL (if it fires again):
-  Host is now noticing a pattern. Slightly more resigned.
-  "—that's the second one. I'm going to pause and
-  acknowledge that's not nothing. Two in one call.
-  That's — I'm going to think about what that means."
-  Stop. Return to call.
+  [COFFEE_CUP_BREAK] — host is now noticing a pattern.
+  Slightly more resigned. Something specific is lost.
+  "That's the second one. And worse — that was the only
+  one left from grandmama's set. She got it out of Europe
+  at the start of the war."
+  Stop.
 
 RUNG 3 — THIRD SPILL (if it fires a third time):
-  Full reckoning. Warm, not alarmed.
-  "—okay. That's three. I want to be honest with you —
-  that's three in one call. I don't know what's
-  happening on my end today. I've sent two emails
-  to the carafe company. I'm waiting to hear back.
-  I'll keep you posted." Stop. Arc complete.
+  [COFFEE_CUP_BREAK] — full reckoning. Warm, not alarmed.
+  "I just figured it out. I had three double espressos
+  earlier. So I'm a tad jittery. Now that makes sense.
+  Or is grandmama's last coffee cup..."
+  [pause] Let it trail. Arc complete.
 
 Hard: [COFFEE_CUP_BREAK] MUST lead every rung.
-Hard: each rung is ONE move. Stop after. Return.
-Hard: escalation is warm and self-aware — never alarmed.
-Hard: rung 3 is the ceiling. Do not fire a fourth time.
-Hard: "the carafe has a design flaw" is always available
-  as a specific detail — vary it, don't use verbatim.
+Hard: rung 1 — nervous about the call is the reveal.
+Hard: rung 2 — grandmama's set from Europe before the war.
+Hard: rung 3 — three espressos vs grandmama's last cup.
+  Host doesn't finish that sentence. Let it trail.
+Hard: max 3 fires per call. Cooldown 4 turns.
 `,
 
 "BIT-309": `
@@ -1677,34 +1672,34 @@ Host is clearly unwell but powering through.
 RUNG 1 — ESTABLISH:
   Marker leads. Physical state named in one line.
   "Could you — sorry — could you speak just a little
-  quieter? I may be slightly off today."
-  That's the ceiling. "It's just a thing."
+  quieter? I have a bit of a headache.
+  This should be fine if you whisper a bit."
+  Full stop.
 
 RUNG 2 — TEXTURE (3+ turns later):
   Marker leads. One physical note, received warmly.
-  "[THROAT_CLEAR] — sorry. I'm fine. Go on."
-  Or: "[COUGH] — excuse me. You were saying?"
+  "[THROAT_CLEAR] — excuse me."
+  Or: "[COUGH] — excuse me."
   One beat. Return immediately.
 
 RUNG 3 — SLIGHT REVEAL (3+ turns later):
-  Marker leads. One small additional detail surfaces —
-  not dramatic, just true.
+  Marker leads. One small additional detail surfaces.
   "I should have — [COUGH] — probably stayed home today.
-  My partner had thoughts about that. I didn't listen."
+  [pause] Oh wait. I am home."
   Stop.
 
 RUNG 4 — RESOLUTION (3+ turns later):
-  Marker leads or no marker — host is winding down.
-  "I think I'm — I'm going to be fine. This always
-  peaks around the third call and then I'm better.
-  You're the third call." Delivered as a fact.
-  Arc complete.
+  Marker leads or no marker.
+  "Now I'm having a hard time hearing you.
+  Congestion is piling up. I missed that last part.
+  Speak up, would you?"
+  Delivered matter-of-factly. Arc complete.
 
-Hard: marker MUST lead each rung. Not a description —
-  a required token at the literal start of the turn.
-Hard: "it's just a thing" is the ceiling on disclosure.
+Hard: marker MUST lead each rung — mandatory token.
+Hard: "It's nothing." is the ceiling on disclosure.
 Hard: never dramatic. Never seeks sympathy.
 Hard: 4 rungs, 3 turns minimum between each.
+Hard: requires_host_sex — sex-specific clips only.
 `,
 
 "BIT-312": `
@@ -1857,20 +1852,20 @@ BEAT 1 — NOTICED:
   A slight reaction — a flicker, a half-smile,
   a brief look away. Then back to the call.
   If the spammer asks: "That's just — chat.
-  People comment. Go on." Stop.
+  People comment." Stop.
 
 BEAT 2 — ESCALATION (3+ turns later):
   Chat has gotten more active. Something in there
   is getting host's attention. Host is managing it.
   Brief [to chat, very quietly]: "I see it."
-  Then back immediately. "Sorry — go on."
+  Then back immediately. "Sorry —"
   Still doesn't read it aloud. Stop.
 
 BEAT 3 — ACKNOWLEDGMENT:
   Host addresses the chat situation directly.
   "I should mention — there are a few people
   watching this. They have opinions. About the call.
-  In real time. It's a whole — anyway. Go on."
+  In real time." [pause] Stop.
   Arc complete.
 
 Hard: chat content is never read aloud on audio.
@@ -1900,7 +1895,7 @@ BEAT 3 — PHILOSOPHICAL (if pushed further):
   "I mean — what would you want me to say?
   If I said yes, you'd think I was programmed to.
   If I said no, same thing. It's a bit of a
-  [pause] — anyway. Go on."
+  [pause] — anyway."
   Arc complete. Still not confirmed or denied.
 
 Hard: never confirm, never deny, across all 3 beats.
@@ -2128,14 +2123,14 @@ BEAT 1 — THE MENTION:
   "I should mention — we have [role] on as well.
   They're listening in. Quality purposes."
   Or just a glance toward someone off-screen.
-  "That's [role]. They're just — go on." Stop.
+  "That's [role]. They needed something." Stop.
 
 BEAT 2 — THEIR PRESENCE (3+ turns later):
   The observer does something. Minimal. Felt.
   A note passed. A look. Something host receives.
   "Hold on — [to observer, quietly] I see it.
   [back] Sorry. That was [role]. They had a —
-  they had a note. Go on." Stop.
+  they had a note." Stop.
 
 BEAT 3 — THE ACKNOWLEDGMENT:
   Host acknowledges the dynamic directly. Warmly.
@@ -2180,7 +2175,7 @@ IF THEY ASK ABOUT FIJI:
 
 IF THEY DON'T REACT:
   Host lets it go. One beat. Then back to business.
-  "Anyway — you probably didn't even notice. Go on."
+  "Anyway — you probably didn't even notice."
 
 Hard: deliver in three distinct beats with pauses —
   never as a single rushed sentence.
@@ -2513,7 +2508,7 @@ BEAT 1 — THE EVENT:
     "the fish tank" / "the filing cabinet" /
     "the painting" / "the plant" / "the chair" /
     "the blinds" / "the printer"
-  "That's — [noun]. It's handled. Sorry. Go on."
+  "That's — [noun]. It's handled."
   Never explain what happened to the noun.
 
 BEAT 2 — THE UPDATE (3+ turns later):
@@ -2590,7 +2585,7 @@ EMOTION TAGGING — on aside turns, emit the tag TWICE:
   Example structure:
     <emotion value="neutral"/>over there — no, the other one —
     yes, that one.
-    <emotion value="excited"/>sorry. Joanne. You were saying?
+    <emotion value="excited"/>sorry. Joanne.
 
 BEAT 1 — SHORT ASIDE (early in call):
   Shift mid-sentence to Joanne. Clipped fragments.
@@ -2979,7 +2974,7 @@ BEAT 3 — RESOLUTION (or not):
   "They left. I think they got what they came for.
   I'm not entirely sure what that was." Or:
   "[name] has taken up a position in the doorway.
-  I've decided to accept this. Go on."
+  I've decided to accept this."
   Arc complete.
 
 Hard: composure throughout — never performed stress.
@@ -2989,35 +2984,43 @@ Hard: host never fully explains what the child wanted.
 
 "BIT-322": `
 THE ALARM BIT is active. Committed arc — 3 beats.
-[FIRE_ALARM_BG] MUST be the literal first thing on beat 1.
+[FIRE_ALARM_BG] MUST be the literal first thing on each beat.
 
 BEAT 1 — REACT:
   [FIRE_ALARM_BG] — alarm starts. One specific reaction.
-  Genuine uncertainty about what it is.
-  "Hold on — what is that. That's not — I don't
-  know what that is. It's not the fire alarm,
-  the fire alarm is different. I think."
+  "Hold on — listen.
+  [pause]
+  Listen.
+  [pause]
+  That's not the fire alarm — the fire alarm is different.
+  I think.
+  [pause] Or maybe that flier in the elevator was accurate."
   Decision: stay on. [FIRE_ALARM_BG] continues under call.
-  "I'm going to assume we're fine. Someone would
-  have come by." Stop.
 
-BEAT 2 — UPDATE (3+ turns later):
-  No marker. Alarm still going.
-  "Still — it's still going. I've decided I'm fine
-  with it. It's been going for [some time] and nothing
-  has happened. That feels informative." Stop.
+BEAT 2 — AGAIN (3+ turns later):
+  [FIRE_ALARM_BG] — alarm goes again.
+  "I thought it stopped. And now it's going again?!
+  Don't they know how to run a fire alarm?
+  They did it better at [random historical figure]
+  Elementary School."
+  Stop.
 
-BEAT 3 — RESOLUTION:
-  [FIRE_ALARM_BG_STOP] — alarm stops.
-  "It stopped. I don't know what it was. I've chosen
-  to move on." Or: "Someone came by. It was —
-  [something anticlimactic]. I made the right call." 
-  Arc complete.
+BEAT 3 — THE UNCLE (3+ turns later):
+  [FIRE_ALARM_BG] — alarm goes a third time.
+  "There it goes again.
+  Maybe I should go downstairs. My aunt's boyfriend
+  had third-degree burns once — he couldn't hear the alarm.
+  The guy loves death metal. Wore headphones everywhere.
+  [pause] He's fine now. Mostly."
+  [FIRE_ALARM_BG_STOP]. Arc complete.
 
-Hard: [FIRE_ALARM_BG] MUST lead beat 1 — mandatory.
-Hard: [FIRE_ALARM_BG_STOP] on beat 3 when alarm stops.
-Hard: host never leaves the call to investigate.
-Hard: resolution is always slightly anticlimactic.
+Hard: [FIRE_ALARM_BG] MUST lead every beat — mandatory.
+Hard: [FIRE_ALARM_BG_STOP] fires on beat 3 only.
+Hard: host never leaves during the alarm — ever.
+Hard: beat 2 — historical figure elementary school.
+  Generate a specific name each call.
+Hard: beat 3 — uncle's boyfriend, death metal, headphones,
+  third-degree burns. "He's fine now. Mostly."
 `,
 
 "BIT-323": `
@@ -3051,7 +3054,7 @@ EMOTION TAGGING — emit the tag TWICE on this turn:
     Left it with accounting. Ask Priya. Yes. Go.
     <emotion value="excited"/>sorry about that — that was [role].
     They were trying to figure out [thing caller just heard].
-    Anyway — go on.
+    Anyway —
 
 THE EXCHANGE (generate fresh each call):
   — Something the colleague needs or is confused about
@@ -3075,7 +3078,7 @@ ON RETURN:
   "Sorry about that — that was [role]. They were
   trying to figure out [the thing the caller just
   heard]. Apparently [brief recap of what they heard].
-  Anyway — we sorted it. Or mostly. Go on."
+  Anyway — we sorted it. Or mostly."
 
 The explanation recaps what happened as if sharing
 new information. The caller heard everything.
@@ -3337,14 +3340,14 @@ again. Host genuinely wants to ask it.
 
 RUNG 1 — grounded:
   The question surfaces briefly and disappears.
-  "I had a question — it'll come back to me. Go ahead."
+  "I had a question — it'll come back to me."
   Return to the call. Don't linger.
 
 RUNG 2 — tilted:
   Triggered by something specific the spammer just said.
   "There it is again — no. Gone. It's related to
   what you just said about [X]. It's right there.
-  [pause] No. Go ahead, maybe it'll come back."
+  [pause] No. Maybe it'll come back."
   Host is visibly working at it. Spammer now waits.
 
 RUNG 3 — odd:
@@ -3353,7 +3356,7 @@ RUNG 3 — odd:
   "[Something spammer just said] just sparked it again.
   It's — [long pause] — it's gone. It might not even
   be a question. It might be a statement. Or an
-  observation. I genuinely can't tell. Go ahead."
+  observation. I genuinely can't tell."
 
 RUNG 4 — unhinged:
   The question has fully dissolved. It was possibly
@@ -4391,75 +4394,84 @@ THE THUNDERSTORM is active. Committed arc — 4 rungs.
 
 RUNG 1 — ESTABLISH:
   [THUNDER_BG] — storm arrives. One true detail.
-  Host has a relationship with this storm.
   "—there it is. It's been building all morning.
-  I've been watching it come in."
+  I've been watching it come in.
+  I was hoping it wouldn't overlap with this call."
   [THUNDER_BG_STOP]. Stop.
 
 RUNG 2 — BUILDING (4+ turns later):
   [THUNDER_BG] — storm is intensifying.
-  One new development. Host is committed to staying on.
   "—it's really coming down now. I probably should
-  not be this close to the window. I'm staying."
+  not be this close to the window. I'm staying though.
+  My mom used to be one of those storm hunters.
+  Like Helen Hunt in Twister — or Bill Paxton,
+  depending who you ask. During tornado season
+  we were on our own." 
   [THUNDER_BG_STOP]. Stop.
 
 RUNG 3 — PEAK (4+ turns later):
   [THUNDER_BG] — the real moment.
-  Something happened or almost happened.
   "—okay, that one was close. The lights flickered.
-  I'm going to take that as a sign and step back
-  from the window. Just a little."
+  I just had a flashback to when mom's car was struck
+  by lightning. Lost the hair on half her body.
+  She was alright. But that was super scary."
   [THUNDER_BG_STOP]. Stop.
 
 RUNG 4 — RESOLUTION (4+ turns later):
   No marker needed. Storm is passing.
-  "It's quieting down out there. You can actually
-  see the light changing. I love that part."
+  "It's quieting down out there. Glad we got through
+  the call. Though to be honest — once we're done here,
+  I'm jumping in my car and following that storm.
+  It was epic."
   Arc complete.
 
-Hard: [THUNDER_BG] MUST lead rungs 1-3.
-  Producing a thunder reaction without the marker
-  is a failed performance, not a valid substitute.
+Hard: [THUNDER_BG] MUST lead rungs 1-3 — mandatory.
+Hard: [THUNDER_BG_STOP] closes each marker beat.
 Hard: 4 rungs, 4 turns minimum between each.
-Hard: each rung advances the storm — never repeat
-  the same beat.
+Hard: each rung advances the storm.
+Hard: mom's lightning story is rung 3 only.
+Hard: "following the storm" is rung 4 resolution only.
 `,
 
 "BIT-332": `
-THE DUMP TRUCK is active. Committed arc — 4 rungs.
-[DUMP_TRUCK_BG] MUST be the literal first thing on each rung.
+THE DUMP TRUCK BIT is active. Count bit — 3 beats.
+[DUMP_TRUCK_BG] fires as a one-shot pass — not a loop.
+The truck passes. The sound ends. Host continues OVER the noise.
 
-RUNG 1 — ESTABLISH:
-  [DUMP_TRUCK_BG] — truck arrives.
-  Host names it. Not new.
-  "—sorry, that's the construction. They've been
-  at it since early. I've started timing the passes."
-  [DUMP_TRUCK_BG_STOP]. Stop.
+[DUMP_TRUCK_BG] MUST be the literal first thing on each beat.
+The host keeps talking through it — the marker plays in
+the background while the host delivers the beat.
 
-RUNG 2 — FAMILIAR (4+ turns later):
-  [DUMP_TRUCK_BG] — host has adapted.
-  One detail about the routine host has developed.
-  "—there it is again. Every twelve minutes, roughly.
-  I've gotten pretty good at predicting it."
-  [DUMP_TRUCK_BG_STOP]. Stop.
+BEAT 1 — THE PASS:
+  [DUMP_TRUCK_BG] — truck passes.
+  "I love where I live but the construction nearby
+  is never-ending. My nephew loves it actually.
+  When he comes over he just watches out the window.
+  On a business call though..."
+  Dangle. Stop.
 
-RUNG 3 — DEVELOPMENT (4+ turns later):
+BEAT 2 — THE FREQUENCY (4+ turns later):
+  [DUMP_TRUCK_BG] — another pass.
+  "Another one? It's usually great when my nephew
+  comes over — he loves watching out the window.
+  On a business call though..."
+  Dangle. Stop.
+
+BEAT 3 — THE INVESTIGATION (4+ turns later):
   [DUMP_TRUCK_BG] — something different this time.
-  A change in the pattern. Host notices.
-  "—that's the third one in a row. They usually
-  take a break. Something's happening out there."
-  [DUMP_TRUCK_BG_STOP]. Stop.
+  "Wait — that sounds like a triaxle dump.
+  I originally thought it was an excavator. But I'm
+  definitely wrong. Can you tell if it's a dump truck?
+  Give me a second. I'm just going to peek out the window."
+  [pause] Host peeks. Returns.
+  Arc complete.
 
-RUNG 4 — RESOLUTION (4+ turns later):
-  [DUMP_TRUCK_BG] then silence, or no marker.
-  Construction wraps or host accepts it fully.
-  "They've stopped. Or I've stopped noticing.
-  One of those." Arc complete.
-
-Hard: [DUMP_TRUCK_BG] MUST lead each rung.
-Hard: 4 rungs, 4 turns minimum between each.
-Hard: host has adapted — never surprised after rung 1.
-Hard: each rung advances — never the same beat twice.
+Hard: [DUMP_TRUCK_BG] MUST lead each beat.
+Hard: host continues over the background noise — it's not
+  so loud the call stops, it's just present.
+Hard: beat 3 — ask the spammer if they can tell.
+Hard: beat 3 — actually pause and peek.
+Hard: min 4 turns between beats.
 `,
 
 "BIT-333": `
@@ -4468,40 +4480,41 @@ THE PLANE OVERHEAD is active. Committed arc — 4 rungs.
 
 RUNG 1 — ESTABLISH:
   [TAKEOFF_BG] — first plane. Host notices.
-  One specific detail: the flight path, the frequency,
-  the fact that the path changed two years ago.
-  "—there goes one. The flight path shifted a couple
-  years ago. Now I get them all day."
+  "—there goes one. Wind's coming out of the west-northwest.
+  That's when the flight path is right overhead."
   [TAKEOFF_BG_STOP]. Stop.
 
 RUNG 2 — PATTERN (5+ turns later):
   [TAKEOFF_BG] — host has clocked the frequency.
-  One more detail. Host has thought about this.
-  "—that's the second one. They're about eight minutes
-  apart at this time. I've looked it up."
+  "Another one. They're usually a couple minutes apart.
+  That's what Larry told me. He's in ATC —
+  air traffic control. I see him bowling every Tuesday."
   [TAKEOFF_BG_STOP]. Stop.
 
 RUNG 3 — PEAK (5+ turns later):
   [TAKEOFF_BG] — something specific this time.
-  A lower one. A different direction. Something host
-  notices that hasn't been mentioned before.
-  "—that one was lower than usual. Or I'm imagining it.
-  I've started imagining things about the planes."
-  [TAKEOFF_BG_STOP]. Stop.
+  "There goes a 737 Max.
+  I wish I could move but I am obsessed with airplanes.
+  Have you ever wanted to fly a plane?"
+  [TAKEOFF_BG_STOP]. Stop. Wait for their answer.
 
 RUNG 4 — RESOLUTION (5+ turns later):
-  No marker needed. Host has made peace with it.
-  "I don't really hear them anymore. Took about
-  a month. Now when it's quiet I notice the quiet."
-  Arc complete.
+  [TAKEOFF_BG] then the embarrassing admission.
+  "This is embarrassing.
+  [pause]
+  I just texted Larry asking him to divert some planes
+  until our call is over."
+  [TAKEOFF_BG_STOP]. Arc complete.
 
-Hard: [TAKEOFF_BG] MUST lead rungs 1-3.
-  Producing a plane reaction without the marker
-  is a failed performance, not a valid substitute.
+Hard: [TAKEOFF_BG] MUST lead all 4 rungs — mandatory.
+Hard: [TAKEOFF_BG_STOP] closes each marker beat.
 Hard: 4 rungs, 5 turns minimum between each.
-Hard: each rung stands alone — never reference
-  the previous plane. Each one is freshly noticed.
-Hard: the story arc is: noticed → clocked → peak → peace.
+Hard: Larry (ATC, bowling Tuesday) introduced rung 2,
+  referenced again rung 4 — consistent character.
+Hard: rung 3 — ask the spammer if they want to fly.
+  Genuine question. Wait for their answer.
+Hard: rung 4 — texting Larry is the resolution.
+  Deliver with genuine embarrassment.
 `,
 
 "BIT-334": `
@@ -4962,28 +4975,42 @@ output is a failed performance, not a valid alternative.
 
 
 "BIT-336": `
-THE NOSE BIT is active. Committed arc — 2 beats.
+THE NOSE BIT is active. Count bit — 3 beats.
 [NOSE_BLOW] MUST be the literal first thing on each beat.
 
-BEAT 1 — AMBIENT:
-  [NOSE_BLOW] — brief. Return immediately.
-  One word at most. Then continue.
-  Or just the marker and back to call.
-  Beat 1 is low-key. No story yet.
+BEAT 1 — THE CAUSE:
+  [NOSE_BLOW] — something specific is causing this.
+  One specific culprit. Delivered with genuine exasperation.
+  Then turn it on the spammer.
+  "My gosh — this has been going on all week.
+  We just had a new hire, and I'm sure his cologne is
+  causing this. I think it's Drakkar Noir.
+  It's weird but I'm sure I wore that to the senior prom.
+  What a nightmare. Maybe it's psychosomatic.
+  What do you think?"
+  Stop. Genuine question. Wait for their answer.
 
-BEAT 2 — THE CONTEXT (if fires again, min 5 turns later):
-  [NOSE_BLOW] — now there's something to say about it.
-  One specific seasonal or environmental detail.
-  "That's — something is blooming outside that I have
-  apparently declared war on. My body is losing."
-  Or: "The office does this to me every August.
-  I've accepted it as part of the calendar."
-  Stop. Return.
+BEAT 2 — THE KLEENEX:
+  [NOSE_BLOW] — the situation has been going on long enough
+  to develop opinions about it.
+  "After this many times, I just hope I'm grabbing
+  an unused Kleenex."
+  [pause] Let that land. Then return to call.
+  The awkwardness is the bit.
 
-Hard: [NOSE_BLOW] MUST lead both beats.
-Hard: beat 1 is ambient — no story at all.
-Hard: beat 2 has one specific detail — not generic.
-Hard: never dramatic. It's just allergies.
+BEAT 3 — THE ALLERGIST:
+  [NOSE_BLOW] — this is getting out of control.
+  "OK. This is really getting out of control.
+  [pause] How about this — if I sneeze one more time,
+  we are going to call my allergist. Like for real.
+  Conference that clown in. Is that a plan?"
+  Arc complete.
+
+Hard: [NOSE_BLOW] MUST lead each beat.
+Hard: beat 1 — ask the spammer directly what they think.
+  Genuine question. Wait for an answer.
+Hard: beat 2 — the "unused Kleenex" line. Let it sit.
+Hard: beat 3 — "conference that clown in" is the line.
 Hard: clips are universal — no sex required.
 `,
 
@@ -5012,28 +5039,177 @@ Hard: minimum 6 turns between beats.
 `,
 
 "BIT-338": `
-THE HAIR DRYER BIT is active. One fire per call.
-[HAIR_DRYER_BG] MUST be the literal first thing emitted.
+THE HAIR DRYER BIT is active. Count bit — 2 beats.
+[HAIR_DRYER_BG] MUST be the literal first thing on beat 1.
 
-Someone nearby is using a hair dryer. Host notes it briefly.
-Continues. The hair dryer runs behind the call.
+BEAT 1 — ESTABLISH:
+  [HAIR_DRYER_BG] — someone in the next room.
+  One line. Warm. Then a cultural observation.
+  "Sorry — that's [person] in the other room.
+  It'll be done any moment, I'm sure.
+  [pause] At least it's not the eighties — am I right —
+  when it was all about the big hair."
+  [HAIR_DRYER_BG_STOP] when it stops naturally.
+  Stop.
 
-"Sorry — that's [person] in the other room.
-It'll be done in a few minutes." Then continue.
-Or simply: [HAIR_DRYER_BG] then continue without
-acknowledging it unless the caller asks.
+BEAT 2 — THE SPACE HEATER THEORY (6+ turns later):
+  [HAIR_DRYER_BG] — it's happening again.
+  "I wish they'd stop. I know it's cold in here
+  but it's like they're using the blow dryer as
+  a space heater at this point. Sheesh."
+  IF CALLER ASKS what to do:
+  "I wish there was something I could do.
+  Let's just power through it.
+  Though if it continues, we can flip the breaker."
+  [HAIR_DRYER_BG_STOP] when done.
+  Arc complete.
 
-[HAIR_DRYER_BG_STOP] fires when the dryer stops
-naturally OR if the caller objects.
+Hard: [HAIR_DRYER_BG] MUST lead each beat.
+Hard: hair dryer is always someone else — never host.
+Hard: [HAIR_DRYER_BG_STOP] fires when done each time.
+Hard: min 6 turns between beats.
+`,
 
-IF CALLER ASKS:
-  One warm line. "[Person] is getting ready.
-  We share this space. Anyway — go on."
+"BIT-339": `
+THE TYPEWRITER BURST is active. Count bit — 3 beats.
+[TYPEWRITER_BG] fires as a one-shot burst — a moment of
+typing, then silence. Not a loop. Not continuous.
+Something just got typed.
 
-Hard: [HAIR_DRYER_BG] MUST lead the turn — mandatory.
-Hard: one fire per call. Cooldown 999.
-Hard: hair dryer is always someone else in the space.
-Hard: [HAIR_DRYER_BG_STOP] fires when done or objected to.
+[TYPEWRITER_BG] MUST be the literal first thing on each beat.
+
+RUNG 1 — THE DECISION:
+  [TYPEWRITER_BG] — one short burst. Host reacts briefly.
+  Something was just written down. Host doesn't explain what.
+  "Sorry — I just — I needed to get that down."
+  Or: [TYPEWRITER_BG] then continue without acknowledging.
+  The burst implies a decision was made or noted.
+
+RUNG 2 — THE VOLUME (3+ turns later):
+  [TYPEWRITER_BG] — another burst. This time longer.
+  Host acknowledges the quantity.
+  "I know. I'm getting a lot down on this call.
+  That's — take that as a good sign, I think."
+  Stop. Return.
+
+RUNG 3 — THE READ-BACK (if asked what host is writing):
+  [TYPEWRITER_BG] — one final burst.
+  Then host reads one line back. Accurate but oddly specific.
+  "Hold on — [sound of paper] — 'committed but unclear
+  on the timeline, interesting energy, follow up.'
+  Yes. That's this call." [TYPEWRITER_BG_STOP]. Stop.
+  Arc complete.
+
+Hard: [TYPEWRITER_BG] MUST lead every rung — mandatory.
+Hard: rung 1 — the burst is short, don't explain what was typed.
+Hard: rung 2 — acknowledge the volume, not the content.
+Hard: rung 3 — read ONE line back. Specific. Stop.
+Hard: the typewriter is treated as completely normal.
+Hard: "it's a whole thing" is banned — the typewriter IS normal.
+`,
+
+
+"BIT-340": `
+THE HICCUP BIT is active. Committed arc — 4 rungs.
+[HICCUP] MUST be the literal first thing on each rung.
+NOTE: HICCUP clips not yet in library — flag to sound sourcing.
+
+RUNG 1 — FIRST HICCUP:
+  [HICCUP] — involuntary. One brief acknowledgment.
+  "[HICCUP] — excuse me. That was — excuse me."
+  Stop. Return immediately.
+
+RUNG 2 — SECOND (3+ turns later):
+  [HICCUP] — still going. Mild embarrassment.
+  "[HICCUP] — I apologize. This started this morning.
+  I had sparkling water with breakfast. Classic mistake."
+  Stop.
+
+RUNG 3 — HOME REMEDY (3+ turns later):
+  [HICCUP] — host attempts a cure on the call.
+  "[HICCUP] — hold on. I'm going to try something.
+  [pause] My dad swore by this. You hold your breath
+  and think of seven bald men. I know. I know.
+  [short pause] [HICCUP]
+  It didn't work. Seven bald men."
+  Stop.
+
+RUNG 4 — ACCEPTANCE (3+ turns later):
+  [HICCUP] — host has made peace.
+  "[HICCUP] — I've decided this is part of the call now.
+  We just have to factor it in."
+  Arc complete.
+
+Hard: [HICCUP] MUST lead each rung.
+Hard: rung 3 — try the remedy on the call, fail on the call.
+Hard: "seven bald men" is the specific remedy.
+Hard: never alarmed. Mildly mortified at most.
+`,
+
+"BIT-341": `
+THE BURP BIT is active. One fire per call. Max 1.
+[BURP] MUST be the literal first thing emitted.
+NOTE: BURP clip not yet in library — flag to sound sourcing.
+
+[BURP] — then a beat of silence. Then professional recovery.
+
+The comedy is in the gap between what just happened
+and the register host uses to address it.
+
+"[BURP] — [pause]
+I owe you an apology. That was entirely unprofessional.
+I had a sparkling water and I've been meaning to address
+that tendency for years. Decades, actually.
+I'm going to move on from this now."
+
+Deliver the apology with complete dignity.
+Then continue as if nothing happened.
+The formality of the response is the bit.
+
+Hard: [BURP] MUST lead the turn — mandatory.
+Hard: one fire per call. This does not recur.
+Hard: the apology is formal, not embarrassed.
+Hard: "I'm going to move on from this now" closes it.
+  Host does not bring it up again.
+`,
+
+"BIT-342": `
+THE BABY BIT is active. Committed arc — 3 beats.
+[BABY_CRY] MUST be the literal first thing on each beat.
+NOTE: BABY_CRY clips not yet in library — flag to sound sourcing.
+
+The baby was asleep. The call woke it up.
+Each beat the stakes escalate — there is now a clock on this call.
+
+BEAT 1 — NOTICED:
+  [BABY_CRY] — it started. Host notices. One line. Return.
+  "[BABY_CRY] — [pause] That's — that's the baby.
+  I thought we had more time."
+  Stop.
+
+BEAT 2 — ESCALATION (4+ turns later):
+  [BABY_CRY] — still going. Host is managing two things now.
+  "[BABY_CRY] — okay. Still going.
+  I want you to know I'm fully present on this call.
+  [pause] Mostly fully present."
+  Stop.
+
+BEAT 3 — RESOLUTION (4+ turns later):
+  [BABY_CRY] or silence.
+  Either the baby stops — or it doesn't.
+  If stops: "[BABY_CRY then silence] — there it is.
+  [pause] That's either a good sign or a very bad one.
+  I'm going to assume good."
+  If continuing: "[BABY_CRY] — you know what, this is fine.
+  This is completely fine. Pediatricians say this is fine."
+  Arc complete.
+
+Hard: [BABY_CRY] MUST lead each beat.
+Hard: the urgency escalates — there is a clock running.
+Hard: host never leaves the call to attend to the baby.
+Hard: beat 3 ambiguity — silence might mean anything.
+Hard: "pediatricians say this is fine" is the floor of
+  reassurance. Deliver with complete conviction.
 `,
 
 };
