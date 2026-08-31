@@ -1896,11 +1896,27 @@ export default async function handler(req) {
         // now fire at most once per call, not on every turn. Fire-and
         // -forget, off the hot path, matches this file's existing
         // convention for every other non-blocking persistence write.
+        //
+        // ★ OVERLAY-CARRY GAP FOUND + FIXED (live call RM_zwuWohxFNCzr,
+        // Aug 31) — this write persisted prefix+postureLine onto the
+        // call_id row but never openerOverlay/businessOverlay. Once this
+        // write landed (turn 1), getCall(callId) had a real .prefix from
+        // turn 2 on, so the slug-merge block above (the ONLY place that
+        // ever copies the overlays onto `stored`) never ran again for
+        // the rest of the call — OVERLAY-GATE logs confirmed hasOpener/
+        // hasBusiness true on turn 1 only, false on all 39 remaining
+        // turns of a real call. Same trap as the targetId/overlay merge
+        // comment above already describes for the READ side; this is
+        // the matching gap on the WRITE side. Fixed by persisting the
+        // overlays here too, so the call_id row is a true superset of
+        // what the slug row had from this point on.
         if (callId && isConfigured()) {
           waitUntil(
             setCall(callId, {
               prefix: bySlug.prefix,
               postureLine: stored.postureLine || bySlug.postureLine,
+              openerOverlay: bySlug.openerOverlay,
+              businessOverlay: bySlug.businessOverlay,
             }).catch(() => {})
           );
         }
