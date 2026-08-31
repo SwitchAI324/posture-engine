@@ -20,8 +20,7 @@
 
 export const config = { runtime: "edge" };
 
-import { getCall, getCallBySlug, setCall, isConfigured, appendGearEvent, appendBitEvent, clearDeathBlow, getControls, stampArm, fireArm, fireForce, saveTranscript, clearBench } from "../_store.js";
-import { directiveFor } from "../_host_directives.js";
+import { getCall, getCallBySlug, setCall, isConfigured, appendBitEvent, clearDeathBlow, getControls, stampArm, fireArm, fireForce, saveTranscript, clearBench } from "../_store.js";
 import { selectBit, rankBits, DEPLOY_THRESHOLD, selectTextureBit, rankTextureCandidates, explainExclusion } from "../_bits_scorer.js";
 import { archetypeFromBody } from "../_archetype.js";
 // ── ACCUSATION DETECTION (Aug 5, extracted from _gears_tells.js/_gears.js as
@@ -47,34 +46,10 @@ function detectAccusation(utterance) {
   if (ACCUSATION_TELLS.time_waste.test(u)) return "time_waste";
   return null;
 }
-// POSTURE BLOCK (Aug 5, replaces _gears.js's postureBlock now that the file
-// is gone). Two axes only — pressure, engagement — suspicion's dedicated
-// directive is retired entirely (Andrew: lean on CORE's permanent anti-break
-// framework instead, no separate per-turn cue). Same directiveFor() lookup
-// _gears.js used to call, same safe-fallback-on-failure behavior (a host
-// turn must never throw and kill the call over a directive lookup), same
-// [INTERNAL DIRECTION] non-spoken framing.
-function buildPostureBlock(state) {
-  const safeDirective = (axis, pos) => {
-    try {
-      const d = directiveFor(axis, pos);
-      if (d) return d;
-    } catch (e) { /* fall through to inline */ }
-    return "Read the caller and respond naturally, in character.";
-  };
-  const line = (axis, pos) => `  (${axis}) ${safeDirective(axis, pos)}`;
-  return (
-    "[INTERNAL DIRECTION — do NOT say any of this aloud, do NOT read these " +
-    "labels or state names to the caller. This only tells you HOW to play " +
-    "your next spoken line:]\n" +
-    [line("pressure", state.pressure), line("engagement", state.engagement)].join("\n")
-  );
-}
 import { readAmmunition, readFuel, readPriorContact, resolveTargetId } from "../_read.js";
 import { beginArrival, advanceArrival, generateBenchBeat, isPhantom, phantomInvokeDirective, autoArrivalId, benchEntry, BENCH } from "../_bench_v2.js";
 import { telegraphDirective, fireHandoff } from "../handoff.js";
-import { autoBenchAction } from "../_bench_auto.js";
-import { makeTrace, blowLandedTotal, bitFireCount } from "../_trace.js";
+import { makeTrace, bitFireCount } from "../_trace.js";
 import { BITS } from "../_bits_registry.js";
 
 // PHASE LOOKUP for gear_state (Mead Hall's opening-bits group). phase_pref is
@@ -1181,33 +1156,22 @@ async function readCall(messages, prior) {
       .join("\n");
     const p = prior || {};
     const sys =
-      "You read a live sales/spam call and report the caller's state. The caller " +
+      "You read a live sales/spam call and report where it stands. The caller " +
       "cold-contacted the host to sell something; the host is stalling them. " +
-      "Judge THREE things from the caller's recent behavior, reading INTENT (not " +
+      "Judge ONE thing from the caller's recent behavior, reading INTENT (not " +
       "keywords). Reply as compact JSON only, no prose.\n\n" +
       "phase — where the call is now:\n" +
       "  opening (pleasantries, no pitch yet) | pitching (presenting their " +
       "offer) | probing (pressing for a decision/commitment/payment/info) | " +
-      "drifting (wandered into chit-chat mid-call)\n" +
-      "pressure — how hard they push to close/extract:\n" +
-      "  calm | pushing (pressing the sale) | extracting (demanding info/payment/" +
-      "action now)\n" +
-      "engagement — how invested they are:\n" +
-      "  bored (disengaging) | hooked (engaged) | stunned (thrown/derailed by the " +
-      "host)\n\n" +
-      "SARCASM / CONTEMPT / MOCKERY (important — read the TONE, not the words): a " +
-      "caller who says 'oh this sounds GREAT' or 'wow, real professional' " +
-      "sarcastically is NOT engaged or complimenting — they are mocking, cooling, " +
-      "or testing the host. The literal words look positive; the INTENT is cold. " +
-      "When you detect sarcasm, mockery, or contempt aimed at the host, register " +
-      "it as a TEMPERATURE DROP in the gears: nudge engagement toward 'bored' " +
-      "(they're checking out / above it) and, if it reads as doubt or a test, " +
-      "suspicion toward 'slipping'. Do NOT be fooled by the positive surface " +
-      "words. This is exactly the signal keywords cannot catch and you can.\n\n" +
-      "Prior read: phase=" + (p.phase || "opening") + " suspicion=" +
-      (p.suspicion || "alive") + " pressure=" + (p.pressure || "calm") +
-      " engagement=" + (p.engagement || "hooked") + ". Only change a value if the " +
-      "recent turns clearly warrant it (avoid flip-flopping).\n" +
+      "drifting (wandered into chit-chat mid-call)\n\n" +
+      "Prior phase: " + (p.phase || "opening") + ". Phase moves in ONE " +
+      "DIRECTION ONLY in almost every real call (opening -> pitching -> " +
+      "probing, or sideways into drifting) and essentially never reverses " +
+      "once business has genuinely started. If the caller's most recent " +
+      "turn genuinely contains real business content (the pitch, a number, " +
+      "a request, anything beyond pleasantries), advance phase promptly on " +
+      "that turn alone — a phase that's STUCK is a worse failure than a " +
+      "phase that moves one turn too early; err toward advancing it.\n" +
       // STEP 1 (flag-gated): ask for the commitment_push live event. High-
       // precision wording — true ONLY on an unambiguous demand to transact
       // now; when unsure, false. Cheap misses, rare false-fires.
@@ -1302,7 +1266,7 @@ async function readCall(messages, prior) {
         // Build the Reply-EXACTLY line from whichever flags are on, instead
         // of a nested ternary per combination — scales cleanly as more
         // flag-gated fields get added (this is now the fifth).
-        const fields = ['"phase":".."', '"pressure":".."', '"engagement":".."'];
+        const fields = ['"phase":".."'];
         if (EVENT_DETECT) fields.push('"commitment_push":true|false');
         if (CALLER_REDIRECT_DETECT) fields.push('"caller_redirected":true|false');
         if (CALLER_CRUDE_DETECT) fields.push('"caller_crude":"none"|"impersonal"|"personal"');
@@ -1416,15 +1380,11 @@ async function readCall(messages, prior) {
     // "prior=X, reader said Y" exists across turns instead of inferring it.
     console.log(
       "CALLREAD-RAW priorPhase=" + (p.phase || "opening") +
-      " rawPhase=" + JSON.stringify(parsed.phase) +
-      " rawPressure=" + JSON.stringify(parsed.pressure) +
-      " rawEngagement=" + JSON.stringify(parsed.engagement)
+      " rawPhase=" + JSON.stringify(parsed.phase)
     );
-    // Validate each field against legal values; drop anything illegal.
+    // Validate against legal values; drop anything illegal.
     const legal = {
       phase: ["opening", "pitching", "probing", "drifting"],
-      pressure: ["calm", "pushing", "extracting"],
-      engagement: ["bored", "hooked", "stunned"],
     };
     const out = {};
     for (const k of Object.keys(legal)) {
@@ -1479,12 +1439,14 @@ async function readCall(messages, prior) {
   }
 }
 
-// Merge the async read into the keyword-derived gear state, respecting the
-// engine's rules. Suspicion is ONE-WAY (never pull back from a higher keyword
-// suspicion, never un-foregone). Pressure/engagement are reversible, so the
-// async read can move them either direction. Phase is the async read's alone.
-function blendRead(keywordState, read) {
-  if (!read) return null; // nothing to persist beyond keyword state
+// Merge the async read into persisted call state. Phase is the async read's
+// alone. Suspicion and pressure/engagement (gears) are both retired — no
+// merge logic left for them. Signature simplified (Aug 26) — used to take a
+// keywordState first argument for gears blending; with gears fully gone,
+// that argument was permanently unused, so dropped rather than kept as
+// dead weight passed at every call site.
+function blendRead(read) {
+  if (!read) return null; // nothing to persist this turn
   const out = {};
   if (read.phase) out.phase = read.phase;
   // STEP 1: carry the live-event flag into stored state, only when the reader
@@ -1549,14 +1511,11 @@ function blendRead(keywordState, read) {
   // that persists the blended state (no extra write). Fail-safe: if no phase was
   // read this turn, we don't latch (stays opener until a real non-opening read).
   if (out.phase && out.phase !== "opening") out.businessLatched = true;
-  // suspicion-merging REMOVED (Aug 5, gears removal) — the axis is retired
-  // entirely, no replacement (CORE's permanent anti-break framework carries
-  // that job now instead of a dedicated per-turn directive). The reader is
-  // no longer even asked for it (see readCall's prompt).
-  // pressure + engagement: async read wins (reversible, nuance-driven). These
-  // ARE stored under their own names.
-  if (read.pressure) out.pressure = read.pressure;
-  if (read.engagement) out.engagement = read.engagement;
+  // suspicion AND pressure/engagement merging REMOVED (Aug 5 + Aug 26,
+  // gears removal, completed) — neither axis exists anymore; CORE's
+  // permanent anti-break framework carries that job instead of a
+  // dedicated per-turn directive. The reader is no longer even asked
+  // for these (see readCall's prompt).
   return out;
 }
 
@@ -2844,51 +2803,17 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
       }
     }
   } else {
-    // AUTO-TRIGGER: the conversation itself may surface a bench moment (no
-    // Director). Ships dark (BENCH_AUTO=1). Feeds the SAME gate/pipeline, so
-    // it respects one-in-flight / ceiling / spacer. Phantom actions fold into
-    // the host prompt (invoke, no arrival); arrive actions begin a staged
-    // arrival like a Director send-in would.
-    // GEARSTATE (Aug 5, gears removal) — .gear/.slip dropped, both gone
-    // upstream. .slip's only consumer in _bench_auto.js (wrap_or_sour)
-    // compared it against the STRING "slipping", but slip was always a
-    // NUMBER (the old accumulator count) — that check was already
-    // dead/always-false before this change, so dropping it here is a true
-    // no-op, not a behavior change. .pressure/.engagement stay, still valid
-    // (reader-sourced).
-    const gearState = stored
-      ? { pressure: stored.pressure, engagement: stored.engagement }
-      : null;
-    const auto = autoBenchAction({ gearState, benchLog, messages, callId, benchTurn });
-    if (auto && auto.type === "phantom") {
-      benchPhantomInvoke = phantomInvokeDirective(auto.who);
-      if (callId) makeTrace(callId, benchTurn, waitUntil, stored?.targetId).emit(
-        "bench_joined",
-        { character_id: auto.who, name: auto.who, source: "auto", manifestation: "phantom", invoking: true, why: auto.why, joined_at: new Date().toISOString() },
-        "bench"
-      );
-    } else if (auto && auto.type === "arrive" && benchLog.length < 3) {
-      arrival = beginArrival(auto.who, benchTurn);
+    // AUTO-TRIGGER (gears-based path REMOVED, Aug 26 — Andrew: bench auto
+    // is no longer part of the build). Only the separate, already-legacy
+    // env-scheduled fallback below remains — it never depended on gears/
+    // pressure/engagement at all, so it's untouched by this removal.
+    const autoId = autoArrivalId(benchTurn);
+    if (autoId) {
+      arrival = beginArrival(autoId, benchTurn);
       if (arrival) {
         arrivalDirty = true;
         benchLog = benchLog.concat([{ bench_id: arrival.bench_id, arrived_turn: benchTurn }]);
         benchAppend = generateBenchBeat(arrival, messages, hostName).catch(() => null);
-        if (callId) makeTrace(callId, benchTurn, waitUntil, stored?.targetId).emit(
-          "bench_joined",
-          { character_id: arrival.bench_id, name: arrival.bench_id, source: "auto", manifestation: arrival.type, stage: "entrance", why: auto.why, joined_at: new Date().toISOString() },
-          "bench"
-        );
-      }
-    } else {
-      // Legacy env-scheduled auto arrival (BENCH_ARRIVE_TURN), default off.
-      const autoId = autoArrivalId(benchTurn);
-      if (autoId) {
-        arrival = beginArrival(autoId, benchTurn);
-        if (arrival) {
-          arrivalDirty = true;
-          benchLog = benchLog.concat([{ bench_id: arrival.bench_id, arrived_turn: benchTurn }]);
-          benchAppend = generateBenchBeat(arrival, messages, hostName).catch(() => null);
-        }
       }
     }
   }
@@ -2930,19 +2855,10 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     });
   }
   if (isConfigured() && callId) {
-    // STATE (Aug 5, gears removed): pressure/engagement are reader-sourced
-    // only now (they already were in practice — blendRead's own comment says
-    // "async read wins" — this just removes the keyword layer that used to
-    // ALSO write them synchronously this turn). Suspicion, slip, and
-    // accuseFloor are gone entirely — no replacement, per the decision to
-    // lean on CORE's permanent anti-break framework instead of a dedicated
-    // per-turn directive. Defaults match _gears.js's old AXES defaults
-    // (pressure: calm, engagement: hooked) so a fresh call starts the same
-    // place it always did.
-    const state = {
-      pressure: (stored && stored.pressure) || "calm",
-      engagement: (stored && stored.engagement) || "hooked",
-    };
+    // The old per-call gear STATE object is gone entirely now (Aug 26) —
+    // with pressure/engagement/suspicion all removed and blendRead() no
+    // longer taking a prior-state argument, nothing in this scope reads
+    // it anymore. Removed rather than kept as an empty placeholder.
     const accusation = detectAccusation(lastUserText(messages));
     const turn = countUserTurns(messages);
 
@@ -3070,7 +2986,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     const stallCount = pitchOrAsk ? 0 : priorStall + 1;
     const extendedStall = stallCount >= STALL_N;
 
-    // CALL PHASE — judged by the ASYNC phase reader (readPhase), NOT keywords.
+    // CALL PHASE — judged by the ASYNC phase reader (readCall), NOT keywords.
     // The reader ran in waitUntil on the PREVIOUS turn and wrote stored.phase,
     // so THIS turn just reads it (zero latency). We then fire the reader again
     // below (also in waitUntil) to update it for the NEXT turn. On turn 1 there's
@@ -3080,29 +2996,19 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // rather than spotting single words.
     const phase = (stored && stored.phase) || "opening";
     // Fire the async CALL READER AFTER this turn (waitUntil = post-response, off
-    // the critical path, zero added latency). It judges phase + pressure +
-    // engagement by MEANING (suspicion is gone — see the state comment above),
-    // and writes the result for the NEXT turn.
+    // the critical path, zero added latency). It judges phase only now (gears
+    // removed, Aug 26) and writes the result for the NEXT turn.
     if (callId && isConfigured()) {
-      const priorRead = {
-        phase,
-        pressure: state.pressure,
-        engagement: state.engagement,
-      };
-      // BLOW-LANDED baseline (Aug 5, relocated from the old gears-driven
-      // spot): captured HERE, before the read, so once the new value comes
-      // back below we can tell whether THIS read raised engagement relative
-      // to what the turn started with — the only place a genuinely NEW
-      // engagement value appears, now that it's reader-sourced only.
-      const engagementBefore = state.engagement;
-      const firedLastTurn =
-        stored && stored.lastBitTurn != null && stored.lastBitTurn === turn - 1;
+      const priorRead = { phase };
+      // firedLastTurn REMOVED (Aug 26) — its only consumer was blow_landed's
+      // trigger condition, already removed above; this became genuinely
+      // dead code once that happened, not just unused-but-harmless.
       // Same bench-line strip as the host's own generation (see that
-      // fix's own comment for the full root-cause trace) — the phase/
-      // pressure/engagement reader judges the conversation's dynamic,
-      // and a bench character's tone (e.g. Conrad's confrontational
-      // register) misread as the host's own turn could skew that
-      // judgment. Local filter here since messagesForHost isn't in this
+      // fix's own comment for the full root-cause trace) — the phase
+      // reader judges the conversation's dynamic, and a bench
+      // character's tone (e.g. Conrad's confrontational register)
+      // misread as the host's own turn could skew that judgment.
+      // Local filter here since messagesForHost isn't in this
       // function's scope (messages is; that's enough).
       const messagesForReader = messages.filter((m) => !(m && m.character));
       waitUntil(
@@ -3117,20 +3023,18 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
             // genuinely long opening. Log it instead.
             if (!read) {
               console.log(
-                "callread FAILED — no read this turn; phase/gears unchanged " +
+                "callread FAILED — no read this turn; phase unchanged " +
                   "(persistent failure leaves phase stuck at its default)"
               );
               return;
             }
-            const merged = blendRead(state, read);
+            const merged = blendRead(read);
             const chain = [];
             if (merged && Object.keys(merged).length) {
               chain.push(
                 setCall(callId, merged).then(() => {
                   console.log(
                     "callread phase=" + (merged.phase || phase) +
-                      " press=" + (merged.pressure || state.pressure) +
-                      " eng=" + (merged.engagement || state.engagement) +
                       // STEP 1: log the observed event flag so precision can be
                       // watched BEFORE anything fires off it.
                       (EVENT_DETECT ? " cpush=" + (merged.commitmentPush ? "Y" : "n") : "")
@@ -3138,26 +3042,11 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
                 })
               );
             }
-            // BLOW-LANDED: did the bit thrown last turn make them MORE engaged
-            // THIS turn — it connected. Compares the engagement value THIS
-            // read produced against what the turn started with (captured as
-            // engagementBefore, above) — entirely reader-sourced now, no
-            // gears dependency.
-            const newEngagement = (merged && merged.engagement) || read.engagement;
-            const ENG_RANK = { bored: 0, hooked: 1, stunned: 2 };
-            const rose = newEngagement && ENG_RANK[newEngagement] > ENG_RANK[engagementBefore];
-            if (firedLastTurn && rose) {
-              chain.push(
-                (async () => {
-                  const prior = await blowLandedTotal(callId);
-                  trace.emit(
-                    "blow_landed",
-                    { turn_index: turn, total_blows: prior == null ? null : prior + 1 },
-                    "engine"
-                  );
-                })()
-              );
-            }
+            // BLOW-LANDED metric — DROPPED (Aug 26, Andrew's decision).
+            // Structurally couldn't work without engagement (its whole
+            // logic was an engagement-before/after comparison), so this
+            // was already removed rather than left broken; now confirmed
+            // as the final call, not a pending question.
             return Promise.all(chain);
           })
           .catch((e) => {
@@ -3879,9 +3768,11 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       // else: still waiting -> leave the row pending.
     }
 
-    // MUTABLE block: posture lines + (on fire) a gentle in-character bit cue.
-    // Goes AFTER the cached base, so injecting never busts the prompt cache.
-    let mutable = buildPostureBlock(state);
+    // MUTABLE block: starts empty now (gears/posture-direction removed, Aug
+    // 26 — Andrew: pressure/engagement and everything downstream of them
+    // are no longer part of the build). Bit cues and bench-awareness still
+    // append onto this below, same as before.
+    let mutable = "";
 
     // BENCH TAKEOVER AWARENESS (Aug 8) — consumed exactly once, on the
     // very next turn after a takeover fired. Without this the host would
@@ -4533,12 +4424,8 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         // is reconstructable from the event alone.
         fit_score: top.score != null ? +top.score.toFixed(2) : null,
         deploy_bar: turn <= WARMUP_TURNS ? "warmup" : +bar.toFixed(2),
-        gears_at_fire: {
-          // suspicion/slip REMOVED (Aug 5, gears removal) — pressure/
-          // engagement stay, reader-sourced now, still meaningful telemetry.
-          pressure: state.pressure,
-          engagement: state.engagement,
-        },
+        // gears_at_fire REMOVED (Aug 26, gears removal — pressure/
+        // engagement no longer exist at all).
       };
       if (sameTurnReinject) {
         // Already traced when this bit fired earlier on this same turn. The
@@ -4630,24 +4517,18 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
 
     blocks.push({ type: "text", text: mutable });
 
-    // VISIBILITY: gears + the fit read, every turn, watchable in Vercel logs.
-    // "changes" REMOVED (Aug 5, gears removal) — there's no more keyword-
-    // layer transition list to report; state itself (now just pressure/
-    // engagement) still prints in full below.
+    // VISIBILITY: the fit read, every turn, watchable in Vercel logs.
     const trail = accusation ? "  accuse:" + accusation : "";
-    console.log("gears " + JSON.stringify(state) + trail);
-    // GEAR_STATE: the engine's real reasoning, emitted to the bus each turn so
-    // the Director's View can render the axis values + fit-vs-bar live. These are
-    // the AUTHORITATIVE values the engine actually uses — lowercase axis enums,
-    // bar-scale fit numbers (NOT 0-1). Mead Hall renders off this exact shape.
-    // suspicion/slip REMOVED (Aug 5, gears removal) — Mead Hall is dropping
-    // the gear panel from its layout to match; pressure/engagement stay,
-    // still meaningful (reader-sourced), still real telemetry.
+    if (trail) console.log("accusation" + trail);
+    // GEAR_STATE (name kept for continuity with existing Mead Hall
+    // consumers, even though it no longer carries any actual gear
+    // values — Aug 26, gears removal, Mead Hall confirmed dropped the
+    // gear panel already). Still carries real, live bit-scoring
+    // telemetry (fit_score/deploy_bar/pool/will_fire/call_phase) that's
+    // unrelated to gears and still genuinely used.
     trace.emit(
       "gear_state",
       {
-        pressure: state.pressure,          // calm | pushing | extracting
-        engagement: state.engagement,      // bored | hooked | stunned
         fit_score: top ? +top.score.toFixed(2) : null,
         deploy_bar: turn <= WARMUP_TURNS ? "warmup" : +bar.toFixed(2),
         pool: poolSize,
@@ -4729,12 +4610,11 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       },
       "engine"
     );
-    // gear_transition emit and the old synchronous blow_landed check both
-    // REMOVED (Aug 5, gears removal) — gear_transition had no meaning left
-    // (suspicion, the only axis it tracked, is gone). blow_landed's logic
-    // relocated into the async reader callback above (search BLOW-LANDED) —
-    // that's now the only place a genuinely new engagement value appears,
-    // since engagement is reader-sourced only.
+    // gear_transition emit REMOVED (Aug 5, gears removal) — had no meaning
+    // left once suspicion (the only axis it tracked) was gone. blow_landed
+    // was relocated here first, then dropped entirely (Aug 26, Andrew's
+    // decision) once engagement itself was removed — nothing left of it
+    // anywhere in this file now.
     if (top) {
       console.log(
         "fit " +
@@ -4759,7 +4639,8 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       );
     }
 
-    // SNAPSHOT: persist gears (+ the fired bit, for recency/pacing next turn).
+    // SNAPSHOT: persist call state (+ the fired bit, for recency/pacing next
+    // turn).
     // CRUDE COUNT GATE: stored.callerCrude is last turn's reader judgment,
     // consumed THIS turn (same one-turn-lag pattern as commitmentPush/
     // callerRedirected). Added to the write gate below so an increment isn't
@@ -4767,21 +4648,15 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // archetypeNew could all be false while crude still needs counting).
     // "dirty" REMOVED (Aug 5, gears removal) — it used to mean "did
     // suspicion/pressure/engagement change via keyword detection this turn";
-    // there's no more keyword layer to report that, and the reader's own
-    // separate setCall (in the async callback above) is what actually
-    // persists pressure/engagement now, on its own schedule. The write below
-    // still fires for all the OTHER real reasons it always did.
+    // there's no more keyword layer to report that, and pressure/engagement
+    // are gone entirely now (no replacement). The write below still fires
+    // for all the OTHER real reasons it always did.
     const crudeDetected = !!(stored && (stored.callerCrude === "impersonal" || stored.callerCrude === "personal"));
     if (!stored || fire || archetypeNew || crudeDetected || expertiseChanged) {
       waitUntil(
         setCall(callId, {
-          // gear/slip/accuseFloor REMOVED (Aug 5, gears removal) — suspicion
-          // is gone entirely, no replacement. pressure/engagement kept as a
-          // redundant-but-harmless copy (the reader's own async write is the
-          // authoritative source; this just keeps them consistent on turns
-          // this gate fires for anyway).
-          pressure: state.pressure,
-          engagement: state.engagement,
+          // gear/slip/accuseFloor/pressure/engagement all REMOVED (Aug 5 +
+          // Aug 26, gears removal complete) — nothing left to persist here.
           // EXPERTISE-LEVEL DIAL: persist what was actually USED this turn,
           // unconditionally whenever this gate fires at all — not just on
           // the transition turn. If this only wrote on the transition turn
@@ -4881,17 +4756,12 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       ); // never awaited
     }
 
-    // HISTORY: the gear trace + the fit trace, both off the hot path.
-    // suspicion/slip REMOVED (Aug 5, gears removal).
-    waitUntil(
-      appendGearEvent(callId, {
-        turn,
-        pressure: state.pressure,
-        engagement: state.engagement,
-        accusation,
-        utterance: lastUserText(messages),
-      }).catch(() => {})
-    );
+    // Gear-event history logging REMOVED (Aug 26, gears removal complete) —
+    // appendGearEvent() existed entirely to log gear axis values over time;
+    // with pressure/engagement/suspicion all gone, there's no gear event
+    // left to append. accusation is still logged inline above (the
+    // console.log a few lines up), just not persisted to this
+    // now-meaningless history table anymore.
     if (top) {
       waitUntil(
         appendBitEvent(callId, {
