@@ -857,32 +857,6 @@
   </div>
 </div>
 
-<div class="ov" id="scOv">
-  <div class="scard">
-    <div class="saga">— THE SAGA OF THE ACME RAID —</div>
-    <h2 id="scTitle">Derek of Acme fled the hall.</h2>
-    <div class="sline" id="scLine">The Host landed the blow and he fled. A clean kill.</div>
-    <div class="hero"><span class="lab">Time Wasted</span><b id="scTime">11:42</b>
-      <div class="sub" id="scSub">Eleven minutes stolen from his day.</div></div>
-    <hr>
-    <div class="sgrid">
-      <div><span class="k">Blows landed</span><span class="v">14</span></div>
-      <div><span class="k">Heads mustered</span><span class="v">2</span></div>
-      <div><span class="k">Finish</span><span class="v" id="scRung">Death Blow</span></div>
-      <div><span class="k">Bjorn blames</span><span class="v" id="scBj">9</span></div>
-      <div><span class="k">Time to disconnect</span><span class="v">0:06 after</span></div>
-    </div>
-    <div class="endframe">
-      <div class="ff">FORGED IN THE MEAD HALL · HALL OF SHAME</div>
-      <div class="em">raid@spamviking.io</div>
-    </div>
-    <div class="sacts">
-      <button class="pri" onclick="location.reload()">↻ New raid</button>
-      <button class="sec" id="scClose">Back to the hall</button>
-    </div>
-  </div>
-</div>
-
 <div class="ov" id="cfgOv">
   <div class="cfg">
     <h3>HOST BRAIN <span class="x" id="cfgX">✕ close</span></h3>
@@ -984,20 +958,8 @@
     document.body.style.transition='background .15s'; document.body.style.background='var(--blood)';
     setTimeout(()=>{ document.body.style.background='';
       $('#rungOv').classList.remove('on'); $('#armBtn').textContent='ARM THE BLOW'; $('#armBtn').style.background='';
-      showScore();
     }, 380);
   }
-
-  function showScore(){
-    $('#scTime').textContent=fmt(secs);
-    const m=Math.floor(secs/60);
-    $('#scSub').textContent=m+' minute'+(m===1?'':'s')+' and '+(secs%60)+' seconds stolen from his day.';
-    $('#scRung').textContent='Death Blow';
-    $('#scBj').textContent=bj;
-    $('#scLine').textContent='The Host landed the blow and he fled. A clean kill.';
-    if(SCORECARD_ENABLED) $('#scOv').classList.add('on');
-  }
-  $('#scClose').onclick=()=>$('#scOv').classList.remove('on');
 
   /* ===== LIVE AI CONVERSATION — the Host (Jarl) talks back ===== */
   /* The Host no longer emits telemetry. Measurement is the Governor's job
@@ -1435,7 +1397,6 @@
   // Fire (action=force) + Cancel (action=cancel) are BUILT on PE's side but PENDING DEPLOY of
   // completions.js. Until that lands, both surface "isn't wired yet" from the 404/405 rather
   // than pretending. Fire-Now semantics: lands the NEXT turn; no window/cooldown/expiry yet.
-  const SCORECARD_ENABLED = (qp.get('scorecard')==='1');
   // On a LIVE call the audio is already in your ear (Vapi/Zoom) — the browser reading the
   // same lines a beat later just echoes you. TTS is for demo/replay only. Override with ?sound=1.
   if(source==='live' && qp.get('sound')!=='1'){ muted=true;
@@ -1698,10 +1659,11 @@
     l.innerHTML='<b>'+(PHASE[ev.layer]||'\u00B7')+'</b> '+label+(extra?(' \u2014 '+extra):'')+badge;
     log.appendChild(l); log.scrollTop=log.scrollHeight; }
 
-  // Renders PE's gear_state (the engine's live read). Authoritative shape:
-  // suspicion: alive|slipping|foregone, pressure: calm|pushing|extracting,
-  // engagement: bored|hooked|stunned, slip:int, fit_score (bar-scale, not 0-1),
-  // deploy_bar (number or "warmup"), pool:int, turn:int. Any field may be absent.
+  // Renders PE's gear_state (the engine's live read). Post-gears shape — pressure/engagement/
+  // suspicion were REMOVED from PE's side (Aug 2026); the event name stays but now carries only
+  // fit_score, deploy_bar, pool, will_fire, call_phase, scores, top3. We keep the data flowing into
+  // lastGear (bit scores, will_fire/top_bit flash, opening-phase logic all read from it). Any field
+  // may be absent. blow_landed is also gone — no counter reads it anymore.
   let lastGear={}, firingBit=null, inFlight=null, firedFlash=null, expiredBit=null, missedBit=null, heldBit=null, lastFired={bit:null,at:0};
   function renderGear(p){
     // Keep the gear DATA flowing even though the visible gear panel is removed — the bit scores,
@@ -1824,9 +1786,9 @@
   const FIXED_BITS = [
     { bit_id:'BIT-302', name:'The Dog' },
     { bit_id:'BIT-307', name:'The Spill' },
-    { bit_id:'BIT-216', name:'The Questionnaire' },   // b2b_saas-scoped: absent/"—" off b2b_saas calls (correct)
     { bit_id:'BIT-126', name:'The Aside (Joanne)' },
-    { bit_id:'BIT-323', name:'The Colleague At Door' }
+    { bit_id:'BIT-330', name:'The Dishwasher' },
+    { bit_id:'BIT-331', name:'The Thunderstorm' }   // arc-protected bit
   ];
   // Opening bits — shown as their own group ABOVE the six so you can watch whether an
   // opening actually fires during the opening. Which bit_ids are "opening" is PE's to tell us
@@ -2176,14 +2138,15 @@
           log.appendChild(d); log.scrollTop=log.scrollHeight; } toast('Handoff \u2192 '+(p.name||'colleague')); break; }
       case 'party_joined': theirSide++; peakTheir=Math.max(peakTheir,theirSide); toast((p.label||'A colleague')+' joined their side'); break;
       case 'spammer_reaction': { const tile=$('#spammerTile'); if(tile){ tile.style.boxShadow='0 0 0 3px var(--gold)'; setTimeout(()=>tile.style.boxShadow='',700);} if(p.reaction_type) toast('Spammer: '+p.reaction_type); break; }
-      case 'blow_landed': if(p.total_blows!=null) blows=p.total_blows; else blows++; refreshHud(); break;
       case 'gear_transition': break; /* retired — keyword gear layer removed; event stops firing */
       case 'gear_state': renderGear(p); renderArmPanel(); break;
       case 'blow_armed': {
         document.body.style.transition='background .15s'; document.body.style.background='var(--blood)'; setTimeout(()=>document.body.style.background='',300);
         toast('Death Blow armed'); break; }
       case 'blow_fired': { const line=p.final_line||''; if(line){ showJarl(line); tline('j', line, 'JARL'); if(!muted)speak('JARL',line);} break; }
-      case 'call_ended': live=false; showScoreFromEvent(p); break;
+      case 'call_ended': { live=false;
+        const dur=(p.duration_seconds!=null)?p.duration_seconds:secs;
+        hostSay('\u25A0 Call ended \u2014 '+fmt(dur)+' wasted.', ''); break; }
       case 'call_outcome':  // vapi-eoc: the EMAIL engine's post-call signal, NOT a display beat.
         // Consume as metadata only; call_ended (control.js) remains the scorecard trigger.
         lastOutcome={ outcome:p.call_outcome, attended:p.attended, next_steps:p.next_steps||[] }; break;
@@ -2191,22 +2154,7 @@
         if(ev.layer==='email' || /(_sent|_received|_created|_classified|_selected|_handoff)$|^thread_/.test(ev.event_type)) arcLine(ev);
     } }
 
-  function showScoreFromEvent(p){
-    const dur=(p.duration_seconds!=null)?p.duration_seconds:secs; secs=dur;
-    const blowsLanded=(p.blows_landed!=null)?p.blows_landed:blows;
-    const heads=(p.heads_mustered!=null)?p.heads_mustered:(liveHeads||0);
-    const pkOur=(p.peak_our_side!=null)?p.peak_our_side:peakOur;
-    const pkThem=(p.peak_their_side!=null)?p.peak_their_side:peakTheir;
-    $('#scTime').textContent=fmt(dur); const m=Math.floor(dur/60);
-    $('#scSub').textContent=m+' minute'+(m===1?'':'s')+' and '+(dur%60)+' seconds stolen from his day.';
-    $('#scRung').textContent=(p.ending_type==='death_blow'?'Death Blow':(p.ending_type||'\u2014'));
-    $('#scBj').textContent=blowsLanded;
-    const END={ death_blow:'Finished with the Death Blow. A clean kill.', hung_up:'He hung up. A coward\u2019s exit.',
-      rage_quit:'He rage-quit the call.', slow_fade:'He faded out, defeated.', no_show:'He never showed.',
-      host_ended:'The Host ended it on its own terms.', error:'The line dropped.' };
-    $('#scLine').textContent=(END[p.ending_type]||('Ended: '+(p.ending_type||'unknown')))+
-      ' \u00B7 '+heads+' heads, peak '+pkOur+'v'+pkThem;
-    if(SCORECARD_ENABLED) $('#scOv').classList.add('on'); }
+  function showScoreFromEvent(p){ /* saga scorecard removed */ }
 
   /* ---- Death Blow WRITE — the Director's one live control (live only) ---- */
   let dbSent=false;
