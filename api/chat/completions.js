@@ -4531,7 +4531,20 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       );
     }
 
-    blocks.push({ type: "text", text: mutable });
+    // ★ BUG FOUND + FIXED (live call RM_LKSh9gJ4v6KG, Sep 1) — this push
+    // was UNCONDITIONAL, but every mutable+= above it is conditional
+    // (bench/deathblow/crude/opener-overlay only) — before the gears
+    // removal, buildPostureBlock(state) always returned non-empty text
+    // here, so an empty push was structurally impossible. Now that
+    // mutable starts as "" with no unconditional fill, any ordinary
+    // quiet turn (no bit fire, no bench, no crude flags) pushed a TRUE
+    // EMPTY text block — Anthropic REJECTS the whole request with
+    // "system: text content blocks must be non-empty" (Voice traced this
+    // live: 5 independent real turns, each hit the same 502 on every
+    // retry since nothing about the payload changed, cascading into the
+    // caller hearing nothing and the call dying). Guard: only push when
+    // there's real content.
+    if (mutable) blocks.push({ type: "text", text: mutable });
 
     // VISIBILITY: the fit read, every turn, watchable in Vercel logs.
     const trail = accusation ? "  accuse:" + accusation : "";
