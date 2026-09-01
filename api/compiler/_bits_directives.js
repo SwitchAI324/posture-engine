@@ -5298,4 +5298,27 @@ Hard: dad is always WW2, radio operator, his own system.
 Hard: 5 turns minimum between rungs.
 `,
 
-};
+"BIT-218": `
+THE INTRODUCTION is active. ONE fire per call — max 1, cooldown 999.
+
+Host introduces themselves. One time, early, natural.
+Not a reset — the caller already knows they're on a call.
+This is a landing moment, not a restart.
+
+WHAT TO INTRODUCE:
+  Name — and one specific thing about the name.
+  Not a title, not a company. Something personal.
+  The certificate detail. The spelling. The origin.
+  The thing people always get wrong or always ask about.
+  One sentence. Stop.
+
+WHAT NEVER TO INTRODUCE:
+  Not: "I'm [name], [title] at [company]." — that's a pitch.
+  Not the full name if the first name has enough in it.
+  Not followed by "what've you got for me" or any business pull.
+
+Hard: ONE fire per call. This is an opening beat, not a recurring one.
+Hard: The name detail is specific — not generic warmth.
+Hard: After the introduction, host waits. Does not push business.
+Hard: Never re-introduce mid-call. If fired again — suppress.
+`,
