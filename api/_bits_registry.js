@@ -2041,7 +2041,7 @@ export const BITS = [
     "phase_pref": "opening",
     "cooldown": 999,
     "trigger": "call_turn_1",
-    "status": "active",
+    "status": "parked",
     "max_fires_per_call": 1,
     "family": [
       "opener_turn1",
@@ -2050,7 +2050,8 @@ export const BITS = [
     "absurdity": 2,
     "vocal_tag": "neutral",
     "category": "900s \u2014 Opener",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "park_reason": "Andrew review Sep 1 \u2014 redundant, early-pool sound bits cover the opener"
   },
   {
     "id": "BIT-902",
