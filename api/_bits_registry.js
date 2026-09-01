@@ -850,14 +850,15 @@ export const BITS = [
     "archetypes": "universal"
   },
   {
-    "cooldown": 4,
+    "cooldown": 999,
     "id": "BIT-218",
     "name": "The Introduction",
     "pool": "early",
     "status": "parked",
     "family": "stall_hold",
     "absurdity": 1,
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "max_fires_per_call": 1
   },
   {
     "id": "BIT-219",
@@ -1170,7 +1171,8 @@ export const BITS = [
       "INSECT_BUZZ_3",
       "INSECT_BUZZ_4"
     ],
-    "arc_protection": true
+    "arc_protection": true,
+    "pool": "early"
   },
   {
     "cooldown": 5,
@@ -1201,7 +1203,8 @@ export const BITS = [
     "sound_markers": [
       "TYPEWRITER_BG",
       "TYPEWRITER_BG_STOP"
-    ]
+    ],
+    "pool": "early"
   },
   {
     "id": "BIT-306",
@@ -1230,7 +1233,8 @@ export const BITS = [
       "COFFEE_CUP_BREAK",
       "CLEAN_UP_GLASS"
     ],
-    "rungs": 3
+    "rungs": 3,
+    "pool": "early"
   },
   {
     "id": "BIT-308",
@@ -1290,7 +1294,8 @@ export const BITS = [
       "SNEEZE",
       "THROAT_CLEAR"
     ],
-    "requires_host_sex": true
+    "requires_host_sex": true,
+    "pool": "early"
   },
   {
     "id": "BIT-312",
@@ -2050,7 +2055,7 @@ export const BITS = [
   {
     "id": "BIT-902",
     "name": "The Weather Remark",
-    "status": "active",
+    "status": "parked",
     "family": "opener_turn1",
     "pool": "early",
     "trigger": "call_turn_1",
@@ -2059,7 +2064,8 @@ export const BITS = [
     "absurdity": 2,
     "vocal_tag": "content",
     "category": "900s \u2014 Opener",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "park_reason": "Andrew review Sep 1 \u2014 BIT-331 Thunderstorm covers this better with actual audio"
   },
   {
     "id": "BIT-903",
@@ -2107,7 +2113,7 @@ export const BITS = [
     "name": "The Dishwasher",
     "status": "active",
     "family": "environment_appliance",
-    "pool": "none",
+    "pool": "early",
     "trigger": "none",
     "cooldown": 6,
     "max_fires_per_call": 1,
@@ -2223,7 +2229,7 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "family": "environment_body",
-    "pool": "middle",
+    "pool": "early",
     "trigger": null,
     "cooldown": 5,
     "max_fires_per_call": 3,
@@ -2264,7 +2270,7 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "family": "environment_oneshot",
-    "pool": "middle",
+    "pool": "early",
     "trigger": null,
     "cooldown": 6,
     "max_fires_per_call": 2,
@@ -2305,7 +2311,7 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "family": "environment_body",
-    "pool": "middle",
+    "pool": "early",
     "trigger": null,
     "cooldown": 4,
     "max_fires_per_call": 4,
@@ -2327,7 +2333,7 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "family": "environment_body",
-    "pool": "middle",
+    "pool": "early",
     "trigger": null,
     "cooldown": 999,
     "max_fires_per_call": 1,
@@ -2346,7 +2352,7 @@ export const BITS = [
     "status": "active",
     "archetypes": "universal",
     "family": "other_people",
-    "pool": "middle",
+    "pool": "early",
     "trigger": null,
     "cooldown": 5,
     "max_fires_per_call": 3,
@@ -2361,5 +2367,24 @@ export const BITS = [
       "BABY_CRY"
     ],
     "note": "BABY_CRY clip needed \u2014 not yet in library"
+  },
+  {
+    "id": "BIT-150",
+    "name": "The Phonetic",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "verbal_language",
+    "pool": "middle",
+    "trigger": null,
+    "cooldown": 6,
+    "max_fires_per_call": 3,
+    "absurdity": 3,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "rungs": 3,
+    "rung_spacing": {
+      "min_between": 5
+    },
+    "requires_context": "host needs to spell something out \u2014 a name, acronym, or reference"
   }
 ];
