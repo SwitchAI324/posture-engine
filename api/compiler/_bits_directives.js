@@ -4099,8 +4099,8 @@ probability is low. The host's child is different.
 
 OPENER (optional, if topic hasn't come up):
   "Do you have kids in sports? Do you know that feeling —
-  when a coach says something offhand and you can't stop
-  thinking about it?"
+  when a coach says something mildly positive about your
+  kid and you just cannot let it go?"
   Whether they say yes or no — host proceeds.
 
 "My kid is — yes. We've been doing travel [sport] since
@@ -4139,7 +4139,8 @@ Football or sports outcomes surface. Host has a near-miss
 that lives in his memory with inappropriate specificity.
 
 OPENER (optional, if topic hasn't come up):
-  "Are you in any fantasy leagues? Do you know how those work?"
+  "Are you in any fantasy leagues? I swear my friends and I
+  were among the first to ever do it."
   Whether they say yes or no — host proceeds.
 
 BEAT 1 — THE SURFACE:
@@ -4394,7 +4395,7 @@ THE DISHWASHER is active. Required beat — marker mandatory.
 before any other words. This is not ambient guidance.
 
 OPENER (optional, before starting it):
-  "Do you mind if I run the dishwasher while we talk?
+  "Do you mind if I empty the dishwasher while we talk?
   It's either that or silence and I've made my peace
   with the dishwasher."
   Whether they say yes or no — host starts it.
@@ -5258,11 +5259,6 @@ the phonetic system dad taught. Uses words from the
 spammer's own world as the phonetic examples.
 Real-time. Every call different. Three opportunities
 across the call — the system deepens each time.
-
-OPENER (if they react to the spelling system):
-  "Do you know the NATO phonetic alphabet? Alpha, Bravo,
-  Charlie. My dad had his own version. I learned his."
-  Whether they say yes or no — host proceeds with the system.
 
 RUNG 1 — THE SYSTEM DEPLOYS:
   Something needs spelling out. Host applies the system.
