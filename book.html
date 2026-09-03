@@ -482,8 +482,14 @@
     this.disabled = true;
     note.textContent = '';
     var claimedSlot = selected;
+    // Authoritative fast-join check: is the selected slot one of the "Today —
+    // next available" slots? Derive it from the data rather than trusting the
+    // isFastJoin flag alone (the flag can drift if a slot gets re-picked). Either
+    // signal being true means fast-join -> skip the "just taken" rig.
+    var fastJoinNow = isFastJoin ||
+      !!(DATA && DATA.today && DATA.today.indexOf(claimedSlot) !== -1);
     try {
-      if (isFastJoin) {
+      if (fastJoinNow) {
         // Fast-join (next-2-hours): no "just taken" rig — friction would risk
         // losing someone ready to jump on a call now. But keep the 5s
         // "confirming…" beat as polish; it always resolves to the booking.
@@ -508,7 +514,7 @@
       var r = await fetch('/api/book', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug: slug, first: first, last: last, email: email, slot: claimedSlot, fast_join: isFastJoin }),
+        body: JSON.stringify({ slug: slug, first: first, last: last, email: email, slot: claimedSlot, fast_join: fastJoinNow }),
       });
       if (!r.ok) throw new Error('book');
       showDone();
