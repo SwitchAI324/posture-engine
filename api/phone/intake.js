@@ -4,8 +4,12 @@
 // attachment or as a carrier text transcript in the body.
 //
 // POST JSON (audio): { sender_email, subject, attachment_base64,
-//                      attachment_mime, host_name }
-// POST JSON (text):  { sender_email, subject, transcript, host_name }
+//                      attachment_mime, host_name, message_id?,
+//                      voicemail_datetime? }
+// POST JSON (text):  { sender_email, subject, transcript, host_name,
+//                      message_id?, voicemail_datetime? }
+// Duplicate (same sender + message_id already seen) → 200
+//   { ok:true, status:'duplicate', reply_body:null } — send nothing.
 // Header:            x-phone-intake-secret: <PHONE_INTAKE_SECRET>
 // Returns:           { ok, intake_id, status, reply_subject, reply_body }
 //                    Apps Script sends reply_body back to the user.
@@ -169,7 +173,8 @@ export default async function handler(req, res) {
     return res.status(401).json({ ok: false, error: 'bad secret' });
   }
 
-  const { sender_email, subject, attachment_base64, attachment_mime, host_name } = req.body || {};
+  const { sender_email, subject, attachment_base64, attachment_mime, host_name,
+          message_id, voicemail_datetime } = req.body || {};
   const textTranscript = typeof req.body?.transcript === 'string' ? req.body.transcript.trim() : '';
   const isAudio = !!attachment_base64;
   if (!sender_email || (!isAudio && !textTranscript)) {
@@ -184,12 +189,25 @@ export default async function handler(req, res) {
     const userId = await rpc('user_id_by_email', { p_email: sender_email });
     if (!userId) return res.status(404).json({ ok: false, error: 'unknown sender' });
 
+    // 1b. Exact duplicate? (same email forwarded twice)
+    if (message_id) {
+      const dup = await select('phone_intakes',
+        `user_id=eq.${userId}&message_id=eq.${encodeURIComponent(message_id)}&select=id,status`);
+      if (dup.length) {
+        return res.status(200).json({ ok: true, intake_id: dup[0].id, status: 'duplicate', reply_subject: null, reply_body: null });
+      }
+    }
+
     // 2. Settings row (insert-if-missing; inserts are not guarded)
     await insert('phone_settings', { user_id: userId }, 'resolution=ignore-duplicates,return=minimal');
     const [settings] = await select('phone_settings', `user_id=eq.${userId}&select=*`);
 
     // 3. Open the intake; store audio if we have it
-    const [intake] = await insert('phone_intakes', { user_id: userId, source: 'voicemail_share', status: 'received' });
+    const [intake] = await insert('phone_intakes', {
+      user_id: userId, source: 'voicemail_share', status: 'received',
+      message_id: message_id || null,
+      voicemail_at: voicemail_datetime || null,
+    });
     intakeId = intake.id;
 
     let transcript;
@@ -225,10 +243,12 @@ export default async function handler(req, res) {
       p_e164: number, p_org: a.claimed_org || null, p_summary: a.script_summary || null,
       p_archetype: a.archetype, p_src: 'intake',
     });
-    await insert('callback_numbers', {
-      user_id: userId, intake_id: intakeId, e164: number,
-      provenance, caller_profile_id: number,
-    }, 'resolution=ignore-duplicates,return=minimal');
+    // Allowlist row is one-per-(user, number); many jobs may point at it.
+    await sb('callback_numbers?on_conflict=user_id,e164', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId, intake_id: intakeId, e164: number, provenance, caller_profile_id: number }),
+      prefer: 'resolution=ignore-duplicates,return=minimal',
+    });
     const [gate] = await select('callback_numbers', `user_id=eq.${userId}&e164=eq.${encodeURIComponent(number)}&select=id,blocked`);
     if (!gate || gate.blocked) {
       await update('phone_intakes', `id=eq.${intakeId}`, { status: 'rejected' });
