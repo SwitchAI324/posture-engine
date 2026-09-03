@@ -97,7 +97,6 @@ Fields:
     body: JSON.stringify({
       model: MODEL,
       max_tokens: 600,
-      temperature: 0,
       system,
       messages: [{ role: 'user', content: `Voicemail transcript:\n\n${transcript}` }],
     }),
