@@ -88,6 +88,8 @@ Fields:
 - confidence: number 0..1 that the archetype is right.
 - stated_numbers: phone numbers the SPEAKER explicitly gives as a number to call back, as E.164 (+1XXXXXXXXXX for US). Only numbers actually spoken in the recording. Empty array if none.
 - number_count: how many times the primary callback number is spoken.
+- extension: digits the caller says to enter after the number connects ("press 4", "extension 204"), as a digit string, or null.
+- ask_for: the person and/or department the caller says to ask for ("Jim in the fraud department"), or null.
 - claimed_org: the organization the caller claims to be from, or null.
 - agent_label: the name the caller gives for themselves, or null.
 - script_summary: one sentence, the pitch and the ask.`;
@@ -110,6 +112,8 @@ Fields:
   const j = JSON.parse(raw.replace(/```json|```/g, '').trim());
   if (!ARCHETYPES.includes(j.archetype)) j.archetype = 'generic';
   j.stated_numbers = (j.stated_numbers || []).filter(n => /^\+1\d{10}$/.test(n)); // US only for v1
+  j.extension = typeof j.extension === 'string' && /^\d{1,6}$/.test(j.extension) ? j.extension : null;
+  j.ask_for = typeof j.ask_for === 'string' && j.ask_for.trim() ? j.ask_for.trim().slice(0, 80) : null;
   return j;
 }
 
@@ -143,7 +147,7 @@ function replyFor(status, ctx) {
 
 "${ctx.transcript}"
 
-We're going to call ${pretty(ctx.number)} in about ${ctx.minutes} minutes.
+We're going to call ${pretty(ctx.number)}${ctx.extension ? `, extension ${ctx.extension}` : ''}${ctx.askFor ? `, asking for ${ctx.askFor}` : ''} in about ${ctx.minutes} minutes.
 If that's the wrong number or you'd rather we didn't, reply CANCEL.
 
 — SpamViking`,
@@ -264,6 +268,8 @@ export default async function handler(req, res) {
       approved_at: new Date().toISOString(),
       reference_code: CODE_ARCHETYPES.includes(a.archetype) ? refCode() : null,
       host_name: host_name || null,
+      dial_extension: a.extension,
+      ask_for: a.ask_for,
     }, 'return=minimal');
     await update('phone_intakes', `id=eq.${intakeId}`, { status: 'queued' });
 
@@ -272,7 +278,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true, intake_id: intakeId, status: 'queued',
-      ...replyFor('queued', { subject, transcript, number, minutes }),
+      ...replyFor('queued', { subject, transcript, number, minutes, extension: a.extension, askFor: a.ask_for }),
     });
   } catch (err) {
     console.error('phone-intake', err);
