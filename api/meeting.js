@@ -3,35 +3,38 @@
 // NORTH STAR: give a zoom-like meeting experience, but video is LOCKED OFF for
 // everyone. In-world cover: the host keeps their camera off, so cameras are
 // disabled for the meeting (no one is put on the spot). The Zoom shell is
-// theater; the only live channel is Vapi audio. No real video infra, no Daily
-// rooms of our own — the camera button just sits locked.
+// theater; the only live channel is LiveKit audio. No real video infra — the
+// camera button just sits locked.
 //
-// Token-driven: reads the archetype from /api/join, starts the Vapi audio call
-// with metadata { archetype, slug } (the carrier), records the call id back.
-// Host tile lights up when the AI speaks (Vapi speech events); live captions
-// come from transcript messages.
+// Transport: LiveKit. The browser mints a server-side token (/api/livekit-token)
+// carrying the slug (+ host_name) as participant/job metadata, connects to a
+// per-session room, and publishes mic. agent.py auto-joins, reads the slug from
+// the token metadata, calls /api/hydrate for the compiled prefix, and runs the
+// session. There is NO browser key, NO Vapi, NO variableValues / call-id
+// threading (LiveKit has none) — identity travels only in the token metadata.
 //
 //   scammer link -> /api/meeting?slug=<token>
 //
-// Needs VAPI_PUBLIC_KEY (browser-safe) in env; assistant model.metadataSendMode
-// must NOT be "off" or the proxy won't see the archetype.
+// HOST NAME: read off the booking token (the name the spammer emailed) via
+// /api/join and threaded through the page (tile label, pfp, waiting + late-join
+// copy). Run through hostDisplay() for casing so it matches the booking page
+// ("andrea" -> "Andrea"). "Andrew" appears ONLY as the pre-fetch placeholder in
+// the HTML; setHostName() overwrites it once join data arrives.
 //
-// HOST NAME: read off the booking token (the name the spammer emailed) and
-// threaded through the page, the call carrier (variableValues.sv_host_name),
-// AND the silence nudge prompts — so a booking made under any name reads as that
-// name end to end. "Dude" (changed from a hardcoded real name, Aug 25) appears
-// ONLY as the pre-fetch placeholder in the HTML; setHostName() overwrites it
-// once join data arrives. Falls back to the placeholder only if the token has
-// no host_name — a genuinely generic fallback, not a specific real person's
-// name standing in for a broken/missing lookup.
+// PARTICIPANT TILES: the first remote participant is the host (static tile);
+// any additional remote participant is a bench character joining the call and
+// gets its own tile, with the grid reflowing by count. (Layout is Booking-owned;
+// whether bench characters actually join as LiveKit participants is Voice's.)
 //
 // FAST-JOIN: a "today / next-available" booking minutes out (token.fast_join).
 // The host arrives at max(join+30s, slot-5min) — never sooner than 5 min before
 // the slot, never less than 30s after they join, so they're never met
 // mid-sentence and the eager-exec "great timing" opener lands. The page carries
-// fast_join + booked_slot + the measured wait into the call so the proxy can
-// pick the right opener (and the "saw you in the waiting room" callback only
-// when they actually waited).
+// fast_join + booked_slot into the call so the host can pick the right opener.
+//
+// OWNERSHIP: this file is Booking/Calendar's (the Calendly-replacement call
+// page). The LiveKit-join internals (Room/RoomEvent, /api/livekit-token, agent
+// dispatch, silence-nudge) are Voice's — co-edited; re-emit whole + ping.
 // ----------------------------------------------------------------------
 
 export const config = { runtime: "edge" };
@@ -77,7 +80,14 @@ function PAGE(pub, asst, testMode, silenceNudge) {
   .topbar{height:44px;background:var(--stage);display:flex;align-items:center;justify-content:space-between;padding:0 16px;font-size:13px;color:var(--mut);border-bottom:1px solid #000}
   .topbar .secure{display:flex;align-items:center;gap:6px}
   .stage{flex:1;background:var(--stage);display:flex;align-items:center;justify-content:center;gap:16px;padding:18px;flex-wrap:wrap}
-  .tile{background:var(--tile);border-radius:14px;width:min(46%,460px);aspect-ratio:16/10;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;border:3px solid transparent;transition:border-color .15s}
+  .tile{background:var(--tile);border-radius:14px;width:min(46%,460px);aspect-ratio:16/10;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;border:3px solid transparent;transition:border-color .15s,width .2s}
+  /* grid reflow by participant count (host + you + any bench characters) */
+  .stage[data-count="3"] .tile{width:min(31%,380px)}
+  .stage[data-count="4"] .tile{width:min(46%,420px)}
+  .stage[data-count="5"] .tile,.stage[data-count="6"] .tile{width:min(31%,340px)}
+  .stage[data-count="7"] .tile,.stage[data-count="8"] .tile,.stage[data-count="9"] .tile{width:min(23%,300px)}
+  .stage[data-count="10"] .tile,.stage[data-count="11"] .tile,.stage[data-count="12"] .tile{width:min(23%,240px)}
+  .pfp.bench{background:linear-gradient(135deg,#5a4a3a,#c0925c)}
   .tile.speaking{border-color:var(--spk)}
   .pfp{width:84px;height:84px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:600;color:#fff}
   .pfp.host{background:linear-gradient(135deg,#3a4a7a,#2d8cff)}
@@ -155,8 +165,8 @@ function PAGE(pub, asst, testMode, silenceNudge) {
   </div>
   <div class="stage">
     <div class="tile" id="hostTile">
-      <div class="pfp host" id="hostPfp">D</div>
-      <div class="name"><span id="hostName">Dude</span> ${micon_svg()}</div>
+      <div class="pfp host" id="hostPfp">A</div>
+      <div class="name"><span id="hostName">Andrew</span> ${micon_svg()}</div>
     </div>
     <div class="tile" id="youTile">
       <div class="pfp you">Y</div>
@@ -209,22 +219,93 @@ function showWaitImage(){
 var room = null, started = null, tick = null, muted = false, callId = null;
 
 // Host name (the name the spammer emailed). Filled from the token in ensureJoin;
-// "Dude" is only the pre-fetch placeholder (changed from a hardcoded real
-// name, Aug 25 — a broken/missing lookup should degrade to something
-// generic, never silently impersonate a specific real person). setHostName
-// threads it everywhere the page shows the host: tile name, pfp initial,
-// waiting + late-join copy.
-var hostName = "Dude";
+// "Andrew" is only the pre-fetch placeholder. setHostName threads it everywhere
+// the page shows the host: tile name, pfp initial, waiting + late-join copy.
+var hostName = "Andrew";
 
 var $ = function(id){ return document.getElementById(id); };
 function toast(s){ var t = $("toast"); t.textContent = s; t.classList.add("show"); setTimeout(function(){ t.classList.remove("show"); }, 4200); }
 function note(s, err){ var n = $("note"); n.textContent = s; n.className = "note" + (err ? " err" : ""); }
+// Display casing for the host name — mirrors render.js hostDisplay so the call
+// page and the booking page name the host identically. Known shorthands get
+// canonical casing; anything else is title-cased per word. The token stores the
+// raw Sheet value ("andrea"), so without this the tile would read lowercase.
+function hostDisplay(raw){
+  var s = String(raw || "").trim();
+  if(!s) return "Andrew";
+  var low = s.toLowerCase();
+  if(low === "andrew") return "Andrew";
+  if(low === "andrea") return "Andrea";
+  return s.replace(/\\b\\w/g, function(c){ return c.toUpperCase(); });
+}
 function setHostName(name){
   if(!name) return;
-  hostName = String(name).trim();
+  hostName = hostDisplay(name);
   var first = hostName.split(/\\s+/)[0] || hostName;
   if($("hostName")) $("hostName").textContent = first;
-  if($("hostPfp")) $("hostPfp").textContent = (first[0] || "D").toUpperCase();
+  if($("hostPfp")) $("hostPfp").textContent = (first[0] || "A").toUpperCase();
+}
+
+// --- bench-character tiles (LAYOUT — Booking-owned) -------------------------
+// The first remote participant is the host (uses the static #hostTile). Any
+// ADDITIONAL remote participant is a bench character joining the call — give it
+// its own tile and reflow the grid. Voice owns whether/how bench characters
+// actually join as LiveKit participants (identity + name/metadata); this side
+// just renders whatever joins. Labels read participant.name, then metadata
+// host_name/name, then identity — run through hostDisplay for casing.
+var hostParticipant = null;      // first remote we see == the host
+var benchTiles = {};             // participant.sid -> tile element
+function pLabel(p){
+  var nm = "";
+  try {
+    if(p && p.name) nm = p.name;
+    else if(p && p.metadata){ var m = JSON.parse(p.metadata); nm = (m && (m.host_name || m.name)) || ""; }
+  } catch(e){}
+  return hostDisplay(nm || (p && p.identity) || "Guest");
+}
+function stageCount(){ return 2 + Object.keys(benchTiles).length; }
+function reflowStage(){
+  var stage = document.querySelector(".stage");
+  if(stage) stage.setAttribute("data-count", String(stageCount()));
+}
+function addBenchTile(p){
+  if(!p || benchTiles[p.sid]) return;
+  var stage = document.querySelector(".stage");
+  if(!stage) return;
+  var label = pLabel(p);
+  var tile = document.createElement("div");
+  tile.className = "tile bench";
+  tile.id = "tile-" + p.sid;
+  tile.innerHTML = '<div class="pfp bench">' + ((label[0] || "G").toUpperCase()) +
+    '</div><div class="name"><span>' + label + '</span></div>';
+  var cap = $("caption");
+  if(cap) stage.insertBefore(tile, cap); else stage.appendChild(tile);
+  benchTiles[p.sid] = tile;
+  reflowStage();
+}
+function removeBenchTile(p){
+  if(!p) return;
+  var t = benchTiles[p.sid];
+  if(t){ t.remove(); delete benchTiles[p.sid]; reflowStage(); }
+}
+// classify a newly-seen remote: first one is the host, the rest are bench tiles
+function onRemote(p){
+  if(!hostParticipant){ hostParticipant = p; return; }
+  addBenchTile(p);
+}
+// light the correct tile(s) when participants speak
+function paintSpeakers(speakers){
+  var speaking = {};
+  (speakers || []).forEach(function(p){ if(p && !p.isLocal) speaking[p.sid] = true; });
+  // host tile
+  var hostSid = hostParticipant && hostParticipant.sid;
+  if(hostSid && speaking[hostSid]) $("hostTile").classList.add("speaking");
+  else $("hostTile").classList.remove("speaking");
+  // bench tiles
+  Object.keys(benchTiles).forEach(function(sid){
+    if(speaking[sid]) benchTiles[sid].classList.add("speaking");
+    else benchTiles[sid].classList.remove("speaking");
+  });
 }
 
 // consent gate (entry point) -> reveal lobby
@@ -242,16 +323,7 @@ var joinData = null, bookedSlot = null, fastJoin = false;
 function parseSlot(s){ if(!s) return null; var t = Date.parse(s); return isNaN(t) ? null : t; }
 function fmtWhen(ms){ try { return new Date(ms).toLocaleString([], {weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}); } catch(e){ return ""; } }
 function ensureJoin(){
-  // CACHING BUG FIX (Aug 25) — this used to short-circuit on any cached
-  // joinData, meaning host_name (and everything else from /api/join) was
-  // only ever fetched ONCE per page load, forever after. This file's own
-  // host-arrival-timing logic expects a join page might sit open for a
-  // real stretch of time (waiting for a booked slot) — any change made
-  // to host_name after the FIRST fetch would silently never be picked up
-  // for the rest of that page load. Always fetch fresh now; the extra
-  // request costs nothing meaningful (this is called at most twice in a
-  // normal flow: the early gate, then again at join-click) against the
-  // real risk of showing/speaking a stale name.
+  if(joinData) return Promise.resolve(joinData);
   return fetch("/api/join?slug=" + encodeURIComponent(slug)).then(function(r){ return r.json(); })
     .then(function(j){
       joinData = j || {};
@@ -301,6 +373,20 @@ function wireRoom(rm){
       $("timer").textContent = Math.floor(s/60) + ":" + ("0"+(s%60)).slice(-2);
     }, 1000);
     setTimeout(function(){ toast("The host has video off for this meeting, so everyone's camera stays off."); }, 700);
+    // LAYOUT (Booking): classify anyone already in the room — first remote = host
+    // (static tile), the rest get bench tiles. Handles the case where the agent /
+    // bench chars are present before we connect.
+    try {
+      var existing = rm.remoteParticipants || rm.participants;
+      if(existing && typeof existing.forEach === "function"){ existing.forEach(function(p){ onRemote(p); }); }
+      else if(existing){ Object.keys(existing).forEach(function(k){ onRemote(existing[k]); }); }
+    } catch(e){}
+  });
+  // LAYOUT (Booking): bench characters joining/leaving as participants get tiles.
+  rm.on(RoomEvent.ParticipantConnected, function(p){ onRemote(p); });
+  rm.on(RoomEvent.ParticipantDisconnected, function(p){
+    if(p === hostParticipant){ hostParticipant = null; return; }
+    removeBenchTile(p);
   });
   // Hear the host: attach any subscribed audio track to a hidden <audio>.
   rm.on(RoomEvent.TrackSubscribed, function(track){
@@ -310,74 +396,16 @@ function wireRoom(rm){
       document.body.appendChild(el);
     }
   });
-  // Speaking indicator: light the host tile when a remote participant speaks.
-  rm.on(RoomEvent.ActiveSpeakersChanged, function(speakers){
-    var hostSpeaking = (speakers || []).some(function(p){ return p && !p.isLocal; });
-    if(hostSpeaking) $("hostTile").classList.add("speaking");
-    else $("hostTile").classList.remove("speaking");
-  });
+  // Speaking indicator: light the specific tile(s) of whoever is speaking
+  // (host tile or a bench tile). LAYOUT (Booking).
+  rm.on(RoomEvent.ActiveSpeakersChanged, function(speakers){ paintSpeakers(speakers); });
   // Captions: if the agent publishes transcriptions, show them.
   rm.on(RoomEvent.TranscriptionReceived, function(segments){
     try {
       var txt = (segments || []).map(function(s){ return s.text; }).join(" ").trim();
       if(txt){
         $("caption").style.display = "block";
-        // EMOTION TAG STRIP (Aug 15, extended Aug 24) — uses RegExp(string)
-        // instead of a /.../ literal on purpose: a literal regex with an
-        // internal unescaped "/" throws "Uncaught SyntaxError: Invalid
-        // regular expression: missing /" at PAGE LOAD (breaks the whole
-        // script, not just captions — this is what blocked the join screen
-        // entirely last time). A string pattern has no delimiter to
-        // mismatch, so this class of error can't happen here again.
-        // Also fixes a latent bug in the original bracket-strip: it used
-        // \\[ (an escaped literal backslash + bracket) instead of \[ (an
-        // escaped bracket) — so it only ever matched a literal backslash
-        // character before [[, which real captions never contain,
-        // meaning that strip was silently a no-op the whole time.
-        // EXTENDED (Aug 24) — Voice's proposed variable-pause signal adds
-        // an optional second attribute: <emotion value="content"
-        // pause="0.6"/>. Caught before it ever shipped: the OLD pattern
-        // only matched a tag ending in value="..." immediately followed
-        // by />; any extra attribute in between meant the whole tag
-        // failed to match at all and leaked into captions raw, unstripped
-        // — confirmed by direct execution, not just read. Fixed generally
-        // (any number of additional name="value" attributes, not just
-        // pause), so this doesn't need touching again if Voice/Canon add
-        // a third attribute later.
-        var noEmotion = txt.replace(new RegExp('<emotion\\s+value="[^"]*"(?:\\s+[a-zA-Z_-]+="[^"]*")*\\s*/>', 'g'), "");
-        // IN-FLIGHT TAG HOLD (Aug 15, same day) — TranscriptionReceived has
-        // no final/interim flag; it fires repeatedly as text grows, so the
-        // regex above (which only matches a CLOSED tag) lets a partial
-        // "<emotion value=\"" or "<emotion value=\"excited\"" — no closing
-        // "/>" yet — render on screen for one or more events before the
-        // close arrives. Fix: after stripping any complete tag, look for a
-        // still-open "<emotion" with no "/>" anywhere after it and cut the
-        // string right there. The held fragment simply reappears (complete,
-        // and then stripped) once enough text has streamed in — nothing is
-        // lost, it just never renders half-formed.
-        var openTagIdx = noEmotion.lastIndexOf("<emotion");
-        if (openTagIdx >= 0 && noEmotion.indexOf("/>", openTagIdx) === -1) {
-          noEmotion = noEmotion.slice(0, openTagIdx);
-        }
-        var noBrackets = noEmotion.replace(new RegExp('\\[\\[[^\\]]*\\]\\]', 'g'), "");
-        // SOUND MARKER STRIP (Aug 25) — real, confirmed gap: this caption
-        // path only ever stripped [[double-bracket]] bench tags and
-        // <emotion.../> tags — it never touched single-bracket sound
-        // markers like [DOG_BARK]. Those are a normal, correct part of
-        // the model's own output (the agent's TTS pipeline scans for and
-        // strips them before speech, converting them to real audio) —
-        // but that stripping happens in a COMPLETELY SEPARATE pipeline
-        // from this live-caption renderer, which was never updated to
-        // match. Result: every sound marker, even ones playing correctly
-        // as real audio, ALSO showed up as literal, visible bracket text
-        // in the caption — confirmed as the direct cause of a live report
-        // ("the dog bark's in square brackets"). Same token shape already
-        // used elsewhere in this codebase for marker detection (all-caps
-        // letters/digits/underscores, 2-32 chars) — matched here rather
-        // than reinvented, so it only strips genuine markers, never
-        // legitimate bracketed text that happens to appear in dialogue.
-        var noMarkers = noBrackets.replace(new RegExp('\\[[A-Z0-9_]{2,32}\\]', 'g'), "");
-        $("captionText").textContent = noMarkers.trim();
+        $("captionText").textContent = txt.replace(/\\[\\[[^\\]]*\\]\\]/g, "").trim();
       }
     } catch(e){}
   });
@@ -460,7 +488,12 @@ $("muteCtrl").addEventListener("click", function(){
   $("youMic").innerHTML = muted ? ${JSON.stringify(micoff_svg())} : ${JSON.stringify(micon_svg())};
 });
 $("camCtrl").addEventListener("click", function(){ toast("The host has turned video off for this meeting."); });
-$("partCtrl").addEventListener("click", function(){ toast("In this meeting: the host and you."); });
+$("partCtrl").addEventListener("click", function(){
+  var n = Object.keys(benchTiles).length;
+  toast(n > 0
+    ? ("In this meeting: " + hostName + ", " + n + " other" + (n>1?"s":"") + ", and you.")
+    : ("In this meeting: " + hostName + " and you."));
+});
 $("leaveCtrl").addEventListener("click", function(){ if(room) room.disconnect(); });
 
 
