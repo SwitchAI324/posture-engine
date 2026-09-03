@@ -37,11 +37,23 @@
 //   leaving_voicemail: boolean
 //
 // caller_profile shape (Data-owned, one row per scammer E.164, shared
-// across users — NEVER contains a SpamViking user's name):
-//   claimed_org: text | null
-//   script_summary: text | null
-//   web_reports: jsonb          — PROVENANCE ONLY, never surfaced
-//   confidence: 'low' | 'medium' | 'high'
+// across users — NEVER contains a SpamViking user's name; co-written by
+// two systems, column-scoped, per Scouting's Sep 2 inventory):
+//   claimed_org: text | null        — Phone Intake's own classification
+//   script_summary: text | null     — Phone Intake's own classification
+//                                      (single voicemail, NOT used by
+//                                      the expected_playbook block below
+//                                      — see that function's comment)
+//   line_type: 'voip'|'landline'|'mobile'|null  — Scouting (Twilio)
+//   playbook: { opening_move, the_ask, pressure_moves[] } | null
+//                                    — Scouting, corroboration-gated at
+//                                      the source too (judgeReports())
+//   confidence: 'low' | 'medium' | 'high'   — Scouting's, corroboration
+//                                    confidence (NOT Phone Intake's own
+//                                    per-intake confidence, which lives
+//                                    on the separate phone_intakes row)
+//   web_reports: jsonb              — Scouting, PROVENANCE ONLY, never
+//                                      surfaced to the model
 //   caller_profile_archetype(): () => archetype string
 //
 // conversation_threads shape (Data-owned; KEY = caller_profile_id +
@@ -105,6 +117,21 @@ function recordingNoticeDirective(meta) {
 // confidence. Strip all provenance (web_reports, counts, URLs) before it
 // ever reaches the model — frame as the host's own hunch, never as
 // aggregated data with a source.
+//
+// CORRECTED (Sep 2, per Scouting's full inventory) — the real
+// caller_profile row has TWO separate origins on the same fields I'd
+// conflated: `claimed_org`/`script_summary` are Phone Intake's own
+// single-voicemail classification (one source, written at intake time);
+// `playbook: { opening_move, the_ask, pressure_moves[] }` and
+// `confidence` are Scouting's, built from MULTIPLE corroborating web
+// reports with their own precision gate (judgeReports() in
+// api/scout/_phone.js — playbook is null below medium confidence AT
+// THE SOURCE too, not just here). The brief's "opening move / the ask /
+// pressure moves" fields map to Scouting's playbook object, not to
+// script_summary — my first draft read script_summary for this block,
+// which was never actually the field the brief meant. confidence here
+// is unambiguously Scouting's (Phone Intake's own per-intake confidence
+// lives on the phone_intakes table, a different row entirely).
 // ---------------------------------------------------------------------
 function meetsPlaybookConfidence(confidence) {
   const rank = CONFIDENCE_RANK[confidence];
@@ -116,15 +143,22 @@ function buildExpectedPlaybookBlock(callerProfile) {
   if (!meetsPlaybookConfidence(callerProfile.confidence)) return null;
 
   const org = (callerProfile.claimed_org || "").trim();
-  const script = (callerProfile.script_summary || "").trim();
-  if (!org && !script) return null; // nothing usable even at confidence
+  const playbook = callerProfile.playbook || null;
+  const opening = playbook && (playbook.opening_move || "").trim();
+  const ask = playbook && (playbook.the_ask || "").trim();
+  const pressureMoves =
+    (playbook && Array.isArray(playbook.pressure_moves) && playbook.pressure_moves) || [];
+
+  if (!org && !opening && !ask && !pressureMoves.length) return null; // nothing usable
 
   // web_reports is PROVENANCE ONLY — deliberately never read past the
   // confidence check above. No counts, no URLs, no "per N reports" ever
   // reaches the compiled block; that's the whole point of hunch framing.
   const lines = [];
   if (org) lines.push("usually claims to be from " + org);
-  if (script) lines.push(script);
+  if (opening) lines.push("opens with " + opening);
+  if (ask) lines.push("what they're really after is " + ask);
+  if (pressureMoves.length) lines.push("leans on " + pressureMoves.join(", "));
 
   return (
     "[HOST HUNCH — never say this aloud, never cite a source for it, " +
@@ -307,18 +341,25 @@ function getFixtureIntake(overrides) {
     turn: 1,
     leaving_voicemail: false,
     caller_profile: {
-      claimed_org: "Meridian Business Solutions",
+      claimed_org: "Meridian Business Solutions", // Phone Intake's own field
       script_summary:
         "opens with a fake overdue-invoice claim, asks for a callback " +
         "number 'to verify the account', escalates to a same-day " +
-        "payment demand if pushed",
+        "payment demand if pushed", // Phone Intake's own field — NOT read
+                                     // by buildExpectedPlaybookBlock
+      line_type: "voip",
+      playbook: {
+        opening_move: "a fake overdue-invoice claim",
+        the_ask: "a same-day payment over the phone",
+        pressure_moves: ["urgency deadline", "threat of a referred account"],
+      },
       web_reports: [
         {
           source: "https://example-scam-tracker.test/report/8821",
           note: "reported 3x this month",
         },
       ],
-      confidence: "high",
+      confidence: "high", // Scouting's corroboration confidence
       caller_profile_archetype: () => "b2b_saas",
     },
   };
