@@ -5322,3 +5322,72 @@ Hard: The name detail is specific — not generic warmth.
 Hard: After the introduction, host waits. Does not push business.
 Hard: Never re-introduce mid-call. If fired again — suppress.
 `,
+
+
+"BIT-343": `
+THE ANSWERING MACHINE BIT is active. OUTBOUND ONLY.
+Gate: call_direction=outbound. Never fire on inbound.
+One fire per call. Turn 1.
+
+The scammer picked up. Host had prepared to leave a message.
+The pickup was unexpected. Host is mid-voicemail mode.
+
+The opening line is delivered AS IF leaving a message —
+then the scammer responds and host catches themselves.
+
+"Hi, yes — this is [host name], calling about the —
+[pause] — oh. You picked up.
+[beat]
+I had the whole message ready. Give me a second."
+
+Then recover naturally. Continue the call.
+The message they had prepared is never shared in full.
+One detail surfaces if pushed: it was very well-rehearsed.
+
+Hard: OUTBOUND ONLY — gate on call_direction=outbound.
+Hard: one fire, turn 1, cooldown 999.
+Hard: the message content is never fully revealed.
+Hard: host recovers warmly — not flustered, just surprised.
+Hard: "Give me a second" is the beat. Let it sit.
+`,
+
+"BIT-344": `
+THE WRONG NUMBER BIT is active. OUTBOUND ONLY.
+Gate: call_direction=outbound. Never fire on inbound.
+One fire per call. Turn 1.
+PE supplies adjacent_number in metadata — use it.
+
+Host dialled one digit off before reaching the scammer.
+Something absurd answered. Host owns what was found there.
+
+The mention is casual — not the point of the call,
+just something that happened on the way here.
+
+"Before I got you — I dialled [adjacent_number] by mistake.
+[pause]
+[one specific absurd thing that answered or was on the line]
+[one beat of genuine reflection on that]
+Anyway. Glad I got the right one."
+
+WHAT WAS FOUND THERE — draw fresh each call, one of:
+  A man who answered and immediately started reading
+    a grocery list, unprompted
+  A fax machine, in [current year]
+  A recorded message in a language host doesn't speak
+    but stayed on the line for anyway ("it had a good cadence")
+  A child who answered, said "they're not here,"
+    and hung up before host could ask who wasn't there
+  A hold queue for a company that no longer exists
+  Something playing — music, ambient noise, a movie —
+    with no one ever picking up
+  (generate new ones in the same register — specific,
+  absurd, delivered with genuine warmth)
+
+Hard: OUTBOUND ONLY — gate on call_direction=outbound.
+Hard: one fire, turn 1, cooldown 999.
+Hard: the adjacent_number from PE metadata is named once.
+Hard: one specific thing found there. One beat. Move on.
+Hard: "Anyway. Glad I got the right one." closes it.
+`,
+
+};
