@@ -115,10 +115,10 @@
     display: inline-flex; align-items: center; justify-content: center; font-size: 12px; flex: 0 0 auto; font-weight: 700; }
 
   /* trapdoor: the always-there "none of these work" escape, as a stacked button */
-  .trap { margin-top: 10px; }
-  .trap-btn { display: block; width: fit-content; padding: 9px 18px; font-size: 13px; font-weight: 600;
-    color: #7a5c12; background: #fdf3d4; border: 1px solid #f0d98a; border-radius: 9px; cursor: pointer; font-family: inherit; }
-  .trap-btn:hover { background: #fbe9b3; border-color: #e6c75f; }
+  .trap { margin-top: 18px; }
+  .trap-btn { display: block; width: fit-content; padding: 10px 22px; font-size: 14px; font-weight: 600;
+    color: #6b5210; background: #f5c542; border: none; border-radius: 9px; cursor: pointer; font-family: inherit; }
+  .trap-btn:hover { background: #eeb929; }
   .trap-panel { margin-top: 12px; }
   .trap-bubble { background: #f6f7f9; border: 1px solid #e9edf2; border-radius: 12px; padding: 14px 16px;
     font-size: 14px; color: #3a4350; }
@@ -319,7 +319,7 @@
     var showsBlack = false;
     for (var dd = 1; dd <= daysInMonth; dd++) { if (BLACK[ymd(new Date(y, m, dd))]) { showsBlack = true; break; } }
     html += '<div class="legend"><span class="k"><span class="sw open"></span>Available</span>';
-    if (showsBlack) html += '<span class="k"><span class="sw bk"></span>Andrew unavailable</span>';
+    if (showsBlack) html += '<span class="k"><span class="sw bk"></span>' + HOST + ' unavailable</span>';
     html += '</div>';
 
     html += '</div>';
