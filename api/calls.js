@@ -40,6 +40,21 @@ import { insertCallOutcome, saveTranscript } from "./_store.js";
 
 export const config = { runtime: "edge" };
 
+// SCOUT FAN-OUT (2026-09-02) — Scouting's own fix for the "Channel-2
+// written but call-lane content never reaches the host" gap: the
+// transcript arrives here (this endpoint) but was never forwarded on to
+// Scouting's own dissection. /api/scout/call is transport-agnostic
+// (Scouting confirmed, code-checked their side) — it takes {target_id,
+// messages, call_id} and produces call_claim/call_commitment/
+// call_callback content in scout_facts. This endpoint already holds
+// target_id (required, validated above) and the flattened conversation
+// (body.conversation) in the SAME request — no new trigger, no new
+// round trip to find either value, just one more outbound POST from an
+// endpoint that already has everything it needs.
+const SCOUT_CALL_URL =
+  process.env.SCOUT_CALL_URL || "https://posture-engine.vercel.app/api/scout/call";
+const SCOUT_TOKEN = process.env.SV_SCOUT_TOKEN;
+
 function jsonRes(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
     status,
@@ -109,6 +124,28 @@ export default async function handler(req) {
           await saveTranscript(conversationCallId, b.slug || null, b.conversation).catch(() => {});
         } else {
           console.log("calls.js: body.conversation present but no call_id to save it under");
+        }
+        // SCOUT FAN-OUT (2026-09-02) — see header comment. Same
+        // conversation array, same guard, one more consumer. Fails soft
+        // exactly like saveTranscript above (.catch swallows) — a
+        // Scouting-side outage must never break call-close for the
+        // agent, which is already mid-shutdown by the time this fires.
+        // No token = lane silently skipped (matches the phone lane's own
+        // keyless-degrade convention in api/phone-intake.js), not an
+        // error — SV_SCOUT_TOKEN just isn't configured yet in every env.
+        if (SCOUT_TOKEN) {
+          await fetch(SCOUT_CALL_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-sv-scout-token": SCOUT_TOKEN,
+            },
+            body: JSON.stringify({
+              target_id: targetId,
+              call_id: b.call_id || null,
+              messages: b.conversation,
+            }),
+          }).catch(() => {});
         }
       }
       return jsonRes({
