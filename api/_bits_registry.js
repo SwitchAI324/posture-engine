@@ -3,6 +3,7 @@
 // Last updated: August 17, 2026
 // CRITICAL: archetypes field restored — do not remove until PE confirms scorer gate update
 // family field: 37 fine-grained subgroups
+// channel enum: audio | video | phone
 
 export const BITS = [
   {
@@ -2387,5 +2388,39 @@ export const BITS = [
       "min_between": 5
     },
     "requires_context": "host needs to spell something out \u2014 a name, acronym, or reference"
+  },
+  {
+    "id": "BIT-343",
+    "name": "The Answering Machine",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "structural_opener",
+    "pool": "early",
+    "trigger": "call_turn_1",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 3,
+    "vocal_tag": "neutral",
+    "channel": "phone",
+    "rungs": 1,
+    "requires_context": "call_direction=outbound only",
+    "call_direction": "outbound"
+  },
+  {
+    "id": "BIT-344",
+    "name": "The Wrong Number",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "structural_opener",
+    "pool": "early",
+    "trigger": "call_turn_1",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 4,
+    "vocal_tag": "neutral",
+    "channel": "phone",
+    "rungs": 1,
+    "requires_context": "call_direction=outbound only, PE supplies adjacent_number in metadata",
+    "call_direction": "outbound"
   }
 ];
