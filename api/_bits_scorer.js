@@ -204,6 +204,16 @@ const EMITTED_TRIGGERS = new Set([
                         // implementation, not a rename of live code. Covers
                         // BIT-113, 119, 203, 206, 207, 216, 229, 334, 503,
                         // 515, 516.
+  "call_direction:outbound", // state.call_direction === "outbound" — Phone
+                        // Intake's Sep 2 ask: BIT-343/344 are outbound-only
+                        // (host placed the call), never eligible on an
+                        // inbound callback. No lag, known from dispatch
+                        // metadata before turn 1.
+  "call_direction:inbound",  // state.call_direction === "inbound" — the
+                        // complementary gate, added alongside for symmetry
+                        // even though Phone Intake only asked for outbound
+                        // today; costs nothing and closes the obvious next
+                        // ask before it's needed.
   // NOTE: call_phase_late is intentionally NOT here. It tags only the 700-series
   // death-blows, which never pass through normal loadout() — they fire via
   // selectDeathBlow() (separate end-of-call path, threshold bypassed). The
@@ -240,6 +250,10 @@ function triggerPresent(trigger, state) {
       return state.has_prior_contact === true;
     case "browsed_tmi":
       return state.browsed_tmi === true;
+    case "call_direction:outbound":
+      return state.call_direction === "outbound";
+    case "call_direction:inbound":
+      return state.call_direction === "inbound";
     default:
       // Not an allowlisted trigger — should never reach here (loadout guards).
       // Fail SAFE toward eligibility so a mis-call can't silently blackhole a bit.
