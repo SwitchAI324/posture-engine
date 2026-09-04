@@ -152,6 +152,47 @@ async function readToken(slug) {
   return rows[0] || null;
 }
 
+// PHONE JOB FIELDS (2026-09-04, Voice/Booking) — channel='phone' tokens
+// were deliberately trimmed to {slug, channel, archetype, host_name,
+// target_id} only (my own earlier ruling: dial_extension/ask_for/
+// reference_code should NOT ride booking_tokens, since Voice's per-turn
+// metadata channel and dial.js's job-dispatch metadata both already
+// carry them more reliably). That ruling stands — this is NOT reversing
+// it. But hydrate.js is what actually builds the call-start prompt
+// today, and prompt-compile.js (which was designed to read these
+// properly) isn't wired into anything live yet — so for a real job to
+// work right now, hydrate needs its own read of these three values.
+// Slug for a phone token is ph-<job_id> (confirmed, no other encoding);
+// job_id is recovered by stripping the prefix and used to look up the
+// real callback_jobs row directly. Fails soft exactly like
+// readDossierFloor above — never blocks hydrate, degrades to nulls.
+async function readPhoneJobFields(slug) {
+  if (!slug || !slug.startsWith("ph-")) return null;
+  const jobId = slug.slice(3);
+  const URL = process.env.SUPABASE_URL;
+  const KEY =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+  if (!URL || !KEY) return null;
+  try {
+    const r = await fetch(
+      `${URL}/rest/v1/callback_jobs?id=eq.${encodeURIComponent(jobId)}` +
+        `&select=dial_extension,ask_for,reference_code&limit=1`,
+      { headers: { apikey: KEY, authorization: `Bearer ${KEY}` } }
+    );
+    if (!r.ok) return null;
+    const rows = await r.json();
+    const row = rows && rows[0];
+    if (!row) return null;
+    return {
+      dial_extension: row.dial_extension || null,
+      ask_for: row.ask_for || null,
+      reference_code: row.reference_code || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // DOSSIER FLOOR (2026-08-05, Data's scoping) — the AMBIENT FLOOR read:
 // baseline identity + top prior-contact fact, condensed to ~50 tokens, baked
 // into the STABLE (cached) prefix so the host always has it, unconditional
@@ -455,6 +496,15 @@ module.exports = async function handler(req, res) {
     // anything about this read fails or the target has no scout_facts yet.
     const dossierFloor = await readDossierFloor(token.target_id);
 
+    // PHONE JOB FIELDS (2026-09-04) — see readPhoneJobFields' own comment
+    // for why this exists despite the earlier no-phone-fields-on-tokens
+    // ruling. Only meaningful for channel='phone' tokens; a no-op (null)
+    // for every web token, and fails soft exactly like the dossier floor
+    // above if the join comes back empty for any reason.
+    const phoneJobFields = token.channel === "phone"
+      ? await readPhoneJobFields(slug)
+      : null;
+
     // CUT (Aug 10, PE code-cut certification) — was: const posture =
     // process.env.SV_DEFAULT_POSTURE || "skald", a genuine "which of the
     // Eight" selection per call. The host is now a single constant
@@ -648,6 +698,14 @@ module.exports = async function handler(req, res) {
         // merges this over its code defaults and falls back safely if null —
         // changing a host's voice = editing the Supabase row, zero deploys.
         voice: token.voice || null,
+        // PHONE JOB FIELDS (2026-09-04) — null on every web call, and
+        // null on a phone call if the callback_jobs join found nothing
+        // (fails soft, never blocks the response). See
+        // readPhoneJobFields' comment for the full context on why these
+        // are read here despite not living on the token itself.
+        dial_extension: (phoneJobFields && phoneJobFields.dial_extension) || null,
+        ask_for: (phoneJobFields && phoneJobFields.ask_for) || null,
+        reference_code: (phoneJobFields && phoneJobFields.reference_code) || null,
       })
     );
   } catch (e) {
