@@ -199,6 +199,21 @@ const FUEL_HOOKS = {
       return Object.keys(out).length ? out : null;
     },
   },
+  // OFFICE_LOCATION (2026-09-02, Scouting) — RESTORED, not new. Dropped
+  // from this table in the Aug-4 CALL_* PROXY cleanup as presumed
+  // dead-code alongside four genuinely-dead hooks — but _dissect.js was
+  // producing facts.location on the body lane the whole time, and
+  // registering the office_location fuel-hook gate to match. The write
+  // side was never actually dead; only this read-side entry was
+  // (mistakenly) removed with it. Same body lane as pitch_claims/
+  // sender_identity/email_dossier, no new query.
+  office_location: {
+    lane: "body",
+    extract: (facts) => {
+      const loc = facts?.location;
+      return loc ? { location: loc } : null;
+    },
+  },
 };
 
 export async function readFuel(targetId) {

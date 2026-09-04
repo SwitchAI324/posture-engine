@@ -36,7 +36,7 @@
 // don't overlap, so nobody double-writes.
 // ----------------------------------------------------------------------
 
-import { insertCallOutcome, saveTranscript } from "./_store.js";
+import { insertCallOutcome, saveTranscript, upsertRecording } from "./_store.js";
 
 export const config = { runtime: "edge" };
 
@@ -82,10 +82,47 @@ export default async function handler(req) {
       return jsonRes({ error: "target_id required" }, 400);
     }
     try {
+      // RECORDING FIELDS (2026-09-03, Recording chat) — passed through to
+      // _store.js's insertCallOutcome, same pattern as every other
+      // optional field above. recording_url/recording_duration_sec arrive
+      // only once egress actually finishes; recording_status is derived
+      // here, not trusted from the agent (three states: 'ready' when a
+      // URL genuinely arrived, 'failed' when egress never started,
+      // 'pending' otherwise — covers the agent closing before egress
+      // finishes, which is the normal case, not an error).
+      //
+      // FIELD RENAMED (2026-09-03, Recording/Voice): egress_start_failed,
+      // not egress_failed — the old name collided with LiveKit's own
+      // EGRESS_FAILED status, a DIFFERENT, LATER event delivered via the
+      // egress_ended webhook (a recording that started, then failed
+      // partway through). egress_start_failed means egress never started
+      // at all — this close-time field can only ever know about that
+      // earlier failure mode; anything after start is the webhook's job,
+      // not this one's.
+      //
+      // insertCallOutcome() confirmed (2026-09-03) to actually persist
+      // recordingUrl/recordingDurationSeconds/recordingStatus — verified
+      // with a real captured-request test, not just assumed.
+      const recordingStatus = b.recording_url
+        ? "ready"
+        : b.egress_start_failed
+        ? "failed"
+        : "pending";
       await insertCallOutcome({
         targetId,
         callOutcome: b.call_outcome,
-        vapiCallId: b.vapi_call_id,
+        // vapi_call_id (2026-09-03, corrected per Data) — this IS the real,
+        // only column on `calls` for the external call reference; it's
+        // just named for the old system. Written from b.call_id (the
+        // LiveKit room name, same value the transcript save below already
+        // uses) rather than b.vapi_call_id — that field has documented
+        // history of arriving empty (the Aug-8 call_transcripts fix), so
+        // prefer the value already confirmed reliable, falling back to
+        // b.vapi_call_id only if the agent genuinely doesn't send call_id
+        // on some path. updateCallRecording (the recording_ready action
+        // below) matches on this exact column later — its correctness
+        // depends on this write actually landing a good value.
+        vapiCallId: b.call_id ?? b.vapi_call_id ?? null,
         startedAt: b.started_at,
         endedAt: b.ended_at,
         durationSeconds: b.duration_seconds,
@@ -93,6 +130,9 @@ export default async function handler(req) {
         hostPosture: b.host_posture,
         transcript: b.transcript,
         status: b.status,
+        recordingUrl: b.recording_url ?? null,
+        recordingDurationSeconds: b.recording_duration_sec ?? null,
+        recordingStatus,
       });
       // FINAL-CONVERSATION SAVE (Aug 8, Voice — race-proof by construction).
       // Separate write, separate table, from the calls-row insert above:
@@ -154,6 +194,42 @@ export default async function handler(req) {
         target_id: targetId,
         call_outcome: b.call_outcome ?? null,
       });
+    } catch (e) {
+      return jsonRes(
+        { ok: false, error: String(e && e.message ? e.message : e) },
+        500
+      );
+    }
+  }
+
+  // POST ?action=recording_ready — REPLACED (2026-09-03, Data's ruling).
+  // Phone jobs never hit ?action=close on this file at all, so the
+  // previous by-call_id UPDATE against `calls` could never work for
+  // them — recordings now live in their own table (`recordings`, uuid id
+  // + UNIQUE slug), upserted by slug, NOT mirrored into `calls`. The
+  // existing calls.recording_* write in the close handler above is
+  // untouched — that stays exactly as shipped, web-close-time only.
+  // Genuine upsert means no 202/retry anymore: it can't match zero rows,
+  // it creates the row if absent. 200 on every successful write.
+  if (req.method === "POST" && action === "recording_ready") {
+    let b;
+    try {
+      b = await req.json();
+    } catch {
+      return jsonRes({ error: "bad json" }, 400);
+    }
+    const slug = b.slug ? String(b.slug).trim() : null;
+    if (!slug) {
+      return jsonRes({ error: "slug required" }, 400);
+    }
+    try {
+      const row = await upsertRecording({
+        slug,
+        recordingUrl: b.recording_url ?? null,
+        durationSec: b.recording_duration_sec ?? null,
+        status: b.status ?? null,
+      });
+      return jsonRes({ ok: true, slug, recording: row });
     } catch (e) {
       return jsonRes(
         { ok: false, error: String(e && e.message ? e.message : e) },
