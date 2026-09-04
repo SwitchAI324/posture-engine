@@ -135,6 +135,11 @@ async function mintPhoneToken(job) {
   const row = {
     slug,
     channel: 'phone',
+    // booking_tokens.target_email is NOT NULL (built for the web flow, which
+    // always has a scammer email). A phone callback has a NUMBER, not an email,
+    // so we set a synthetic, unique, obviously-not-real placeholder — greppable
+    // as a phone-origin token and safe from collisions.
+    target_email: `phone+${job.id}@sv.local`,
     archetype: job.archetype || null,
     host_name: job.host_name || null,
     target_id: null,   // callback_jobs has no target_id; hydrate degrades safely
