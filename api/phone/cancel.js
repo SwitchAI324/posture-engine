@@ -1,4 +1,4 @@
-// api/phone/cancel.js  (moved from api/phone-cancel.js, Sep 2)
+// api/phone/cancel.js
 // Called by Barbara's Apps Script when a user replies CANCEL on a
 // phone-intake thread. Cancels that user's newest pending/approved job.
 //

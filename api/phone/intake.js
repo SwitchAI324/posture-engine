@@ -1,12 +1,18 @@
-// api/phone/intake.js  (moved from api/phone-intake.js, Sep 2)
+// api/phone/intake.js
 // Phone Intake v1 (voicemail share). Called by Barbara's Apps Script when a
-// message to raid@spamviking.com carries an audio attachment.
+// message to raid@spamviking.com carries a voicemail — either as an audio
+// attachment or as a carrier text transcript in the body.
 //
-// POST JSON: { sender_email, subject, attachment_base64, attachment_mime,
-//              host_name }
-// Header:    x-phone-intake-secret: <PHONE_INTAKE_SECRET>
-// Returns:   { ok, intake_id, status, reply_subject, reply_body }
-//            Apps Script sends reply_body back to the user as the reply.
+// POST JSON (audio): { sender_email, subject, attachment_base64,
+//                      attachment_mime, host_name, message_id?,
+//                      voicemail_datetime? }
+// POST JSON (text):  { sender_email, subject, transcript, host_name,
+//                      message_id?, voicemail_datetime? }
+// Duplicate (same sender + message_id already seen) → 200
+//   { ok:true, status:'duplicate', reply_body:null } — send nothing.
+// Header:            x-phone-intake-secret: <PHONE_INTAKE_SECRET>
+// Returns:           { ok, intake_id, status, reply_subject, reply_body }
+//                    Apps Script sends reply_body back to the user.
 //
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, DEEPGRAM_API_KEY,
 //      ANTHROPIC_API_KEY, ANTHROPIC_MODEL (optional), PHONE_INTAKE_SECRET,
@@ -80,8 +86,10 @@ async function analyze(transcript) {
 Fields:
 - archetype: one of ${ARCHETYPES.join(', ')}. Precision over recall: use "generic" unless clearly one of the others.
 - confidence: number 0..1 that the archetype is right.
-- stated_numbers: phone numbers the SPEAKER explicitly gives as a number to call back, as E.164 (+1XXXXXXXXXX for US). Only numbers actually spoken in the recording. Empty array if none.
+- stated_numbers: phone numbers the SPEAKER explicitly gives as a number to call back, in E.164 with country code (+1XXXXXXXXXX for US/Canada, +44... etc). Only numbers actually spoken in the recording. Empty array if none.
 - number_count: how many times the primary callback number is spoken.
+- extension: digits the caller says to enter after the number connects ("press 4", "extension 204"), as a digit string, or null.
+- ask_for: the person and/or department the caller says to ask for ("Jim in the fraud department"), or null.
 - claimed_org: the organization the caller claims to be from, or null.
 - agent_label: the name the caller gives for themselves, or null.
 - script_summary: one sentence, the pitch and the ask.`;
@@ -95,7 +103,6 @@ Fields:
     body: JSON.stringify({
       model: MODEL,
       max_tokens: 600,
-      temperature: 0,
       system,
       messages: [{ role: 'user', content: `Voicemail transcript:\n\n${transcript}` }],
     }),
@@ -104,7 +111,11 @@ Fields:
   const raw = (await r.json()).content?.map(c => c.text || '').join('') || '{}';
   const j = JSON.parse(raw.replace(/```json|```/g, '').trim());
   if (!ARCHETYPES.includes(j.archetype)) j.archetype = 'generic';
-  j.stated_numbers = (j.stated_numbers || []).filter(n => /^\+1\d{10}$/.test(n)); // US only for v1
+  const all = (j.stated_numbers || []).filter(n => /^\+\d{8,15}$/.test(n));
+  j.stated_numbers = all.filter(n => /^\+1\d{10}$/.test(n));            // dialable: +1 only for v1
+  j.international_numbers = all.filter(n => !/^\+1\d{10}$/.test(n));    // heard, not dialed
+  j.extension = typeof j.extension === 'string' && /^\d{1,6}$/.test(j.extension) ? j.extension : null;
+  j.ask_for = typeof j.ask_for === 'string' && j.ask_for.trim() ? j.ask_for.trim().slice(0, 80) : null;
   return j;
 }
 
@@ -138,8 +149,23 @@ function replyFor(status, ctx) {
 
 "${ctx.transcript}"
 
-We're going to call ${pretty(ctx.number)} in about ${ctx.minutes} minutes.
+We're going to call ${pretty(ctx.number)}${ctx.extension ? `, extension ${ctx.extension}` : ''}${ctx.askFor ? `, asking for ${ctx.askFor}` : ''} in about ${ctx.minutes} minutes.
 If that's the wrong number or you'd rather we didn't, reply CANCEL.
+
+— SpamViking`,
+    };
+  }
+  if (status === 'international') {
+    return {
+      reply_subject: subj,
+      reply_body:
+`Got it. Here's what we heard:
+
+"${ctx.transcript}"
+
+The callback number in that message is ${ctx.number}, which is outside
+the US. We're US-only right now — international is coming. Nothing will
+be dialed.
 
 — SpamViking`,
     };
@@ -168,11 +194,15 @@ export default async function handler(req, res) {
     return res.status(401).json({ ok: false, error: 'bad secret' });
   }
 
-  const { sender_email, subject, attachment_base64, attachment_mime, host_name } = req.body || {};
-  if (!sender_email || !attachment_base64) {
-    return res.status(400).json({ ok: false, error: 'sender_email and attachment_base64 required' });
+  const { sender_email, subject, attachment_base64, attachment_mime, host_name,
+          message_id, voicemail_datetime } = req.body || {};
+  const textTranscript = typeof req.body?.transcript === 'string' ? req.body.transcript.trim() : '';
+  const isAudio = !!attachment_base64;
+  if (!sender_email || (!isAudio && !textTranscript)) {
+    return res.status(400).json({ ok: false, error: 'sender_email plus attachment_base64 or transcript required' });
   }
   const mime = attachment_mime || 'audio/m4a';
+  const provenance = isAudio ? 'stated_in_audio' : 'stated_in_text';
 
   let intakeId = null;
   try {
@@ -180,30 +210,53 @@ export default async function handler(req, res) {
     const userId = await rpc('user_id_by_email', { p_email: sender_email });
     if (!userId) return res.status(404).json({ ok: false, error: 'unknown sender' });
 
+    // 1b. Exact duplicate? (same email forwarded twice)
+    if (message_id) {
+      const dup = await select('phone_intakes',
+        `user_id=eq.${userId}&message_id=eq.${encodeURIComponent(message_id)}&select=id,status`);
+      if (dup.length) {
+        return res.status(200).json({ ok: true, intake_id: dup[0].id, status: 'duplicate', reply_subject: null, reply_body: null });
+      }
+    }
+
     // 2. Settings row (insert-if-missing; inserts are not guarded)
     await insert('phone_settings', { user_id: userId }, 'resolution=ignore-duplicates,return=minimal');
     const [settings] = await select('phone_settings', `user_id=eq.${userId}&select=*`);
 
-    // 3. Store audio + open the intake
-    const buf = Buffer.from(attachment_base64, 'base64');
-    const [intake] = await insert('phone_intakes', { user_id: userId, source: 'voicemail_share', status: 'received' });
+    // 3. Open the intake; store audio if we have it
+    const [intake] = await insert('phone_intakes', {
+      user_id: userId, source: 'voicemail_share', status: 'received',
+      message_id: message_id || null,
+      voicemail_at: voicemail_datetime || null,
+    });
     intakeId = intake.id;
-    const audioPath = await uploadAudio(`${userId}/${intakeId}.${mime.includes('wav') ? 'wav' : 'm4a'}`, buf, mime);
-    await update('phone_intakes', `id=eq.${intakeId}`, { audio_path: audioPath });
 
-    // 4. Transcribe
-    const transcript = await transcribe(buf, mime);
+    let transcript;
+    if (isAudio) {
+      const buf = Buffer.from(attachment_base64, 'base64');
+      const audioPath = await uploadAudio(`${userId}/${intakeId}.${mime.includes('wav') ? 'wav' : 'm4a'}`, buf, mime);
+      await update('phone_intakes', `id=eq.${intakeId}`, { audio_path: audioPath });
+      // 4a. Transcribe
+      transcript = await transcribe(buf, mime);
+      await insert('minute_ledger', { user_id: userId, intake_id: intakeId, kind: 'transcription', minutes: 1 }, 'return=minimal');
+    } else {
+      // 4b. Carrier transcript supplied as text
+      transcript = textTranscript;
+    }
     await update('phone_intakes', `id=eq.${intakeId}`, { transcript, status: 'transcribed' });
-    await insert('minute_ledger', { user_id: userId, intake_id: intakeId, kind: 'transcription', minutes: 1 }, 'return=minimal');
 
     // 5. Classify (every forward is treated as a scam by design)
     const a = await analyze(transcript);
     await update('phone_intakes', `id=eq.${intakeId}`, {
       archetype: a.archetype, confidence: a.confidence, is_scam: true,
-      stated_numbers: a.stated_numbers, classification: a, status: 'classified',
+      stated_numbers: a.stated_numbers, classification: { ...a, provenance }, status: 'classified',
     });
 
-    // 6. No spoken number → nothing to dial
+    // 6. No dialable number → nothing to dial
+    if (!a.stated_numbers.length && a.international_numbers.length) {
+      await update('phone_intakes', `id=eq.${intakeId}`, { status: 'rejected' });
+      return res.status(200).json({ ok: true, intake_id: intakeId, status: 'international', ...replyFor('international', { subject, transcript, number: a.international_numbers[0] }) });
+    }
     if (!a.stated_numbers.length) {
       await update('phone_intakes', `id=eq.${intakeId}`, { status: 'rejected' });
       return res.status(200).json({ ok: true, intake_id: intakeId, status: 'rejected', ...replyFor('rejected', { subject, transcript }) });
@@ -215,10 +268,12 @@ export default async function handler(req, res) {
       p_e164: number, p_org: a.claimed_org || null, p_summary: a.script_summary || null,
       p_archetype: a.archetype, p_src: 'intake',
     });
-    await insert('callback_numbers', {
-      user_id: userId, intake_id: intakeId, e164: number,
-      provenance: 'stated_in_audio', caller_profile_id: number,
-    }, 'resolution=ignore-duplicates,return=minimal');
+    // Allowlist row is one-per-(user, number); many jobs may point at it.
+    await sb('callback_numbers?on_conflict=user_id,e164', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId, intake_id: intakeId, e164: number, provenance, caller_profile_id: number }),
+      prefer: 'resolution=ignore-duplicates,return=minimal',
+    });
     const [gate] = await select('callback_numbers', `user_id=eq.${userId}&e164=eq.${encodeURIComponent(number)}&select=id,blocked`);
     if (!gate || gate.blocked) {
       await update('phone_intakes', `id=eq.${intakeId}`, { status: 'rejected' });
@@ -234,6 +289,8 @@ export default async function handler(req, res) {
       approved_at: new Date().toISOString(),
       reference_code: CODE_ARCHETYPES.includes(a.archetype) ? refCode() : null,
       host_name: host_name || null,
+      dial_extension: a.extension,
+      ask_for: a.ask_for,
     }, 'return=minimal');
     await update('phone_intakes', `id=eq.${intakeId}`, { status: 'queued' });
 
@@ -242,7 +299,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true, intake_id: intakeId, status: 'queued',
-      ...replyFor('queued', { subject, transcript, number, minutes }),
+      ...replyFor('queued', { subject, transcript, number, minutes, extension: a.extension, askFor: a.ask_for }),
     });
   } catch (err) {
     console.error('phone-intake', err);
