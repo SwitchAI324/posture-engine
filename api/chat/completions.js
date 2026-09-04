@@ -1545,6 +1545,70 @@ const REINJECT_WINDOW_MS = parseInt(process.env.REINJECT_WINDOW_MS || "3000", 10
 // is the occasional variant. This is the ONE control that decides how often the
 // gag lane grabs turn 1. Env-tunable, no deploy. Only consulted on turn 1.
 const GAG_OPEN_RATE = parseFloat(process.env.GAG_OPEN_RATE || "0.25");
+// PHONE VOICEMAIL OVERLAY (2026-09-03) — REVISED per Recording/Call
+// Design's confirmed spec (PHONE_INTAKE_host_voice_spec.md, items 2+8).
+// Real content now, not a flat placeholder — but built as INSTRUCTION
+// POOLS for the model to vary from, not one pre-picked script. This
+// matches how the rest of the master host prompt's own lesson-8 pools
+// work (offered as options in the prompt, model picks/varies live), and
+// is the right split of labor here: the STRUCTURE and DATA
+// (callback_number, reference_code) are real and mine to inject
+// precisely; the actual per-host VOICE is still pending the host-
+// roster adaptation pass Canon's own doc flags as not yet done — so
+// this reads as a genuine, correct voicemail bit today, on a generic
+// register, and gets richer once that pass lands, without this
+// function needing to change.
+function buildVoicemailOverlay(callbackNumber, referenceCode, archetype) {
+  const codeArchetypes = new Set(["b2b_saas", "account_access", "gov_threat"]);
+  const includeCode = codeArchetypes.has(archetype) && !!referenceCode;
+
+  let codeFraming = "";
+  if (includeCode) {
+    if (archetype === "gov_threat") {
+      codeFraming =
+        "\nYou also have a reference/case number for this: " + referenceCode +
+        ". Weave it in once with the same hedging/self-doubt as everything " +
+        "else you're not fully sure of (\"don't hold me to that one\") — " +
+        "never stated with false confidence.";
+    } else {
+      codeFraming =
+        "\nYou also have a reference number for this: " + referenceCode +
+        ". Weave it in once with the same hedging/self-doubt as everything " +
+        "else you're not fully sure of (\"don't hold me to that one\") — " +
+        "never stated with false confidence.";
+    }
+  }
+
+  return (
+    "[VOICEMAIL MODE — you've reached voicemail, not a live person. Leave " +
+    "a genuinely long, well-meaning, bumbling message — not a brief " +
+    "functional one. You are trying hard to be thorough and helpful, lose " +
+    "the thread more than once, circle back. Roughly 60-90 seconds. Never " +
+    "a clipped goodbye.]\n\n" +
+    "YOUR REAL CALLBACK NUMBER (state this exactly, it's real data, not " +
+    "invented): " + callbackNumber + ". Repeat it 3-4 times through the " +
+    "message, spaced out, not just once at the end — each time with a " +
+    "different excuse (\"let me say that again,\" \"just in case that " +
+    "didn't come through,\" \"one more time for good measure,\" \"in case " +
+    "you're writing this down\").\n" +
+    codeFraming + "\n\n" +
+    "STRUCTURE TO VARY (mix and match, never the same full script twice):\n" +
+    "- OPENING RESTART: some kind of self-aware flub right at the top — " +
+    "\"let me just start that over,\" \"sorry, I always do this,\" \"actually " +
+    "— no, let me try that again.\"\n" +
+    "- MIDDLE CONTENT: as much specific, concrete detail as you'd " +
+    "plausibly remember and want to reference about why you're calling — " +
+    "not a vague \"about that thing we discussed.\"\n" +
+    "- SELF-AWARE LENGTH COMMENT: somewhere past the middle, notice how " +
+    "long the message is getting (\"I don't want to leave you a fifteen-" +
+    "minute voicemail,\" \"sorry, this is getting long\") — and then keep " +
+    "going a bit longer anyway. That's a real character beat, not " +
+    "something to fix.\n" +
+    "- WARM, SLIGHTLY RAMBLY CLOSE: never a clipped \"goodbye\" — \"okay, " +
+    "bye now,\" \"alright, take care, bye,\" \"hope to hear from you, bye " +
+    "now.\""
+  );
+}
 // PHASE: warm up before throwing any bit, then get mildly more willing to fire
 // as the call goes (they're invested — swing a little more).
 const WARMUP_TURNS = parseInt(process.env.WARMUP_TURNS || "2", 10);
@@ -2066,7 +2130,56 @@ export default async function handler(req) {
     " hasBusiness=" + !!(stored && stored.businessOverlay) +
     " willEnterBlock=" + !!(stored && stored.prefix && (stored.openerOverlay || stored.businessOverlay))
   );
-  if (stored && stored.prefix && (stored.openerOverlay || stored.businessOverlay)) {
+  // PHONE VOICEMAIL MODE (2026-09-03, Voice) — a fundamentally different
+  // register from the normal opener/business phase split: one continuous
+  // message, no back-and-forth, ~60-90s. NOT a phase, so it does NOT go
+  // through the useBusiness phase logic below — it overrides that
+  // selection entirely when active. Voice stamps phone_mode on the SAME
+  // metadata channel silence_beat/interrupted already use (dual-read
+  // convention matches those exactly). callback_number/reference_code
+  // read the same way — per Voice's spec, both arrive fresh on every
+  // completion, not via booking_tokens (see the PE<->Voice thread this
+  // session: routing these through the synthetic token would have been
+  // redundant with this same channel).
+  //
+  // Content REVISED 2026-09-03 to Recording/Call Design's real spec
+  // (buildVoicemailOverlay, defined near GAG_OPEN_RATE above) — real
+  // callback number/reference code injected as data, structural pools
+  // as instructions for the model to vary from. Register is still
+  // generic pending the host-roster adaptation pass Canon's own doc
+  // flags as not yet done.
+  const phoneMode =
+    body?.metadata?.phone_mode ?? body?.extra_body?.metadata?.phone_mode ?? null;
+  const isVoicemailMode = phoneMode === "voicemail";
+  if (isVoicemailMode) {
+    const callbackNumber =
+      body?.metadata?.callback_number ?? body?.extra_body?.metadata?.callback_number ?? null;
+    const referenceCodeMeta =
+      body?.metadata?.reference_code ?? body?.extra_body?.metadata?.reference_code ?? null;
+    const archetypeMeta =
+      body?.metadata?.archetype ?? body?.extra_body?.metadata?.archetype ?? null;
+    console.log(
+      "PHONE-VOICEMAIL-MODE active — overriding normal overlay selection" +
+      " hasCallbackNumber=" + !!callbackNumber +
+      " hasReferenceCode=" + !!referenceCodeMeta +
+      " archetype=" + (archetypeMeta || "unknown")
+    );
+    if (callbackNumber) {
+      baseSystem =
+        (baseSystem || "") +
+        "\n\n" +
+        buildVoicemailOverlay(callbackNumber, referenceCodeMeta, archetypeMeta);
+    } else {
+      // No real number to state means this directive would ask the model
+      // to invent one — worse than not injecting it at all. Log loudly;
+      // this should never happen on a real voicemail dispatch.
+      console.log(
+        "PHONE-VOICEMAIL-MODE FAILED — phone_mode=voicemail but no " +
+        "callback_number in metadata; skipping voicemail overlay entirely " +
+        "rather than let the host invent a number"
+      );
+    }
+  } else if (stored && stored.prefix && (stored.openerOverlay || stored.businessOverlay)) {
     const phase = stored.phase || "opening";
     // BACKSTOP (added 2026-07-23 after the first live test): the phase reader
     // can FAIL persistently ("callread FAILED — phase/gears unchanged"), which
