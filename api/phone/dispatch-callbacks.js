@@ -78,7 +78,9 @@ async function agentBusy() {
   return true;                                         // a live agent is dialing
 }
 
-// ── the single oldest due + approved job (one per run for the free tier).
+// ── the single oldest due + approved job (one per run for the free tier). The
+//    phone number lives on callback_numbers (FK callback_number_id), so embed it
+//    via PostgREST. target_id is NOT on callback_jobs, so it's not selected.
 async function nextDueJob() {
   const nowIso = new Date().toISOString();
   const url =
@@ -87,11 +89,15 @@ async function nextDueJob() {
     `&scheduled_at=lte.${encodeURIComponent(nowIso)}` +
     `&order=scheduled_at.asc` +
     `&limit=1` +
-    `&select=id,callback_number_id,archetype,host_name,target_id,e164,scheduled_at,status`;
+    `&select=id,callback_number_id,archetype,host_name,reference_code,dial_extension,ask_for,scheduled_at,status,callback_numbers(e164,blocked)`;
   const r = await fetch(url, { headers: { ...sb, Accept: 'application/json' } });
   if (!r.ok) throw new Error(`nextDueJob ${r.status}: ${(await r.text()).slice(0, 200)}`);
   const rows = await r.json();
-  return rows[0] || null;
+  const job = rows[0];
+  if (!job) return null;
+  // flatten the embedded number for convenience
+  job.e164 = job.callback_numbers ? job.callback_numbers.e164 : null;
+  return job;
 }
 
 // ── mark_callback_job (named args; p_outcome sits BETWEEN status and fail_reason).
@@ -131,7 +137,7 @@ async function mintPhoneToken(job) {
     channel: 'phone',
     archetype: job.archetype || null,
     host_name: job.host_name || null,
-    target_id: job.target_id || null,
+    target_id: null,   // callback_jobs has no target_id; hydrate degrades safely
   };
   const r = await fetch(`${SUPABASE_URL}/rest/v1/booking_tokens?on_conflict=slug`, {
     method: 'POST',
