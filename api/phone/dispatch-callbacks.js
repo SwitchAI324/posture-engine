@@ -32,7 +32,7 @@
 // Writes go through mark_callback_job (named args) which satisfies Data's
 // app.system_write guard inside its own body.
 
-import { AgentDispatchClient } from 'livekit-server-sdk';
+const { AgentDispatchClient } = require('livekit-server-sdk');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -41,7 +41,7 @@ const DISPATCH_SECRET = process.env.DISPATCH_SECRET;       // for manual test ca
 const LIVEKIT_URL = process.env.LIVEKIT_URL;
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
-const AGENT_NAME = 'spamviking';
+const AGENT_NAME = process.env.LIVEKIT_AGENT_NAME || 'spamviking';
 
 const sb = { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` };
 
@@ -177,7 +177,7 @@ function authorized(req) {
   return !CRON_SECRET && !DISPATCH_SECRET; // dev: allow if no secret configured
 }
 
-export default async (req, res) => {
+module.exports = async (req, res) => {
   if (!authorized(req)) return res.status(401).json({ ok: false, error: 'unauthorized' });
   if (!SUPABASE_URL || !SERVICE_KEY) {
     return res.status(500).json({ ok: false, error: 'supabase env missing' });
