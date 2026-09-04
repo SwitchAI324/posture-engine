@@ -32,7 +32,7 @@
 // Writes go through mark_callback_job (named args) which satisfies Data's
 // app.system_write guard inside its own body.
 
-const { AgentDispatchClient } = require('livekit-server-sdk');
+const { AgentDispatchClient, RoomServiceClient } = require('livekit-server-sdk');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -43,7 +43,46 @@ const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
 const AGENT_NAME = process.env.LIVEKIT_AGENT_NAME || 'spamviking';
 
+// GLOBAL KILL SWITCH — DB-backed so it's flippable instantly via SQL, no deploy
+// (an env var would need a redeploy, wrong for a safety switch). The dispatcher
+// reads it every run. Flag lives in system_flags.dispatch_enabled (Data). Fails
+// SAFE: if the read errors or returns no flag, dialing stays OFF.
+const KILL_TABLE = process.env.DISPATCH_FLAG_TABLE || 'system_flags';
+const KILL_COL = process.env.DISPATCH_FLAG_COL || 'dispatch_enabled';
+async function dispatchEnabled() {
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/${KILL_TABLE}?select=${KILL_COL}&limit=1`;
+    const r = await fetch(url, { headers: { ...sb, Accept: 'application/json' } });
+    if (!r.ok) return false;                 // fail safe: no flag readable => off
+    const rows = await r.json();
+    if (!rows.length) return false;
+    return rows[0][KILL_COL] === true;
+  } catch (e) {
+    return false;                            // fail safe on any error
+  }
+}
+
 const sb = { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` };
+
+// ── LiveKit-level concurrency check (free tier = 1 concurrent agent). The DB
+//    busy-guard below only sees PHONE jobs in 'dialing' — it can't see live WEB
+//    calls. So also ask LiveKit directly: if any sv-* (web) or ph-* (phone) room
+//    is active, skip this tick. Best-effort; on error we fall through to the DB
+//    guard rather than block dialing entirely.
+async function liveKitBusy() {
+  if (!LIVEKIT_URL || !LIVEKIT_API_KEY || !LIVEKIT_API_SECRET) return false;
+  try {
+    const rs = new RoomServiceClient(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET);
+    const rooms = await rs.listRooms();
+    return (rooms || []).some((r) => {
+      const n = r && r.name ? String(r.name) : '';
+      return (n.startsWith('sv-') || n.startsWith('ph-')) &&
+        (r.numParticipants > 0 || r.numPublishers > 0);
+    });
+  } catch (e) {
+    return false; // don't let a listRooms hiccup wedge the queue
+  }
+}
 
 // ── is an agent already in flight? (free tier = 1 concurrent). A job stuck in
 //    'dialing' means a call is live; skip this run so we never start a second.
@@ -187,9 +226,18 @@ module.exports = async (req, res) => {
   if (!SUPABASE_URL || !SERVICE_KEY) {
     return res.status(500).json({ ok: false, error: 'supabase env missing' });
   }
+  // global kill switch (DB-backed, read every run). Off unless explicitly true.
+  if (!(await dispatchEnabled())) {
+    return res.status(200).json({ ok: true, skipped: 'dispatch_disabled' });
+  }
 
   try {
-    // free-tier: never start a second agent while one is live
+    // free-tier concurrency: skip if a live LiveKit room (web sv-* OR phone ph-*)
+    // is active, OR a phone job is still in 'dialing'. The LiveKit check covers
+    // web calls the DB can't see; the DB check has the 30-min stale reaper.
+    if (await liveKitBusy()) {
+      return res.status(200).json({ ok: true, skipped: 'livekit_busy' });
+    }
     if (await agentBusy()) {
       return res.status(200).json({ ok: true, skipped: 'agent_busy' });
     }
