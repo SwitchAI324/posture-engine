@@ -35,6 +35,11 @@
 //   caller_profile_id: string | null    (the key for a thread lookup)
 //   turn: number
 //   leaving_voicemail: boolean
+//   ask_for: string | null              (2026-09-03, Voice's extension —
+//                                         PE surfaces it verbatim when
+//                                         present, doesn't interpret,
+//                                         validate, or gate it; the
+//                                         content/meaning is Voice's call)
 //
 // caller_profile shape (Data-owned, one row per scammer E.164, shared
 // across users — NEVER contains a SpamViking user's name; co-written by
@@ -84,29 +89,81 @@ function referenceCodeOnFor(archetype) {
 // with bits, randomness, or archetype logic. Mirrors the bar-bypass
 // mechanism turn-1 gag-open uses in completions.js, minus the coin flip
 // — this one is unconditional whenever the gate holds, every time.
+//
+// REVISED (2026-09-03, per Recording/Call Design's confirmed spec) —
+// three real changes from the first draft:
+//   1. TWO ORDERED BEATS, not one blended line: a plain, unmistakable
+//      "this call is recorded" statement first, standing alone (legal
+//      requires the literal word "recorded"/"recording"), THEN a
+//      separate in-character flavor line. The order is fixed and can't
+//      be softened by burying the plain beat inside the joke.
+//   2. POOL-BASED, not one fixed string — matches this whole build's
+//      lesson-8 discipline (vary per call, never the same line twice).
+//      Picks one plain-beat variant + one flavor-line variant per call.
+//   3. FIRES ON INBOUND TOO, not just outbound — Recording's spec: a
+//      genuinely fresh inbound call with no prior notice gets the same
+//      plain-then-flavor structure, just phrased for answering rather
+//      than initiating. Real, confirmed change to needsRecordingNotice's
+//      gate below (previously outbound-only — that was never actually
+//      what the spec called for once Recording's answer came back).
+//      ⚠ genuine legal uncertainty remains open on some inbound edge
+//      cases per Recording's own flag ("this spec can't resolve" it) —
+//      what IS resolved and implemented here is the fresh-inbound
+//      default; a future legal answer could still narrow it further.
+//
+// NOT built here, and deliberately so: the "host may end the call if
+// the caller objects to recording" exception is standing CORE-prompt
+// content (a permission the model reasons about from what the caller
+// actually says), not a per-call compiled directive — that's Canon's
+// prompt text, not a gate this file can express. Same for the
+// call-ending seed line and the cold "are you recording me?" reactive
+// reply framing — both belong in the master host prompt alongside this
+// mechanism, not injected from here.
 // ---------------------------------------------------------------------
-const RECORDING_NOTICE_LINE =
-  "I can't figure out how to use this phone. About six months ago I " +
-  "turned the recording option on and for the life of me I can't undo it.";
-// Seed line per Andrew (2026-09-02), handed to Host Canon for final
-// wording — PE owns firing it, Canon owns the words. Swap this constant
-// for Canon's actual render once it ships; the GATE below is the real
-// deliverable here, not this placeholder string.
+const RECORDING_PLAIN_BEAT_POOL = [
+  "Oh — quick thing before we get going, this call's being recorded.",
+  "Hey, before I forget — heads up, this is being recorded.",
+  "One thing right off the top — you should know this call's being recorded.",
+];
+const RECORDING_FLAVOR_LINE_POOL = [
+  "I turned that on by accident about six months ago and I've never figured out how to undo it.",
+  "It's some setting I flipped by mistake ages ago, and every time I try to fix it I just make it worse, so I've let it be.",
+  "I've been meaning to figure out how to turn that off since sometime last spring and never have.",
+];
+
+function pickOne(pool) {
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 
 function needsRecordingNotice(meta) {
-  return (
-    meta.call_direction === "outbound" && meta.recording_notice_given !== true
-  );
+  // Fires regardless of direction now — see revision note above. Only
+  // gate is whether notice has genuinely already been given (a prior
+  // callback attempt, a voicemail) — never repeat the full formal beat.
+  return meta.recording_notice_given !== true;
 }
 
 function recordingNoticeDirective(meta) {
   if (!needsRecordingNotice(meta)) return null;
+  const plain = pickOne(RECORDING_PLAIN_BEAT_POOL);
+  const flavor = pickOne(RECORDING_FLAVOR_LINE_POOL);
+  const inboundNote =
+    meta.call_direction === "inbound"
+      ? "\nThis is an inbound call — phrase the plain beat for ANSWERING " +
+        "rather than initiating (e.g. \"before you get going...\"), and if " +
+        "the caller's own opening turn already asked about recording, " +
+        "answer that directly and honestly instead of using the line " +
+        "below verbatim — same fact, reactive framing, still plain-then-" +
+        "flavor in spirit."
+      : "";
   return (
     "[MANDATORY FIRST UTTERANCE — deliver this before anything else, " +
-    "in character. This is a legal requirement, not a performance " +
-    "choice — it cannot be skipped, softened into a later turn, or " +
-    "folded into small talk first:]\n" +
-    RECORDING_NOTICE_LINE
+    "in character, as TWO SEPARATE ORDERED BEATS. This is a legal " +
+    "requirement, not a performance choice — the first beat cannot be " +
+    "skipped, softened, merged into the second, or folded into small " +
+    "talk first:]\n" +
+    "BEAT 1 (plain, stands alone): " + plain + "\n" +
+    "BEAT 2 (flavor, follows separately): " + flavor +
+    inboundNote
   );
 }
 
@@ -284,13 +341,29 @@ function bitScoringState(meta, baseState) {
 // file doesn't own that registry.
 
 // ---------------------------------------------------------------------
+// ASK_FOR — Voice's extension (2026-09-03), added to the dispatch
+// contract at their request. Deliberately NOT gated on archetype,
+// confidence, direction, or voicemail-vs-answered the way the other
+// directives above are — per the instruction, PE surfaces the string
+// verbatim when present and otherwise stays out of it entirely; the
+// meaning/validity of the content is Voice's call, not this file's.
+// ---------------------------------------------------------------------
+function askForDirective(meta) {
+  if (!meta.ask_for) return null;
+  return (
+    "[WHAT YOU'RE TRYING TO GET FROM THIS CALL:] " + String(meta.ask_for).trim()
+  );
+}
+
+// ---------------------------------------------------------------------
 // COMPILE — mirrors hostBaseFor()/hostOverlaysFor() + callStableContext()
 // in providers.js. compilePhonePrefix() is the once-per-call CACHED
 // block — only what's resolvable from caller_profile/meta alone at call
 // start, with no live-speech dependency (the playbook, the reference-
-// code directive). Person-level memory is deliberately NOT in here: it
-// can only resolve once the caller has said something live, so it's a
-// per-turn concern, not a call-start one — see compileMemoryAddendum.
+// code directive, ask_for). Person-level memory is deliberately NOT in
+// here: it can only resolve once the caller has said something live, so
+// it's a per-turn concern, not a call-start one — see
+// compileMemoryAddendum.
 // ---------------------------------------------------------------------
 function compilePhonePrefix(meta) {
   const blocks = [];
@@ -300,6 +373,8 @@ function compilePhonePrefix(meta) {
   }
   const refCode = referenceCodeDirective(meta);
   if (refCode) blocks.push(refCode);
+  const askFor = askForDirective(meta);
+  if (askFor) blocks.push(askFor);
   return blocks.join("\n\n");
 }
 
@@ -424,6 +499,7 @@ module.exports = {
   resolveConversationThread,
   buildPersonMemoryBlock,
   referenceCodeDirective,
+  askForDirective,
   bitScoringState,
   compilePhonePrefix,
   compileMemoryAddendum,
