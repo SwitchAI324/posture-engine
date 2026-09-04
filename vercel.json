@@ -3,5 +3,8 @@
     { "source": "/chat/completions", "destination": "/api/chat/completions" },
     { "source": "/book/:slug", "destination": "/book.html" },
     { "source": "/reschedule/:slug", "destination": "/reschedule.html" }
+  ],
+  "crons": [
+    { "path": "/api/phone/dispatch-callbacks", "schedule": "* * * * *" }
   ]
 }
