@@ -5,6 +5,6 @@
     { "source": "/reschedule/:slug", "destination": "/reschedule.html" }
   ],
   "crons": [
-    { "path": "/api/phone/dispatch-callbacks", "schedule": "* * * * *" }
+    { "path": "/api/dispatch-callbacks", "schedule": "* * * * *" }
   ]
 }
