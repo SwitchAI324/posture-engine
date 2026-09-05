@@ -100,17 +100,17 @@ async function readToken(slug) {
 // token — that would re-stamp every booking and drift if the host moves zones).
 // Resolve it by host_name; fall back to the deploy default. Best-effort: if
 // host_config isn't reachable or has no row, the env default is fine for display.
+// Per-host timezone. PENDING host-name convergence: host_config is now keyed by
+// user_id and host_config.host_name was DROPPED, so the old
+// host_config?host_name=eq.X lookup is invalid. host_tz isn't in the locked
+// host_config schema either (may have moved/been dropped). Until the new keying
+// is confirmed, return the deploy default (this already was the fallback, so
+// output is unchanged) instead of firing a query against a dropped column.
+// TODO(convergence): re-key host_config lookup by user_id (resolve via the
+// token's owner_email -> sv_users.id) once host_config owner confirms host_tz's
+// home and key.
 async function readHostTz(hostName) {
-  if (!hostName) return HOST_TZ;
-  try {
-    const url =
-      `${SUPABASE_URL}/rest/v1/host_config` +
-      `?host_name=eq.${encodeURIComponent(hostName)}&select=host_tz&limit=1`;
-    const res = await fetch(url, { headers: { ...sbHeaders, Accept: 'application/json' } });
-    if (!res.ok) return HOST_TZ;
-    const rows = await res.json();
-    return (rows[0] && rows[0].host_tz) || HOST_TZ;
-  } catch (e) { return HOST_TZ; }
+  return HOST_TZ;
 }
 
 // Freeze the authored story onto the token (first load only).
