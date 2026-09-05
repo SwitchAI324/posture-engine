@@ -128,7 +128,7 @@ async function nextDueJob() {
     `&scheduled_at=lte.${encodeURIComponent(nowIso)}` +
     `&order=scheduled_at.asc` +
     `&limit=1` +
-    `&select=id,callback_number_id,archetype,host_name,reference_code,dial_extension,ask_for,scheduled_at,status,callback_numbers(e164,blocked)`;
+    `&select=id,user_id,callback_number_id,archetype,host_name,reference_code,dial_extension,ask_for,scheduled_at,status,callback_numbers(e164,blocked),sv_users(email)`;
   const r = await fetch(url, { headers: { ...sb, Accept: 'application/json' } });
   if (!r.ok) throw new Error(`nextDueJob ${r.status}: ${(await r.text()).slice(0, 200)}`);
   const rows = await r.json();
@@ -136,6 +136,7 @@ async function nextDueJob() {
   if (!job) return null;
   // flatten the embedded number for convenience
   job.e164 = job.callback_numbers ? job.callback_numbers.e164 : null;
+  job.owner_email = job.sv_users ? job.sv_users.email : null;   // for host_config voice resolution
   return job;
 }
 
@@ -182,6 +183,7 @@ async function mintPhoneToken(job) {
     archetype: job.archetype || null,
     host_name: job.host_name || null,
     target_id: null,   // callback_jobs has no target_id; hydrate degrades safely
+    owner_email: job.owner_email || null,   // host_config voice dials resolve by this
   };
   const r = await fetch(`${SUPABASE_URL}/rest/v1/booking_tokens?on_conflict=slug`, {
     method: 'POST',
