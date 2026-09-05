@@ -91,7 +91,11 @@ Fields:
 - extension: digits the caller says to enter after the number connects ("press 4", "extension 204"), as a digit string, or null.
 - ask_for: the person and/or department the caller says to ask for ("Jim in the fraud department"), or null.
 - claimed_org: the organization the caller claims to be from, or null.
-- agent_label: the name the caller gives for themselves, or null.
+- agent_label: the name the caller gives for themselves ("this is Steve"), or null.
+- account_refs: any account, case, reference, or invoice numbers the caller cites, as strings. Empty array if none.
+- stated_hours: the hours the caller says to call back, verbatim ("8AM to 5PM Pacific"), or null.
+- pitch: one short sentence, what the caller claims is going on.
+- the_ask: one short sentence, what the caller wants the listener to do.
 - script_summary: one sentence, the pitch and the ask.`;
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -116,6 +120,9 @@ Fields:
   j.international_numbers = all.filter(n => !/^\+1\d{10}$/.test(n));    // heard, not dialed
   j.extension = typeof j.extension === 'string' && /^\d{1,6}$/.test(j.extension) ? j.extension : null;
   j.ask_for = typeof j.ask_for === 'string' && j.ask_for.trim() ? j.ask_for.trim().slice(0, 80) : null;
+  j.agent_label = typeof j.agent_label === 'string' && j.agent_label.trim() ? j.agent_label.trim().slice(0, 60) : null;
+  if (!j.ask_for && j.agent_label) j.ask_for = j.agent_label;   // "this is Steve" → ask for Steve
+  j.account_refs = Array.isArray(j.account_refs) ? j.account_refs.map(String).slice(0, 10) : [];
   return j;
 }
 
@@ -291,6 +298,15 @@ export default async function handler(req, res) {
       host_name: host_name || null,
       dial_extension: a.extension,
       ask_for: a.ask_for,
+      caller_context: {
+        caller_name: a.agent_label || null,
+        claimed_org: a.claimed_org || null,
+        pitch: a.pitch || null,
+        the_ask: a.the_ask || null,
+        account_refs: a.account_refs,
+        stated_hours: a.stated_hours || null,
+        transcript,
+      },
     }, 'return=minimal');
     await update('phone_intakes', `id=eq.${intakeId}`, { status: 'queued' });
 
