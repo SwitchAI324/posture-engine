@@ -23,6 +23,20 @@
     border:1.5px solid var(--gold);background:#fbf0d8;color:#5f4a1e;border-radius:7px;padding:4px 10px;cursor:pointer;white-space:nowrap}
   .listenbtn:hover{background:#f7e7c2}
   .listenbtn.on{background:var(--blood);border-color:var(--blood);color:#fff}
+  .sharebtn{margin-left:8px;font-family:var(--mono);font-weight:700;font-size:11px;letter-spacing:.02em;
+    border:1.5px solid #3b6ea5;background:#eaf1fa;color:#274b73;border-radius:7px;padding:4px 10px;cursor:pointer;white-space:nowrap}
+  .sharebtn:hover{background:#dae8f7}
+  body.role-watcher .sharebtn{display:none}   /* watchers can't create share links */
+  #shareOv .sharecard{background:#fff;max-width:520px;width:92%;border-radius:12px;padding:22px 22px 20px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  #shareOv h3{font-family:var(--mono);font-size:13px;letter-spacing:.04em;margin:0 0 8px;display:flex;align-items:center}
+  #shareOv h3 .x{margin-left:auto;cursor:pointer;color:var(--muted);font-size:12px}
+  .sharenote{font-size:12px;line-height:1.5;color:#5a5346;margin:0 0 14px}
+  .shareurlrow{display:flex;gap:8px}
+  #shareUrl{flex:1;font-family:var(--mono);font-size:11px;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:#faf7f0;color:#3a352d;min-width:0}
+  #shareCopy{font-family:var(--mono);font-weight:700;font-size:11px;border:1.5px solid var(--blood);background:var(--blood);color:#fff;border-radius:7px;padding:0 16px;cursor:pointer}
+  #shareCopy:hover{background:var(--blood2)}
+  .sharemeta{font-family:var(--mono);font-size:9px;color:#a99a7c;margin-top:10px;word-break:break-all}
+  .sharestatus{font-size:11px;color:#5a5346;margin-top:8px;min-height:14px}
   .listenbtn.on::before{content:"● ";color:#fff}
   .listenbtn.connecting{opacity:.7;cursor:default}
   #callAudio{display:none}
@@ -691,6 +705,7 @@
     <span class="live"><i></i>LIVE</span>
     <span class="badge" id="dirBadge">DIRECTOR · WATCHING</span>
     <button class="listenbtn" id="listenBtn" title="hear the live call">🔊 Listen</button>
+    <button class="sharebtn" id="shareBtn" title="create a read-only watch link to share">⤴ Share watch link</button>
     <span class="soundbeat" id="soundBeat"></span>
     <span class="zoomctl">
       <button id="zoomOut" title="smaller">A−</button>
@@ -698,6 +713,19 @@
       <button id="zoomIn" title="bigger">A+</button>
     </span>
   </header>
+
+  <div class="ov" id="shareOv">
+    <div class="sharecard">
+      <h3>Share a watch link <span class="x" id="shareX">✕</span></h3>
+      <p class="sharenote">Anyone with this link can <b>watch this call live, read-only</b> — no controls, no login. Send it to whoever you want watching.</p>
+      <div class="shareurlrow">
+        <input id="shareUrl" type="text" readonly value="">
+        <button id="shareCopy">Copy</button>
+      </div>
+      <div class="sharemeta" id="shareMeta"></div>
+      <div class="sharestatus" id="shareStatus"></div>
+    </div>
+  </div>
   <audio id="callAudio" autoplay></audio>
 
   <div class="strip">
@@ -1360,6 +1388,40 @@
   if($('#zoomOut')) $('#zoomOut').onclick=()=>{ zoom=Math.max(0.8, Math.round((zoom-0.1)*10)/10); applyZoom(); };
   if($('#listenBtn')) $('#listenBtn').onclick=()=>toggleListen();
   if($('#hcClear')) $('#hcClear').onclick=()=>clearComms();
+
+  // ---- SHARE WATCH LINK (director-only) -----------------------------------------------------
+  // Creates a read-only watcher link for the current engagement. SECURITY: the browser must NEVER
+  // hold WATCHER_MINT_SECRET. This calls a SERVER-SIDE wrapper (/api/share-link) that holds the
+  // secret, authorizes the director, mints the watcher token, and returns { url|token, jti }. The
+  // wrapper — not this page — is what talks to /api/mint-token with the secret.
+  const SHARE_ENDPOINT = qp.get('share_endpoint') || '/api/share-link';
+  const WATCH_BASE = qp.get('watch_base') || 'https://live.spamviking.com/mead_hall_live.html';
+  function shareStatus(t){ const s=$('#shareStatus'); if(s) s.textContent=t||''; }
+  async function openShare(){
+    if(viewerRole==='watcher') return;                 // watchers can't mint
+    if(!targetId){ toast('\u26A0 No engagement to share \u2014 open with ?target_id=<uuid>.'); return; }
+    $('#shareUrl').value=''; $('#shareMeta').textContent=''; shareStatus('Creating link\u2026');
+    $('#shareOv').classList.add('on');
+    try{
+      const u=SHARE_ENDPOINT+'?target_id='+encodeURIComponent(targetId)+(authToken?'&token='+encodeURIComponent(authToken):'');
+      const r=await fetch(u,{cache:'no-store'});
+      if(r.status===403){ shareStatus('\u26A0 Not authorized \u2014 sharing needs a Director token.'); return; }
+      if(r.status===404||r.status===405){ shareStatus('\u26A0 Share endpoint isn\u2019t deployed yet (/api/share-link).'); return; }
+      if(!r.ok){ shareStatus('\u26A0 Couldn\u2019t create link (HTTP '+r.status+').'); return; }
+      const j=await r.json().catch(()=>({}));
+      const url = j.url || (j.token ? (WATCH_BASE+'?token='+encodeURIComponent(j.token)) : '');
+      if(!url){ shareStatus('\u26A0 Mint response missing token/url.'); return; }
+      $('#shareUrl').value=url;
+      $('#shareMeta').textContent = j.jti ? ('revoke id (jti): '+j.jti+'  \u2014  keep this to remove access later') : '';
+      shareStatus('Read-only link ready \u2014 copy and send it.');
+    }catch(e){ shareStatus('\u26A0 Couldn\u2019t reach the share endpoint: '+(e.message||e)); }
+  }
+  if($('#shareBtn')) $('#shareBtn').onclick=openShare;
+  if($('#shareX')) $('#shareX').onclick=()=>$('#shareOv').classList.remove('on');
+  if($('#shareCopy')) $('#shareCopy').onclick=()=>{ const i=$('#shareUrl'); if(!i.value)return;
+    i.select(); try{ document.execCommand('copy'); }catch(_){}
+    if(navigator.clipboard) navigator.clipboard.writeText(i.value).catch(()=>{});
+    shareStatus('\u2713 Copied to clipboard.'); };
   applyZoom();
   loadRegistry();   // prefill bit names from PE's registry (non-blocking, degrades gracefully)
   // Watcher view: hide Director controls + relabel the badge. (Server still enforces; this is UX.)
