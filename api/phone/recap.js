@@ -96,6 +96,8 @@ function compose(kind, ctx) {
   lines.push('Reply STOP and we\'ll never call this number again.');
   lines.push('');
   lines.push('— SpamViking');
+  lines.push('');
+  lines.push(`[SV-PHONE job:${ctx.jobId}]`);
   return { subject, body: lines.join('\n') };
 }
 
@@ -128,6 +130,7 @@ export default async function handler(req, res) {
     const link = kind === 'recap' ? await recordingLink(job_id) : null;
 
     const ctx = {
+      jobId: job_id,
       host: job.host_name || user?.host_name || 'Your host',
       number: num?.e164,
       org: job.caller_context?.claimed_org || profile?.claimed_org || null,
