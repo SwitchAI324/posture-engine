@@ -42,6 +42,25 @@ const LIVEKIT_URL = process.env.LIVEKIT_URL;
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
 const AGENT_NAME = process.env.LIVEKIT_AGENT_NAME || 'spamviking';
+const PHONE_INTAKE_SECRET = process.env.PHONE_INTAKE_SECRET;
+const RECAP_URL = process.env.PHONE_RECAP_URL || 'https://posture-engine.vercel.app/api/phone/recap';
+
+// After the dispatcher marks a FINAL outcome (its 'failed' paths — agent never
+// ran, so the agent won't send its own recap), ping the recap route. Idempotent
+// + decides internally whether an email is due, so fire-and-forget is safe. NOT
+// fired on 'dialing' (not final — the agent marks the real outcome at hangup and
+// fires recap there). The agent owns recap for all normal calls; this covers only
+// the dispatcher-marked failures.
+function recapPing(jobId) {
+  try {
+    fetch(RECAP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-phone-intake-secret': PHONE_INTAKE_SECRET || '' },
+      body: JSON.stringify({ job_id: jobId }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch (e) {}
+}
 
 // GLOBAL KILL SWITCH — DB-backed so it's flippable instantly via SQL, no deploy
 // (an env var would need a redeploy, wrong for a safety switch). The dispatcher
@@ -111,7 +130,7 @@ async function agentBusy() {
   const ageMin = ts ? (Date.now() - ts) / 60000 : Infinity;
   if (ageMin > STALE_MINUTES) {
     // crashed agent — reap it and let the run continue
-    try { await markJob(job.id, 'failed', 'failed', 'dialing timeout'); } catch (e) {}
+    try { await markJob(job.id, 'failed', 'failed', 'dialing timeout'); recapPing(job.id); } catch (e) {}
     return false;
   }
   return true;                                         // a live agent is dialing
@@ -251,6 +270,7 @@ module.exports = async (req, res) => {
     const gate = await canDial(job.id);
     if (!gate.ok) {
       await markJob(job.id, 'failed', 'failed', gate.reason || 'can_dial_declined');
+      recapPing(job.id);
       return res.status(200).json({ ok: true, id: job.id, action: 'failed', reason: gate.reason });
     }
 
@@ -263,6 +283,7 @@ module.exports = async (req, res) => {
       await dispatchAgent(job, slug);
     } catch (e) {
       await markJob(job.id, 'failed', 'failed', `dispatch_error: ${String(e.message || e).slice(0, 120)}`);
+      recapPing(job.id);
       return res.status(200).json({ ok: false, id: job.id, action: 'failed', detail: String(e.message || e) });
     }
 
