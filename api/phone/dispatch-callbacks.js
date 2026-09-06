@@ -45,6 +45,11 @@ const AGENT_NAME = process.env.LIVEKIT_AGENT_NAME || 'spamviking';
 const PHONE_INTAKE_SECRET = process.env.PHONE_INTAKE_SECRET;
 const RECAP_URL = process.env.PHONE_RECAP_URL || 'https://posture-engine.vercel.app/api/phone/recap';
 
+// Supabase service-role auth headers. Declared here (before any function that
+// uses it) — const is NOT hoisted, so a function calling `sb` before this line
+// would throw "Cannot access 'sb' before initialization".
+const sb = { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` };
+
 // After the dispatcher marks a FINAL outcome (its 'failed' paths — agent never
 // ran, so the agent won't send its own recap), ping the recap route. Idempotent
 // + decides internally whether an email is due, so fire-and-forget is safe. NOT
@@ -81,9 +86,7 @@ async function dispatchEnabled() {
   }
 }
 
-const sb = { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` };
-
-// ── LiveKit-level concurrency check (free tier = 1 concurrent agent). The DB
+// ── LiveKit-level concurrency check
 //    busy-guard below only sees PHONE jobs in 'dialing' — it can't see live WEB
 //    calls. So also ask LiveKit directly: if any sv-* (web) or ph-* (phone) room
 //    is active, skip this tick. Best-effort; on error we fall through to the DB
