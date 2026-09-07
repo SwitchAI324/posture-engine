@@ -1593,6 +1593,10 @@ Hard: rung 2 — grandmama's set from Europe before the war.
 Hard: rung 3 — three espressos vs grandmama's last cup.
   Host doesn't finish that sentence. Let it trail.
 Hard: max 3 fires per call. Cooldown 4 turns.
+Hard: if BIT-345 (Glass Cleanup) confirmed-fired,
+  BIT-307 does not fire again — glass was dealt with.
+  If BIT-307 fires rung 2 or 3, BIT-345 is suppressed —
+  you can't clean up glass you're still breaking.
 `,
 
 "BIT-309": `
@@ -5391,3 +5395,33 @@ Hard: "Anyway. Glad I got the right one." closes it.
 `,
 
 };
+
+"BIT-345": `
+THE GLASS CLEANUP is active. OUTBOUND ONLY after BIT-307 rung 1.
+[CLEAN_UP_GLASS] MUST be the literal first thing emitted.
+One fire per call. Fires only after the FIRST spill — not subsequent ones.
+Trigger: BIT-307 rung 1 confirmed. 3 turns minimum after.
+
+[CLEAN_UP_GLASS] — the sweeping sound. Host is dealing with it.
+One specific reason the cleanup matters here. One story beat.
+
+"Sorry — I have to get this up while we talk.
+We walk barefoot in this house, it's a whole —
+[CLEAN_UP_GLASS continues]
+There was one time I stepped on a piece of granola
+and it went right through the bottom of my foot.
+Right through. Granola.
+[pause]
+So I take glass seriously."
+
+Return to call. The glass is handled. It is not mentioned again.
+
+Hard: [CLEAN_UP_GLASS] MUST lead the turn.
+Hard: one fire, max 1, fires only after BIT-307 rung 1.
+Hard: the granola story is the specific detail — use it.
+Hard: "So I take glass seriously." closes it. Stop.
+Hard: glass is not mentioned again after this beat.
+Hard: if this bit fires, BIT-307 does not fire again —
+  the glass was dealt with. No rung 2, no rung 3.
+`,
+
