@@ -101,15 +101,38 @@ module.exports = async function handler(req, res) {
   const receiver = new WebhookReceiver(LIVEKIT_API_KEY, LIVEKIT_API_SECRET);
   let event;
   try {
-    // receive() verifies the Authorize header signature against the raw
-    // body — must be called with the EXACT raw body string, not a
-    // re-serialized parse of it (signature is computed over the exact
-    // bytes LiveKit sent). Header name confirmed against the SDK's own
-    // exported authorizeHeader constant ("Authorize") — the method's own
-    // doc comment says "Authorization", which is wrong; the actual
-    // constant is the source of truth here, verified in the installed
-    // package's real source, not assumed from the stale comment.
-    event = await receiver.receive(rawBody, req.headers[authorizeHeader.toLowerCase()]);
+    // REVISED (2026-09-07) — real, repeated production failures
+    // ("authorization header is empty", 11+ consecutive deliveries)
+    // proved the original assumption wrong: I trusted the SDK's own
+    // exported authorizeHeader constant ("Authorize") over its doc
+    // comment ("Authorization") when I first built this, based on
+    // static inspection of the installed package. That inspection was
+    // real, not guessed — but LiveKit's actual live webhook sender
+    // apparently uses the standard "Authorization" header in practice,
+    // not "Authorize". Rather than flip the guess a second time, this
+    // now checks BOTH and logs which one (if either) actually arrived —
+    // so the next real delivery gives a definitive answer instead of
+    // another guess, and the endpoint works either way in the meantime.
+    const authHeaderValue =
+      req.headers[authorizeHeader.toLowerCase()] || req.headers["authorization"];
+    if (!authHeaderValue) {
+      console.log(
+        "livekit-webhook: NEITHER 'Authorize' nor 'Authorization' header " +
+        "present on this delivery — headers seen: " +
+        JSON.stringify(Object.keys(req.headers))
+      );
+    } else {
+      console.log(
+        "livekit-webhook: auth header found via " +
+        (req.headers[authorizeHeader.toLowerCase()] ? "'Authorize'" : "'Authorization'") +
+        " (fallback)"
+      );
+    }
+    // receive() verifies the header's signature against the raw body —
+    // must be called with the EXACT raw body string, not a re-serialized
+    // parse of it (signature is computed over the exact bytes LiveKit
+    // sent).
+    event = await receiver.receive(rawBody, authHeaderValue);
   } catch (e) {
     console.log("livekit-webhook: signature verification FAILED: " + (e && e.message ? e.message : e));
     return jsonRes(res, { error: "invalid signature" }, 401);
