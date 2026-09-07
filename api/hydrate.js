@@ -54,6 +54,45 @@
 // guaranteed to be. (Earlier ../compiler/ pointed at the root compiler/ folder
 // and failed to bundle: "Cannot find module".)
 const { assemblePrefix } = require("./compiler/assemble.js");
+
+// CHANNEL SIGNAL (2026-09-06, Canon) — the actual missing piece behind
+// the video-messy-open-on-a-phone-call bug. The video-scoping content
+// already shipped in providers.js's CORE ("this rule only applies to
+// video; on a real phone call none of this applies") was correct from
+// day one — it just never had a fact to condition on. token.channel
+// already existed and was already READ elsewhere in this file (gating
+// the callback_jobs join), but never written into the compiled prompt
+// itself as a plain statement. This is that statement — one-time,
+// hydrate-time, same as archetype (channel is locked for the whole call,
+// never swaps mid-call, so no phase-style swap machinery needed).
+function formatChannelSignal(channel) {
+  if (channel === "phone") {
+    return (
+      "CHANNEL: this is a real phone call, not a video call — there is no " +
+      "camera, no video feed, nothing to join or connect on-screen. A " +
+      "ring, a pickup, a dial tone are genuinely happening."
+    );
+  }
+  return "CHANNEL: this is a video call.";
+}
+
+// ARCHETYPE SIGNAL (2026-09-06) — REVISED from the first draft, which
+// wrongly assumed Canon would ship five separate selectable blocks (a
+// hostArchetypeFor() server-side picker, since removed from
+// providers.js). Canon's real v8 source doc shipped all five "IF THE
+// ARCHETYPE IS X" conditionals together, as ONE block inside CORE
+// itself ("WHICH EMOTIONAL REGISTER YOU'RE REACTING FROM — SET BY
+// ARCHETYPE") — meant to ship on every call, with the model reading all
+// five and self-selecting. That needs a plain fact statement, same
+// shape as the channel signal above, not a content selector. Uppercased
+// to match the conditionals' own exact phrasing ("IF THE ARCHETYPE IS
+// CRYPTO_INVESTMENT") as closely as possible, though a capable model
+// shouldn't need exact-case matching to self-select correctly.
+function formatArchetypeSignal(archetype) {
+  const value = (archetype || "generic").toUpperCase();
+  return "ARCHETYPE: " + value;
+}
+
 // CACHE WARMING (Aug 10, opener-latency investigation). waitUntil is
 // documented as working on Node.js serverless functions too, not just
 // Edge — but this is the FIRST time hydrate.js (a Node function, unlike
@@ -176,7 +215,7 @@ async function readPhoneJobFields(slug) {
   try {
     const r = await fetch(
       `${URL}/rest/v1/callback_jobs?id=eq.${encodeURIComponent(jobId)}` +
-        `&select=dial_extension,ask_for,reference_code&limit=1`,
+        `&select=dial_extension,ask_for,reference_code,caller_context&limit=1`,
       { headers: { apikey: KEY, authorization: `Bearer ${KEY}` } }
     );
     if (!r.ok) return null;
@@ -187,10 +226,110 @@ async function readPhoneJobFields(slug) {
       dial_extension: row.dial_extension || null,
       ask_for: row.ask_for || null,
       reference_code: row.reference_code || null,
+      caller_context: row.caller_context || null,
     };
   } catch {
     return null;
   }
+}
+
+// HOST CONFIG VOICE (2026-09-04, Data) — new, more centralized voice
+// source than the old per-token booking_tokens.voice jsonb. Matches the
+// existing pattern of host_config already holding host_tz (per-host
+// settings, not per-booking) rather than per-slug data. Maps Data's six
+// dial columns into the exact key names the agent reads — "voice" (not
+// "voice_id") is the correct output key per Data's own mapping, even
+// though it reads oddly next to the object's own name; not second-
+// guessing that, since "those are the only keys the agent reads."
+//
+// ⚠ JOIN KEY ASSUMPTION, NOT CONFIRMED: queries host_config by
+// host_name, since that's the one identifier confirmed present on both
+// web and phone tokens uniformly (the instruction requires this to work
+// for both). host_config's real key could be something else entirely
+// (a host_config_id FK, user_id) — worth confirming rather than trusting
+// this blind. Fails soft exactly like every other read in this file if
+// the join is wrong or empty: falls through to token.voice, then null.
+async function readHostConfigVoice(hostName) {
+  if (!hostName) return null;
+  const URL = process.env.SUPABASE_URL;
+  const KEY =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+  if (!URL || !KEY) return null;
+  try {
+    const r = await fetch(
+      `${URL}/rest/v1/host_config?host_name=eq.${encodeURIComponent(hostName)}` +
+        `&select=voice_id,voice_model,voice_emotion,voice_speed,voice_volume,host_base&limit=1`,
+      { headers: { apikey: KEY, authorization: `Bearer ${KEY}` } }
+    );
+    if (!r.ok) return null;
+    const rows = await r.json();
+    const row = rows && rows[0];
+    if (!row) return null;
+    // Only include keys that actually have a value — never send a bare
+    // null for a dial nobody set, matching this file's own convention
+    // elsewhere (omit rather than send an empty override).
+    const out = {};
+    if (row.voice_id != null) out.voice = row.voice_id;
+    if (row.voice_model != null) out.model = row.voice_model;
+    if (row.voice_emotion != null) out.emotion = row.voice_emotion;
+    if (row.voice_speed != null) out.speed = row.voice_speed;
+    if (row.voice_volume != null) out.volume = row.voice_volume;
+    if (row.host_base != null) out.sex = row.host_base;
+    return Object.keys(out).length ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+
+// CALLER CONTEXT BRIEF (2026-09-04, Phone Intake) — "the payload that
+// makes the host actually know the mark." Formats callback_jobs.
+// caller_context (jsonb: caller_name, claimed_org, pitch, the_ask,
+// account_refs[], stated_hours, transcript) into prose, same framing
+// discipline as email_dossier elsewhere in this system: this is what
+// the CALLER told/showed us, not confirmed fact — presented as
+// something the host would just already know going into the callback,
+// never as a readout of structured data. transcript is the raw
+// voicemail/call text; only a short excerpt is folded in (full
+// transcripts belong in a real dossier read, not a compiled prefix
+// blob) so this can't balloon the cached prefix on a long recording.
+// Returns null (not an empty string) when there's nothing usable, so
+// callers can tell "no context" from "empty context" and skip cleanly.
+function formatCallerContextBrief(callerContext) {
+  if (!callerContext) return null;
+  const lines = [];
+  if (callerContext.caller_name) {
+    lines.push("They gave the name " + callerContext.caller_name + ".");
+  }
+  if (callerContext.claimed_org) {
+    lines.push("Said they were calling from " + callerContext.claimed_org + ".");
+  }
+  if (callerContext.pitch) {
+    lines.push("What they said the call was about: " + callerContext.pitch);
+  }
+  if (callerContext.the_ask) {
+    lines.push("What they actually wanted: " + callerContext.the_ask);
+  }
+  if (Array.isArray(callerContext.account_refs) && callerContext.account_refs.length) {
+    lines.push(
+      "Account/reference numbers they mentioned: " +
+        callerContext.account_refs.slice(0, 5).join(", ")
+    );
+  }
+  if (callerContext.stated_hours) {
+    lines.push("Hours/availability they gave: " + callerContext.stated_hours);
+  }
+  if (callerContext.transcript) {
+    const excerpt = String(callerContext.transcript).slice(0, 400);
+    lines.push('Roughly what they said, in their own words: "' + excerpt + '"');
+  }
+  if (!lines.length) return null;
+  return (
+    "PRE-CALL BRIEF — this is what you already picked up from their earlier " +
+    "voicemail, not something you're reading off now: " +
+    lines.join(" ") +
+    " Treat all of it as what THEY claimed, not confirmed fact."
+  );
 }
 
 // DOSSIER FLOOR (2026-08-05, Data's scoping) — the AMBIENT FLOOR read:
@@ -488,6 +627,11 @@ module.exports = async function handler(req, res) {
       return res.end(JSON.stringify({ error: "unknown slug" }));
     }
 
+    // HOST CONFIG VOICE (2026-09-04) — read alongside the token, applies
+    // to BOTH web and phone (host_name is present on both). See
+    // readHostConfigVoice's own comment for the join-key caveat.
+    const hostConfigVoice = await readHostConfigVoice(token.host_name);
+
     // DOSSIER FLOOR: read once here, alongside the token, before assembling —
     // condensed identity + top prior-contact fact, ~50 tokens, baked into the
     // STABLE prefix (see readDossierFloor's own comment for the full account
@@ -504,6 +648,39 @@ module.exports = async function handler(req, res) {
     const phoneJobFields = token.channel === "phone"
       ? await readPhoneJobFields(slug)
       : null;
+    const callerContextBrief = formatCallerContextBrief(
+      phoneJobFields && phoneJobFields.caller_context
+    );
+
+    // ARCHETYPE + CHANNEL (2026-09-06) — both locked once for the whole
+    // call (same as target_id), so both are stated ONCE here, baked into
+    // the cached prefix — no per-turn signal needed, no phase-style swap
+    // machinery. Both are now plain FACT statements (REVISED: archetype
+    // was originally a server-side block-selector; corrected once
+    // Canon's real content showed all five registers ship together in
+    // CORE and the model self-selects — see formatArchetypeSignal's own
+    // comment). Together these are the actual fix for the video-messy-
+    // open-on-a-phone-call bug and for the archetype content being dead
+    // until now: both rules already existed correctly in CORE, neither
+    // ever had the fact it needed to fire.
+    const archetypeSignal = formatArchetypeSignal(token.archetype);
+    const channelSignal = formatChannelSignal(token.channel);
+
+    // Folded into dossierFloor itself (not a separate cfg field) — this
+    // guarantees it actually reaches the compiled prefix through the
+    // SAME path already proven working, without needing a matching
+    // change in compiler/assemble.js (a file I don't have in this
+    // session, so I can't confirm it would read a brand-new cfg field
+    // on its own). archetypeSignal/channelSignal are always present
+    // (never null) — every call states both facts once.
+    const dossierFloorWithCallerContext = [
+      dossierFloor,
+      callerContextBrief,
+      archetypeSignal,
+      channelSignal,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
 
     // CUT (Aug 10, PE code-cut certification) — was: const posture =
     // process.env.SV_DEFAULT_POSTURE || "skald", a genuine "which of the
@@ -529,7 +706,11 @@ module.exports = async function handler(req, res) {
       bits: [],
       armedBench: [], // room starts empty; bench sent in live
       target: token.target_id || null,
-      dossierFloor, // NEW (Aug 5) — the condensed ambient-floor string, or null
+      // dossierFloor NOW carries the phone caller-context brief appended
+      // when present (2026-09-04) — see callerContextBrief above. Web
+      // calls and phone calls with no caller_context are byte-identical
+      // to before this change.
+      dossierFloor: dossierFloorWithCallerContext,
       soundMarkers, // NEW (Aug 7) — live marker inventory from the agent, or null
       tactic: token.archetype || "universal",
       host_name: token.host_name || null,
@@ -693,11 +874,20 @@ module.exports = async function handler(req, res) {
         // keys her follow-up ladder off target_id). Returned here so the agent
         // reads it from the same hydrate payload, no separate query.
         target_id: cfg.target || null,
-        // Per-slug voice config (optional). Sourced from booking_tokens.voice
-        // (jsonb), shape: { voice_id, model, stability, similarity }. The agent
-        // merges this over its code defaults and falls back safely if null —
-        // changing a host's voice = editing the Supabase row, zero deploys.
-        voice: token.voice || null,
+        // Per-slug voice config. Sourced from booking_tokens.voice (jsonb,
+        // old shape: { voice_id, model, stability, similarity }).
+        //
+        // SUPERSEDED (2026-09-04, Data) by host_config's six voice dials,
+        // mapped by readHostConfigVoice above into the exact key names the
+        // agent reads (voice/model/emotion/speed/volume/sex — NOT the old
+        // voice_id/stability/similarity shape). hostConfigVoice wins when
+        // present; token.voice stays as a fallback for any token that
+        // still carries the old per-slug override and has no host_config
+        // row yet — not explicitly instructed, a defensive choice so this
+        // change can't silently break an existing working override.
+        // Confirm whether that fallback is wanted or host_config should
+        // be the sole source now.
+        voice: hostConfigVoice || token.voice || null,
         // PHONE JOB FIELDS (2026-09-04) — null on every web call, and
         // null on a phone call if the callback_jobs join found nothing
         // (fails soft, never blocks the response). See

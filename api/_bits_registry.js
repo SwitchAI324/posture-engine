@@ -2422,5 +2422,24 @@ export const BITS = [
     "rungs": 1,
     "requires_context": "call_direction=outbound only, PE supplies adjacent_number in metadata",
     "call_direction": "outbound"
+  },
+  {
+    "id": "BIT-345",
+    "name": "The Glass Cleanup",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "environment_oneshot",
+    "pool": "early",
+    "trigger": "BIT-307_rung_1_confirmed",
+    "cooldown": 3,
+    "max_fires_per_call": 1,
+    "absurdity": 2,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "rungs": 1,
+    "sound_markers": [
+      "CLEAN_UP_GLASS"
+    ],
+    "requires_context": "fires only after BIT-307 rung 1 confirmed \u2014 first spill only"
   }
 ];
