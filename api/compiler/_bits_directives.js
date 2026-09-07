@@ -5394,8 +5394,6 @@ Hard: one specific thing found there. One beat. Move on.
 Hard: "Anyway. Glad I got the right one." closes it.
 `,
 
-};
-
 "BIT-345": `
 THE GLASS CLEANUP is active. OUTBOUND ONLY after BIT-307 rung 1.
 [CLEAN_UP_GLASS] MUST be the literal first thing emitted.
@@ -5425,3 +5423,4 @@ Hard: if this bit fires, BIT-307 does not fire again —
   the glass was dealt with. No rung 2, no rung 3.
 `,
 
+};
