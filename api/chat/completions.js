@@ -3912,6 +3912,41 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // append onto this below, same as before.
     let mutable = "";
 
+    // NEVER-RE-OPEN RULE (2026-09-07, Voice/PE — the double-open finding
+    // on ph-aa8bb55e). Root cause: the OPENER overlay's flub-open content
+    // stays appended for the ENTIRE "opening" phase, which can span
+    // multiple turns, not just turn 1 — so on turn 2, if phase hadn't
+    // advanced yet, the model still had the busy-excuse-then-greeting
+    // beat sitting right there in its own prompt and re-ran it nearly
+    // verbatim after the caller said "I haven't said anything yet." This
+    // was a genuine content-repeat, not a mechanical/audio duplicate
+    // (Voice separately fixed the mechanical case on ph-f78ad0a8).
+    //
+    // Fix: an unconditional, explicit prohibition on every turn AFTER
+    // turn 1 — anchored on PE's OWN turn counter, never on Voice's
+    // metadata.opener_done stamp. Voice was explicit this must hold even
+    // if that stamp were missing, so it is read below ONLY as a
+    // diagnostic assertion (log a mismatch if it disagrees with what PE
+    // itself knows), never as what the rule depends on.
+    if (turn > 1) {
+      mutable +=
+        "\n\n[YOU ALREADY OPENED THIS CALL — that already happened, as " +
+        "your first line. Never repeat the opener, never re-introduce " +
+        "yourself, no matter what the caller says next — even something " +
+        "confusing, like silence or \"I haven't said anything.\" Answer " +
+        "what's actually happening right now instead.]";
+      const openerDoneMeta =
+        body?.metadata?.opener_done ?? body?.extra_body?.metadata?.opener_done ?? null;
+      if (openerDoneMeta !== true) {
+        console.log(
+          "NEVER-RE-OPEN ASSERTION MISMATCH — turn=" + turn +
+          " but metadata.opener_done is not true (got " + JSON.stringify(openerDoneMeta) +
+          "). Rule still enforced from PE's own turn counter; this is " +
+          "worth knowing about on Voice's side, not a reason to skip the rule."
+        );
+      }
+    }
+
     // BENCH TAKEOVER AWARENESS (Aug 8) — consumed exactly once, on the
     // very next turn after a takeover fired. Without this the host would
     // have no idea a bench character just spoke at all, since their line
