@@ -1604,6 +1604,15 @@ function buildVoicemailOverlay(callbackNumber, referenceCode, archetype) {
     "minute voicemail,\" \"sorry, this is getting long\") — and then keep " +
     "going a bit longer anyway. That's a real character beat, not " +
     "something to fix.\n" +
+    "- WRONG-NUMBER-THEN-CORRECTION (2026-09-04, Canon): ONE of your " +
+    "number repetitions is genuinely WRONG — a different number entirely, " +
+    "not a one-digit slip — and you don't catch it until later in the " +
+    "same ramble, since there's no one to correct you on a voicemail. " +
+    "When you do catch it, make it its own digression with a specific, " +
+    "grounded reason for the mix-up (whose number it actually was and " +
+    "why it's stuck in your head) — never a vague \"I misspoke.\" This " +
+    "naturally repeats the correct number once more on top of your other " +
+    "repetitions elsewhere in the message.\n" +
     "- WARM, SLIGHTLY RAMBLY CLOSE: never a clipped \"goodbye\" — \"okay, " +
     "bye now,\" \"alright, take care, bye,\" \"hope to hear from you, bye " +
     "now.\""
