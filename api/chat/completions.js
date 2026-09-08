@@ -3262,6 +3262,46 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         ? controls.absurdityCeiling // Director override always wins
         : ABSURDITY_CEILING_DEFAULT;
 
+    // browsedTmiBlocks (2026-09-08, Scouting/Booking) — the FULL block
+    // objects (tmi_id, tmi_label, host_callback, follow_up,
+    // invite_invention, category), not just the id array. Confirmed shape:
+    // { tmi_id, tmi_label, host_callback, payload_extra: { follow_up,
+    // invite_invention, category }, browsed_at }, stored both at the top
+    // of the payload (most recent) and in payload.items[] (every block
+    // browsed this call). browsedTmiIds (used for trigger-matching) is
+    // now DERIVED from this same list rather than re-parsing the payload
+    // separately — one extraction, two consumers, can't drift apart.
+    // Bits' rewritten BIT-507+522-535 directives reference follow_up/
+    // invite_invention by name and expect the real values here — this is
+    // what makes that consumption possible; it was never surfaced before.
+    const browsedTmiBlocks = (() => {
+      const payload = ammo.byHook && ammo.byHook.browsed_tmi;
+      if (!payload || typeof payload !== "object") return [];
+      const raw = [];
+      if (payload.tmi_id) raw.push(payload);
+      if (Array.isArray(payload.items)) raw.push(...payload.items);
+      const seen = new Set();
+      const blocks = [];
+      for (const item of raw) {
+        if (!item || !item.tmi_id || seen.has(item.tmi_id)) continue;
+        seen.add(item.tmi_id);
+        const extra = item.payload_extra || {};
+        blocks.push({
+          tmi_id: item.tmi_id,
+          tmi_label: item.tmi_label || null,
+          host_callback: item.host_callback || null,
+          follow_up: extra.follow_up || null,
+          invite_invention: extra.invite_invention || null, // null is a
+          // valid, expected state per Booking's spec — some blocks (jury,
+          // and the whole medical/dentist/wellness skip-set) have no
+          // escalation move, opener-only is fine.
+          category: extra.category || null,
+        });
+      }
+      return blocks;
+    })();
+    const browsedTmiIds = browsedTmiBlocks.map((b) => b.tmi_id);
+
     const scorerState = {
       archetype,
       accusation,
@@ -3278,6 +3318,10 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       // internal shape).
       has_prior_contact: !!(ammo.byHook && ammo.byHook.has_prior_contact),
       browsed_tmi: !!(ammo.byHook && ammo.byHook.browsed_tmi),
+      // browsedTmiIds now computed ABOVE, alongside browsedTmiBlocks (its
+      // full-data sibling) — see that block's comment for the shape and
+      // why they're derived together rather than parsed twice.
+      browsedTmiIds,
       absurdityCeiling,
       // sequencing anchor — without this, chain + category spacing never fire.
       lastBitId: stored ? stored.lastBitId || null : null,
@@ -3967,8 +4011,27 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // TURN-1 RECORDING NOTICE — mandatory, unconditional, every channel.
     // See buildRecordingNoticeDirective's own comment for the full
     // context (a real, long-standing gap, closed here for real).
-    if (turn === 1) {
+    //
+    // FIXED (2026-09-08) — a real, confirmed bug found on a live call: a
+    // caller who never speaks at all means countUserTurns(messages) never
+    // advances past 0/1 — turn stays 1 for the ENTIRE silent stretch, so
+    // every silence-nudge/regeneration during that stretch re-evaluated
+    // `turn === 1` as true and re-injected the notice fresh, each with
+    // its own random pool pick (confirmed on a real transcript: FOUR
+    // separate deliveries before the caller ever said a word — this is
+    // also what "the opening felt long" actually was, not a separate
+    // issue). Same root shape as the earlier double-open bug — gate
+    // needs its own memory, not just the turn counter, which resets
+    // nothing across a silent regeneration. Fixed the same way: an
+    // explicit PE-owned persisted flag, checked in ADDITION to turn===1,
+    // not instead of it — stored.recordingNoticeGiven, set the moment
+    // the notice is actually injected, so a later regeneration of the
+    // same still-silent turn 1 sees it's already been delivered and
+    // skips re-injecting, regardless of how many attempts happen before
+    // the caller finally speaks.
+    if (turn === 1 && !(stored && stored.recordingNoticeGiven)) {
       mutable += buildRecordingNoticeDirective();
+      waitUntil(setCall(callId, { recordingNoticeGiven: true }).catch(() => {}));
     }
 
     // NEVER-RE-OPEN RULE (2026-09-07, Voice/PE — the double-open finding
@@ -4479,6 +4542,43 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         BIT_DIRECTIVES && BIT_DIRECTIVES[top.id] && String(BIT_DIRECTIVES[top.id]).trim()
           ? String(BIT_DIRECTIVES[top.id]).trim()
           : null;
+      // BROWSED_TMI PAYLOAD DATA (2026-09-08, Booking/Scouting/Bits) — for a
+      // browsed_tmi:<id>-triggered bit, attach the matched block's real
+      // host_callback/follow_up/invite_invention alongside its directive
+      // text. Bits' rewritten directives (BIT-507, 522-535) reference
+      // these fields by name and expect real values, not their own
+      // hardcoded content anymore — this is the data those directives
+      // are written to consume. Parses the SAME browsed_tmi: prefix the
+      // scorer's own trigger-match already uses (top.trigger), so this
+      // can't drift out of sync with what actually made the bit eligible.
+      // null invite_invention is a valid, expected state (some blocks —
+      // jury, the medical/dentist/wellness skip-set — have no escalation
+      // move) — omitted from the injected text rather than printed as
+      // "null", matching this file's convention everywhere else.
+      let browsedTmiPayload = null;
+      if (top.trigger && String(top.trigger).includes("browsed_tmi:")) {
+        const wantedId = String(top.trigger)
+          .split("|")
+          .map((s) => s.trim())
+          .find((s) => s.startsWith("browsed_tmi:"))
+          ?.slice("browsed_tmi:".length);
+        const block = wantedId
+          ? (scorerState.browsedTmiIds && scorerState.browsedTmiIds.includes(wantedId)
+              ? browsedTmiBlocks.find((b) => b.tmi_id === wantedId)
+              : null)
+          : null;
+        if (block) {
+          const lines = [];
+          if (block.host_callback) lines.push("host_callback: " + block.host_callback);
+          if (block.follow_up) lines.push("follow_up: " + block.follow_up);
+          if (block.invite_invention) lines.push("invite_invention: " + block.invite_invention);
+          if (lines.length) {
+            browsedTmiPayload =
+              "\n[BROWSED_TMI PAYLOAD for " + wantedId + " — real data, deliver exactly as given, " +
+              "not invented: " + lines.join(" | ") + "]";
+          }
+        }
+      }
       // RUNG TRACKING (Aug 17, per Bits' committed-arc spec) — a rungs>1 bit
       // (BIT-302/303/311/313/331/332/333 today) carries ALL its rung text in
       // one directive block; without this, the model has no way to know
@@ -4571,12 +4671,12 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           ? "Its directive follows. Perform ITS specific structure: hit its " +
             "beats, its required moves, its sequence. Do NOT produce behavior " +
             "that is merely consistent with the bit's tone — that is a failed " +
-            "performance.\n\n" + bitDirective + "\n\n"
+            "performance.\n\n" + bitDirective + (browsedTmiPayload || "") + "\n\n"
           : "Its full directive is under " + top.id + " in your ARMED BITS " +
             "section. Perform THAT routine's specific structure: hit its " +
             "beats, its required moves, its sequence. Do NOT produce behavior " +
             "that is merely consistent with the bit's tone — that is a failed " +
-            "performance. ") +
+            "performance. " + (browsedTmiPayload || "")) +
         // PERMISSION TO DECLINE (Aug 5) — texture fires ONLY. Scenario/stall
         // mechanics (the hunt, etc.) stay mandatory once fired; those are
         // load-bearing state machines, not ambient color, and making them
