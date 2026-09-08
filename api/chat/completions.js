@@ -1545,6 +1545,58 @@ const REINJECT_WINDOW_MS = parseInt(process.env.REINJECT_WINDOW_MS || "3000", 10
 // is the occasional variant. This is the ONE control that decides how often the
 // gag lane grabs turn 1. Env-tunable, no deploy. Only consulted on turn 1.
 const GAG_OPEN_RATE = parseFloat(process.env.GAG_OPEN_RATE || "0.25");
+
+// TURN-1 RECORDING NOTICE (2026-09-08, Canon — finally wired live). Real
+// gap found and closed: this content has existed since early September
+// in prompt-compile.js, correctly built, but that file was NEVER wired
+// into anything live — nothing called it. Meanwhile there was no
+// turn-1 recording-notice mechanism anywhere in THIS file (completions.js
+// — the file every real turn actually runs through) at all. Whatever
+// earlier report described this as "live, mechanically guaranteed" was
+// wrong against what the shipped files actually contained; checked
+// directly, not assumed. This closes that gap for real, in the file
+// that matters.
+//
+// MANDATORY, unconditional, turn-1-only — same bar-bypass discipline as
+// turn-1 gag-open (below), minus the coin flip: this fires every single
+// time, no randomness on WHETHER it fires, only on WHICH pool lines get
+// picked. Applies to every channel (web AND phone) — recording_stop
+// itself was just made channel-agnostic per Recording's latest ruling,
+// so the notice that precedes it needs to be too, for the same reason
+// (web calls get recorded too).
+//
+// TWO ORDERED BEATS, never blended — Canon's own repeated emphasis: the
+// plain beat states the fact outright ("recorded"/"recording", no
+// hedging, no joke) and stands alone; the flavor line (the in-character
+// "why") follows immediately after as its own distinct beat.
+function pickOne(pool) {
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+const RECORDING_PLAIN_BEAT_POOL = [
+  "Oh — quick thing before we get going, this call's being recorded.",
+  "Hey, before I forget — heads up, this is being recorded.",
+  "One thing right off the top — you should know this call's being recorded.",
+];
+const RECORDING_FLAVOR_LINE_POOL = [
+  "I turned that on by accident about six months ago and never got around to figuring out how to switch it back off.",
+  "Some setting I flipped by mistake ages ago and just never bothered turning back off, if I'm honest.",
+  "I've been meaning to turn that back off since sometime last spring, just haven't gotten to it.",
+];
+function buildRecordingNoticeDirective() {
+  const plain = pickOne(RECORDING_PLAIN_BEAT_POOL);
+  const flavor = pickOne(RECORDING_FLAVOR_LINE_POOL);
+  return (
+    "\n\n[MANDATORY FIRST UTTERANCE — deliver this before anything else, " +
+    "in character, as TWO SEPARATE ORDERED BEATS. This is a legal " +
+    "requirement, not a performance choice — the first beat cannot be " +
+    "skipped, softened, merged into the second, or folded into small " +
+    "talk first:]\n" +
+    "BEAT 1 (plain, stands alone, states the fact outright with " +
+    "'recorded'/'recording' — no hedging, no joke): " + plain + "\n" +
+    "BEAT 2 (flavor, follows separately, the in-character why): " + flavor
+  );
+}
+
 // PHONE VOICEMAIL OVERLAY (2026-09-03) — REVISED per Recording/Call
 // Design's confirmed spec (PHONE_INTAKE_host_voice_spec.md, items 2+8).
 // Real content now, not a flat placeholder — but built as INSTRUCTION
@@ -3912,6 +3964,13 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // append onto this below, same as before.
     let mutable = "";
 
+    // TURN-1 RECORDING NOTICE — mandatory, unconditional, every channel.
+    // See buildRecordingNoticeDirective's own comment for the full
+    // context (a real, long-standing gap, closed here for real).
+    if (turn === 1) {
+      mutable += buildRecordingNoticeDirective();
+    }
+
     // NEVER-RE-OPEN RULE (2026-09-07, Voice/PE — the double-open finding
     // on ph-aa8bb55e). Root cause: the OPENER overlay's flub-open content
     // stays appended for the ENTIRE "opening" phase, which can span
@@ -5068,6 +5127,18 @@ function syntheticAnthropicStream() {
 function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenController) {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
+  // RECORDING-STOP SIGNAL flag — declared here, at the true top of this
+  // function, before chunkStr is even defined. REAL bug caught by
+  // testing: an earlier placement (further down, near svSneezeSent)
+  // threw "recordingStopTriggered is not defined" when the
+  // FIRST-TOKEN-WATCHDOG's fallback path invoked chunkStr via a
+  // setTimeout callback that fired before execution reached that later
+  // declaration line — a genuine ordering hazard, not a hoisting
+  // question (let bindings are in a temporal dead zone until their
+  // declaration line actually runs). Declaring it immediately, before
+  // any closure that could reference it is even created, removes the
+  // hazard entirely regardless of which path calls chunkStr first.
+  let recordingStopTriggered = false;
 
   const chunkStr = (delta, finish_reason = null) => {
     // pe_stall (survives the LiveKit plugin): a TOP-LEVEL chunk field is dropped
@@ -5093,6 +5164,28 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
       outDelta = {
         ...outDelta,
         extra_content: { ...(outDelta.extra_content || {}), bench_speak: meta.benchSpeak },
+      };
+    }
+    // RECORDING-STOP SIGNAL (2026-09-07, Recording — REVISED design,
+    // replaces the earlier end-the-call approach entirely). Different
+    // shape from pe_stall/bench_speak above: those are PRE-DETERMINED
+    // before generation starts and only ever stamped on the role chunk.
+    // This one is discovered MID-GENERATION, from the model's own
+    // in-context judgment that the caller explicitly objected to being
+    // recorded (see [RECORDING_STOP] detection further down in this
+    // same closure) — so it has to attach to whichever CONTENT chunk
+    // triggers it, not the role chunk, and recordingStopTriggered is a
+    // let-bound flag in this same closure (declared below, alongside
+    // svSneezeSent) rather than a meta field set beforehand.
+    //
+    // ⚠ FIELD NAME UNCONFIRMED: recording_stop is Recording's own
+    // proposal, explicitly pending Voice's confirmation — change this
+    // one string if they pick something else; nothing else depends on
+    // the exact name.
+    if (recordingStopTriggered && delta) {
+      outDelta = {
+        ...outDelta,
+        extra_content: { ...(outDelta.extra_content || {}), recording_stop: true },
       };
     }
     const chunk = {
@@ -5447,6 +5540,30 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
                 if (emit.indexOf("[SNEEZE]") >= 0) {
                   if (!svSneezeSent) console.log("SNZ sent=true (mid-stream)");
                   svSneezeSent = true;
+                }
+                // RECORDING-STOP SIGNAL (2026-09-07, Recording — REVISED
+                // design). No longer ends the call — Recording's new
+                // ruling: on explicit objection, stop recording and
+                // continue normally. [RECORDING_STOP] is detected AND
+                // REMOVED from emit here (unlike [SNEEZE], which
+                // deliberately passes through for the agent to strip) —
+                // this marker's whole purpose is to become the
+                // structured extra_content.recording_stop field
+                // (stamped by chunkStr above, via the
+                // recordingStopTriggered flag this block sets), not a
+                // spoken or visible cue. meta.turn/meta.callId (not bare
+                // turn/callId — this function doesn't close over those,
+                // a real bug caught by testing on the first draft of
+                // this feature) give the trigger-turn log Recording
+                // asked for.
+                if (emit.indexOf("[RECORDING_STOP]") >= 0) {
+                  emit = emit.replace(/\[RECORDING_STOP\]/g, "");
+                  recordingStopTriggered = true;
+                  console.log(
+                    "RECORDING-STOP-SIGNAL fired — turn=" + (meta && meta.turn) +
+                    " callId=" + JSON.stringify(meta && meta.callId) +
+                    " (extra_content.recording_stop stamped on this chunk)"
+                  );
                 }
                 // First emitted chunk: also strip a leading wrapping quote.
                 if (!firstDeltaSeen && emit) {
