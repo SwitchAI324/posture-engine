@@ -5483,8 +5483,6 @@ Hard: if this bit fires, BIT-307 does not fire again —
   the glass was dealt with. No rung 2, no rung 3.
 `,
 
-};
-
 "BIT-522": `
 THE TOKYO CALLBACK is active. One fire per call.
 Trigger: browsed_tmi:tokyo. Payload carries follow_up + invite_invention.
