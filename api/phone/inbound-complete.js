@@ -41,8 +41,29 @@ const rpc = (fn, args) => sb(`rpc/${fn}`, { method: 'POST', body: JSON.stringify
 
 const monthStart = () => { const d = new Date(); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-01`; };
 
+// The agent sends the transcript as a JSON array of turns; flatten to prose.
+function asProse(t) {
+  if (!t) return '';
+  let turns = t;
+  if (typeof t === 'string') {
+    const s = t.trim();
+    if (!s.startsWith('[')) return s;
+    try { turns = JSON.parse(s); } catch { return s; }
+  }
+  if (!Array.isArray(turns)) return String(t);
+  return turns
+    .map(x => {
+      const who = (x.role === 'assistant' || x.role === 'agent') ? 'HOST' : 'CALLER';
+      const said = x.text || x.content || x.transcript || '';
+      return said ? `${who}: ${said}` : '';
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
 // After-the-fact classification. The host never saw this — it's for the feed.
-async function classify(transcript) {
+async function classify(raw) {
+  const transcript = asProse(raw);
   if (!ANTHROPIC || !transcript || transcript.length < 40) return null;
   const system = `You classify inbound scam calls from a transcript. Respond with a single JSON object, no prose, no code fences.
 - archetype: one of ${ARCHETYPES.join(', ')}. Precision over recall: "generic" unless clearly one of the others.
@@ -50,7 +71,9 @@ async function classify(transcript) {
 - claimed_org: the organization the caller claimed to be from, or null.
 - agent_label: the name the caller gave, or null.
 - script_summary: one sentence, the pitch and the ask.
-- likely_legitimate: true if this reads like a real business or personal call rather than a scam.`;
+- likely_legitimate: true if this reads like a real business or personal call rather than a scam.
+
+The transcript is labelled by speaker: HOST is our own AI, CALLER is the person who phoned in. Classify the CALLER only — ignore anything the HOST claims or says.`;
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
