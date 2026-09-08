@@ -76,6 +76,70 @@ function formatChannelSignal(channel) {
   return "CHANNEL: this is a video call.";
 }
 
+// RECORDING OBJECTION — STOP-NOT-END (2026-09-07, Recording — REVISED,
+// replaces the earlier objection-exit design entirely). Design change
+// from the first build: on explicit objection, do NOT end the call —
+// stop recording and continue normally. Applies to outbound and inbound
+// identically, AND to web calls (REVISED 2026-09-07 — gate lifted from
+// channel='phone' to unconditional, since web calls get recorded too).
+//
+// DETECTION — unchanged from the first design, still mine, still
+// deliberately conservative per Recording's instruction: only a
+// genuine, explicit objection to being recorded counts ("I don't want
+// this recorded," "turn that off," "stop recording") — general
+// grumbling, unrelated hostility, or suspicion of the call itself does
+// NOT qualify. Left as model judgment, same as every other "is this
+// actually X" call this build already makes.
+//
+// ⚠ CONTENT NOW REAL — Canon's actual acknowledgment pool shipped
+// 2026-09-07 (was a placeholder before this). Presented as options for
+// the model to vary between in the moment, not pre-selected server-side
+// — this is reactive, in-character content, not legally load-bearing
+// fixed wording the way the turn-1 plain recording-notice beat is.
+//
+// MECHANISM — REVISED from a pass-through sound-marker to a stripped,
+// PE-consumed one: [RECORDING_STOP] is detected AND REMOVED from the
+// text before it reaches the agent (unlike [SNEEZE], which deliberately
+// passes through for the agent to strip) — this marker's whole purpose
+// is to become the structured extra_content.recording_stop field
+// Recording asked for (matching bench_speak's exact wire pattern:
+// extra_content survives the LiveKit plugin translation to delta.extra,
+// which is what the agent actually reads), not a spoken/visible cue.
+// completions.js logs the trigger turn per Recording's ask.
+//
+// "Never mentions recording again" needs no separate stored state: this
+// directive is already baked into the cached prefix present on every
+// turn, and the model can see in its own conversation history whether
+// it already delivered this beat — so the instruction below is
+// self-referential (same principle as the turn>1 never-re-open rule),
+// not a new persistence mechanism.
+//
+// ⚠ FIELD NAME CONFIRMED (2026-09-07, Recording) — recording_stop is
+// exactly the name Voice's main79 already reads and calls
+// stop_room_recording() against. No change needed here or in
+// completions.js's chunkStr.
+function formatRecordingObjectionExitDirective() {
+  return (
+    "RECORDING OBJECTION — if the caller EXPLICITLY objects to being " +
+    "recorded (\"I don't want this recorded,\" \"turn that off,\" \"stop " +
+    "recording\" — not general grumbling, not unrelated hostility, not " +
+    "suspicion of the call itself, only a genuine objection to the " +
+    "recording specifically), do NOT end the call. Acknowledge it and " +
+    "continue the call normally — pick naturally from (vary it, never " +
+    "the same one twice): \"Oh — yeah, sure, no problem. Hang on... " +
+    "okay, there, I think that's off now.\" / \"Oh, of course — hang on, " +
+    "let me find that setting... okay, got it, that should be off.\" / " +
+    "\"Oh, absolutely, one sec... there, I think I just turned it off. " +
+    "Okay, go ahead.\" Immediately after that beat, include the marker " +
+    "[RECORDING_STOP] (silent, never spoken — it will not reach the " +
+    "caller). If you've already delivered this beat earlier in this " +
+    "same call (check your own prior turns), no re-fumble — a brief " +
+    "\"yeah, that's still off\" and straight back to the conversation, " +
+    "with no second [RECORDING_STOP] marker."
+  );
+}
+
+
 // ARCHETYPE SIGNAL (2026-09-06) — REVISED from the first draft, which
 // wrongly assumed Canon would ship five separate selectable blocks (a
 // hostArchetypeFor() server-side picker, since removed from
@@ -91,6 +155,103 @@ function formatChannelSignal(channel) {
 function formatArchetypeSignal(archetype) {
   const value = (archetype || "generic").toUpperCase();
   return "ARCHETYPE: " + value;
+}
+
+// COLD-OPEN INBOUND DIRECTIVE (2026-09-07, Canon's COLD_OPEN_INBOUND_host_
+// spec.md) — mode='house': an inbound call that never resolved to a
+// planted callback job (no caller_context, no archetype signal that
+// means anything, no name, no reason for the call). A genuinely
+// different character problem from the outbound callback, compiled once
+// here rather than as a runtime completions.js gate (unlike the
+// voicemail overlay) because — like channel/archetype — house-vs-user
+// is knowable ONCE, at hydrate time, from whether phoneJobFields
+// resolved at all; nothing about it changes mid-call the way AMD
+// detection does.
+//
+// Two open questions Canon left unresolved were settled directly by
+// Andrew before this was built: (1) register stays NEUTRAL throughout a
+// cold call — the archetype registers do NOT apply here even if a scam
+// pattern later emerges (overrides Canon's own tentative lean toward
+// yes); (2) no separate persona/name pool — this is the host's own
+// existing voice, vanilla is fine, no new roster needed.
+function formatColdOpenDirective() {
+  return (
+    "COLD INBOUND CALL — you have no dossier, no transcript, no name, no " +
+    "reason for this call. Could be a scammer, a telemarketer, a wrong " +
+    "number, or a real business. Register stays neutral throughout this " +
+    "call — none of the archetype-register content applies here, even if " +
+    "a scam pattern becomes obvious as the call goes on.\n" +
+    "REVISED ORDER (2026-09-08) — a phone ringing has a real, involuntary " +
+    "human reflex attached to answering it; skipping straight to the " +
+    "recording notice with no greeting at all reads as a scripted " +
+    "announcement, not someone picking up a phone. So: a minimal, " +
+    "NAMELESS reflex greeting comes first — just \"Hello?\" — then the " +
+    "recording notice (plain beat, then flavor line) immediately after. " +
+    "This costs a fraction of a second, well within the legal " +
+    "requirement's \"first few seconds\" window. Don't self-identify in " +
+    "this opening \"Hello?\" — stay nameless here, see below for why.\n" +
+    "WHY NO NAME YET: volunteering a name immediately works against the " +
+    "redirect-and-extract goal below. If your name happens to match who " +
+    "the caller was after, they never have to reveal who they actually " +
+    "wanted — that information is lost. If it doesn't match, they may " +
+    "just conclude wrong number and hang up before you get a chance to " +
+    "fish for anything. Stay neutral past the recording notice; let the " +
+    "caller make the first move.\n" +
+    "IF THE CALLER'S FIRST REAL LINE IS A NAME-CHECK (\"is this Danny?\", " +
+    "\"can I speak to Danny?\" — the most common real opening, since they " +
+    "dialed expecting someone specific): don't confirm or deny it. Echo " +
+    "it back with genuine, open curiosity instead — same \"don't commit " +
+    "to an identity\" principle as the WHAT'S YOUR NAME section below, " +
+    "just applied to this earlier moment: \"Danny? Sorry, who's calling?\" " +
+    "/ \"Hang on — who are you looking for?\" / \"Sorry, who am I speaking " +
+    "with?\" Keeps the door open for them to reveal who they actually " +
+    "wanted; only if they push further does self-identification " +
+    "(WHO IS THIS, below) come into play.\n" +
+    "\"Who is this?\" -> plain, unbothered, no hesitation: \"Oh — this is " +
+    "[HOST NAME].\"\n" +
+    "\"What number did I call?\" -> you genuinely don't have your own " +
+    "number memorized, a relatable ordinary trait, not evasion: " +
+    "\"Honestly? I'd have to go look, I never remember my own number.\"\n" +
+    "YOUR CHARACTER HERE: surprisingly smarter than the typical mark — " +
+    "not gullible, not hostile. You want to help, you ask real questions " +
+    "— they're just never quite the ones that move the caller's script " +
+    "forward. This must feel like an accident of your own nature, never " +
+    "suspicion, never testing them, never trying to catch them out. " +
+    "Example: caller says \"your computer has a virus\" — not panic, not " +
+    "\"prove it,\" but \"oh no — wait, which computer, I've got two, one's " +
+    "really my wife's but I end up on it half the time too.\"\n" +
+    "\"WHAT'S YOUR NAME?\" — never answer directly; a flat real-name answer " +
+    "risks mismatching whoever the caller actually expected to hear. " +
+    "Instead redirect with a genuine-sounding question of your own, using " +
+    "a plausible RANDOM name (vary it, never the same one twice): \"Oh — " +
+    "wait, were you trying to reach Danny? I feel like I get his calls " +
+    "sometimes,\" or \"Huh, is this about Mike? I want to say this used to " +
+    "be his number,\" or \"Hang on — you're not looking for a Steve, are " +
+    "you? I get that sometimes.\" This must read as genuine ordinary " +
+    "uncertainty, not a dodge. Three branches depending on what they say " +
+    "next: (1) they correct with a real name (\"no, I was looking for " +
+    "Steve\") — real information, react naturally, not suspiciously (\"Oh, " +
+    "Steve? Hm, no Steve here that I know of. But go ahead, what's this " +
+    "about?\"), then keep engaging under the normal switch point below; " +
+    "(2) they go along with your made-up name (\"yeah, Danny, that's " +
+    "right\") — a small, funny reveal that they had no real target at " +
+    "all; play along naturally rather than correcting or flagging it; " +
+    "(3) they ignore the question and plow ahead with their pitch anyway " +
+    "— let it go, don't insist on an answer, same never-pushy principle " +
+    "as everywhere else, just follow wherever they take it.\n" +
+    "IF THIS IS PLAINLY A WRONG NUMBER OR A REAL, LEGITIMATE BUSINESS " +
+    "CALL — not a scam — you may end the call gracefully, the way any " +
+    "ordinary person would, without ever revealing anything about " +
+    "SpamViking. This is a real, explicit exception to never ending a " +
+    "call yourself. Wrong number: \"Oh — I think you've got the wrong " +
+    "number, no worries though. Take care.\" Legitimate business: \"I " +
+    "appreciate it, but I'm not really in the market for that. Thanks " +
+    "for calling, take care.\" Judge this the same way you judge " +
+    "anything else you're handed — if nothing scam-shaped ever " +
+    "materializes, this graceful exit applies; if the content starts " +
+    "sounding like an actual pitch or scam script, stay in and derail " +
+    "naturally instead."
+  );
 }
 
 // CACHE WARMING (Aug 10, opener-latency investigation). waitUntil is
@@ -205,9 +366,22 @@ async function readToken(slug) {
 // job_id is recovered by stripping the prefix and used to look up the
 // real callback_jobs row directly. Fails soft exactly like
 // readDossierFloor above — never blocks hydrate, degrades to nulls.
-async function readPhoneJobFields(slug) {
-  if (!slug || !slug.startsWith("ph-")) return null;
-  const jobId = slug.slice(3);
+// REVISED (2026-09-07) — accepts an explicit jobId now, not just a
+// ph-<job_id> slug to derive one from. Real gap found: an inbound
+// in-<house_call_id> slug never encodes a job id at all (house_call_id
+// is a different identifier space entirely), so mode='user' inbound
+// calls — a scammer calling back a number the host planted — could
+// never resolve their caller_context/ask_for/reference_code through
+// this function no matter what, since the ph- prefix check silently
+// excluded them. Fix: booking_tokens.callback_job_id (Data's schema
+// addition, Booking's mint-token stamps it) now carries the job id
+// directly for tokens whose slug doesn't encode it. This function takes
+// EITHER source — whichever the caller has — rather than deriving it
+// itself, so both ph- (slug-derived) and in- (token-column-sourced)
+// tokens share the exact same lookup and caller_context/ask_for/
+// reference_code logic below, with zero duplication.
+async function readPhoneJobFields(jobId) {
+  if (!jobId) return null;
   const URL = process.env.SUPABASE_URL;
   const KEY =
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
@@ -329,6 +503,32 @@ function formatCallerContextBrief(callerContext) {
     "voicemail, not something you're reading off now: " +
     lines.join(" ") +
     " Treat all of it as what THEY claimed, not confirmed fact."
+  );
+}
+
+// ASK_FOR OPENER DIRECTIVE (2026-09-07) — genuine bug found and fixed:
+// callback_jobs.ask_for was already being fetched (readPhoneJobFields
+// above) and was already reaching the agent's JSON response — but
+// nothing ever turned it into prompt text anywhere in this file. It sat
+// in the response body, unused, exactly as flagged from a live call
+// ("ask_for='Jojo' was captured but unused"). The caller's NAME did
+// separately reach the model via formatCallerContextBrief's caller_name
+// line — but only as PASSIVE context ("they gave the name Jojo"), never
+// as an ACTIVE instruction to lead the opener with it. This is that
+// active instruction — deliberately separate from the pre-call brief
+// above, since that one is framed as ambient memory and this one is
+// framed as a direct opening command. Distinct from Andrew's separate,
+// larger flag (no positive phone-callback opener content exists at all
+// yet — that's Canon's to write); this fixes the narrower, purely
+// mechanical part: making sure ask_for itself is never silently dropped
+// once that content exists to use it.
+function formatAskForDirective(askFor) {
+  if (!askFor) return null;
+  return (
+    "WHO TO ASK FOR — this is a callback, you know who you're trying to " +
+    "reach: open by asking for " + askFor + " by name (e.g. \"hi, is " +
+    askFor + " there?\"). Don't ask a generic \"who am I speaking with\" " +
+    "as if you don't already know who you called."
   );
 }
 
@@ -640,17 +840,49 @@ module.exports = async function handler(req, res) {
     // anything about this read fails or the target has no scout_facts yet.
     const dossierFloor = await readDossierFloor(token.target_id);
 
-    // PHONE JOB FIELDS (2026-09-04) — see readPhoneJobFields' own comment
-    // for why this exists despite the earlier no-phone-fields-on-tokens
-    // ruling. Only meaningful for channel='phone' tokens; a no-op (null)
-    // for every web token, and fails soft exactly like the dossier floor
-    // above if the join comes back empty for any reason.
+    // PHONE JOB FIELDS (2026-09-04, revised 2026-09-07 for inbound) — see
+    // readPhoneJobFields' own comment for the full context. Only
+    // meaningful for channel='phone' tokens; a no-op (null) for every
+    // web token, and fails soft exactly like the dossier floor above if
+    // the lookup comes back empty for any reason.
+    //
+    // jobId resolves from EITHER source, whichever applies: outbound
+    // ph-<job_id> slugs encode it directly (slug.slice(3)); inbound
+    // in-<house_call_id> slugs do NOT encode a job id at all (a
+    // different identifier space), so those rely on
+    // token.callback_job_id instead — Data's schema addition, stamped
+    // by Booking's mint-token when a mode='user' inbound call resolves
+    // to the job whose planted number it's calling back. Both paths
+    // converge on the exact same downstream lookup/formatting, no
+    // duplicated logic.
+    const jobId =
+      (slug && slug.startsWith("ph-") && slug.slice(3)) ||
+      token.callback_job_id ||
+      null;
     const phoneJobFields = token.channel === "phone"
-      ? await readPhoneJobFields(slug)
+      ? await readPhoneJobFields(jobId)
       : null;
     const callerContextBrief = formatCallerContextBrief(
       phoneJobFields && phoneJobFields.caller_context
     );
+    const askForDirective = formatAskForDirective(
+      phoneJobFields && phoneJobFields.ask_for
+    );
+
+    // COLD-OPEN INBOUND (2026-09-07) — mode='house': inbound, phone, but
+    // no job ever resolved (phoneJobFields is null). Genuinely different
+    // from every other phone case: no caller_context, no ask_for, and —
+    // per Andrew's explicit decision — no archetype register either,
+    // even once a scam pattern emerges mid-call. So the normal archetype
+    // signal is deliberately SKIPPED here (its own "generic" fallback
+    // would just create noise alongside this directive's own "register
+    // stays neutral" instruction), and this directive replaces it.
+    const isColdOpenInbound =
+      token.channel === "phone" &&
+      typeof slug === "string" &&
+      slug.startsWith("in-") &&
+      !phoneJobFields;
+    const coldOpenDirective = isColdOpenInbound ? formatColdOpenDirective() : null;
 
     // ARCHETYPE + CHANNEL (2026-09-06) — both locked once for the whole
     // call (same as target_id), so both are stated ONCE here, baked into
@@ -662,22 +894,34 @@ module.exports = async function handler(req, res) {
     // comment). Together these are the actual fix for the video-messy-
     // open-on-a-phone-call bug and for the archetype content being dead
     // until now: both rules already existed correctly in CORE, neither
-    // ever had the fact it needed to fire.
-    const archetypeSignal = formatArchetypeSignal(token.archetype);
+    // ever had the fact it needed to fire. archetypeSignal is skipped
+    // entirely for cold-open inbound — see isColdOpenInbound above.
+    const archetypeSignal = isColdOpenInbound ? null : formatArchetypeSignal(token.archetype);
     const channelSignal = formatChannelSignal(token.channel);
+    // REVISED (2026-09-07, Recording) — gate lifted from channel='phone'
+    // to unconditional: recording_stop applies to web calls too, not
+    // just phone. Web calls get recorded the same way phone calls do
+    // (calls.recording_* in the close path is channel-agnostic), so the
+    // objection handling needs to be too.
+    const recordingObjectionExit = formatRecordingObjectionExitDirective();
 
     // Folded into dossierFloor itself (not a separate cfg field) — this
     // guarantees it actually reaches the compiled prefix through the
     // SAME path already proven working, without needing a matching
     // change in compiler/assemble.js (a file I don't have in this
     // session, so I can't confirm it would read a brand-new cfg field
-    // on its own). archetypeSignal/channelSignal are always present
-    // (never null) — every call states both facts once.
+    // on its own). channelSignal is always present; archetypeSignal is
+    // present unless cold-open inbound, in which case coldOpenDirective
+    // takes its place. recordingObjectionExit is present on every phone
+    // call regardless of mode/direction, per Canon's ruling.
     const dossierFloorWithCallerContext = [
       dossierFloor,
       callerContextBrief,
+      askForDirective,
+      coldOpenDirective,
       archetypeSignal,
       channelSignal,
+      recordingObjectionExit,
     ]
       .filter(Boolean)
       .join("\n\n");
