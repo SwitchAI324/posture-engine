@@ -5,9 +5,12 @@
 //
 // POST JSON: { from_e164, to_e164, livekit_room? }
 // Header:    x-phone-intake-secret
-// Returns:   { answer: bool, reason, mode: 'house'|'user',
+// Returns:   { answer: bool, reason, mode: 'house'|'user', slug?,
 //              job_id?, user_id?, host_name?, reference_code?,
 //              caller_context?, house_call_id? }
+// The slug ('in-<house_call_id>') is minted via Booking's /api/phone/mint-token
+// so the agent hydrates through the one prompt path. Return calls carry
+// callback_job_id on the token; house calls don't (cold open by design).
 //
 // Guardrails checked, in order: kill switch → blocklist → return-call match
 // → per-number daily caps → house monthly budget.
@@ -16,6 +19,7 @@
 const SB = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SECRET = process.env.PHONE_INTAKE_SECRET;
+const MINT_URL = process.env.MINT_TOKEN_URL || 'https://posture-engine.vercel.app/api/phone/mint-token';
 
 async function sb(path, opts = {}) {
   const r = await fetch(`${SB}/rest/v1/${path}`, {
@@ -33,6 +37,19 @@ async function sb(path, opts = {}) {
 }
 const select = (table, filter) => sb(`${table}?${filter}`, { method: 'GET' });
 const insert = (table, row, prefer) => sb(table, { method: 'POST', body: JSON.stringify(row), prefer });
+
+// Booking owns the mint; we just hand it the fields. Idempotent on slug.
+async function mintToken(body) {
+  const r = await fetch(MINT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-phone-intake-secret': SECRET },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(6000),
+  });
+  const j = await r.json().catch(() => null);
+  if (!r.ok || !j?.ok) throw new Error(`mint-token ${r.status}: ${j?.error || 'unknown'}`);
+  return j.slug;
+}
 
 const monthStart = () => { const d = new Date(); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-01`; };
 const dayAgoISO = () => new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -77,8 +94,15 @@ export default async function handler(req, res) {
       const [row] = await insert('house_calls', {
         from_e164, to_e164, livekit_room, matched_job_id: job?.id || null,
       }, 'return=representation');
+      const [owner] = await select('sv_users', `id=eq.${userId}&select=email,host_name`);
+      const slug = await mintToken({
+        slug: `in-${row.id}`,
+        callback_job_id: job?.id || null,
+        host_name: job?.host_name || owner?.host_name || null,
+        owner_email: owner?.email || null,
+      });
       return res.status(200).json({
-        answer: true, reason: 'return_call', mode: 'user',
+        answer: true, reason: 'return_call', mode: 'user', slug,
         user_id: userId, job_id: job?.id || null,
         host_name: job?.host_name || null,
         reference_code: job?.reference_code || null,
@@ -108,8 +132,9 @@ export default async function handler(req, res) {
 
     // 6. Answer as a house call — host knows nothing about this caller.
     const [row] = await insert('house_calls', { from_e164, to_e164, livekit_room }, 'return=representation');
+    const slug = await mintToken({ slug: `in-${row.id}` });   // no job, no owner → cold open
     return res.status(200).json({
-      answer: true, reason: 'house_call', mode: 'house', house_call_id: row.id,
+      answer: true, reason: 'house_call', mode: 'house', slug, house_call_id: row.id,
     });
   } catch (err) {
     console.error('inbound-check', err);
