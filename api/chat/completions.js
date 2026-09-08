@@ -1590,7 +1590,12 @@ function buildRecordingNoticeDirective() {
     "in character, as TWO SEPARATE ORDERED BEATS. This is a legal " +
     "requirement, not a performance choice — the first beat cannot be " +
     "skipped, softened, merged into the second, or folded into small " +
-    "talk first:]\n" +
+    "talk first. ONE EXCEPTION (2026-09-08, cold inbound calls only — " +
+    "if your context includes a COLD INBOUND CALL directive, follow ITS " +
+    "ordering instead: a single nameless \"Hello?\" reflex-greeting comes " +
+    "before these two beats, not after. On every other call — outbound, " +
+    "resolved inbound, web — these two beats ARE genuinely the first " +
+    "thing said, no exceptions:]\n" +
     "BEAT 1 (plain, stands alone, states the fact outright with " +
     "'recorded'/'recording' — no hedging, no joke): " + plain + "\n" +
     "BEAT 2 (flavor, follows separately, the in-character why): " + flavor
