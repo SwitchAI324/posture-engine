@@ -1,6 +1,6 @@
 // SpamViking — Bits Registry
 // Source of truth: SpamViking_BitsRegistry.json + session edits
-// Last updated: August 17, 2026
+// Last updated: September 8, 2026
 // CRITICAL: archetypes field restored — do not remove until PE confirms scorer gate update
 // family field: 37 fine-grained subgroups
 // channel enum: audio | video | phone
@@ -674,7 +674,7 @@ export const BITS = [
     "name": "The Nda Bit",
     "lane": "stall",
     "stall_type": "hunt",
-    "trigger": "documentation_mentioned",
+    "trigger": "commitment_push|pricing_raised",
     "status": "active",
     "family": "process_information",
     "absurdity": 2,
@@ -731,19 +731,20 @@ export const BITS = [
     "pool": "middle",
     "family": "process_documentation",
     "absurdity": 1,
-    "park_reason": "Andrew review Aug 5 \u2014 too thin",
+    "park_reason": "Andrew review Sep 8 \u2014 parked",
     "archetypes": "universal"
   },
   {
     "id": "BIT-209",
     "name": "The Previous Call Bit",
-    "status": "parked",
+    "status": "active",
     "cooldown": 6,
     "pool": "early",
     "family": "echo_reflection",
     "absurdity": 1,
-    "park_reason": "Andrew review Aug 5 \u2014 too thin",
-    "archetypes": "universal"
+    "park_reason": null,
+    "archetypes": "universal",
+    "trigger": "has_prior_contact"
   },
   {
     "cooldown": 3,
@@ -751,7 +752,7 @@ export const BITS = [
     "name": "Cry Poverty",
     "lane": "stall",
     "stall_type": "hunt",
-    "trigger": "commitment_push|pricing_raised",
+    "trigger": "commitment_push",
     "status": "active",
     "family": "stall_hunt",
     "absurdity": 2,
@@ -768,9 +769,10 @@ export const BITS = [
     "cooldown": 3,
     "pool": "middle",
     "family": "stall_hold",
-    "absurdity": 2,
+    "absurdity": 3,
     "vocal_tag": "calm",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "max_fires_per_call": 1
   },
   {
     "cooldown": 4,
@@ -801,7 +803,7 @@ export const BITS = [
     "family": "process_documentation",
     "absurdity": 1,
     "vocal_tag": "surprised",
-    "park_reason": "Andrew review Aug 16 \u2014 two spammers situation too rare",
+    "park_reason": "Andrew review Sep 8 \u2014 parked",
     "archetypes": "universal"
   },
   {
@@ -870,7 +872,7 @@ export const BITS = [
     "family": "process_information",
     "absurdity": 1,
     "vocal_tag": "excited",
-    "park_reason": "Andrew review Aug 16 \u2014 terrible notes too thin",
+    "park_reason": "Andrew review Sep 8 \u2014 parked",
     "archetypes": "universal"
   },
   {
@@ -950,7 +952,7 @@ export const BITS = [
     "name": "The Reference Check",
     "cooldown": 5,
     "phase_pref": "probing",
-    "trigger": "documentation_mentioned",
+    "trigger": "has_prior_contact|pricing_raised",
     "status": "active",
     "family": "process_documentation",
     "absurdity": 2,
@@ -1053,7 +1055,7 @@ export const BITS = [
     "ceiling": "soft_dead_end",
     "stall_type": "hunt",
     "rungs": 5,
-    "trigger": "documentation_mentioned",
+    "trigger": "pricing_raised",
     "status": "active",
     "max_fires_per_call": 5,
     "family": "stall_hunt",
@@ -1096,7 +1098,7 @@ export const BITS = [
     },
     "absurdity": 4,
     "vocal_tag": "mysterious",
-    "trigger": "commitment_push",
+    "trigger": "commitment_push|pricing_raised",
     "requires_context": "spammer has asked for personal information",
     "archetypes": "universal"
   },
@@ -1150,7 +1152,8 @@ export const BITS = [
       "DOG_BARK_BG",
       "DOG_BARK_STOP"
     ],
-    "arc_protection": true
+    "arc_protection": true,
+    "pool": "early"
   },
   {
     "id": "BIT-303",
@@ -1341,7 +1344,8 @@ export const BITS = [
     "family": "environment_oneshot",
     "absurdity": 2,
     "vocal_tag": "surprised",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "pool": "middle"
   },
   {
     "id": "BIT-315",
@@ -1405,7 +1409,8 @@ export const BITS = [
     "family": "environment_oneshot",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal"
+    "archetypes": "universal",
+    "pool": "middle"
   },
   {
     "id": "BIT-321",
@@ -1713,12 +1718,12 @@ export const BITS = [
       "browsed_tmi"
     ],
     "cooldown": 6,
-    "trigger": "browsed_tmi",
+    "trigger": "browsed_tmi:fiji",
     "status": "active",
     "family": "dossier_prior_ambient",
     "absurdity": 2,
     "vocal_tag": "mysterious",
-    "requires_context": "browsed_tmi hook confirmed \u2014 Fiji or travel data available",
+    "requires_context": "tmi_id=fiji confirmed in Scouting payload",
     "archetypes": "universal"
   },
   {
@@ -2075,7 +2080,7 @@ export const BITS = [
     "status": "active",
     "family": "opener_turn1",
     "pool": "early",
-    "trigger": "call_turn_1",
+    "trigger": null,
     "cooldown": 999,
     "max_fires_per_call": 1,
     "absurdity": 2,
@@ -2178,7 +2183,7 @@ export const BITS = [
     "name": "The Plane Overhead",
     "status": "active",
     "family": "environment_traffic",
-    "pool": "none",
+    "pool": "middle",
     "trigger": "none",
     "cooldown": 5,
     "max_fires_per_call": 4,
@@ -2441,5 +2446,271 @@ export const BITS = [
       "CLEAN_UP_GLASS"
     ],
     "requires_context": "fires only after BIT-307 rung 1 confirmed \u2014 first spill only"
+  },
+  {
+    "id": "BIT-522",
+    "name": "The Tokyo Callback",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "dossier_tmi",
+    "pool": "middle",
+    "trigger": "browsed_tmi:tokyo",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 3,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "rungs": 3,
+    "rung_spacing": {
+      "min_between": 4
+    },
+    "requires_context": "tmi_id=tokyo, follow_up and invite_invention in payload_extra"
+  },
+  {
+    "id": "BIT-523",
+    "name": "The Patagonia Callback",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "dossier_tmi",
+    "pool": "middle",
+    "trigger": "browsed_tmi:patagonia",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 3,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "rungs": 3,
+    "rung_spacing": {
+      "min_between": 4
+    },
+    "requires_context": "tmi_id=patagonia, follow_up and invite_invention in payload_extra"
+  },
+  {
+    "id": "BIT-524",
+    "name": "The Safari Callback",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "dossier_tmi",
+    "pool": "middle",
+    "trigger": "browsed_tmi:safari",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 3,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "rungs": 3,
+    "rung_spacing": {
+      "min_between": 4
+    },
+    "requires_context": "tmi_id=safari, follow_up and invite_invention in payload_extra"
+  },
+  {
+    "id": "BIT-525",
+    "name": "The Flight Callback",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "dossier_tmi",
+    "pool": "middle",
+    "trigger": "browsed_tmi:flight",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 3,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "rungs": 3,
+    "rung_spacing": {
+      "min_between": 4
+    },
+    "requires_context": "tmi_id=flight, follow_up and invite_invention in payload_extra"
+  },
+  {
+    "id": "BIT-526",
+    "name": "The Recital Callback",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "dossier_tmi",
+    "pool": "middle",
+    "trigger": "browsed_tmi:recital",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 3,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "rungs": 3,
+    "rung_spacing": {
+      "min_between": 4
+    },
+    "requires_context": "tmi_id=recital, follow_up and invite_invention in payload_extra"
+  },
+  {
+    "id": "BIT-527",
+    "name": "The Kids Off Callback",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "dossier_tmi",
+    "pool": "middle",
+    "trigger": "browsed_tmi:kids_off",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 3,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "rungs": 3,
+    "rung_spacing": {
+      "min_between": 4
+    },
+    "requires_context": "tmi_id=kids_off, follow_up and invite_invention in payload_extra"
+  },
+  {
+    "id": "BIT-528",
+    "name": "The Moving Callback",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "dossier_tmi",
+    "pool": "middle",
+    "trigger": "browsed_tmi:moving",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 3,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "rungs": 3,
+    "rung_spacing": {
+      "min_between": 4
+    },
+    "requires_context": "tmi_id=moving, follow_up and invite_invention in payload_extra"
+  },
+  {
+    "id": "BIT-529",
+    "name": "The Contractor Callback",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "dossier_tmi",
+    "pool": "middle",
+    "trigger": "browsed_tmi:contractor",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 3,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "rungs": 3,
+    "rung_spacing": {
+      "min_between": 4
+    },
+    "requires_context": "tmi_id=contractor, follow_up and invite_invention in payload_extra"
+  },
+  {
+    "id": "BIT-530",
+    "name": "The Jury Callback",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "dossier_tmi",
+    "pool": "middle",
+    "trigger": "browsed_tmi:jury",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 3,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "rungs": 3,
+    "rung_spacing": {
+      "min_between": 4
+    },
+    "requires_context": "tmi_id=jury, follow_up and invite_invention in payload_extra"
+  },
+  {
+    "id": "BIT-531",
+    "name": "The Offsite Callback",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "dossier_tmi",
+    "pool": "middle",
+    "trigger": "browsed_tmi:offsite",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 3,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "rungs": 3,
+    "rung_spacing": {
+      "min_between": 4
+    },
+    "requires_context": "tmi_id=offsite, follow_up and invite_invention in payload_extra"
+  },
+  {
+    "id": "BIT-532",
+    "name": "The Board Callback",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "dossier_tmi",
+    "pool": "middle",
+    "trigger": "browsed_tmi:board",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 3,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "rungs": 3,
+    "rung_spacing": {
+      "min_between": 4
+    },
+    "requires_context": "tmi_id=board, follow_up and invite_invention in payload_extra"
+  },
+  {
+    "id": "BIT-533",
+    "name": "The Conference Callback",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "dossier_tmi",
+    "pool": "middle",
+    "trigger": "browsed_tmi:conference",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 3,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "rungs": 3,
+    "rung_spacing": {
+      "min_between": 4
+    },
+    "requires_context": "tmi_id=conference, follow_up and invite_invention in payload_extra"
+  },
+  {
+    "id": "BIT-534",
+    "name": "The OOO Callback",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "dossier_tmi",
+    "pool": "middle",
+    "trigger": "browsed_tmi:ooo",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 3,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "rungs": 3,
+    "rung_spacing": {
+      "min_between": 4
+    },
+    "requires_context": "tmi_id=ooo, follow_up and invite_invention in payload_extra"
+  },
+  {
+    "id": "BIT-535",
+    "name": "The Sabbatical Callback",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "dossier_tmi",
+    "pool": "middle",
+    "trigger": "browsed_tmi:sabbatical",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 3,
+    "vocal_tag": "content",
+    "channel": "audio",
+    "rungs": 3,
+    "rung_spacing": {
+      "min_between": 4
+    },
+    "requires_context": "tmi_id=sabbatical, follow_up and invite_invention in payload_extra"
   }
 ];
