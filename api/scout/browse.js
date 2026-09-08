@@ -1,82 +1,81 @@
-// api/scout/browse.js
-// Records which calendar blackout ("TMI") a scammer paged to on the booking
-// page, so the host can call it back LIVE on the call ("saw you poking around
-// my Fiji week"). Writes a browsed_tmi hook to scout_hooks keyed by slug — the
-// same pre-call rack PE reads at call_started. Each blackout carries its own
-// host_callback line, which becomes the hook's label: a ready-to-say sentence,
-// no inference, no transcription.
+// POST /api/browse   Body: { slug, tmi_id, tmi_label? }
 //
-// Called server-side by Booking (scout_hooks is service-key only, so the
-// browser can't write it directly). Fire-and-forget; never blocks the page.
+// Thin server-side forwarder for calendar browse-capture. The page detects when
+// the scammer pages to / clicks a blackout and posts { slug, tmi_id } here. This
+// resolves the blackout's host_callback SERVER-SIDE (authoring is deterministic
+// by slug, so we never send the host's scripted line to the browser), then
+// relays to Scouting's /api/scout/browse with the scout token.
 //
-// Body: { slug, tmi_id, tmi_label?, host_callback, browsed_at? }
+// Fire-and-forget on both legs — browse capture is pure upside; it must never
+// block or surface anything to the scammer. Scouting handles dedupe +
+// one-row-per-slug shaping and lands it in scout_hooks as browsed_tmi (keyed by
+// slug); PE reads it in the call_started rack with no change on their end.
 
-import { sbSelect, sbUpsert, activeSecret, scoutToken } from './_sb.js';
-import { emitTrace } from './_hooks.js';
+const { authorToken } = require('./_pools');
 
-const MAX_ITEMS = 5;
+const SCOUT_BROWSE_URL =
+  process.env.SCOUT_BROWSE_URL || 'https://posture-engine.vercel.app/api/scout/browse';
+const SCOUT_TOKEN = process.env.SV_SCOUT_TOKEN || process.env.SV_PROXY_TOKEN;
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
-
-  const expected = activeSecret(process.env.SV_SCOUT_TOKEN);
-  if (expected && scoutToken(req) !== expected)
-    return res.status(401).json({ error: 'bad token' });
-
-  const b = req.body || {};
-  const slug = b.slug;
-  const tmi_id = b.tmi_id;
-  const host_callback = b.host_callback;
-  if (!slug || !tmi_id || !host_callback)
-    return res.status(400).json({ error: 'slug, tmi_id, host_callback required' });
-
-  const extra = b.payload_extra || {};
-  const item = {
-    tmi_id,
-    tmi_label: b.tmi_label || null,
-    host_callback,
-    // Thread fields (from Booking's block payload) so the host has a runway,
-    // not just a one-line callback: opener (=host_callback/label) -> follow_up
-    // question -> invite_invention escalation. Nullable per block.
-    follow_up: extra.follow_up || null,
-    invite_invention: extra.invite_invention || null,
-    category: extra.category || null,
-    browsed_at: b.browsed_at || new Date().toISOString(),
-  };
-
+// Resolve the host_callback for a (slug, tmi_id) by re-deriving the frozen
+// authoring (deterministic by slug). Keeps the spoken line off the browser.
+function resolveCallback(slug, tmiId, tmiLabel) {
   try {
-    // One hook per slug, never one row per blackout: scout_hooks PK is
-    // (slug, hook_id), so multiple browsed_tmi rows collide and the write
-    // fails. Read the current row, merge the new blackout into payload.items
-    // (dedupe by tmi_id, newest at top), upsert the single row.
-    let items = [item];
-    try {
-      const rows = await sbSelect(
-        `scout_hooks?slug=eq.${encodeURIComponent(slug)}` +
-        `&hook_id=eq.browsed_tmi&select=payload`);
-      const current = (rows && rows[0] && rows[0].payload) || {};
-      const existing = Array.isArray(current.items) ? current.items : [];
-      items = [item, ...existing.filter((x) => x && x.tmi_id !== tmi_id)].slice(0, MAX_ITEMS);
-    } catch {}
-
-    const payload = { ...item, items };
-    await sbUpsert(
-      'scout_hooks',
-      [{
-        slug,
-        hook_id: 'browsed_tmi',
-        label: String(host_callback).slice(0, 200),
-        payload,
-        confidence: 0.95, // observed page event, not inference
-        source: 'page:browse',
-      }],
-      'slug,hook_id');
-
-    await emitTrace('browse_recorded', { slug, tmi_id, total: items.length });
-    return res.status(200).json({ slug, tmi_id, recorded: true, total: items.length });
-  } catch (e) {
-    // Never break the booking page over a missed callback capture.
-    await emitTrace('browse_error', { slug, message: String((e && e.message) || e) });
-    return res.status(200).json({ slug, recorded: false });
-  }
+    const a = authorToken(slug);
+    const bks = (a.slot_pool && a.slot_pool.blackouts) || [];
+    let hit = bks.find((b) => b.tmi_id === tmiId);
+    if (!hit && tmiLabel) {
+      const norm = String(tmiLabel).toLowerCase();
+      hit = bks.find((b) => String(b.label).toLowerCase() === norm);
+    }
+    return hit ? {
+      host_callback: hit.host_callback,
+      label: hit.label,
+      tmi_id: hit.tmi_id,
+      follow_up: hit.follow_up || null,
+      invite_invention: hit.invite_invention || null,
+      category: hit.category || null,
+    } : null;
+  } catch (e) { return null; }
 }
+
+module.exports = async (req, res) => {
+  try {
+    if (req.method !== 'POST') return res.status(405).json({ ok: false });
+    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
+    const { slug, tmi_id, tmi_label } = body;
+    if (!slug || !tmi_id) return res.status(200).json({ ok: true, skipped: true });
+
+    const resolved = resolveCallback(slug, tmi_id, tmi_label);
+    if (!resolved || !resolved.host_callback) {
+      // nothing to arm — still 200 (fire-and-forget)
+      return res.status(200).json({ ok: true, skipped: true });
+    }
+
+    // relay to Scouting with the token; don't block on it
+    fetch(SCOUT_BROWSE_URL, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-sv-scout-token': SCOUT_TOKEN || '',
+        'x-sv-token': SCOUT_TOKEN || '',
+      },
+      body: JSON.stringify({
+        slug,
+        tmi_id: resolved.tmi_id,
+        tmi_label: resolved.label,
+        host_callback: resolved.host_callback,   // top-level (hook label)
+        payload_extra: {                          // nested — Scouting stores verbatim
+          follow_up: resolved.follow_up,
+          invite_invention: resolved.invite_invention,
+          category: resolved.category,
+        },
+        browsed_at: new Date().toISOString(),
+      }),
+    }).catch(() => {});
+
+    return res.status(200).json({ ok: true });
+  } catch (e) {
+    return res.status(200).json({ ok: true });
+  }
+};
