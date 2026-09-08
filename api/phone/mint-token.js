@@ -11,12 +11,16 @@
 // Hydrate keys on the prefix: 'ph-' -> join callback_jobs for context; 'in-' ->
 // no job, degrade to no-context. (PE hydrate must tolerate the 'in-' case.)
 //
-// Body: { slug, host_name?, target_id?, owner_email?, host_tz? }
-//   - slug        required (caller-chosen; 'in-<id>' for inbound)
-//   - host_name   the host persona name (nullable -> null)
-//   - target_id   nullable (house calls have none)
-//   - owner_email for host_config voice resolution (nullable -> null)
-//   - host_tz     nullable -> render falls back to Eastern
+// Body: { slug, host_name?, target_id?, owner_email?, host_tz?, callback_job_id? }
+//   - slug           required (caller-chosen; 'in-<house_call_id>' for inbound)
+//   - host_name      the host persona name (nullable -> null)
+//   - target_id      nullable (house calls have none)
+//   - owner_email    for host_config voice resolution (nullable -> null)
+//   - host_tz        nullable -> render falls back to Eastern
+//   - callback_job_id  INBOUND return calls only: the matched job. The 'in-<house
+//                    _call_id>' slug does NOT encode the job id (unlike 'ph-<job_id>'),
+//                    so it's stamped on the token for hydrate to read context off.
+//                    Null / omitted = house call, cold open (no context by design).
 //
 // Auth: x-phone-intake-secret (same secret the rest of the phone layer uses).
 // Idempotent: on_conflict=slug merge, so re-minting the same slug is safe.
@@ -38,7 +42,7 @@ module.exports = async (req, res) => {
     }
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
-    const { slug, host_name, target_id, owner_email, host_tz } = body;
+    const { slug, host_name, target_id, owner_email, host_tz, callback_job_id } = body;
     if (!slug) return res.status(400).json({ ok: false, error: 'missing slug' });
 
     // Same minimal shape as the outbound dispatcher's mintPhoneToken:
@@ -53,6 +57,9 @@ module.exports = async (req, res) => {
       owner_email: owner_email || null, // host_config voice resolution
     };
     if (host_tz) row.host_tz = host_tz;  // else render falls back to Eastern
+    // Inbound return calls carry the matched job id here (the 'in-' slug doesn't
+    // encode it). Hydrate reads context off this when present; null = cold open.
+    if (callback_job_id) row.callback_job_id = callback_job_id;
 
     const r = await fetch(`${SUPABASE_URL}/rest/v1/booking_tokens?on_conflict=slug`, {
       method: 'POST',
