@@ -30,10 +30,17 @@ export default async function handler(req, res) {
   if (!slug || !tmi_id || !host_callback)
     return res.status(400).json({ error: 'slug, tmi_id, host_callback required' });
 
+  const extra = b.payload_extra || {};
   const item = {
     tmi_id,
     tmi_label: b.tmi_label || null,
     host_callback,
+    // Thread fields (from Booking's block payload) so the host has a runway,
+    // not just a one-line callback: opener (=host_callback/label) -> follow_up
+    // question -> invite_invention escalation. Nullable per block.
+    follow_up: extra.follow_up || null,
+    invite_invention: extra.invite_invention || null,
+    category: extra.category || null,
     browsed_at: b.browsed_at || new Date().toISOString(),
   };
 
