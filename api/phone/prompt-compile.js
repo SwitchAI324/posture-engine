@@ -125,10 +125,12 @@ const RECORDING_PLAIN_BEAT_POOL = [
   "Hey, before I forget — heads up, this is being recorded.",
   "One thing right off the top — you should know this call's being recorded.",
 ];
+// REVISED (2026-09-07, Canon) — "can't undo it" line replaced with three
+// new variants, all keeping the same technologically-confused register.
 const RECORDING_FLAVOR_LINE_POOL = [
-  "I turned that on by accident about six months ago and I've never figured out how to undo it.",
-  "It's some setting I flipped by mistake ages ago, and every time I try to fix it I just make it worse, so I've let it be.",
-  "I've been meaning to figure out how to turn that off since sometime last spring and never have.",
+  "I turned that on by accident about six months ago and never got around to figuring out how to switch it back off.",
+  "Some setting I flipped by mistake ages ago and just never bothered turning back off, if I'm honest.",
+  "I've been meaning to turn that back off since sometime last spring, just haven't gotten to it.",
 ];
 
 function pickOne(pool) {
