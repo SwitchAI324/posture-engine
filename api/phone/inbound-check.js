@@ -20,6 +20,9 @@ const SB = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SECRET = process.env.PHONE_INTAKE_SECRET;
 const MINT_URL = process.env.MINT_TOKEN_URL || 'https://posture-engine.vercel.app/api/phone/mint-token';
+// Numbers that are ALWAYS a cold house call, never a return match (Andrew's
+// ruling: a call to the public demo line has no context, ever). Comma-separated.
+const DEMO_LINES = (process.env.DEMO_LINE_E164 || '+18143287726').split(',').map(x => x.trim()).filter(Boolean);
 
 async function sb(path, opts = {}) {
   const r = await fetch(`${SB}/rest/v1/${path}`, {
@@ -79,7 +82,8 @@ export default async function handler(req, res) {
     //    back. Anything else is a cold house call.
     //    (callback_numbers.e164 is the scammer's number, i.e. the number we
     //    dial AND the number they'd call back from — same value by design.)
-    const gate = await select('callback_numbers',
+    const isDemoLine = to_e164 && DEMO_LINES.includes(to_e164);
+    const gate = isDemoLine ? [] : await select('callback_numbers',
       `e164=eq.${encodeURIComponent(from_e164)}&blocked=eq.false&order=first_seen.desc&limit=1&select=id,user_id`);
     const RETURN_WINDOW_DAYS = 30;
     const since = new Date(Date.now() - RETURN_WINDOW_DAYS * 864e5).toISOString();
