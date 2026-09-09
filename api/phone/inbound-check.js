@@ -74,14 +74,22 @@ export default async function handler(req, res) {
       return res.status(200).json({ answer: false, reason: 'blocked_number', mode: 'house' });
     }
 
-    // 3. Return call? If this number is on someone's allowlist, the call
-    //    belongs to that user — recap, minutes, memory all apply.
+    // 3. Return call? Only if we actually LEFT this number a voicemail
+    //    recently — that's the only reason a scammer would be calling us
+    //    back. Anything else is a cold house call.
+    //    (callback_numbers.e164 is the scammer's number, i.e. the number we
+    //    dial AND the number they'd call back from — same value by design.)
     const gate = await select('callback_numbers',
       `e164=eq.${encodeURIComponent(from_e164)}&blocked=eq.false&order=first_seen.desc&limit=1&select=id,user_id`);
-    if (gate.length) {
+    const RETURN_WINDOW_DAYS = 30;
+    const since = new Date(Date.now() - RETURN_WINDOW_DAYS * 864e5).toISOString();
+    const candidates = gate.length ? await select('callback_jobs',
+      `callback_number_id=eq.${gate[0].id}&outcome=eq.voicemail_left&status=eq.completed`
+      + `&created_at=gte.${since}&order=created_at.desc&limit=1`
+      + `&select=id,host_name,reference_code,caller_context,archetype`) : [];
+    if (candidates.length) {
       const userId = gate[0].user_id;
-      const [job] = await select('callback_jobs',
-        `callback_number_id=eq.${gate[0].id}&order=created_at.desc&limit=1&select=id,host_name,reference_code,caller_context,archetype`);
+      const job = candidates[0];
       const [settings] = await select('phone_settings', `user_id=eq.${userId}&select=*`);
       if (settings?.minute_cap_enabled) {
         const led = await select('minute_ledger',
