@@ -793,6 +793,9 @@ export async function insertCallOutcome({
   hostPosture,
   transcript,
   status,
+  recordingUrl,
+  recordingDurationSeconds,
+  recordingStatus,
 }) {
   if (!isConfigured()) throw new Error("store not configured");
   if (!targetId) throw new Error("target_id required");
@@ -800,6 +803,21 @@ export async function insertCallOutcome({
   // send a null that overwrites a column default (e.g. next_steps default []).
   const row = { target_id: targetId };
   if (callOutcome !== undefined) row.call_outcome = callOutcome;
+  // vapi_call_id (2026-09-03, corrected per Data) — CONFIRMED this is the
+  // ONLY column on `calls` for the external/telephony call reference; there
+  // is no separate call_id column on this table (that gap only exists on
+  // engagement_events/bit_deployments, which confusingly name the SAME
+  // kind of value `call_id` — a real cross-table naming inconsistency Data
+  // flagged, not a missing column here). An earlier version of this file
+  // wrongly assumed calls needed the same fix call_transcripts got on
+  // Aug 8 (a dedicated call_id field, because vapi_call_id was found empty
+  // there) — that precedent was real but table-specific; it doesn't carry
+  // over to this table, and adding a call_id column write here would have
+  // silently hit a column that doesn't exist. Caller (calls.js) is
+  // responsible for passing the RELIABLE value into vapiCallId — the
+  // LiveKit room name, not necessarily whatever legacy vapi_call_id field
+  // the agent might also send — this function just persists whatever it's
+  // given under the correct real column name.
   if (vapiCallId !== undefined) row.vapi_call_id = vapiCallId;
   if (startedAt !== undefined) row.started_at = startedAt;
   if (endedAt !== undefined) row.ended_at = endedAt;
@@ -808,6 +826,16 @@ export async function insertCallOutcome({
   if (hostPosture !== undefined) row.host_posture = hostPosture;
   if (transcript !== undefined) row.transcript = transcript;
   if (status !== undefined) row.status = status;
+  // RECORDING FIELDS (2026-09-03, Recording chat) — genuine gap fixed:
+  // calls.js was already passing these three through, but this function
+  // never destructured them, so they were silently dropped before ever
+  // reaching `row` — never persisted, no error, no sign anything was
+  // wrong. Column names match the wire-level field names Recording's
+  // agent sends (recording_url, recording_duration_sec) plus the
+  // derived recording_status calls.js computes.
+  if (recordingUrl !== undefined) row.recording_url = recordingUrl;
+  if (recordingDurationSeconds !== undefined) row.recording_duration_sec = recordingDurationSeconds;
+  if (recordingStatus !== undefined) row.recording_status = recordingStatus;
   const r = await fetch(`${URL}/rest/v1/${CALLS}`, {
     cache: "no-store",
     method: "POST",
@@ -853,3 +881,48 @@ export async function cancelForce(callId, { bitId } = {}) {
   if (!r.ok) throw new Error(`cancelForce failed: ${r.status} ${await r.text()}`);
   return true;
 }
+
+// RECORDINGS UPSERT (2026-09-03, Data's ruling) — REPLACES the earlier
+// updateCallRecording approach entirely. Phone jobs never hit
+// ?action=close on this file at all, so matching against a calls row
+// (by any column) could never work for them — recordings now live in
+// their own table, `recordings`, uuid id PK + UNIQUE slug, upserted by
+// slug. This table is the sole source of truth for recording status;
+// it does NOT mirror into `calls` (calls.recording_* stays exactly as
+// shipped, web-close-time only, untouched by this function).
+//
+// Genuine upsert (POST + on_conflict=slug + resolution=merge-duplicates),
+// not an UPDATE — the row may not exist yet (first time this slug's
+// recording resolves), and upsert creates it in that case rather than
+// silently no-op'ing. That's also why this needs no 202/retry signal
+// the way the old by-call_id UPDATE did: an upsert can't "match zero
+// rows", it either updates the existing row or creates it — the race
+// that used to require a retry is handled by the upsert itself.
+//
+// channel is deterministically inferred from the slug prefix (ph- =
+// phone, else web) every time, including on an update to an existing
+// row — harmless since the same slug always yields the same channel,
+// never actually changes call to call.
+export async function upsertRecording({ slug, recordingUrl, durationSec, status }) {
+  if (!isConfigured()) throw new Error("store not configured");
+  if (!slug) throw new Error("slug required");
+  const channel = String(slug).startsWith("ph-") ? "phone" : "web";
+  const row = { slug, channel };
+  if (recordingUrl !== undefined) row.recording_url = recordingUrl;
+  if (durationSec !== undefined) row.duration_sec = durationSec;
+  if (status !== undefined) row.status = status;
+  const r = await fetch(`${URL}/rest/v1/recordings?on_conflict=slug`, {
+    cache: "no-store",
+    method: "POST",
+    headers: {
+      apikey: KEY, authorization: `Bearer ${KEY}`,
+      "content-type": "application/json",
+      prefer: "resolution=merge-duplicates,return=representation",
+    },
+    body: JSON.stringify(row),
+  });
+  if (!r.ok) throw new Error(`upsertRecording failed: ${r.status} ${await r.text()}`);
+  const rows = await r.json();
+  return Array.isArray(rows) ? rows[0] || null : null;
+}
+
