@@ -868,15 +868,27 @@ module.exports = async function handler(req, res) {
     // HOST CONFIG VOICE (2026-09-04) — read alongside the token, applies
     // to BOTH web and phone (host_name is present on both). See
     // readHostConfigVoice's own comment for the join-key caveat.
-    const hostConfigVoice = await readHostConfigVoice(token.host_name);
-
+    //
     // DOSSIER FLOOR: read once here, alongside the token, before assembling —
     // condensed identity + top prior-contact fact, ~50 tokens, baked into the
     // STABLE prefix (see readDossierFloor's own comment for the full account
     // and the one open question re: the prior-contact lane name). Never
     // throws/blocks hydrate — degrades to null (the placeholder text) if
     // anything about this read fails or the target has no scout_facts yet.
-    const dossierFloor = await readDossierFloor(token.target_id);
+    //
+    // PARALLELIZED (2026-09-09, latency pass) — these two used to run as
+    // sequential awaits, paying the full latency of both fetches added
+    // together, even though neither depends on the other's result (one
+    // keys on token.host_name, the other on token.target_id). Both are
+    // documented as never-throwing (degrade to null on any failure), so
+    // Promise.all is safe here — no risk of one's rejection masking the
+    // other's result the way it could for a function that might actually
+    // throw. This is the fetch pair behind the "opener felt slow"
+    // latency report — pays the cost of whichever is slower, not both.
+    const [hostConfigVoice, dossierFloor] = await Promise.all([
+      readHostConfigVoice(token.host_name),
+      readDossierFloor(token.target_id),
+    ]);
 
     // PHONE JOB FIELDS (2026-09-04, revised 2026-09-07 for inbound) — see
     // readPhoneJobFields' own comment for the full context. Only
