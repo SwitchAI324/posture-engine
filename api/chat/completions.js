@@ -1590,12 +1590,14 @@ function buildRecordingNoticeDirective() {
     "in character, as TWO SEPARATE ORDERED BEATS. This is a legal " +
     "requirement, not a performance choice — the first beat cannot be " +
     "skipped, softened, merged into the second, or folded into small " +
-    "talk first. ONE EXCEPTION (2026-09-08, cold inbound calls only — " +
-    "if your context includes a COLD INBOUND CALL directive, follow ITS " +
-    "ordering instead: a single nameless \"Hello?\" reflex-greeting comes " +
-    "before these two beats, not after. On every other call — outbound, " +
-    "resolved inbound, web — these two beats ARE genuinely the first " +
-    "thing said, no exceptions:]\n" +
+    "talk first. ONE EXCEPTION (revised 2026-09-08, Andrew's override — " +
+    "cold inbound calls only): if your context includes a COLD INBOUND " +
+    "CALL directive, IGNORE these two formal beats entirely — that " +
+    "directive fully replaces this mechanism for that call type, not " +
+    "just reorders it; its own casual, folded-in disclosure instructions " +
+    "apply instead. On every other call — outbound, resolved inbound, " +
+    "web — these two beats ARE genuinely the first thing said, no " +
+    "exceptions:]\n" +
     "BEAT 1 (plain, stands alone, states the fact outright with " +
     "'recorded'/'recording' — no hedging, no joke): " + plain + "\n" +
     "BEAT 2 (flavor, follows separately, the in-character why): " + flavor
@@ -4022,20 +4024,71 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // advances past 0/1 — turn stays 1 for the ENTIRE silent stretch, so
     // every silence-nudge/regeneration during that stretch re-evaluated
     // `turn === 1` as true and re-injected the notice fresh, each with
-    // its own random pool pick (confirmed on a real transcript: FOUR
-    // separate deliveries before the caller ever said a word — this is
-    // also what "the opening felt long" actually was, not a separate
-    // issue). Same root shape as the earlier double-open bug — gate
-    // needs its own memory, not just the turn counter, which resets
-    // nothing across a silent regeneration. Fixed the same way: an
-    // explicit PE-owned persisted flag, checked in ADDITION to turn===1,
-    // not instead of it — stored.recordingNoticeGiven, set the moment
-    // the notice is actually injected, so a later regeneration of the
-    // same still-silent turn 1 sees it's already been delivered and
-    // skips re-injecting, regardless of how many attempts happen before
-    // the caller finally speaks.
-    if (turn === 1 && !(stored && stored.recordingNoticeGiven)) {
+    // its own random pool pick. Fixed with an explicit PE-owned persisted
+    // flag, stored.recordingNoticeGiven, checked in ADDITION to turn===1.
+    //
+    // REVISED (2026-09-09) — that fix alone wasn't enough: confirmed on a
+    // real inbound call (in-f0fc8793, Recording) firing FOUR times, once
+    // per silence-beat re-prompt. Root cause is a RACE, not a logic gap:
+    // the persisted flag is written via waitUntil (fire-and-forget,
+    // async) — several rapid silence nudges can each read `stored`
+    // BEFORE the first write has actually landed in Supabase, so each
+    // one sees the flag still unset and fires again. The fix isn't a
+    // bigger hammer on the same async flag; it's anchoring on signals
+    // that are SYNCHRONOUS and already present in the request itself,
+    // no round-trip needed: metadata.opener_done (the agent's own
+    // confirmation the real opener already happened) and
+    // metadata.silence_beat (this request IS a nudge, by definition not
+    // the genuine first utterance, regardless of what turn says). Same
+    // dual-read pattern already used for these two fields elsewhere in
+    // this file. The persisted flag stays as a secondary guard — still
+    // useful for the original silent-caller-turn-never-advances case
+    // where neither of these two signals is present — just no longer
+    // the ONLY thing standing between one delivery and four.
+    const openerAlreadyDone =
+      body?.metadata?.opener_done ?? body?.extra_body?.metadata?.opener_done ?? null;
+    const isSilenceBeatRequest =
+      (body?.metadata?.silence_beat ?? body?.extra_body?.metadata?.silence_beat ?? null) != null;
+    if (
+      turn === 1 &&
+      !(stored && stored.recordingNoticeGiven) &&
+      openerAlreadyDone !== true &&
+      !isSilenceBeatRequest
+    ) {
       mutable += buildRecordingNoticeDirective();
+      waitUntil(setCall(callId, { recordingNoticeGiven: true }).catch(() => {}));
+    }
+
+    // COLD-OPEN BACKSTOP (2026-09-09, Recording — the concrete number
+    // finally confirmed: "by the host's third turn"). The standard
+    // mandatory notice above deliberately steps aside entirely for a
+    // cold inbound call (see the ONE EXCEPTION clause in
+    // buildRecordingNoticeDirective's own text) — that call type instead
+    // waits for the caller to be identified before folding the notice in
+    // casually, per Andrew's override. That's a real, accepted legal
+    // risk if "identified" never happens naturally: this closes it
+    // mechanically rather than leaving it purely to the model's own
+    // judgment, since a judgment call is exactly the thing being
+    // backstopped against. Detects "is this a cold-open call" from the
+    // cached prefix's own distinctive marker text — reuses data already
+    // flowing through the system, no new signal needed from Voice.
+    // Force-fires the SAME two-beat notice, verbatim, the moment turn
+    // reaches 3 with nothing given yet — the caller may still not be
+    // "identified," but the legal clock doesn't get to keep waiting.
+    const isColdOpenCall = !!(stored && stored.prefix && stored.prefix.includes("COLD INBOUND CALL"));
+    if (
+      isColdOpenCall &&
+      turn >= 3 &&
+      !(stored && stored.recordingNoticeGiven)
+    ) {
+      mutable +=
+        "\n\n[BACKSTOP OVERRIDE — you're on your third turn without having " +
+        "worked the recording notice in yet. The 'wait until someone's " +
+        "identified' guidance is now overridden by this: deliver the " +
+        "notice THIS turn regardless, folded in as naturally as you can " +
+        "manage given where the conversation actually is — this is no " +
+        "longer optional.]" +
+        buildRecordingNoticeDirective();
       waitUntil(setCall(callId, { recordingNoticeGiven: true }).catch(() => {}));
     }
 
