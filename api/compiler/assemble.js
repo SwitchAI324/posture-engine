@@ -121,7 +121,19 @@ function buildTurn(assembled, transcript, opts = {}) {
     stream: true,
     system: [
       // FROZEN + CACHED — identical every turn.
-      { type: "text", text: assembled.stablePrefix, cache_control: { type: "ephemeral" } },
+      // EXTENDED TTL (2026-09-09, latency pass) — was the default 5-minute
+      // ephemeral cache; switched to the 1-hour extended TTL. No beta
+      // header required for this (confirmed against current docs before
+      // building — ttl:"1h" is a plain cache_control field now, not a
+      // beta-gated feature). Real tradeoff, not free: a higher cache-write
+      // cost for the same cheap read price. Worth it specifically because
+      // this call type (cold house calls on the demo line) can plausibly
+      // land more than 5 minutes apart between tests/real calls, in which
+      // case the standard TTL was a guaranteed miss every time regardless
+      // of the prefix being byte-identical — this directly targets that
+      // gap rather than the within-a-burst case, which the standard TTL
+      // already handled fine.
+      { type: "text", text: assembled.stablePrefix, cache_control: { type: "ephemeral", ttl: "1h" } },
     ],
     messages: transcript || [],
   };
