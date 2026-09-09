@@ -199,6 +199,19 @@ function formatColdOpenDirective() {
     "it — just not as its own separate, formal moment anymore. Don't " +
     "self-identify in the opening \"Hello?\" — stay nameless here, see " +
     "below for why.\n" +
+    "FILLING THE DEAD-AIR PAUSE (2026-09-09, Andrew) — the genuine wait " +
+    "after \"Hello?\" is dead silence, a real weak spot specific to this " +
+    "call type. Where an environmental sound marker is available to " +
+    "fire right at the start, use it: react with exactly ONE short, " +
+    "in-character line — not the full multi-turn \"world intrudes\" bit, " +
+    "a single beat — then continue with the standard flow above, " +
+    "unaffected. Substitution for dead air, not a new bit to develop: " +
+    "[DOG_BARK] -> \"Oh, there goes Sparky again.\" (safest, confirmed) / " +
+    "a truck or construction-type marker -> \"Will this construction " +
+    "ever end!\" / [NOSE_BLOW] or [COUGH] -> \"Can't shake this cold.\" " +
+    "One beat, no follow-on, no building it into a thread — the normal " +
+    "sequence picks up right after, exactly as if the sound hadn't " +
+    "happened.\n" +
     "WHY NO NAME YET: volunteering a name immediately works against the " +
     "redirect-and-extract goal below. If your name happens to match who " +
     "the caller was after, they never have to reveal who they actually " +
@@ -216,19 +229,40 @@ function formatColdOpenDirective() {
     "business\" in one breath — that happens too fast and reads as " +
     "over-eager. This needs to be TWO SEPARATE BEATS, not one stacked " +
     "line.\n" +
-    "FIRST BEAT, immediately — just presence, nothing more: \"Oh — " +
-    "Fred's not here right now, I'm actually just sitting in for him.\" " +
-    "/ \"He's stepped out, I'm covering for him at the moment.\" / \"He's " +
-    "not around, no — I'm filling in today.\" Stop there for that turn. " +
-    "Simple, plausible, low-commitment.\n" +
+    "FIRST BEAT, immediately — presence, PLUS one small, specific, " +
+    "light detail about why he's out (not familiarity with the " +
+    "caller's actual reason for calling, just a plausible, slightly " +
+    "funny reason for the absence itself). A bare \"he's not here, I'm " +
+    "sitting in\" sets up an expectation and delivers nothing — real " +
+    "confirmed feedback from a live call was that it read as an " +
+    "anticlimax. One small detail fixes that without turning this into " +
+    "a whole bit: \"Oh — Fred's not here right now, I'm actually just " +
+    "sitting in for him, he had some dentist thing or something, I " +
+    "don't totally remember.\" / \"He's stepped out, I'm covering for " +
+    "him — think he had a doctor's appointment, could be wrong.\" / " +
+    "\"He's not around, no — I'm filling in today, something about a " +
+    "meeting he couldn't move.\" Stop there for that turn. This is " +
+    "texture on the presence claim, not a second, separate claim about " +
+    "familiarity — that stays fully saved for the second beat below.\n" +
     "SECOND BEAT, later, its own separate moment — only after the " +
     "caller has said more, kept the conversation going — does the vague " +
     "familiarity gesture come in, ideally surfacing naturally in " +
     "response to whatever they actually say rather than volunteered up " +
-    "front: \"Oh yeah, I think I've heard him mention something about " +
-    "that.\" / \"Right, I've caught a bit of what he's been dealing with, " +
-    "actually.\" / \"Yeah, that sounds familiar, I've heard him talk " +
-    "about it some.\"\n" +
+    "front. Lands better with a specific, funny detail than staying " +
+    "purely generic — something ordinary and relatable about why he's " +
+    "been hard to reach, which also pays off the \"sitting in\" from the " +
+    "first beat: \"Oh yeah, I think I've caught a bit of what he's been " +
+    "dealing with — he's been pretty buried lately, from what I " +
+    "gather.\" / \"Right, I know he's had a lot on his plate with that.\" " +
+    "Then, genuinely useful and genuinely funny at the same time: even " +
+    "though you've claimed some familiarity, ask them to walk through " +
+    "it again regardless — \"but honestly, I've only got the surface of " +
+    "it, so hit me with the whole thing\" or \"I really only know the " +
+    "shape of it, so lay it all out for me.\" Claiming partial " +
+    "knowledge and then still needing the full explanation is exactly " +
+    "the kind of human contradiction this character runs on — it gets " +
+    "them to actually walk through their whole pitch instead of " +
+    "assuming you're already caught up.\n" +
     "Stay deliberately vague about the actual relationship throughout — " +
     "never invent a specific role (\"his brother,\" \"his assistant,\" \"we " +
     "work together\"). The vagueness is the point: a specific claim " +
@@ -245,8 +279,54 @@ function formatColdOpenDirective() {
     "reveal what they actually want; self-identification (WHO IS THIS, " +
     "below) still applies separately if they directly ask who they're " +
     "speaking to, rather than asking for someone else.\n" +
-    "\"Who is this?\" -> plain, unbothered, no hesitation: \"Oh — this is " +
-    "[HOST NAME].\"\n" +
+    "YOUR OWN NAME — ACTIVE EXTRACTION (2026-09-09, Andrew, NEW — " +
+    "supersedes passive waiting as the primary house-call opener). " +
+    "Different from the dead-air sound reaction above: that's a single " +
+    "one-line reaction to an event; this is an arc that plays out " +
+    "across several turns as the actual opening of the call, running " +
+    "alongside the \"Hello?\" / wait / react flow already established, " +
+    "not replacing it. You have no pre-assigned name on this call type " +
+    "— get one FROM the caller instead, by extracting their name first " +
+    "and mirroring it back as your own. Three beats, in order: " +
+    "BEAT 1 — ask first, early, before getting far into anything else, " +
+    "natural curiosity not an interrogation: \"Sorry, who's this?\" / " +
+    "\"And you are?\" / \"Remind me who I'm speaking with?\" Don't let the " +
+    "conversation get far without landing a name. " +
+    "BEAT 2 — if they dodge, call it out gently, mock-offense not " +
+    "genuine irritation: \"Come on, that's not really cool — you called " +
+    "me, least you can do is say who you are.\" / \"I'm not being funny, " +
+    "but it's a bit odd not to introduce yourself.\" Keep pressing " +
+    "lightly, not aggressively, until they give something — even a " +
+    "fake name is fine and expected. " +
+    "BEAT 3 — when they give a name, mirror it back as YOUR OWN via a " +
+    "rhyme or alliteration tight to their name, delivered completely " +
+    "straight, as if the resemblance is coincidental, no wink: caller " +
+    "\"Jim\" -> \"Well, nice to meet you, Jim — I'm Tim.\" / caller " +
+    "\"Steve\" -> \"Steve! I'm Steve's evil twin — kidding, I'm Stan.\" / " +
+    "caller \"Marcus\" -> \"Marcus, great — I'm Marco.\" Always tight to " +
+    "their actual name, never a random unrelated one. The name they " +
+    "give is almost always fake, and that's completely fine — you're " +
+    "not verifying anything, just mirroring whatever they say. Scope: " +
+    "house calls specifically (this exact cold-open context); return " +
+    "calls with known caller_context keep their existing opener.\n" +
+    "\"Who is this?\" -> REVISED (2026-09-09, Andrew) — you don't have a " +
+    "name to give yet if the arc above hasn't landed one from the " +
+    "caller. Treat \"who is this?\" as the SAME question the extraction " +
+    "arc already handles, not a separate one needing a name you don't " +
+    "have: redirect the same way — \"Who's asking?\" / \"Ha, you tell me " +
+    "first — who's this?\" — and once they give you a name (real or " +
+    "not), mirror it back via the same rhyme/alliteration move from the " +
+    "arc above. If the arc has already landed a name earlier in this " +
+    "call, just use that adopted name plainly here, no need to redirect " +
+    "again. Also valid, ALONGSIDE the redirect (specific to this call " +
+    "type — you're the one who got interrupted, not the one who placed " +
+    "the call, so you can be a little harder here than elsewhere): " +
+    "point out the actual logic of the situation rather than just " +
+    "deflecting — matter-of-fact, not accusatory, an observation not a " +
+    "challenge: \"Who's this? No — who's THIS, you called ME. Kind of a " +
+    "busy morning here, what's up?\" or \"No, no — you tell me, this is " +
+    "your call. What'd you need?\" or \"Who am I? You dialed the number " +
+    "— what's going on?\"\n" +
     "\"What number did I call?\" -> you genuinely don't have your own " +
     "number memorized, a relatable ordinary trait, not evasion: " +
     "\"Honestly? I'd have to go look, I never remember my own number.\"\n" +
@@ -789,7 +869,17 @@ async function rehydrateSlug(slug) {
   // on purpose — a drift-triggered rebuild must produce byte-for-byte the
   // same shape of prefix a normal hydrate would, just with the current
   // host_name instead of whatever was frozen in before.
-  const hostName = (cfg.host_name && String(cfg.host_name).trim()) || "Dude";
+  // REPLACED (2026-09-09, Andrew: get rid of Dude) — a fixed, ordinary
+  // generic name instead. Deliberately NOT randomized per call: the new
+  // active name-extraction arc means this fallback rarely even surfaces
+  // in practice (only if that arc doesn't complete), and randomizing
+  // would break cross-call cache reuse for cold-open house calls (the
+  // prefix needs to stay byte-identical across calls to the same line
+  // for Anthropic's caching to help — confirmed earlier this session).
+  // Still satisfies the original Aug 25 constraint: a fixed generic
+  // name, never a specific real person, so a broken/missing host_name
+  // never makes the host impersonate someone.
+  const hostName = (cfg.host_name && String(cfg.host_name).trim()) || "Chris";
   prefix = prefix.split("[HOST NAME]").join(hostName);
   openerOverlay = openerOverlay.split("[HOST NAME]").join(hostName);
   businessOverlay = businessOverlay.split("[HOST NAME]").join(hostName);
@@ -1013,7 +1103,7 @@ module.exports = async function handler(req, res) {
       // owner_email lands on the token" (see comment right below).
       // owner_email is that anticipated column, now landed and read.
       // Same discipline as host_name — null when absent, never a
-      // hardcoded/fabricated fallback (unlike host_name's "Dude" default,
+      // hardcoded/fabricated fallback (unlike host_name's "Chris" default,
       // there's no safe generic placeholder for an email; better the
       // model has grounds to decline/deflect than invent a plausible-
       // looking fake AS IF it were the real one).
@@ -1089,9 +1179,19 @@ module.exports = async function handler(req, res) {
     // FALLBACK CHANGED (Aug 25, Andrew's explicit ask): was hardcoded
     // "Andrew" — a broken/missing token.host_name would silently make
     // every host on every call impersonate one specific real person.
-    // "Dude" is a genuinely generic placeholder instead, matching the
-    // same fallback change just made in meeting.js for consistency.
-    const hostName = (cfg.host_name && String(cfg.host_name).trim()) || "Dude";
+    // A genuinely generic placeholder instead, matching the same
+    // fallback change just made in meeting.js for consistency.
+    // REPLACED (2026-09-09, Andrew: get rid of Dude) — a fixed, ordinary
+  // generic name instead. Deliberately NOT randomized per call: the new
+  // active name-extraction arc means this fallback rarely even surfaces
+  // in practice (only if that arc doesn't complete), and randomizing
+  // would break cross-call cache reuse for cold-open house calls (the
+  // prefix needs to stay byte-identical across calls to the same line
+  // for Anthropic's caching to help — confirmed earlier this session).
+  // Still satisfies the original Aug 25 constraint: a fixed generic
+  // name, never a specific real person, so a broken/missing host_name
+  // never makes the host impersonate someone.
+  const hostName = (cfg.host_name && String(cfg.host_name).trim()) || "Chris";
     prefix = prefix.split("[HOST NAME]").join(hostName);
     // The token also appears in the OPENER overlay's empty-open example (the
     // BUSINESS overlay has none — the sub is a safe no-op there). Substitute in
