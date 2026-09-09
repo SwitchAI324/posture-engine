@@ -1298,6 +1298,15 @@ async function readCall(messages, prior) {
         // 1024 is real headroom for thinking + JSON both, not a meaningful
         // cost change.
         max_tokens: 1024,
+        // THINKING DISABLED (2026-09-09) — this is the exact task that
+        // originally surfaced the thinking-consumes-the-budget failure
+        // mode (see this function's blockTypes=["thinking"] diagnostic
+        // above); the earlier fix only raised max_tokens, which buys
+        // headroom but doesn't prevent the mechanism. Explicitly
+        // disabling is the more robust fix, applied here now that the
+        // same root cause is confirmed live elsewhere too — a terse
+        // forced-JSON classifier task never wants deliberation either.
+        thinking: { type: "disabled" },
         system: sys,
         messages: [{ role: "user", content: convo + "\n\nJSON:" }],
       }),
@@ -2443,6 +2452,21 @@ export default async function handler(req) {
     max_tokens: MAX_TOKENS(),
     stream: true,
     messages: messagesForHost,
+    // THINKING DISABLED (2026-09-09, real live bug) — a Sonnet-5 call
+    // returned a genuinely empty completion: stream opened with
+    // delta:{role:'assistant'}, then closed with finish_reason:'stop' and
+    // ZERO content deltas, ~12 seconds later — confirmed by reading the
+    // raw PE-CHUNK log for that exact request. Root cause matches a
+    // precedent already diagnosed elsewhere in this file (see callread's
+    // own "blockTypes=['thinking']" comment): newer models default to
+    // adaptive/extended thinking, and can spend the entire max_tokens
+    // budget reasoning before ever emitting real text, especially once
+    // MODEL() resolves to something other than what a request was tuned
+    // against. A host's phone-call turn needs a fast, conversational
+    // reply, never deliberation — explicitly disabling thinking prevents
+    // the failure mode outright, rather than just buying more headroom
+    // (which only delays the same problem at a longer prompt/harder turn).
+    thinking: { type: "disabled" },
     // Spike creativity on the Death Blow turn only — the comedy is in the
     // surprise. Every other turn stays at the model's default for consistency.
     ...(deathBlowFiring ? { temperature: 1 } : {}),
@@ -5893,6 +5917,10 @@ export async function runHostTurn({ messages, callId, meta }) {
     model: MODEL(),
     max_tokens: MAX_TOKENS(),
     messages,
+    // THINKING DISABLED — same fix, same reasoning as the streaming
+    // request above; this non-streaming path shares the identical
+    // failure mode (adaptive thinking consuming the whole budget).
+    thinking: { type: "disabled" },
     ...(deathBlowFiring ? { temperature: 1 } : {}),
     ...(systemBlocks ? { system: systemBlocks } : {}),
   };
