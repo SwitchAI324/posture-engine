@@ -149,7 +149,6 @@ module.exports = async function handler(req, res) {
     return jsonRes(res, { ok: true, skipped: "no room_name" });
   }
 
-  const slug = egressInfo.roomName;
   const status = mapEgressStatus(egressInfo.status);
 
   // fileResults is an array — LiveKit egress can emit multiple file
@@ -158,7 +157,59 @@ module.exports = async function handler(req, res) {
   // (e.g. separate audio/video egress), only the first is captured here
   // — not confirmed this call type only ever produces one.
   const file = Array.isArray(egressInfo.fileResults) ? egressInfo.fileResults[0] : null;
-  const recordingUrl = file && file.location ? file.location : null;
+
+  // SLUG + RECORDING_URL (2026-09-09, Recording — breaking change ahead
+  // of Voice's main85). Egress files are being renamed from the LiveKit
+  // room name to the actual hydrate slug (in-<house_call_id>.ogg,
+  // ph-<job_id>.ogg, or the web slug) — so egressInfo.roomName, which
+  // still returns the room and NOT the slug after main85, can no longer
+  // be trusted as the slug. Deriving it instead from the egress file
+  // result's own location/name, which main85 sets to the real slug.
+  //
+  // Same parse also fixes a separate, related bug Recording flagged:
+  // recording_url was being stored as file.location directly — the
+  // full, percent-encoded S3 endpoint URL, not the object key. Storing
+  // the decoded object key only now.
+  //
+  // Real, honest caveat: file.location's exact shape (full https URL
+  // with query string vs. a bucket-relative key already) isn't
+  // confirmed against a real main85 delivery yet — this handles both
+  // plausible shapes defensively (URL-parses if it looks like one,
+  // falls back to treating the whole string as a path otherwise) rather
+  // than assuming one specific format.
+  function parseEgressLocation(location) {
+    if (!location) return { objectKey: null, slug: null };
+    let pathPart = location;
+    try {
+      // If it parses as an absolute URL, take just the pathname —
+      // strips scheme/host/query string (the "percent-encoded S3
+      // endpoint" Recording flagged) automatically.
+      pathPart = new URL(location).pathname;
+    } catch {
+      // Not a full URL — treat the whole string as already being a
+      // path/key, unchanged.
+    }
+    // Decode percent-encoding (S3 keys are commonly percent-encoded in
+    // the path) and strip a leading slash so the stored key is clean.
+    let objectKey;
+    try {
+      objectKey = decodeURIComponent(pathPart).replace(/^\/+/, "");
+    } catch {
+      objectKey = pathPart.replace(/^\/+/, "");
+    }
+    // The slug is the filename component, extension stripped —
+    // "recordings/in-abc123.ogg" -> "in-abc123".
+    const filename = objectKey.split("/").pop() || "";
+    const slug = filename.replace(/\.[a-zA-Z0-9]+$/, "") || null;
+    return { objectKey: objectKey || null, slug };
+  }
+
+  const parsed = parseEgressLocation(file && file.location ? file.location : null);
+  // Fall back to roomName ONLY if the file result gave us nothing to
+  // parse at all (e.g. an egress that failed before producing a file) —
+  // never prefer roomName over a real parsed slug once main85 is live.
+  const slug = parsed.slug || egressInfo.roomName;
+  const recordingUrl = parsed.objectKey;
   // ⚠ UNIT NOT EXPLICITLY DOCUMENTED in the protobuf definition — inferred
   // as nanoseconds by convention with this same message's own started_at/
   // ended_at fields (LiveKit's established convention for all its
