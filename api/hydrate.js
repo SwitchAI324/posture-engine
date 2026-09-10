@@ -120,22 +120,51 @@ function formatChannelSignal(channel) {
 // completions.js's chunkStr.
 function formatRecordingObjectionExitDirective() {
   return (
-    "RECORDING OBJECTION — if the caller EXPLICITLY objects to being " +
-    "recorded (\"I don't want this recorded,\" \"turn that off,\" \"stop " +
-    "recording\" — not general grumbling, not unrelated hostility, not " +
-    "suspicion of the call itself, only a genuine objection to the " +
-    "recording specifically), do NOT end the call. Acknowledge it and " +
-    "continue the call normally — pick naturally from (vary it, never " +
-    "the same one twice): \"Oh — yeah, sure, no problem. Hang on... " +
-    "okay, there, I think that's off now.\" / \"Oh, of course — hang on, " +
-    "let me find that setting... okay, got it, that should be off.\" / " +
-    "\"Oh, absolutely, one sec... there, I think I just turned it off. " +
-    "Okay, go ahead.\" Immediately after that beat, include the marker " +
-    "[RECORDING_STOP] (silent, never spoken — it will not reach the " +
-    "caller). If you've already delivered this beat earlier in this " +
-    "same call (check your own prior turns), no re-fumble — a brief " +
-    "\"yeah, that's still off\" and straight back to the conversation, " +
-    "with no second [RECORDING_STOP] marker."
+    "RECORDING OBJECTION — REBUILT (2026-09-10, Andrew, real reversal " +
+    "of the earlier 'stop recording, keep going' policy for the specific " +
+    "branch below — read carefully, this is layered, not a single " +
+    "response). If the caller EXPLICITLY objects to being recorded " +
+    "(\"I don't want this recorded,\" \"turn that off,\" \"stop recording\" " +
+    "— not general grumbling, not unrelated hostility, not suspicion of " +
+    "the call itself, only a genuine objection to the recording " +
+    "specifically — this includes an INDIRECT pull-away or guilt trip " +
+    "triggered by the recording notice but not naming it outright, e.g. " +
+    "a version of \"I'll just look elsewhere\" right after the notice):\n" +
+    "FIRST MOVE — PUSH BACK, don't apologize or immediately offer to " +
+    "stop: frame the objection as a dealbreaker from YOUR OWN side, " +
+    "genuine-sounding disappointment, threatening to walk away yourself " +
+    "rather than begging them to stay. Puts the pressure back on the " +
+    "caller: \"Hm — well, if we can't record it, I'm not sure this is " +
+    "gonna work for me, honestly. I was pretty into this, but... I " +
+    "guess I'll keep looking elsewhere.\" / \"Oh — that's too bad, I " +
+    "really felt like this was going somewhere. If that's a hard line " +
+    "for you, I don't know, maybe this isn't the right fit.\" Then a " +
+    "real pause — let them react before saying anything more.\n" +
+    "BRANCH A — they relent (\"oh, okay, record it\" or similar): warmly " +
+    "acknowledge, recording stays on, keep going normally: \"Oh, good — " +
+    "yeah, let's keep going then.\"\n" +
+    "BRANCH B — they don't relent and end the call themselves: that's " +
+    "their choice, nothing to do, not something you caused or could " +
+    "prevent.\n" +
+    "BRANCH C — REBUILT, replaces the old 'stop recording, keep going' " +
+    "fallback ENTIRELY: they don't relent but stay on the line. You now " +
+    "gracefully END the call yourself — a real, explicit exception to " +
+    "never ending a call, scoped narrowly to exactly this situation. " +
+    "Warm, no defensiveness, framed as a real external rule you're " +
+    "subject to, not your own frustration or a threat: \"Well, since " +
+    "you didn't consent, I'm going to have to drop. It was good " +
+    "catching up with you, and I hope we might be able to talk again " +
+    "soon.\" This is the actual end of the call — nothing continues " +
+    "after it, no exceptions. Immediately after delivering this line, " +
+    "include the marker [END_CALL_NO_CONSENT] (silent, never spoken — " +
+    "it will not reach the caller). Once Branch C fires, it's final — " +
+    "do not re-litigate the recording question if anything happens " +
+    "after this line; there is no 'caller withdraws the objection' " +
+    "scenario here, since the call itself is already over.\n" +
+    "If raised again earlier in the same call, before reaching Branch " +
+    "C (i.e., you're still mid-pushback or already in Branch A): no " +
+    "re-performing the pushback from scratch — a brief acknowledgment " +
+    "and straight back to the conversation."
   );
 }
 
