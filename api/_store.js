@@ -906,7 +906,11 @@ export async function cancelForce(callId, { bitId } = {}) {
 export async function upsertRecording({ slug, recordingUrl, durationSec, status }) {
   if (!isConfigured()) throw new Error("store not configured");
   if (!slug) throw new Error("slug required");
-  const channel = String(slug).startsWith("ph-") ? "phone" : "web";
+  // FIXED (2026-09-09, Recording — confirmed via real production rows:
+  // every inbound call was stamped channel=web). This only ever checked
+  // ph-, never in- — every inbound slug fell through to the else branch
+  // by construction. Both phone-call prefixes now recognized.
+  const channel = /^(ph-|in-)/.test(String(slug)) ? "phone" : "web";
   const row = { slug, channel };
   if (recordingUrl !== undefined) row.recording_url = recordingUrl;
   if (durationSec !== undefined) row.duration_sec = durationSec;
