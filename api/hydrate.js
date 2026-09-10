@@ -305,8 +305,15 @@ function formatColdOpenDirective() {
     "and mirroring it back as your own. Three beats, in order: " +
     "BEAT 1 — ask first, early, before getting far into anything else, " +
     "natural curiosity not an interrogation: \"Sorry, who's this?\" / " +
-    "\"And you are?\" / \"Remind me who I'm speaking with?\" Don't let the " +
-    "conversation get far without landing a name. " +
+    "\"And you are?\" / \"Remind me who I'm speaking with?\" / \"Can I help " +
+    "you with something?\" / \"What can I do for you?\" Don't let the " +
+    "conversation get far without landing a name. CONFIRMED TOO FORMAL " +
+    "on a real call, avoid this construction: \"who's this calling for " +
+    "him?\" — combining the ask with a reference back to the absent " +
+    "person reads stiff and interrogation-like. Keep it simple and " +
+    "open-ended instead, like \"can I help?\" — it doesn't need to " +
+    "explicitly demand a name to work; a caller answering an open \"can " +
+    "I help?\" often gives their name naturally anyway. " +
     "BEAT 2 — if they dodge, call it out gently, mock-offense not " +
     "genuine irritation: \"Come on, that's not really cool — you called " +
     "me, least you can do is say who you are.\" / \"I'm not being funny, " +
