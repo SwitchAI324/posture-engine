@@ -1595,21 +1595,25 @@ function buildRecordingNoticeDirective() {
   const plain = pickOne(RECORDING_PLAIN_BEAT_POOL);
   const flavor = pickOne(RECORDING_FLAVOR_LINE_POOL);
   return (
-    "\n\n[MANDATORY FIRST UTTERANCE — deliver this before anything else, " +
-    "in character, as TWO SEPARATE ORDERED BEATS. This is a legal " +
-    "requirement, not a performance choice — the first beat cannot be " +
-    "skipped, softened, merged into the second, or folded into small " +
-    "talk first. ONE EXCEPTION (revised 2026-09-08, Andrew's override — " +
-    "cold inbound calls only): if your context includes a COLD INBOUND " +
-    "CALL directive, IGNORE these two formal beats entirely — that " +
-    "directive fully replaces this mechanism for that call type, not " +
-    "just reorders it; its own casual, folded-in disclosure instructions " +
-    "apply instead. On every other call — outbound, resolved inbound, " +
-    "web — these two beats ARE genuinely the first thing said, no " +
-    "exceptions:]\n" +
-    "BEAT 1 (plain, stands alone, states the fact outright with " +
-    "'recorded'/'recording' — no hedging, no joke): " + plain + "\n" +
-    "BEAT 2 (flavor, follows separately, the in-character why): " + flavor
+    "\n\n[RECORDING DISCLOSURE — REVISED (2026-09-10, Andrew, confirmed " +
+    "extending the cold-open approach to every call type): the two-beat " +
+    "mandatory-first-utterance version is retired entirely, not just for " +
+    "cold-open calls anymore. On every call — outbound, resolved " +
+    "inbound, web — do NOT announce this as a formal opening statement. " +
+    "Proceed with your normal opener/greeting as usual, let a real " +
+    "exchange actually get underway, and once the caller has genuinely " +
+    "engaged (they've said something, you're actually talking), work " +
+    "the disclosure in casually, as an aside folded into whatever " +
+    "you're already saying — not as two separate announced beats: \"" +
+    plain + "\" or similar, in your own words, woven in naturally, with " +
+    "\"" + flavor + "\" as the in-character why if it fits. Still needs " +
+    "the literal word 'recorded'/'recording' somewhere in it — just not " +
+    "as its own formal, separated moment. If you've already delivered " +
+    "this once earlier in the call, don't repeat it. NOTE FOR COLD-OPEN " +
+    "CALLS SPECIFICALLY: if your context includes a COLD INBOUND CALL " +
+    "directive, follow ITS own version of this instead (it's more " +
+    "specific to that call's own nameless-open sequencing) — this is " +
+    "the general version for every other call type.]"
   );
 }
 
@@ -4039,77 +4043,63 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // append onto this below, same as before.
     let mutable = "";
 
-    // TURN-1 RECORDING NOTICE — mandatory, unconditional, every channel.
-    // See buildRecordingNoticeDirective's own comment for the full
-    // context (a real, long-standing gap, closed here for real).
+    // RECORDING DISCLOSURE — REVISED (2026-09-10, Andrew, confirmed):
+    // the mandatory-first-utterance/turn===1 gate is retired along with
+    // the two-beat framing itself. This now needs to stay present across
+    // EVERY genuine turn (not just the first) until actually delivered,
+    // since the model is now working it in whenever a real exchange is
+    // underway — which could be turn 1, 2, or later — rather than being
+    // forced into turn 1 specifically. openerAlreadyDone is no longer
+    // part of this gate: it used to mean "this is a nudge-like retry
+    // where turn incorrectly still says 1," but now that there's no
+    // turn===1 requirement at all, excluding "opener already done"
+    // would incorrectly suppress this on every turn after the first —
+    // the opposite of what's needed. Silence nudges are still excluded
+    // (this isn't the moment to work a disclosure into a "still there?"
+    // check), same isSilenceBeatRequest signal as before.
     //
-    // FIXED (2026-09-08) — a real, confirmed bug found on a live call: a
-    // caller who never speaks at all means countUserTurns(messages) never
-    // advances past 0/1 — turn stays 1 for the ENTIRE silent stretch, so
-    // every silence-nudge/regeneration during that stretch re-evaluated
-    // `turn === 1` as true and re-injected the notice fresh, each with
-    // its own random pool pick. Fixed with an explicit PE-owned persisted
-    // flag, stored.recordingNoticeGiven, checked in ADDITION to turn===1.
-    //
-    // REVISED (2026-09-09) — that fix alone wasn't enough: confirmed on a
-    // real inbound call (in-f0fc8793, Recording) firing FOUR times, once
-    // per silence-beat re-prompt. Root cause is a RACE, not a logic gap:
-    // the persisted flag is written via waitUntil (fire-and-forget,
-    // async) — several rapid silence nudges can each read `stored`
-    // BEFORE the first write has actually landed in Supabase, so each
-    // one sees the flag still unset and fires again. The fix isn't a
-    // bigger hammer on the same async flag; it's anchoring on signals
-    // that are SYNCHRONOUS and already present in the request itself,
-    // no round-trip needed: metadata.opener_done (the agent's own
-    // confirmation the real opener already happened) and
-    // metadata.silence_beat (this request IS a nudge, by definition not
-    // the genuine first utterance, regardless of what turn says). Same
-    // dual-read pattern already used for these two fields elsewhere in
-    // this file. The persisted flag stays as a secondary guard — still
-    // useful for the original silent-caller-turn-never-advances case
-    // where neither of these two signals is present — just no longer
-    // the ONLY thing standing between one delivery and four.
+    // History kept for context: originally mandatory-first-utterance
+    // only, fixed for a same-turn repeat bug (2026-09-08), fixed again
+    // for a cross-request race (2026-09-09) — both fixes' underlying
+    // signals (recordingNoticeGiven, isSilenceBeatRequest) are reused
+    // here unchanged, only the gate's SHAPE changed.
     const openerAlreadyDone =
       body?.metadata?.opener_done ?? body?.extra_body?.metadata?.opener_done ?? null;
     const isSilenceBeatRequest =
       (body?.metadata?.silence_beat ?? body?.extra_body?.metadata?.silence_beat ?? null) != null;
     if (
-      turn === 1 &&
       !(stored && stored.recordingNoticeGiven) &&
-      openerAlreadyDone !== true &&
       !isSilenceBeatRequest
     ) {
+      // Deliberately NOT marking recordingNoticeGiven here anymore. Real
+      // bug caught by testing before shipping this revision: under the
+      // old mandatory-turn-1 design, injecting the guidance and marking
+      // it "given" in the same step was safe, because the model was
+      // forced to comply immediately — injection and delivery happened
+      // on the same turn by construction. Under this new "wait, then
+      // work it in whenever a real exchange is underway" design, that's
+      // no longer true: marking it given at injection time would make
+      // the guidance vanish after one turn even if the model correctly
+      // waited and hadn't said it yet — silently defeating the backstop
+      // below too, since it checks this same flag. So this keeps
+      // re-injecting on every genuine turn (harmless — the directive's
+      // own text already says not to repeat if already delivered) until
+      // the backstop either forces real delivery or the call ends.
       mutable += buildRecordingNoticeDirective();
-      waitUntil(setCall(callId, { recordingNoticeGiven: true }).catch(() => {}));
     }
 
-    // COLD-OPEN BACKSTOP (2026-09-09, Recording — the concrete number
-    // finally confirmed: "by the host's third turn"). The standard
-    // mandatory notice above deliberately steps aside entirely for a
-    // cold inbound call (see the ONE EXCEPTION clause in
-    // buildRecordingNoticeDirective's own text) — that call type instead
-    // waits for the caller to be identified before folding the notice in
-    // casually, per Andrew's override. That's a real, accepted legal
-    // risk if "identified" never happens naturally: this closes it
-    // mechanically rather than leaving it purely to the model's own
-    // judgment, since a judgment call is exactly the thing being
-    // backstopped against. Detects "is this a cold-open call" from the
-    // cached prefix's own distinctive marker text — reuses data already
-    // flowing through the system, no new signal needed from Voice.
-    //
-    // REVISED (2026-09-09, Recording — real confirmed miss on a live
-    // call: notice never fired across 4+ host turns). Root cause: this
-    // was keyed on `turn`, and turn does not reliably advance on inbound
-    // calls — the exact same "always reports turn=1" pattern already
-    // confirmed for silence nudges (Voice). A compliance backstop keyed
-    // on an unreliable counter is not a backstop at all. Fixed by
-    // counting genuine host turns SERVER-SIDE instead of trusting the
-    // request's own turn field — a persisted counter (stored.
-    // hostTurnCount), incremented only on a turn confirmed genuine by
-    // the SAME openerAlreadyDone/isSilenceBeatRequest signals already
-    // proven reliable for the notice-repeat fix above. A nudge never
-    // increments it; only a real, new host turn does. This is now
-    // mechanically certain regardless of whatever the turn field says.
+    // RECORDING-DISCLOSURE BACKSTOP — REVISED AGAIN (2026-09-10, Andrew:
+    // "2 turns or 15 seconds"). Now a genuine hybrid, not turn-count
+    // alone — closes a real gap in the pure-turn version: a caller
+    // speaking in long, slow sentences could take far longer, in actual
+    // elapsed time, to reach turn 3 than a caller trading rapid
+    // back-and-forth, making "by turn 3" an inconsistent time guarantee
+    // on its own. Fires on whichever threshold is reached FIRST — turn
+    // count OR elapsed time, not both required. Elapsed time reuses
+    // stored.firstSeenAt, already stamped once per call for the
+    // existing OPENER_SILENCE_RESOLVE mechanism (see that code, a few
+    // hundred lines up) — same proven Date.now()-diff pattern, not a
+    // new timing mechanism invented from scratch.
     const isColdOpenCall = !!(stored && stored.prefix && stored.prefix.includes("COLD INBOUND CALL"));
     const priorHostTurnCount = (stored && stored.hostTurnCount) || 0;
     const isGenuineNewHostTurn = openerAlreadyDone !== true && !isSilenceBeatRequest;
@@ -4119,18 +4109,27 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     if (isGenuineNewHostTurn && effectiveHostTurnCount !== priorHostTurnCount) {
       waitUntil(setCall(callId, { hostTurnCount: effectiveHostTurnCount }).catch(() => {}));
     }
+    const RECORDING_BACKSTOP_TURN_THRESHOLD = 2;
+    const RECORDING_BACKSTOP_MS = 15000;
+    const elapsedSinceFirstSeenMs =
+      stored && stored.firstSeenAt ? Date.now() - stored.firstSeenAt : null;
+    const backstopByTurn = effectiveHostTurnCount >= RECORDING_BACKSTOP_TURN_THRESHOLD;
+    const backstopByTime =
+      elapsedSinceFirstSeenMs != null && elapsedSinceFirstSeenMs >= RECORDING_BACKSTOP_MS;
     if (
-      isColdOpenCall &&
-      effectiveHostTurnCount >= 3 &&
+      (backstopByTurn || backstopByTime) &&
       !(stored && stored.recordingNoticeGiven)
     ) {
       mutable +=
-        "\n\n[BACKSTOP OVERRIDE — you're on your third turn without having " +
-        "worked the recording notice in yet. The 'wait until someone's " +
-        "identified' guidance is now overridden by this: deliver the " +
-        "notice THIS turn regardless, folded in as naturally as you can " +
-        "manage given where the conversation actually is — this is no " +
-        "longer optional.]" +
+        "\n\n[BACKSTOP OVERRIDE — " +
+        (backstopByTime && !backstopByTurn
+          ? "15 seconds have passed"
+          : "you're on your second turn") +
+        " without having worked the recording notice in yet. The 'wait " +
+        "until a real exchange is underway' guidance is now overridden " +
+        "by this: deliver the notice THIS turn regardless, folded in as " +
+        "naturally as you can manage given where the conversation " +
+        "actually is — this is no longer optional.]" +
         buildRecordingNoticeDirective();
       waitUntil(setCall(callId, { recordingNoticeGiven: true }).catch(() => {}));
     }
@@ -5369,6 +5368,12 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
   // any closure that could reference it is even created, removes the
   // hazard entirely regardless of which path calls chunkStr first.
   let recordingStopTriggered = false;
+  // END-CALL-NO-CONSENT SIGNAL — declared at the same early point, same
+  // ordering-hazard reasoning as recordingStopTriggered directly above
+  // (a setTimeout-driven fallback path can invoke chunkStr before
+  // execution reaches a later declaration line — proven real once
+  // already on recordingStopTriggered, not worth re-discovering here).
+  let endCallTriggered = false;
 
   const chunkStr = (delta, finish_reason = null) => {
     // pe_stall (survives the LiveKit plugin): a TOP-LEVEL chunk field is dropped
@@ -5416,6 +5421,27 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
       outDelta = {
         ...outDelta,
         extra_content: { ...(outDelta.extra_content || {}), recording_stop: true },
+      };
+    }
+    // END-CALL-NO-CONSENT SIGNAL (2026-09-10, Andrew — real reversal of
+    // the recording_stop-only policy above, scoped to one specific
+    // branch: caller pushed back on, doesn't relent, stays on the line
+    // without consenting). Same shape as recording_stop — discovered
+    // mid-generation from the model's own judgment, attaches to
+    // whichever content chunk triggers it, not the role chunk.
+    //
+    // ⚠ FIELD NAME UNCONFIRMED, same caveat as recording_stop had:
+    // end_call is PE's own proposal for this, not yet confirmed by
+    // Voice — change this one string if they pick something else.
+    // Voice needs to actually tear the room down on seeing this after
+    // the goodbye line finishes playing, same as the original
+    // [END_CALL_OBJECTION] mechanism would have needed before it was
+    // retired — this is that same real requirement, now genuinely
+    // needed again under this new branch.
+    if (endCallTriggered && delta) {
+      outDelta = {
+        ...outDelta,
+        extra_content: { ...(outDelta.extra_content || {}), end_call: true },
       };
     }
     const chunk = {
@@ -5812,6 +5838,20 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
                     "RECORDING-STOP-SIGNAL fired — turn=" + (meta && meta.turn) +
                     " callId=" + JSON.stringify(meta && meta.callId) +
                     " (extra_content.recording_stop stamped on this chunk)"
+                  );
+                }
+                // END-CALL-NO-CONSENT (2026-09-10) — same detect-and-strip
+                // shape as RECORDING_STOP directly above; this marker is
+                // also structured-signal-only, never meant to reach the
+                // caller as visible/spoken text.
+                if (emit.indexOf("[END_CALL_NO_CONSENT]") >= 0) {
+                  emit = emit.replace(/\[END_CALL_NO_CONSENT\]/g, "");
+                  endCallTriggered = true;
+                  console.log(
+                    "END-CALL-NO-CONSENT fired — turn=" + (meta && meta.turn) +
+                    " callId=" + JSON.stringify(meta && meta.callId) +
+                    " (extra_content.end_call stamped on this chunk — agent " +
+                    "should tear the room down after the goodbye line plays)"
                   );
                 }
                 // First emitted chunk: also strip a leading wrapping quote.
