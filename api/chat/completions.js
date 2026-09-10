@@ -4096,13 +4096,32 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // backstopped against. Detects "is this a cold-open call" from the
     // cached prefix's own distinctive marker text — reuses data already
     // flowing through the system, no new signal needed from Voice.
-    // Force-fires the SAME two-beat notice, verbatim, the moment turn
-    // reaches 3 with nothing given yet — the caller may still not be
-    // "identified," but the legal clock doesn't get to keep waiting.
+    //
+    // REVISED (2026-09-09, Recording — real confirmed miss on a live
+    // call: notice never fired across 4+ host turns). Root cause: this
+    // was keyed on `turn`, and turn does not reliably advance on inbound
+    // calls — the exact same "always reports turn=1" pattern already
+    // confirmed for silence nudges (Voice). A compliance backstop keyed
+    // on an unreliable counter is not a backstop at all. Fixed by
+    // counting genuine host turns SERVER-SIDE instead of trusting the
+    // request's own turn field — a persisted counter (stored.
+    // hostTurnCount), incremented only on a turn confirmed genuine by
+    // the SAME openerAlreadyDone/isSilenceBeatRequest signals already
+    // proven reliable for the notice-repeat fix above. A nudge never
+    // increments it; only a real, new host turn does. This is now
+    // mechanically certain regardless of whatever the turn field says.
     const isColdOpenCall = !!(stored && stored.prefix && stored.prefix.includes("COLD INBOUND CALL"));
+    const priorHostTurnCount = (stored && stored.hostTurnCount) || 0;
+    const isGenuineNewHostTurn = openerAlreadyDone !== true && !isSilenceBeatRequest;
+    const effectiveHostTurnCount = isGenuineNewHostTurn
+      ? priorHostTurnCount + 1
+      : priorHostTurnCount;
+    if (isGenuineNewHostTurn && effectiveHostTurnCount !== priorHostTurnCount) {
+      waitUntil(setCall(callId, { hostTurnCount: effectiveHostTurnCount }).catch(() => {}));
+    }
     if (
       isColdOpenCall &&
-      turn >= 3 &&
+      effectiveHostTurnCount >= 3 &&
       !(stored && stored.recordingNoticeGiven)
     ) {
       mutable +=
