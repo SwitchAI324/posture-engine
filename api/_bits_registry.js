@@ -679,7 +679,9 @@ export const BITS = [
     "family": "process_information",
     "absurdity": 2,
     "vocal_tag": "mysterious",
-    "archetypes": "universal"
+    "archetypes": [
+      "b2b_saas"
+    ]
   },
   {
     "id": "BIT-205",
@@ -1062,7 +1064,9 @@ export const BITS = [
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "spammer has been pushing for commitment \u2014 approval hunt is warranted",
-    "archetypes": "universal"
+    "archetypes": [
+      "b2b_saas"
+    ]
   },
   {
     "id": "BIT-234",
@@ -1100,7 +1104,9 @@ export const BITS = [
     "vocal_tag": "mysterious",
     "trigger": "commitment_push|pricing_raised",
     "requires_context": "spammer has asked for personal information",
-    "archetypes": "universal"
+    "archetypes": [
+      "b2b_saas"
+    ]
   },
   {
     "id": "BIT-239",
@@ -1153,7 +1159,8 @@ export const BITS = [
       "DOG_BARK_STOP"
     ],
     "arc_protection": true,
-    "pool": "early"
+    "pool": "early",
+    "requires_context": "; on cold_open_inbound: one-line reaction only, no arc"
   },
   {
     "id": "BIT-303",
@@ -1299,7 +1306,8 @@ export const BITS = [
       "THROAT_CLEAR"
     ],
     "requires_host_sex": true,
-    "pool": "early"
+    "pool": "early",
+    "requires_context": "; on cold_open_inbound: one-line reaction only, no arc"
   },
   {
     "id": "BIT-312",
@@ -1684,7 +1692,9 @@ export const BITS = [
     "family": "dossier_host_deflection",
     "absurdity": 2,
     "vocal_tag": "excited",
-    "archetypes": "universal",
+    "archetypes": [
+      "b2b_saas"
+    ],
     "rungs": 3,
     "max_fires_per_call": 3
   },
@@ -1869,7 +1879,9 @@ export const BITS = [
     "vocal_tag": "excited",
     "requires_context": "spammer has mentioned a credential, certification, or qualification",
     "trigger": "caller_presenting",
-    "archetypes": "universal"
+    "archetypes": [
+      "b2b_saas"
+    ]
   },
   {
     "id": "BIT-517",
@@ -2213,7 +2225,9 @@ export const BITS = [
     "vocal_tag": "mysterious",
     "channel": "audio",
     "requires_context": "spammer has described their product, technology, or industry in specific terms",
-    "archetypes": "universal",
+    "archetypes": [
+      "b2b_saas"
+    ],
     "rungs": 3
   },
   {
@@ -2247,7 +2261,7 @@ export const BITS = [
     "sound_markers": [
       "NOSE_BLOW"
     ],
-    "requires_context": null
+    "requires_context": "; on cold_open_inbound: one-line reaction only, no arc"
   },
   {
     "id": "BIT-337",
