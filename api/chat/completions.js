@@ -4638,6 +4638,34 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       // move) — omitted from the injected text rather than printed as
       // "null", matching this file's convention everywhere else.
       let browsedTmiPayload = null;
+
+      // COLD-OPEN SOUND-BIT SUPPRESSION (2026-09-09, Bits/Canon) — three
+      // specific sound-reaction bits (BIT-302, BIT-311 Sick Day, BIT-336
+      // Nose) have their own full multi-turn arc normally, but on a cold
+      // inbound call the spec calls for exactly ONE line and nothing
+      // more — no arc, no follow-on, no building it into a thread.
+      // Bits' own signal for this: each bit's requires_context field now
+      // carries "on cold_open_inbound: one-line reaction only, no arc".
+      // Rather than parsing that text programmatically (fragile — a
+      // free-text field isn't a contract to pattern-match against), this
+      // reuses the same override-injection pattern already proven
+      // elsewhere in this file (the never-re-open rule, the recording-
+      // objection exception): inject an explicit instruction alongside
+      // the bit's own directive, let the model reconcile the two, rather
+      // than trying to truncate or rewrite BIT_DIRECTIVES' text
+      // server-side. isColdOpenCall is already computed above (same
+      // prefix-marker detection the backstop uses) — reused here rather
+      // than recomputed.
+      const SOUND_BITS_SUPPRESSED_ON_COLD_OPEN = ["BIT-302", "BIT-311", "BIT-336"];
+      const coldOpenSoundBitOverride =
+        isColdOpenCall && SOUND_BITS_SUPPRESSED_ON_COLD_OPEN.includes(top.id)
+          ? "\n\n[COLD-OPEN OVERRIDE for this bit — deliver ONE short line " +
+            "reacting to the sound, nothing more. Do not run this bit's " +
+            "full arc or follow-on beats on this call type — a single " +
+            "reaction line only, then continue the normal cold-open flow " +
+            "exactly as if the sound hadn't happened.]"
+          : "";
+
       if (top.trigger && String(top.trigger).includes("browsed_tmi:")) {
         const wantedId = String(top.trigger)
           .split("|")
@@ -4753,12 +4781,13 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           ? "Its directive follows. Perform ITS specific structure: hit its " +
             "beats, its required moves, its sequence. Do NOT produce behavior " +
             "that is merely consistent with the bit's tone — that is a failed " +
-            "performance.\n\n" + bitDirective + (browsedTmiPayload || "") + "\n\n"
+            "performance.\n\n" + bitDirective + (browsedTmiPayload || "") +
+            (coldOpenSoundBitOverride || "") + "\n\n"
           : "Its full directive is under " + top.id + " in your ARMED BITS " +
             "section. Perform THAT routine's specific structure: hit its " +
             "beats, its required moves, its sequence. Do NOT produce behavior " +
             "that is merely consistent with the bit's tone — that is a failed " +
-            "performance. " + (browsedTmiPayload || "")) +
+            "performance. " + (browsedTmiPayload || "") + (coldOpenSoundBitOverride || "")) +
         // PERMISSION TO DECLINE (Aug 5) — texture fires ONLY. Scenario/stall
         // mechanics (the hunt, etc.) stay mandatory once fired; those are
         // load-bearing state machines, not ambient color, and making them
@@ -5705,6 +5734,25 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
                 // Lowercase/natural-language brackets ([chuckles], [I settle
                 // in...]) remain stage directions and are still stripped here.
                 svScrubBuf = svScrubBuf.replace(/\[([A-Z0-9_]{2,32})\]/g, "\u0001$1\u0001");
+                // HTML-TAG STRIP (2026-09-09, real bug, confirmed reaching
+                // TTS on a live call: a literal "<br>" opened an assistant
+                // turn and was spoken/sent as-is). No prompt content
+                // anywhere emits this — genuinely spontaneous model
+                // markup, same shape as the earlier backtick-wrapped
+                // emotion-tag issue but with no traceable prompt-side
+                // source this time, so fixed defensively in code rather
+                // than chasing a prompt cause that doesn't exist. Targets
+                // a specific, known list of common HTML tag names only —
+                // deliberately NOT a blanket "strip anything in angle
+                // brackets" rule, since <emotion value="X"/> is a real,
+                // intentional marker (agent-consumed, same family as the
+                // sound markers above) that must survive untouched. Any
+                // tag name not on this list — including "emotion" — is
+                // left alone.
+                svScrubBuf = svScrubBuf.replace(
+                  /<\/?(br|p|div|span|b|i|strong|em|ul|ol|li|h[1-6]|hr)\s*\/?>/gi,
+                  ""
+                );
                 svScrubBuf = svScrubBuf
                   .replace(/\*[^*\n]{0,80}\*/g, "")
                   .replace(/\[[^\]\n]{0,80}\]/g, "");
