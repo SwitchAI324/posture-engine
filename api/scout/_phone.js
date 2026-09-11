@@ -44,21 +44,44 @@ export async function lookupLineType(e164) {
 // ---- web complaint reports (Tavily) ------------------------------------
 // Returns raw report rows for the row's web_reports column AND as the judge's
 // input. Degrades to [] without a key.
+//
+// TWO-PASS by design: generic "<number> scam" queries surface anti-scam
+// LISTICLES (FTC how-tos, malwarebytes homepages) rather than the per-number
+// complaint THREADS where corroboration actually lives. So pass 1 scopes to
+// the complaint aggregators via include_domains (the threads); pass 2 is a
+// broad fallback so a number only reported off-aggregator still yields
+// something. Aggregator hits are what let a real scam number reach medium.
+const COMPLAINT_DOMAINS = [
+  '800notes.com', 'robokiller.com', 'nomorobo.com', 'reportedcalls.com',
+  'shouldianswer.com', 'whocalled.us', 'usphonesearch.net', 'spamcalls.net',
+  'truecaller.com', 'whitepages.com',
+];
+
 export async function gatherReports(e164) {
   const key = process.env.TAVILY_API_KEY;
   if (!key || !e164) return [];
   const out = [];
-  for (const q of [`${e164} scam`, `${e164} who called`, `${e164} complaint`]) {
+
+  const passes = [
+    // Pass 1 — targeted: bare number, scoped to complaint aggregators.
+    { query: `${e164}`, include_domains: COMPLAINT_DOMAINS, max_results: 8 },
+    // Pass 2 — broad fallback: catches off-aggregator reports.
+    { query: `${e164} scam complaint who called`, max_results: 5 },
+  ];
+
+  for (const p of passes) {
     try {
+      const body = {
+        api_key: key,
+        query: p.query,
+        max_results: p.max_results,
+        include_answer: false,
+      };
+      if (p.include_domains) body.include_domains = p.include_domains;
       const r = await fetch('https://api.tavily.com/search', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          api_key: key,
-          query: q,
-          max_results: 5,
-          include_answer: false,
-        }),
+        body: JSON.stringify(body),
       });
       if (!r.ok) continue;
       const data = await r.json();
