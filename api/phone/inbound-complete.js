@@ -17,6 +17,8 @@ const SECRET = process.env.PHONE_INTAKE_SECRET;
 const ANTHROPIC = process.env.ANTHROPIC_API_KEY;
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 const RECAP_URL = process.env.RECAP_URL || 'https://posture-engine.vercel.app/api/phone/recap';
+const SCOUT_TOKEN = process.env.SV_SCOUT_TOKEN;
+const SCOUT_URL = process.env.SCOUT_PHONE_URL || 'https://posture-engine.vercel.app/api/scout/phone';
 
 const ARCHETYPES = ['b2b_saas', 'crypto_investment', 'account_access', 'gov_threat', 'generic'];
 
@@ -38,6 +40,22 @@ const select = (table, filter) => sb(`${table}?${filter}`, { method: 'GET' });
 const insert = (table, row, prefer) => sb(table, { method: 'POST', body: JSON.stringify(row), prefer });
 const update = (table, filter, row) => sb(`${table}?${filter}`, { method: 'PATCH', body: JSON.stringify(row) });
 const rpc = (fn, args) => sb(`rpc/${fn}`, { method: 'POST', body: JSON.stringify(args) });
+
+// Fire-and-forget scouting ping, same as intake. Covers cold callers to the
+// demo line, who otherwise never get a profile built.
+async function pingScout(number) {
+  if (!SCOUT_TOKEN || !number) return;
+  try {
+    await fetch(SCOUT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-sv-scout-token': SCOUT_TOKEN },
+      body: JSON.stringify({ number }),
+      signal: AbortSignal.timeout(3000),
+    });
+  } catch (e) {
+    console.warn('scout ping failed (non-blocking)', String(e.message || e));
+  }
+}
 
 const monthStart = () => { const d = new Date(); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-01`; };
 
@@ -115,12 +133,17 @@ export default async function handler(req, res) {
     });
 
     // Feed the shared scammer profile (column-scoped RPC; vote append).
-    if (a && call.from_e164) {
+    // Skip anonymous/withheld caller IDs — they'd all pile into one
+    // meaningless profile row keyed on a placeholder string.
+    const realNumber = /^\+\d{8,15}$/.test(call.from_e164 || '') ? call.from_e164 : null;
+    if (a && realNumber) {
       await rpc('upsert_caller_profile', {
-        p_e164: call.from_e164, p_org: a.claimed_org || null,
+        p_e164: realNumber, p_org: a.claimed_org || null,
         p_summary: a.script_summary || null, p_archetype: a.archetype, p_src: 'inbound',
       }).catch(() => {});
     }
+    // Scout every number that enters the system, cold callers included.
+    if (realNumber) await pingScout(realNumber);
 
     const matchedUser = user_id || null;
     const matchedJob = job_id || call.matched_job_id || null;

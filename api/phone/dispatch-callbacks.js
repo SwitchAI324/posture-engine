@@ -44,6 +44,7 @@ const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
 const AGENT_NAME = process.env.LIVEKIT_AGENT_NAME || 'spamviking';
 const PHONE_INTAKE_SECRET = process.env.PHONE_INTAKE_SECRET;
 const RECAP_URL = process.env.PHONE_RECAP_URL || 'https://posture-engine.vercel.app/api/phone/recap';
+const PICK_TIME_URL = process.env.PHONE_PICK_TIME_URL || 'https://posture-engine.vercel.app/api/phone/pick-time';
 
 // Supabase service-role auth headers. Declared here (before any function that
 // uses it) — const is NOT hoisted, so a function calling `sb` before this line
@@ -238,11 +239,202 @@ async function dispatchAgent(job, slug) {
   return true;
 }
 
+// ── NO-ANSWER RETRY: when a call ends outcome='no_answer', re-arm it up to 2
+//    retries (3 total dials) via Data's retry_callback_job RPC, which owns the
+//    cap + attempt_count (we never touch attempt_count). Spacing is retry-number
+//    aware: retry 1 = +2h, retry 2 = +1d (read attempt_count to pick it). Timing
+//    goes through pick-time (plausible hour, avoids the hour it just failed at).
+//    voicemail_left is NOT here — the campaign handles that.
+//
+//    Idempotency: filter status='completed' — a re-armed job flips to 'approved'
+//    (outcome may stay stale 'no_answer'), so it won't re-match and double-bump.
+//    attempt_count < 2 excludes already-capped jobs so we don't spam the RPC.
+const RETRY_1_HOURS = 2;    // first retry: +2h
+const RETRY_2_HOURS = 24;   // second retry: +1d
+async function retryScan() {
+  const url =
+    `${SUPABASE_URL}/rest/v1/callback_jobs` +
+    `?outcome=eq.no_answer&status=eq.completed&attempt_count=lt.2` +
+    `&order=status_changed_at.asc&limit=25` +
+    `&select=id,callback_number_id,scheduled_at,attempt_count`;
+  const r = await fetch(url, { headers: { ...sb, Accept: 'application/json' } });
+  if (!r.ok) return { rearmed: 0 };
+  const jobs = await r.json();
+  let rearmed = 0;
+
+  for (const job of jobs) {
+    try {
+      const addHours = (job.attempt_count || 0) === 0 ? RETRY_1_HOURS : RETRY_2_HOURS;
+      const base = new Date(job.scheduled_at || Date.now());
+      const afterDate = new Date(base.getTime() + addHours * 3600000);
+
+      // plausible time via pick-time; ok:false (dead/blocked) => don't retry (stop)
+      let scheduledAt = null;
+      try {
+        const pt = await fetch(PICK_TIME_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-phone-intake-secret': PHONE_INTAKE_SECRET || '' },
+          body: JSON.stringify({
+            callback_number_id: job.callback_number_id,
+            after_date: afterDate.toISOString(),
+            avoid_after: base.toISOString(),
+          }),
+        });
+        const pj = await pt.json().catch(() => ({}));
+        if (!pj || pj.ok !== true || !pj.scheduled_at) continue; // dead/blocked/bad => stop
+        scheduledAt = pj.scheduled_at;
+      } catch (e) { continue; } // pick-time unreachable => retry next tick
+
+      // re-arm via the guarded RPC (it caps at <2 and bumps attempt_count itself)
+      const rr = await fetch(`${SUPABASE_URL}/rest/v1/rpc/retry_callback_job`, {
+        method: 'POST',
+        headers: { ...sb, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_job_id: job.id, p_next_scheduled_at: scheduledAt }),
+      });
+      if (rr.ok) {
+        let out = null;
+        try { out = await rr.json(); } catch (e) {}
+        if (out === 're_armed') rearmed++;   // 'capped' / 'not_found' => nothing to do
+      }
+    } catch (e) { /* skip this job, continue */ }
+  }
+  return { rearmed };
+}
+
 function authorized(req) {
   const auth = req.headers['authorization'] || '';
   if (CRON_SECRET && auth === `Bearer ${CRON_SECRET}`) return true;
   if (DISPATCH_SECRET && req.headers['x-dispatch-secret'] === DISPATCH_SECRET) return true;
   return !CRON_SECRET && !DISPATCH_SECRET; // dev: allow if no secret configured
+}
+
+// ── VOICEMAIL CAMPAIGN: after a job ends outcome='voicemail_left', spawn the
+//    next touch (leave another voicemail days later) up to max_campaign_touches.
+//    Runs every cron tick as its own scan (the AGENT marks voicemail_left at
+//    hangup, not us, so we can't hook it inline — we detect it here). Inserts
+//    are NOT guarded, so a plain insert works; we never re-arm via this path.
+//
+//    Idempotent: only spawns if no next-touch child already exists for the chain.
+//    Stop conditions (spec): touch cap; any 'answered*' outcome ever on this
+//    number (a human ended it); caller_profile.status='dead' or number blocked.
+//
+//    TIME-OF-DAY: next-touch send time comes from Phone Intake's /api/phone/
+//    pick-time (tz-aware plausible window in the scammer's zone), asked for the
+//    day touch-1+N and told to AVOID the previous touch's local hour so touches
+//    differ. pick-time returning {ok:false} (dead/blocked number) STOPS the
+//    campaign.
+async function campaignScan() {
+  // system_flags campaign config (with safe defaults). Spacing is now in HOURS
+  // from touch-1's scheduled_at (_hours columns supersede the old _days).
+  let maxTouches = 3, t2hours = 72, t3hours = 192;
+  try {
+    const f = await fetch(
+      `${SUPABASE_URL}/rest/v1/system_flags?select=max_campaign_touches,campaign_touch2_hours,campaign_touch3_hours&limit=1`,
+      { headers: { ...sb, Accept: 'application/json' } });
+    if (f.ok) { const r = (await f.json())[0] || {};
+      if (Number.isFinite(r.max_campaign_touches)) maxTouches = r.max_campaign_touches;
+      if (Number.isFinite(r.campaign_touch2_hours)) t2hours = r.campaign_touch2_hours;
+      if (Number.isFinite(r.campaign_touch3_hours)) t3hours = r.campaign_touch3_hours;
+    }
+  } catch (e) { /* defaults */ }
+
+  // jobs that just left a voicemail and are under the touch cap
+  const url =
+    `${SUPABASE_URL}/rest/v1/callback_jobs` +
+    `?outcome=eq.voicemail_left` +
+    `&campaign_touch=lt.${maxTouches}` +
+    `&order=created_at.desc&limit=25` +
+    `&select=id,user_id,intake_id,callback_number_id,archetype,reference_code,host_name,dial_extension,ask_for,caller_context,campaign_touch,campaign_parent_id,scheduled_at,callback_numbers(e164,blocked)`;
+  const r = await fetch(url, { headers: { ...sb, Accept: 'application/json' } });
+  if (!r.ok) return { spawned: 0 };
+  const jobs = await r.json();
+  let spawned = 0;
+
+  for (const job of jobs) {
+    try {
+      const chainRoot = job.campaign_parent_id || job.id;
+      const nextTouch = (job.campaign_touch || 1) + 1;
+
+      // idempotency: skip if this chain already has the next touch
+      const kids = await fetch(
+        `${SUPABASE_URL}/rest/v1/callback_jobs?campaign_parent_id=eq.${chainRoot}&campaign_touch=eq.${nextTouch}&select=id&limit=1`,
+        { headers: { ...sb, Accept: 'application/json' } });
+      if (kids.ok && (await kids.json()).length > 0) continue;
+
+      // STOP: number blocked
+      if (job.callback_numbers && job.callback_numbers.blocked) continue;
+
+      // STOP: any 'answered*' outcome ever on this number (a human ended it)
+      const ans = await fetch(
+        `${SUPABASE_URL}/rest/v1/callback_jobs?callback_number_id=eq.${job.callback_number_id}&outcome=like.answered*&select=id&limit=1`,
+        { headers: { ...sb, Accept: 'application/json' } });
+      if (ans.ok && (await ans.json()).length > 0) continue;
+
+      // STOP: caller_profile.status='dead' for this number (best-effort)
+      if (job.callback_numbers && job.callback_numbers.e164) {
+        try {
+          const cp = await fetch(
+            `${SUPABASE_URL}/rest/v1/caller_profile?e164=eq.${encodeURIComponent(job.callback_numbers.e164)}&select=status&limit=1`,
+            { headers: { ...sb, Accept: 'application/json' } });
+          if (cp.ok) { const p = (await cp.json())[0]; if (p && p.status === 'dead') continue; }
+        } catch (e) { /* profile unreachable -> don't block the campaign */ }
+      }
+
+      // target time for the next touch: touch-1's scheduled_at + N hours
+      const addHours = nextTouch === 2 ? t2hours : t3hours;
+      const base = new Date(job.scheduled_at || Date.now());
+      const afterDate = new Date(base.getTime() + addHours * 3600000);
+
+      // ask Phone Intake's pick-time for a plausible send time in the scammer's
+      // window, on/after afterDate, avoiding the PREVIOUS touch's local hour. Pass
+      // avoid_after (previous scheduled_at) and let pick-time convert to the
+      // scammer's local hour — it owns the zone resolution. ok:false = STOP the
+      // campaign (dead/blocked number), not a retry.
+      let scheduledAt = null;
+      let windowOut = null;
+      try {
+        const pt = await fetch(PICK_TIME_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-phone-intake-secret': PHONE_INTAKE_SECRET || '' },
+          body: JSON.stringify({
+            callback_number_id: job.callback_number_id,
+            after_date: afterDate.toISOString(),
+            avoid_after: base.toISOString(),   // previous touch's scheduled_at; PI converts to local hour
+          }),
+        });
+        const pj = await pt.json().catch(() => ({}));
+        if (!pj || pj.ok !== true || !pj.scheduled_at) continue; // ok:false or bad => STOP
+        scheduledAt = pj.scheduled_at;
+        windowOut = pj.window || null;         // carry tz forward for the NEXT touch
+      } catch (e) { continue; } // pick-time unreachable => don't spawn this tick, retry next
+
+      // insert the next touch (unguarded insert per Data). Stamp the returned
+      // window onto dial_window so tz is available when THIS touch spawns the next.
+      const ins = await fetch(`${SUPABASE_URL}/rest/v1/callback_jobs`, {
+        method: 'POST',
+        headers: { ...sb, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify({
+          user_id: job.user_id,
+          intake_id: job.intake_id,
+          callback_number_id: job.callback_number_id,
+          archetype: job.archetype,
+          reference_code: job.reference_code,
+          host_name: job.host_name,
+          dial_extension: job.dial_extension,
+          ask_for: job.ask_for,
+          caller_context: job.caller_context,
+          campaign_touch: nextTouch,
+          campaign_parent_id: chainRoot,
+          status: 'approved',
+          approved_at: new Date().toISOString(),
+          scheduled_at: scheduledAt,
+          dial_window: windowOut,              // tz carries down the chain
+        }),
+      });
+      if (ins.ok) spawned++;
+    } catch (e) { /* skip this job, continue the scan */ }
+  }
+  return { spawned };
 }
 
 module.exports = async (req, res) => {
@@ -256,18 +448,26 @@ module.exports = async (req, res) => {
   }
 
   try {
+    // Voicemail campaign + no-answer retry: spawn next touches / re-arm no_answer
+    // jobs. Run every tick regardless of busy state (they only schedule FUTURE
+    // jobs, dial nothing). Wrapped so a hiccup never blocks dispatching.
+    let campaign = { spawned: 0 };
+    try { campaign = await campaignScan(); } catch (e) { campaign = { spawned: 0, error: String(e.message || e) }; }
+    let retry = { rearmed: 0 };
+    try { retry = await retryScan(); } catch (e) { retry = { rearmed: 0, error: String(e.message || e) }; }
+
     // free-tier concurrency: skip if a live LiveKit room (web sv-* OR phone ph-*)
     // is active, OR a phone job is still in 'dialing'. The LiveKit check covers
     // web calls the DB can't see; the DB check has the 30-min stale reaper.
     if (await liveKitBusy()) {
-      return res.status(200).json({ ok: true, skipped: 'livekit_busy' });
+      return res.status(200).json({ ok: true, skipped: 'livekit_busy', campaign, retry });
     }
     if (await agentBusy()) {
-      return res.status(200).json({ ok: true, skipped: 'agent_busy' });
+      return res.status(200).json({ ok: true, skipped: 'agent_busy', campaign, retry });
     }
 
     const job = await nextDueJob();
-    if (!job) return res.status(200).json({ ok: true, picked: 0 });
+    if (!job) return res.status(200).json({ ok: true, picked: 0, campaign, retry });
 
     // can_dial guard
     const gate = await canDial(job.id);
@@ -291,7 +491,7 @@ module.exports = async (req, res) => {
     }
 
     await markJob(job.id, 'dialing');
-    return res.status(200).json({ ok: true, id: job.id, action: 'dialing', room: slug });
+    return res.status(200).json({ ok: true, id: job.id, action: 'dialing', room: slug, campaign, retry });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e) });
   }

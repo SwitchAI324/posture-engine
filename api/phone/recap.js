@@ -84,6 +84,11 @@ function compose(kind, ctx) {
     subject = `${host} left ${who} a message`;
     lines.push(`Nobody picked up at ${pretty(number)} at ${at}, so ${host} left a voicemail.`);
     if (refCode) lines.push(`Reference number planted: ${refCode}. If they call back asking for it, we'll know it's them.`);
+    if (ctx.moreTouches > 0) {
+      lines.push(ctx.moreTouches === 1
+        ? `If they don't call back, ${host} will try once more over the next week.`
+        : `If they don't call back, ${host} will try ${ctx.moreTouches} more times over the next week.`);
+    }
   } else {
     subject = `No answer at ${pretty(number)}`;
     lines.push(`We called ${pretty(number)} at ${at}${ringSeconds ? ` and it rang about ${ringSeconds} seconds` : ''} — no answer.`);
@@ -122,6 +127,7 @@ export default async function handler(req, res) {
     const toggle = { recap: 'notify_recap', voicemail_left: 'notify_voicemail_left', no_answer: 'notify_no_answer' }[kind];
     if (settings && settings[toggle] === false) return res.status(200).json({ ok: true, kind, queued: false, reason: 'user opted out' });
 
+    const [flags] = await select('system_flags', 'select=max_campaign_touches&limit=1').catch(() => [null]);
     const [num] = await select('callback_numbers', `id=eq.${job.callback_number_id}&select=e164,caller_profile_id`);
     const [profile] = num?.caller_profile_id ? await select('caller_profile', `e164=eq.${encodeURIComponent(num.caller_profile_id)}&select=*`) : [null];
     const others = num?.e164 ? await select('callback_numbers', `e164=eq.${encodeURIComponent(num.e164)}&select=user_id`) : [];
@@ -140,6 +146,7 @@ export default async function handler(req, res) {
       refCode: job.reference_code || null,
       about: aboutNumber(profile, userCount),
       ringSeconds: attempts[0]?.ring_seconds || null,
+      moreTouches: Math.max(0, (flags?.max_campaign_touches ?? 3) - (job.campaign_touch ?? 1)),
     };
     const { subject, body } = compose(kind, ctx);
 

@@ -98,6 +98,8 @@ export default async function handler(req, res) {
       status: 'approved', approved_at: new Date().toISOString(),
       reference_code: job.reference_code, host_name: job.host_name,
       dial_extension: job.dial_extension, ask_for: job.ask_for, caller_context: job.caller_context,
+      // A user-requested RETRY starts a fresh campaign, it doesn't continue one.
+      campaign_touch: 1, campaign_parent_id: null,
       fail_reason: `retry_of:${job.id}`,
     }, 'return=minimal');
     return res.status(200).json({ ok: true, action, done: true, ...reply('Re: retry', `On it. We'll call ${pretty(num?.e164)} again in about ${minutes} minutes. Reply CANCEL to stop that.`) });

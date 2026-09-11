@@ -27,6 +27,10 @@
 //     When set, the link is listen=<JWT {room,user_id,exp +30min}> only.
 //     When unset, falls back to call_id=<room> (Voice's mint rejects that).
 //
+// user_id resolution: payload user_id if present; otherwise, when job_id is
+// a uuid, callback_jobs.user_id (Voice's phone payload omitted user_id on
+// first test, Sep 11). Still missing → skip missing_room_or_user.
+//
 // Gates, in order (first hit wins, all logged with skip_reason):
 //   amd_machine  amd not in human/uncertain/ivr/null
 //   global_off   system_flags.call_live_sms_enabled = false
@@ -42,6 +46,7 @@ import crypto from 'crypto';
 const LISTEN_BASE = 'https://live.spamviking.com/mead_hall_live.html?view=listen';
 const LISTEN_TTL_SEC = 30 * 60;
 const ALLOWED_AMD = new Set(['human', 'uncertain', 'ivr']);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function env(name, ...fallbacks) {
   for (const n of [name, ...fallbacks]) {
@@ -172,7 +177,7 @@ export default async function handler(req, res) {
 
   const p = parseBody(req);
   const room = String(p.room || p.slug || '').trim();
-  const userId = String(p.user_id || '').trim();
+  let userId = String(p.user_id || '').trim();
   const channel = String(p.channel || '').trim() || null;
   const jobId = p.job_id != null ? String(p.job_id) : null;
   const amd = p.amd == null || p.amd === '' ? null : String(p.amd);
@@ -195,6 +200,21 @@ export default async function handler(req, res) {
     console.error('call-live:', e.message);
     res.status(200).json({ ok: true, status: 'failed', error: e.message });
     return;
+  }
+
+  if (!userId && jobId && UUID_RE.test(jobId)) {
+    try {
+      const jobs = await db.select(
+        'callback_jobs',
+        `select=user_id&id=eq.${encodeURIComponent(jobId)}&limit=1`
+      );
+      if (jobs[0] && jobs[0].user_id) {
+        userId = String(jobs[0].user_id);
+        base.user_id = userId;
+      }
+    } catch (e) {
+      console.error('call-live: job lookup failed', e.message);
+    }
   }
 
   if (!room || !userId) return skip('missing_room_or_user');
