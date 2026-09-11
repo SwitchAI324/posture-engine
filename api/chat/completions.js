@@ -4102,7 +4102,25 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // new timing mechanism invented from scratch.
     const isColdOpenCall = !!(stored && stored.prefix && stored.prefix.includes("COLD INBOUND CALL"));
     const priorHostTurnCount = (stored && stored.hostTurnCount) || 0;
-    const isGenuineNewHostTurn = openerAlreadyDone !== true && !isSilenceBeatRequest;
+    // FIXED (2026-09-10, Recording — real confirmed bug, found via a
+    // live call: turn advanced correctly to 3 then 4, per the request's
+    // own turn field AND INTERRUPT-BODY-DIAG, yet the backstop never
+    // fired). Root cause: this line incorrectly included
+    // `openerAlreadyDone !== true` as a condition — copied from the
+    // OLD, pre-universal notice-injection gate, where that check made
+    // sense (it meant "not a nudge-like retry where turn incorrectly
+    // still says 1"). But opener_done becomes true PERMANENTLY after
+    // turn 1 and stays true for the rest of the call — so this
+    // condition was false for every single turn after the first, which
+    // meant hostTurnCount could never increment past 1, ever, for the
+    // remainder of any call. This is the EXACT same mistake already
+    // caught and fixed for the main notice-injection gate above
+    // (2026-09-10) — fixed there, but this second copy of the same
+    // logic, in the backstop specifically, was missed at the time.
+    // Only isSilenceBeatRequest actually distinguishes a genuine turn
+    // from a non-turn (a nudge); opener_done being true is normal,
+    // expected, and irrelevant here.
+    const isGenuineNewHostTurn = !isSilenceBeatRequest;
     const effectiveHostTurnCount = isGenuineNewHostTurn
       ? priorHostTurnCount + 1
       : priorHostTurnCount;
@@ -4116,10 +4134,25 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     const backstopByTurn = effectiveHostTurnCount >= RECORDING_BACKSTOP_TURN_THRESHOLD;
     const backstopByTime =
       elapsedSinceFirstSeenMs != null && elapsedSinceFirstSeenMs >= RECORDING_BACKSTOP_MS;
-    if (
-      (backstopByTurn || backstopByTime) &&
-      !(stored && stored.recordingNoticeGiven)
-    ) {
+    const recordingBackstopWillFire =
+      (backstopByTurn || backstopByTime) && !(stored && stored.recordingNoticeGiven);
+    // DIAGNOSTIC LOG (2026-09-10, Recording's explicit request, step 4:
+    // "add an explicit log line every time the backstop evaluates —
+    // whether it fired or not, and why not. Right now the only evidence
+    // is absence, which tells us nothing."). Logs on every single turn,
+    // not only when it fires, specifically so a failure to fire produces
+    // positive evidence (the actual values it saw) instead of silence.
+    console.log(
+      "RECORDING-BACKSTOP-EVAL callId=" + JSON.stringify(callId) +
+      " willFire=" + recordingBackstopWillFire +
+      " effectiveHostTurnCount=" + effectiveHostTurnCount +
+      " backstopByTurn=" + backstopByTurn +
+      " elapsedSinceFirstSeenMs=" + elapsedSinceFirstSeenMs +
+      " backstopByTime=" + backstopByTime +
+      " recordingNoticeGiven=" + !!(stored && stored.recordingNoticeGiven) +
+      " isColdOpenCall=" + isColdOpenCall
+    );
+    if (recordingBackstopWillFire) {
       mutable +=
         "\n\n[BACKSTOP OVERRIDE — " +
         (backstopByTime && !backstopByTurn
