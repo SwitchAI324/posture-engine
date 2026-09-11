@@ -23,6 +23,32 @@ const EVENTS = "gear_events";
 export function isConfigured() {
   return Boolean(URL && KEY);
 }
+
+// HOUSE CALL LOOKUP BY RECORDING SLUG (2026-09-10, Recording — admin
+// notification email needs call_start and a transcript excerpt).
+// house_calls schema confirmed directly from Recording's own paste,
+// not assumed: recording_slug (text), started_at (timestamptz, NOT
+// NULL), transcript (text — stores JSON as a string, matching
+// Recording's own verification query which explicitly casts it via
+// transcript::jsonb; NOT a native jsonb column, so this reads it back
+// as a string and this function's caller must JSON.parse it, same cast
+// shape, just done in JS instead of SQL).
+export async function getHouseCallBySlug(slug) {
+  if (!isConfigured() || !slug) return null;
+  const url =
+    `${URL}/rest/v1/house_calls?recording_slug=eq.${encodeURIComponent(slug)}` +
+    `&select=started_at,transcript&order=started_at.desc&limit=1`;
+  const r = await fetch(url, {
+    cache: "no-store",
+    headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
+  });
+  if (!r.ok) {
+    console.log("getHouseCallBySlug: non-ok response for slug=" + slug + ": " + r.status);
+    return null;
+  }
+  const rows = await r.json().catch(() => null);
+  return Array.isArray(rows) && rows[0] ? rows[0] : null;
+}
 // READ BY SLUG KEY — fallback for the pre-call hydrate. The hydrate can run
 // BEFORE the Vapi call_id exists, writing the prefix under call_id="slug:<slug>"
 // (a pseudo-key). When the real first turn arrives and its call_id row has no

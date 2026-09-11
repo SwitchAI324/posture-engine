@@ -29,12 +29,13 @@
 // ----------------------------------------------------------------------
 
 const { WebhookReceiver, EgressStatus, authorizeHeader } = require("livekit-server-sdk");
-const { upsertRecording } = require("./_store.js");
+const { upsertRecording, getHouseCallBySlug } = require("./_store.js");
 
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
 const PHONE_INTAKE_SECRET = process.env.PHONE_INTAKE_SECRET;
 const RECAP_URL = "https://posture-engine.vercel.app/api/phone/recap";
+const RECORDING_LINK_URL = "https://posture-engine.vercel.app/api/recording-link";
 
 function jsonRes(res, obj, status = 200) {
   res.statusCode = status;
@@ -53,6 +54,149 @@ function mapEgressStatus(status) {
 
 // Fire-and-forget phone recap trigger. Never throws, never blocks the
 // webhook response — logs non-2xx and moves on, exactly as specified.
+
+// ADMIN RECORDING NOTIFICATION (2026-09-10, Recording/Andrew) — one
+// email per completed recording, to Andrew only, never a user-facing
+// send. No shared send path exists (Barbara's own answer: their sends
+// run as GmailApp under raid@, Apps Script, nothing Vercel/Node can
+// invoke) — this is a genuinely new, separate send path, entirely
+// PE's, deliberately NOT using raid@ (that's the user-facing
+// convention; this is admin-only mail to Andrew, needs its own
+// identity). Resend chosen specifically because its onboarding@
+// resend.dev sender works with zero DNS/domain verification for
+// sending TO the account's own signup email — confirmed against
+// Resend's own docs before building, not assumed: this only works
+// because the recipient here always is that same address (Andrew's),
+// not a general-purpose "send to anyone" path.
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL;
+const ADMIN_NOTIFY_FROM = process.env.ADMIN_NOTIFY_FROM || "onboarding@resend.dev";
+
+async function sendAdminRecordingNotification({ slug, recordingUrl, durationSec, egressInfo, req }) {
+  if (!RESEND_API_KEY || !ADMIN_NOTIFY_EMAIL) {
+    console.log("livekit-webhook: RESEND_API_KEY/ADMIN_NOTIFY_EMAIL not configured, skipping admin notification for " + slug);
+    return;
+  }
+  // Same inference _store.js's upsertRecording already uses — computed
+  // locally rather than changing upsertRecording's return contract for
+  // other callers. Kept in sync manually; if that regex ever changes
+  // there, change it here too.
+  const channel = /^(ph-|in-)/.test(String(slug)) ? "phone" : "web";
+
+  // CALL START + TRANSCRIPT EXCERPT (2026-09-10, Recording — schema
+  // confirmed directly from house_calls, not assumed). Best-effort:
+  // house_calls is keyed by recording_slug, a nullable column — a
+  // missing row (never linked, or written before this column existed)
+  // must never break the notification send, just omit these two
+  // fields gracefully.
+  let callStart = "unknown";
+  let transcriptExcerpt = "(transcript not available)";
+  try {
+    const houseCall = await getHouseCallBySlug(slug);
+    if (houseCall) {
+      if (houseCall.started_at) callStart = houseCall.started_at;
+      if (houseCall.transcript) {
+        // transcript is a text column storing JSON as a string —
+        // confirmed from Recording's own verification query, which
+        // explicitly casts it (transcript::jsonb) rather than reading
+        // it as native jsonb. Same cast here, in JS.
+        try {
+          const turns = JSON.parse(houseCall.transcript);
+          if (Array.isArray(turns) && turns.length) {
+            transcriptExcerpt = turns
+              .slice(0, 10)
+              .map((t) => (t && t.role ? t.role : "?") + ": " + (t && t.text ? t.text : ""))
+              .join("\n");
+          }
+        } catch (parseErr) {
+          console.log("livekit-webhook: transcript JSON parse failed for slug=" + slug + ": " + (parseErr && parseErr.message));
+        }
+      }
+    }
+  } catch (e) {
+    console.log("livekit-webhook: getHouseCallBySlug failed for slug=" + slug + ": " + (e && e.message ? e.message : e));
+  }
+
+  // SIGNED LINK (2026-09-10) — internal server-to-server call to PE's
+  // own /api/recording-link, reusing the exact same x-phone-intake-secret
+  // auth mode and PHONE_INTAKE_SECRET already in this file for
+  // triggerPhoneRecap above — no new secret needed. Best-effort: a
+  // failure here must never block the email send, just omit the link.
+  let signedLink = "(unavailable)";
+  if (PHONE_INTAKE_SECRET) {
+    try {
+      const linkRes = await fetch(
+        RECORDING_LINK_URL + "?slug=" + encodeURIComponent(slug),
+        { headers: { "x-phone-intake-secret": PHONE_INTAKE_SECRET } }
+      );
+      if (linkRes.ok) {
+        const linkBody = await linkRes.json().catch(() => null);
+        if (linkBody && linkBody.url) signedLink = linkBody.url;
+      } else {
+        console.log("livekit-webhook: recording-link fetch non-ok for slug=" + slug + ": " + linkRes.status);
+      }
+    } catch (e) {
+      console.log("livekit-webhook: recording-link fetch failed for slug=" + slug + ": " + (e && e.message ? e.message : e));
+    }
+  }
+
+  // IDENTIFIERS BLOCK — deliberately plain, one per line, labeled, not
+  // formatted for readability — this exists purely so a debugging
+  // session can grep/copy-paste a single value straight out of the
+  // email body. x-vercel-id specifically: flagged to Recording as
+  // uncertain before this was built — Vercel's own docs describe it as
+  // a response header their edge network adds, not clearly documented
+  // as present on the incoming request inside the handler. Included
+  // anyway since it may still work; if it consistently comes back
+  // empty in practice, that's the one line to drop.
+  const identifiers = [
+    "slug: " + slug,
+    "livekit_room_name: " + (egressInfo.roomName || ""),
+    "livekit_room_id: " + (egressInfo.roomId || ""),
+    "livekit_egress_id: " + (egressInfo.egressId || ""),
+    "vercel_request_id: " + ((req && req.headers && req.headers["x-vercel-id"]) || ""),
+    "vercel_deployment_id: " + (process.env.VERCEL_DEPLOYMENT_ID || ""),
+    "vercel_git_commit_sha: " + (process.env.VERCEL_GIT_COMMIT_SHA || ""),
+  ].join("\n");
+
+  const subject = "Recording ready — " + slug;
+  const text =
+    "A recording just completed.\n\n" +
+    "slug: " + slug + "\n" +
+    "channel: " + channel + "\n" +
+    "duration_sec: " + (durationSec != null ? durationSec : "unknown") + "\n" +
+    "call_start: " + callStart + "\n" +
+    "object_key: " + (recordingUrl || "unknown") + "\n" +
+    "signed_link (7-day): " + signedLink + "\n\n" +
+    "--- transcript excerpt (first 10 turns) ---\n" +
+    transcriptExcerpt + "\n\n" +
+    "--- identifiers (debugging entry point) ---\n" +
+    identifiers;
+
+  try {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + RESEND_API_KEY,
+      },
+      body: JSON.stringify({
+        from: ADMIN_NOTIFY_FROM,
+        to: [ADMIN_NOTIFY_EMAIL],
+        subject,
+
+        text,
+      }),
+    });
+    if (!r.ok) {
+      const body = await r.text().catch(() => "");
+      console.log("livekit-webhook: admin notification send failed for " + slug + ": " + r.status + " " + body.slice(0, 200));
+    }
+  } catch (e) {
+    console.log("livekit-webhook: admin notification send threw for " + slug + ": " + (e && e.message ? e.message : e));
+  }
+}
+
 async function triggerPhoneRecap(slug) {
   if (!slug.startsWith("ph-")) return;
   const jobId = slug.slice(3); // strip "ph-"
@@ -237,6 +381,7 @@ module.exports = async function handler(req, res) {
   if (status === "ready") {
     // Fire-and-forget, does not block or affect this response.
     triggerPhoneRecap(slug);
+    sendAdminRecordingNotification({ slug, recordingUrl, durationSec, egressInfo, req });
   }
 
   return jsonRes(res, { ok: true, slug, status });
