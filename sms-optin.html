@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live-call alerts — SpamViking</title>
+<meta name="description" content="Get a text the moment your SpamViking host is on a live call with a scammer.">
+<style>
+  /* House style — matches the booking page (book.html): system font stack,
+     #f3f5f8 page, white card, #2f5fd6 accent, #25405f ink, #6b7685 muted. */
+  :root {
+    --page: #f3f5f8;
+    --card: #ffffff;
+    --ink: #25405f;
+    --accent: #2f5fd6;
+    --accent-deep: #244bb0;
+    --muted: #6b7685;
+    --faint: #9aa4b2;
+    --line: #d4dae3;
+    --field: #fafbfc;
+    --ok: #1c7a4a;
+    --bad: #b23b3b;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--page); }
+  body {
+    margin: 0;
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  main {
+    max-width: 620px;
+    margin: 0 auto;
+    padding: 48px 20px 72px;
+  }
+  .brand {
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: .2px;
+    margin: 0 0 32px;
+    color: var(--accent);
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid #e4e8ee;
+    border-radius: 14px;
+    padding: 28px 30px 30px;
+  }
+  h1 {
+    font-weight: 700;
+    font-size: clamp(26px, 5vw, 34px);
+    line-height: 1.12;
+    letter-spacing: -0.01em;
+    margin: 0 0 14px;
+    color: var(--ink);
+  }
+  .lede {
+    font-size: 16px;
+    color: var(--muted);
+    margin: 0 0 26px;
+    max-width: 36em;
+  }
+  form { border-top: 1px solid #eef1f5; padding-top: 24px; }
+  label.field { display: block; margin-bottom: 18px; }
+  label.field span {
+    display: block;
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 6px;
+    color: var(--ink);
+  }
+  input[type="email"], input[type="tel"] {
+    width: 100%;
+    font: inherit;
+    padding: 11px 13px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--field);
+    color: var(--ink);
+  }
+  input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+    border-color: var(--accent);
+  }
+  .consent {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    gap: 12px;
+    align-items: start;
+    margin: 24px 0 22px;
+    padding: 16px;
+    background: var(--field);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+  }
+  .consent input {
+    width: 20px; height: 20px; margin: 2px 0 0;
+    accent-color: var(--accent);
+  }
+  .consent span { font-size: 14px; color: var(--muted); }
+  button {
+    font: inherit;
+    font-weight: 600;
+    font-size: 14px;
+    background: var(--accent);
+    color: #fff;
+    border: 0;
+    border-radius: 9px;
+    padding: 12px 22px;
+    cursor: pointer;
+  }
+  button:hover { background: var(--accent-deep); }
+  button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  button[disabled] { opacity: .55; cursor: default; }
+  .status {
+    margin: 16px 0 0;
+    min-height: 1.4em;
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .status.ok { color: var(--ok); }
+  .status.bad { color: var(--bad); }
+  .terms {
+    margin-top: 26px;
+    padding-top: 20px;
+    border-top: 1px solid #eef1f5;
+    color: var(--faint);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .terms p { margin: 0 0 10px; }
+  .terms a { color: var(--accent); }
+  @media (prefers-reduced-motion: no-preference) {
+    .status { transition: color .2s; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <p class="brand">SpamViking</p>
+
+  <div class="card">
+    <h1>Your host is live. You&rsquo;ll know in seconds.</h1>
+    <p class="lede">
+      When a scammer picks up the phone and your host starts talking, we text you
+      a link. Tap it and listen in — they can&rsquo;t hear you.
+    </p>
+
+    <form id="optin" novalidate>
+      <label class="field">
+        <span>Email on your SpamViking account</span>
+        <input type="email" name="email" autocomplete="email" required>
+      </label>
+
+      <label class="field">
+        <span>Mobile number</span>
+        <input type="tel" name="phone" autocomplete="tel" inputmode="tel"
+               placeholder="(555) 555-5555" required>
+      </label>
+
+      <label class="consent">
+        <input type="checkbox" name="consent" required>
+        <span>
+          I agree to receive text messages from SpamViking at the number above
+          whenever my host is on a live call with a scammer. Message frequency
+          varies with how often scammers answer — typically a few per week.
+          Message and data rates may apply. Reply STOP to cancel, HELP for help.
+        </span>
+      </label>
+
+      <button type="submit">Turn on live-call texts</button>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+    </form>
+
+    <div class="terms">
+      <p>
+        Texts come from (833) 695-7726. You can turn them off any time by replying
+        STOP, or in your SpamViking settings. Reply HELP or email
+        <a href="mailto:raid@spamviking.com">raid@spamviking.com</a>
+        for help.
+      </p>
+      <p>
+        <a href="https://live.spamviking.com/terms.html">Terms of service</a>
+        &nbsp;&nbsp;
+        <a href="https://live.spamviking.com/privacy.html">Privacy policy</a>
+      </p>
+    </div>
+  </div>
+</main>
+
+<script>
+  const form = document.getElementById('optin');
+  const status = document.getElementById('status');
+  const button = form.querySelector('button');
+
+  function say(msg, kind) {
+    status.textContent = msg;
+    status.className = 'status ' + (kind || '');
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = form.email.value.trim();
+    const phone = form.phone.value.trim();
+    const consent = form.consent.checked;
+
+    if (!email || !email.includes('@')) return say('Enter the email on your SpamViking account.', 'bad');
+    if (phone.replace(/\D/g, '').length < 10) return say('Enter a 10-digit US mobile number.', 'bad');
+    if (!consent) return say('Tick the box to agree to receive texts.', 'bad');
+
+    button.disabled = true;
+    say('Saving…');
+    try {
+      const r = await fetch('/api/phone/sms-optin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, phone, consent: true }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.ok) {
+        say('Live-call texts are on for ' + j.phone + '.', 'ok');
+        form.reset();
+      } else {
+        say(j.error || 'Something went wrong. Try again in a minute.', 'bad');
+      }
+    } catch {
+      say('Couldn\u2019t reach SpamViking. Check your connection and try again.', 'bad');
+    } finally {
+      button.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
