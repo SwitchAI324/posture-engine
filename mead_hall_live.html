@@ -587,6 +587,49 @@
     font-family:var(--mono);font-size:12px;line-height:1.5;resize:vertical}
   @media (prefers-reduced-motion:reduce){*{animation:none!important}}
   @media (max-width:900px){.app{grid-template-columns:1fr;grid-template-areas:"head" "strip" "stage" "bench" "control" "board"}}
+
+  .listenview{display:none}
+  /* ===== LISTEN VIEW (?view=listen) — phone "tap to listen" for the SV user =====
+     Minimal full-screen: one big button that joins the live call as a hidden, muted listener.
+     Same listener as the director's 🔊 Listen — just a lightweight surface to hold to your ear. */
+  body.view-listen .app{ display:none !important; }
+  body.view-listen .listenview{ display:flex; position:fixed; inset:0; align-items:center; justify-content:center;
+    background:#f3ecdd; padding:24px; z-index:50; }
+  .lv-inner{ text-align:center; max-width:420px; width:100%; }
+  .lv-title{ font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#8a7b5c;margin-bottom:22px }
+  .lv-btn{ width:100%;max-width:340px;font-family:var(--mono);font-weight:700;font-size:19px;letter-spacing:.02em;
+    border:2px solid var(--blood);background:var(--blood);color:#fff;border-radius:16px;padding:26px 20px;cursor:pointer;
+    box-shadow:0 10px 30px rgba(140,59,43,.25);transition:.15s }
+  .lv-btn:hover{ background:var(--blood2) }
+  .lv-btn.on{ background:#2f7d3a;border-color:#2f7d3a;box-shadow:0 10px 30px rgba(47,125,58,.25) }
+  .lv-btn.connecting{ opacity:.75 }
+  .lv-status{ font-family:var(--mono);font-size:13px;color:#5a5346;margin-top:18px }
+  .lv-hint{ font-size:12px;color:#9a8f79;margin-top:10px;line-height:1.5 }
+
+  /* ===== SPAMMER VIEW (?view=spammer) — participant tiles only =====
+     What the caller sees: a clean meeting grid of the "people" on the call, auto-fitting for N
+     participants (host + caller + each bench character who joins). Everything else is stripped,
+     and ALL SpamViking/Mead Hall branding + raid framing is hidden — the caller must never see it.
+     Tiles come from the same feed the director view uses (liveBenchTile on bench_joined), so
+     multiple bench players / other humans appear automatically. */
+  body.view-spammer .head,
+  body.view-spammer .strip,
+  body.view-spammer .board,
+  body.view-spammer .benchzone,
+  body.view-spammer .control,
+  body.view-spammer .sidelab,
+  body.view-spammer .rec,
+  body.view-spammer .cap,
+  body.view-spammer .namep,
+  body.view-spammer #callAudio{ display:none !important; }
+  body.view-spammer .app{ display:block; height:100vh; max-width:none; padding:16px; margin:0; }
+  body.view-spammer .stage{ height:100%; display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); grid-auto-rows:minmax(150px,1fr);
+    gap:14px; align-content:stretch; }
+  body.view-spammer .side{ display:contents; }        /* flatten them/us into one grid */
+  body.view-spammer .grid{ display:contents; }
+  body.view-spammer #usgrid{ grid-template-columns:none !important; }  /* ignore inline cols from liveBenchTile */
+  body.view-spammer .tile{ height:auto; min-height:150px; }
   /* ===== Bench panel (flip-cards + favorites, namespaced .bp-scope) ===== */
   .bp-scope .sendin{position:absolute;left:6px;top:6px;z-index:3;font-family:var(--mono);font-size:9px;font-weight:700;
     letter-spacing:.03em;border:1px solid var(--blood);color:#fff;background:var(--blood);border-radius:5px;padding:2px 6px;cursor:pointer}
@@ -727,6 +770,15 @@
     </div>
   </div>
   <audio id="callAudio" autoplay></audio>
+
+  <div class="listenview" id="listenView">
+    <div class="lv-inner">
+      <div class="lv-title">Live call</div>
+      <button class="lv-btn" id="lvBtn">🔊 Tap to listen</button>
+      <div class="lv-status" id="lvStatus">Not connected</div>
+      <div class="lv-hint">Hidden &amp; muted — you can hear the call, no one can hear you.</div>
+    </div>
+  </div>
 
   <div class="strip">
     <div class="stat"><span class="lab">Time Wasted</span><b id="tw">06:18</b></div>
@@ -945,6 +997,11 @@
     catch(_){ return 'director'; }
   }
   const viewerRole = tokenRole();
+  // Layout mode. director (full) and watcher (read-only, controls hidden) come from the token role.
+  // spammer = the participant-tile grid ONLY (?view=spammer) — what the caller would see: no
+  // controls, no bits, no brand/raid framing, just the "people" on the call, auto-fitting for N.
+  const spammerView = (qp.get('view')==='spammer');
+  const listenView = (qp.get('view')==='listen');   // minimal phone "tap to listen" surface
   // Live poll interval. Relaxed to 2000ms (0.5 req/s) to cut PE request volume — the SSE push
   // endpoint is the real fix (near-zero polling). Override without redeploy via ?poll=<ms>
   // (floor 250). e.g. ?poll=1000 tightens it, ?poll=4000 loosens it further.
@@ -1430,6 +1487,9 @@
     const bd=$('#dirBadge'); if(bd) bd.textContent='WATCHING';
     const lb=$('#listenBtn'); // watchers may still listen
   }
+  if(spammerView){ document.body.classList.add('view-spammer'); }
+  if(listenView){ document.body.classList.add('view-listen');
+    if($('#lvBtn')) $('#lvBtn').onclick=()=>toggleListen(); }
 
   $('#runBtn').onclick=()=>{ running?stopRun():startRun(); };
   $('#stepBtn').onclick=()=>{ if(!running) autoTurn(); };
@@ -1643,18 +1703,40 @@
       s.src='https://cdn.jsdelivr.net/npm/livekit-client@2/dist/livekit-client.umd.min.js';
       s.onload=res; s.onerror=()=>rej(new Error('livekit-client load failed')); document.head.appendChild(s); });
     return window.LivekitClient||window.LiveKitClient; }
-  function lkSetBtn(state){ const b=$('#listenBtn'); if(!b)return;
-    b.classList.toggle('on', state==='on'); b.classList.toggle('connecting', state==='connecting');
-    b.textContent = state==='on'?'Listening' : state==='connecting'?'Connecting\u2026' : '\uD83D\uDD0A Listen'; }
+  function lkSetBtn(state){ const b=$('#listenBtn');
+    if(b){ b.classList.toggle('on', state==='on'); b.classList.toggle('connecting', state==='connecting');
+      b.textContent = state==='on'?'Listening' : state==='connecting'?'Connecting\u2026' : '\uD83D\uDD0A Listen'; }
+    // minimal ?view=listen page (phone "tap to listen")
+    const lv=$('#lvBtn'), ls=$('#lvStatus');
+    if(lv){ lv.classList.toggle('on', state==='on'); lv.classList.toggle('connecting', state==='connecting');
+      lv.textContent = state==='on'?'\uD83D\uDD0A Listening \u2014 tap to stop' : state==='connecting'?'Connecting\u2026' : '\uD83D\uDD0A Tap to listen'; }
+    if(ls){ ls.textContent = state==='on'?'Live \u2014 hold it to your ear' : state==='connecting'?'Joining the call\u2026' : 'Not connected'; } }
   async function startListening(){
-    await refreshCallId();
-    if(!callId){ toast('\u26A0 No live call to listen to yet \u2014 wait for the call to connect.'); return; }
+    // Three ways to authorize a listen, in priority order:
+    //  1. ?listen=<jwt>   signed listen JWT (SMS flow) — carries its own room; endpoint resolves it,
+    //                     so no room name in the URL (no phone-number leak).
+    //  2. director token  — the director listening to their OWN call: send ?director=<token>&room=,
+    //                     the endpoint authorizes the room named in the URL off the director token
+    //                     (different param + secret than the listen JWT — keep them separate).
+    //  3. ?room= only     unsigned; endpoint rejects unless ALLOW_UNSIGNED_LISTEN (dev/test).
+    const listenTok = qp.get('listen');          // signed listen JWT ONLY (never the director token)
+    const dirTok = (!listenTok && authToken) ? authToken : '';
+    if(!listenTok){ await refreshCallId();
+      if(!callId){ toast('\u26A0 No live call to listen to yet \u2014 wait for the call to connect.'); return; } }
     if(LISTEN.connecting) return;
     LISTEN.connecting=true; lkSetBtn('connecting');
     try{
       const LK = await lkLoad();
-      const r = await fetch(LK_TOKEN_ENDPOINT+'?room='+encodeURIComponent(callId),{cache:'no-store'});
+      const q = listenTok ? ('listen='+encodeURIComponent(listenTok))
+              : dirTok    ? ('director='+encodeURIComponent(dirTok)+'&room='+encodeURIComponent(callId))
+                          : ('room='+encodeURIComponent(callId));
+      const r = await fetch(LK_TOKEN_ENDPOINT+'?'+q,{cache:'no-store'});
       if(r.status===404||r.status===405){ throw new Error('listener-token endpoint not deployed'); }
+      if(r.status===401||r.status===403){ LISTEN.connecting=false; lkSetBtn('off');
+        const m = listenTok
+          ? 'This listen link has expired \u2014 you\u2019ll get a fresh one the next time your host goes live.'
+          : 'Listening isn\u2019t authorized on this link \u2014 open the call from your dashboard or a listen link.';
+        if($('#lvStatus')) $('#lvStatus').textContent=m; else toast('\u26A0 '+m); return; }
       if(!r.ok){ throw new Error('token HTTP '+r.status); }
       const { token, url } = await r.json();
       if(!token||!url){ throw new Error('token response missing token/url'); }
