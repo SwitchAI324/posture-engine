@@ -574,7 +574,22 @@ async function readPhoneJobFields(jobId) {
   try {
     const r = await fetch(
       `${URL}/rest/v1/callback_jobs?id=eq.${encodeURIComponent(jobId)}` +
-        `&select=dial_extension,ask_for,reference_code,caller_context&limit=1`,
+        // REVISED (2026-09-10, Voice/campaign_touch thread) — added
+        // transcript to this same, already-existing single-row query.
+        // No new round trip: this row was already being fetched by
+        // job_id for dial_extension/ask_for/etc, so adding one more
+        // column costs nothing extra. Confirmed by Voice: jsonb array
+        // of {role, text, ts}, written at hangup via
+        // write_phone_transcript, live since main76 — this is the
+        // host's OWN prior voicemail content (what WE said), not the
+        // scammer's (that's caller_context, already handled separately
+        // by formatCallerContextBrief below).
+        // REVISED (2026-09-10, Andrew — external scam-report signal for
+        // the hunch mechanism) — added callback_number_id, the first
+        // hop toward caller_profile (callback_jobs -> callback_numbers
+        // -> caller_profile). Confirmed schema: callback_jobs.
+        // callback_number_id -> callback_numbers.id.
+        `&select=dial_extension,ask_for,reference_code,caller_context,transcript,callback_number_id&limit=1`,
       { headers: { apikey: KEY, authorization: `Bearer ${KEY}` } }
     );
     if (!r.ok) return null;
@@ -586,10 +601,156 @@ async function readPhoneJobFields(jobId) {
       ask_for: row.ask_for || null,
       reference_code: row.reference_code || null,
       caller_context: row.caller_context || null,
+      transcript: row.transcript || null,
+      callback_number_id: row.callback_number_id || null,
     };
   } catch {
     return null;
   }
+}
+
+// PRIOR VOICEMAIL BRIEF (2026-09-10, Voice/campaign_touch thread) — the
+// host's OWN prior voicemail content, so a callback can reference what
+// it actually said (the specific dollar figure, reference number, the
+// closing question) instead of contradicting itself. Confirmed shape
+// from Voice: jsonb array of {role, text, ts}, "usually two entries"
+// for a voicemail call (the machine's greeting as a user turn, the
+// host's improvised message as the assistant turn) — but built to
+// handle more than one assistant turn defensively, since Voice's own
+// "usually" leaves room for that. Voice explicitly does NOT extract
+// structured pieces (dollar figures, reference numbers) from this —
+// "the agent has no semantic view of what it relayed" — so this
+// function receives raw spoken text only and presents it the same
+// framing-discipline way formatCallerContextBrief does for the
+// scammer's side: what the HOST said, not confirmed fact to perform
+// off verbatim, just something it would already remember saying.
+// CALLER PROFILE — external scam-report signal (2026-09-10, Andrew,
+// Phone Intake). Two-hop lookup, confirmed schema (Andrew): callback_
+// numbers.id (from callback_number_id above) -> row with e164 + the
+// nullable caller_profile_id -> caller_profile.e164 (a STRING PK, not
+// a uuid — the real gotcha in this schema: caller_profile_id itself
+// IS the e164 string, not a foreign row's .id). caller_profile_id
+// being null is the normal, common case (no scouting match yet), not
+// an error — degrades to null cleanly at either hop.
+async function readCallerProfile(callbackNumberId) {
+  if (!callbackNumberId) return null;
+  const URL = process.env.SUPABASE_URL;
+  const KEY =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+  if (!URL || !KEY) return null;
+  try {
+    const r1 = await fetch(
+      `${URL}/rest/v1/callback_numbers?id=eq.${encodeURIComponent(callbackNumberId)}` +
+        `&select=caller_profile_id&limit=1`,
+      { headers: { apikey: KEY, authorization: `Bearer ${KEY}` } }
+    );
+    if (!r1.ok) return null;
+    const numberRows = await r1.json();
+    const numberRow = numberRows && numberRows[0];
+    const profileE164 = numberRow && numberRow.caller_profile_id;
+    if (!profileE164) return null; // normal case, no scouting match yet
+
+    const r2 = await fetch(
+      `${URL}/rest/v1/caller_profile?e164=eq.${encodeURIComponent(profileE164)}` +
+        `&select=confidence,claimed_org,playbook,line_type&limit=1`,
+      { headers: { apikey: KEY, authorization: `Bearer ${KEY}` } }
+    );
+    if (!r2.ok) return null;
+    const profileRows = await r2.json();
+    return (profileRows && profileRows[0]) || null;
+  } catch {
+    return null;
+  }
+}
+
+// EXPECTED PLAYBOOK / HOST HUNCH (2026-09-10) — ported, not imported,
+// from prompt-compile.js's buildExpectedPlaybookBlock. Same reasoning
+// as share-link.js porting control.js's verifier earlier this session:
+// prompt-compile.js's own header says "intended path: api/phone/
+// prompt-compile.js" — a different directory, not confirmed deployed
+// alongside this file, so a cross-file require() risked a path that
+// doesn't resolve. Porting the exact, already-correct logic sidesteps
+// that entirely.
+//
+// PRESERVED EXACTLY from the original: gates entirely on confidence
+// (nothing below medium ever produces output); deliberately never
+// reads web_reports/counts/URLs past that gate — provenance is
+// structurally excluded, not just avoided by convention; frames output
+// as a felt hunch, never a cited source.
+//
+// NEW, per Andrew's explicit ruling (2026-09-10): confidence now also
+// drives STRENGTH/PERSISTENCE of the hunch, not just whether it fires
+// — medium reads as a passing, easy-to-set-aside feeling; high reads
+// as something that keeps nagging across the call. Deliberately does
+// NOT touch which flavor of hunch gets used (a nephew who warned them,
+// a neighbor, a sister) — that stays on its own, existing, independently
+// varied logic elsewhere, per Andrew's explicit instruction that the
+// system should never legibly map a confidence score to a specific
+// cover story.
+const CALLER_PROFILE_CONFIDENCE_RANK = { low: 0, medium: 1, high: 2 };
+const CALLER_PROFILE_MIN_CONFIDENCE = "medium";
+
+function meetsPlaybookConfidence(confidence) {
+  const rank = CALLER_PROFILE_CONFIDENCE_RANK[confidence];
+  return (
+    rank != null &&
+    rank >= CALLER_PROFILE_CONFIDENCE_RANK[CALLER_PROFILE_MIN_CONFIDENCE]
+  );
+}
+
+function formatExpectedPlaybookBlock(callerProfile) {
+  if (!callerProfile) return null;
+  if (!meetsPlaybookConfidence(callerProfile.confidence)) return null;
+
+  const org = (callerProfile.claimed_org || "").trim();
+  const playbook = callerProfile.playbook || null;
+  const opening = playbook && (playbook.opening_move || "").trim();
+  const ask = playbook && (playbook.the_ask || "").trim();
+  const pressureMoves =
+    (playbook && Array.isArray(playbook.pressure_moves) && playbook.pressure_moves) || [];
+
+  if (!org && !opening && !ask && !pressureMoves.length) return null;
+
+  const lines = [];
+  if (org) lines.push("usually claims to be from " + org);
+  if (opening) lines.push("opens with " + opening);
+  if (ask) lines.push("what they're really after is " + ask);
+  if (pressureMoves.length) lines.push("leans on " + pressureMoves.join(", "));
+
+  const isHighConfidence = callerProfile.confidence === "high";
+  const persistenceNote = isHighConfidence
+    ? "This isn't a fleeting thought — it keeps nagging at you as the " +
+      "call goes on, hard to fully shake."
+    : "It's a passing feeling, easy enough to set aside if the call " +
+      "goes somewhere different than expected.";
+
+  return (
+    "[HOST HUNCH — never say this aloud, never cite a source for it, " +
+    "this is just a feeling, not information you were handed:]\n" +
+    "Something about this feels familiar: " +
+    lines.join("; ") +
+    ". Trust it, but stay ready to be wrong — it's a hunch, not a " +
+    "briefing. " +
+    persistenceNote
+  );
+}
+
+function formatPriorVoicemailBrief(transcript) {
+  if (!Array.isArray(transcript) || !transcript.length) return null;
+  const assistantTurns = transcript
+    .filter((t) => t && t.role === "assistant" && t.text)
+    .map((t) => String(t.text));
+  if (!assistantTurns.length) return null;
+  const joined = assistantTurns.join(" ");
+  const excerpt = joined.slice(0, 500);
+  return (
+    "PRIOR VOICEMAIL BRIEF — this is roughly what YOU said in your own " +
+    "earlier voicemail to them, not something you're reading off now, " +
+    "just something you'd already remember having said: \"" + excerpt +
+    "\" If they reference anything from it — a number, a detail, the " +
+    "question you left them with — stay consistent with this rather " +
+    "than inventing something new."
+  );
 }
 
 // HOST CONFIG VOICE (2026-09-04, Data) — new, more centralized voice
@@ -608,6 +769,39 @@ async function readPhoneJobFields(jobId) {
 // (a host_config_id FK, user_id) — worth confirming rather than trusting
 // this blind. Fails soft exactly like every other read in this file if
 // the join is wrong or empty: falls through to token.voice, then null.
+// USER_ID BY OWNER_EMAIL (2026-09-10, Voice/SMS chat — call-live SMS
+// needs sv_users.id, not just the email booking_tokens already has).
+// Same never-throws-degrades-to-null contract as readHostConfigVoice
+// right below, matching this file's own established pattern.
+//
+// REAL, UNRESOLVED CONCERN, not silently assumed away: sv_users.email
+// has no visible unique constraint in the schema as given (just NOT
+// NULL) — if it's genuinely non-unique, `limit=1` here returns AN
+// account matching that email, not necessarily THE right one, with no
+// error to signal the ambiguity. Flagged to Andrew/SMS chat rather
+// than assumed fine; this function's behavior is correct only if
+// email is actually 1:1 with an account.
+async function readUserIdByEmail(email) {
+  if (!email) return null;
+  const URL = process.env.SUPABASE_URL;
+  const KEY =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+  if (!URL || !KEY) return null;
+  try {
+    const r = await fetch(
+      `${URL}/rest/v1/sv_users?email=eq.${encodeURIComponent(email)}` +
+        `&select=id&limit=1`,
+      { headers: { apikey: KEY, authorization: `Bearer ${KEY}` } }
+    );
+    if (!r.ok) return null;
+    const rows = await r.json();
+    const row = rows && rows[0];
+    return (row && row.id) || null;
+  } catch {
+    return null;
+  }
+}
+
 async function readHostConfigVoice(hostName) {
   if (!hostName) return null;
   const URL = process.env.SUPABASE_URL;
@@ -1042,9 +1236,15 @@ module.exports = async function handler(req, res) {
     // other's result the way it could for a function that might actually
     // throw. This is the fetch pair behind the "opener felt slow"
     // latency report — pays the cost of whichever is slower, not both.
-    const [hostConfigVoice, dossierFloor] = await Promise.all([
+    // REVISED (2026-09-10) — a third, equally independent, equally
+    // never-throwing fetch joined in: user_id by owner_email, needed by
+    // Voice/SMS chat for call-live notifications. Same reasoning applies
+    // — pays the cost of the slowest of three now, not three sequential
+    // round trips.
+    const [hostConfigVoice, dossierFloor, ownerUserId] = await Promise.all([
       readHostConfigVoice(token.host_name),
       readDossierFloor(token.target_id),
+      readUserIdByEmail(token.owner_email),
     ]);
 
     // PHONE JOB FIELDS (2026-09-04, revised 2026-09-07 for inbound) — see
@@ -1069,8 +1269,18 @@ module.exports = async function handler(req, res) {
     const phoneJobFields = token.channel === "phone"
       ? await readPhoneJobFields(jobId)
       : null;
+    // Dependent on phoneJobFields.callback_number_id, so this can't join
+    // the earlier Promise.all above (that one runs before phoneJobFields
+    // exists at all) — genuinely sequential, not an oversight.
+    const callerProfile = await readCallerProfile(
+      phoneJobFields && phoneJobFields.callback_number_id
+    );
+    const expectedPlaybookBlock = formatExpectedPlaybookBlock(callerProfile);
     const callerContextBrief = formatCallerContextBrief(
       phoneJobFields && phoneJobFields.caller_context
+    );
+    const priorVoicemailBrief = formatPriorVoicemailBrief(
+      phoneJobFields && phoneJobFields.transcript
     );
     const askForDirective = formatAskForDirective(
       phoneJobFields && phoneJobFields.ask_for
@@ -1124,6 +1334,8 @@ module.exports = async function handler(req, res) {
     const dossierFloorWithCallerContext = [
       dossierFloor,
       callerContextBrief,
+      priorVoicemailBrief,
+      expectedPlaybookBlock,
       askForDirective,
       coldOpenDirective,
       archetypeSignal,
@@ -1357,6 +1569,26 @@ module.exports = async function handler(req, res) {
         dial_extension: (phoneJobFields && phoneJobFields.dial_extension) || null,
         ask_for: (phoneJobFields && phoneJobFields.ask_for) || null,
         reference_code: (phoneJobFields && phoneJobFields.reference_code) || null,
+        // OWNER_EMAIL (2026-09-10, Voice — call-live SMS notifications need
+        // a way to resolve the owning SV user for outbound/web calls;
+        // inbound gets this from inbound-check instead). Checked the real
+        // booking_tokens schema before building this: there is no
+        // user_id/owner_id/sv_user_id column at all, but there IS
+        // owner_email — already fetched via this file's existing
+        // select=* on booking_tokens, so this is genuinely a one-line
+        // addition, not a new join or schema change. Worth knowing this
+        // is an email, not a UUID, unlike the three field names Voice
+        // proposed — matches what the SMS opt-in page already collects
+        // (email, not an internal id), so this may actually be the
+        // right lookup key for that system rather than a fallback.
+        // USER_ID (2026-09-10, Voice/SMS chat — call-live SMS needs the
+        // real sv_users.id, an email alone wasn't the right shape for
+        // their lookup). Resolved above via Promise.all; degrades to
+        // null the same way every other never-throwing fetch in this
+        // response does — a lookup failure here never blocks the
+        // response or breaks anything else in the prompt/call flow.
+        user_id: ownerUserId,
+        owner_email: token.owner_email || null,
       })
     );
   } catch (e) {
