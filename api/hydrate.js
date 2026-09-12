@@ -589,7 +589,7 @@ async function readPhoneJobFields(jobId) {
         // hop toward caller_profile (callback_jobs -> callback_numbers
         // -> caller_profile). Confirmed schema: callback_jobs.
         // callback_number_id -> callback_numbers.id.
-        `&select=dial_extension,ask_for,reference_code,caller_context,transcript,callback_number_id&limit=1`,
+        `&select=dial_extension,ask_for,reference_code,caller_context,transcript,callback_number_id,campaign_touch&limit=1`,
       { headers: { apikey: KEY, authorization: `Bearer ${KEY}` } }
     );
     if (!r.ok) return null;
@@ -603,6 +603,7 @@ async function readPhoneJobFields(jobId) {
       caller_context: row.caller_context || null,
       transcript: row.transcript || null,
       callback_number_id: row.callback_number_id || null,
+      campaign_touch: row.campaign_touch || null,
     };
   } catch {
     return null;
@@ -735,6 +736,105 @@ function formatExpectedPlaybookBlock(callerProfile) {
   );
 }
 
+// VOICEMAIL BIT (2026-09-10, Phone Intake spec sections 8 + 8.5) — the
+// actual live directive for this. Previously only referenced in
+// comments about the campaign_touch thread; never built as a real
+// directive before now. Conditional guidance, not a pre-determination:
+// hydrate compiles this BEFORE the call connects, when it's not yet
+// known whether the call will hit voicemail or a live person — so this
+// is framed as "if you reach voicemail, do the following," not
+// something the model is told will definitely happen.
+//
+// campaign_touch (1, 2, or 3) is known at hydrate time (from the same
+// callback_jobs row already read for other phone-job fields), so the
+// touch-specific register can be baked in directly rather than left
+// to runtime guessing. Touch defaults to 1 if absent — a null/missing
+// campaign_touch means this is either the very first attempt or a
+// non-campaign call, and touch 1's content is the correct baseline
+// either way.
+function formatVoicemailBitDirective(campaignTouch, referenceCode) {
+  const touch = campaignTouch === 2 || campaignTouch === 3 ? campaignTouch : 1;
+  const refLine = referenceCode
+    ? " And if you left a reference number, mention it too, same " +
+      "hedging as everything else — you're not certain of your own " +
+      "handwriting on it."
+    : "";
+
+  const shared =
+    "VOICEMAIL BIT — if this call reaches an answering machine or " +
+    "voicemail system, this is what you leave, IN CHARACTER, not a " +
+    "brief functional message. The whole discipline here: this must " +
+    "never sound like a system running a sequence — same person, same " +
+    "reason for calling, every time, genuinely a little scattered, not " +
+    "reciting a script." + refLine;
+
+  if (touch === 1) {
+    return (
+      shared +
+      "\nThis is the FIRST message you've left them. Structure, mixed " +
+      "and varied each time, never the same script twice: (1) an " +
+      "opening restart — some self-aware flub at the very top (\"let " +
+      "me just start that over,\" \"sorry, I always do this\"); (2) as " +
+      "much specific pitch content as you'd plausibly remember and " +
+      "want to reference — the dollar figure, the reason, whatever's " +
+      "most concrete, not a vague \"about that thing\"; (3) your " +
+      "callback number, repeated 3-4 times throughout with different " +
+      "framing each time (\"let me say that again,\" \"in case you're " +
+      "writing this down\"), never once at the end only; (4) a self-" +
+      "aware length comment (\"I don't want to leave a fifteen-minute " +
+      "voicemail\") — then keep going anyway, that's the character " +
+      "beat, not something to actually cut short; (5) LAST, " +
+      "immediately before goodbye, ONE thoughtful, genuinely specific " +
+      "question tied to the actual pitch content you referenced " +
+      "earlier in this same message — never generic, never a " +
+      "throwaway \"tell me more.\" This needs to survive to the very " +
+      "end of the message on purpose, since it's what gives a later " +
+      "callback something real to answer; (6) a warm, slightly rambly " +
+      "close, never a clipped goodbye. Occasionally (not every time), " +
+      "one of your number repetitions is genuinely WRONG — a fully " +
+      "different number, not a slipped digit — and you don't catch it " +
+      "until later in the same ramble, with a specific, grounded, " +
+      "personal reason for the mix-up (not a vague \"I misspoke\"), " +
+      "then correct it and repeat the right one."
+    );
+  }
+
+  if (touch === 2) {
+    return (
+      shared +
+      "\nThis is your SECOND message to this same number — you left " +
+      "one before, a few days back, and haven't heard anything. " +
+      "Register: mildly puzzled, genuinely not annoyed — you assume an " +
+      "ordinary explanation (they're busy, it didn't come through), " +
+      "not that anything's wrong. Reference the earlier message " +
+      "vaguely (\"the other day,\" \"a few days back\") — never a " +
+      "specific day name, since you don't actually know the exact gap " +
+      "and a wrong guess would sound off. Repeat your callback number " +
+      "and any reference number, same hedging as before. If the " +
+      "thoughtful question from your first message is still " +
+      "genuinely unanswered, ask it again here (or a natural follow-" +
+      "up to it) — don't drop it just because this is a repeat call. " +
+      "Close warmly, acknowledging you might just be bugging someone " +
+      "who's simply busy (\"totally get it if so\") — never pressuring."
+    );
+  }
+
+  // touch === 3
+  return (
+    shared +
+    "\nThis is your THIRD and presumably final message. Register: a " +
+    "bit put out but still warm and still in character — genuine mild " +
+    "resignation, not irritation, not an accusation. Reference having " +
+    "tried a couple of times now without a response. If your earlier " +
+    "question is still unanswered, mention wanting to know it — " +
+    "genuine curiosity, not a demand. Close with a soft, non-" +
+    "ultimatum version of stepping back (\"I think I'll stop calling " +
+    "after this one\") — this is the beat most likely to actually " +
+    "prompt a callback, precisely because it isn't pushy. Leave your " +
+    "number one more time, then a warm, unhurried close."
+  );
+}
+
 function formatPriorVoicemailBrief(transcript) {
   if (!Array.isArray(transcript) || !transcript.length) return null;
   const assistantTurns = transcript
@@ -743,13 +843,42 @@ function formatPriorVoicemailBrief(transcript) {
   if (!assistantTurns.length) return null;
   const joined = assistantTurns.join(" ");
   const excerpt = joined.slice(0, 500);
+  // REVISED (2026-09-10, Phone Intake spec section 8.6) — replaces the
+  // old single flat "stay consistent" instruction with three distinct
+  // registers, per Andrew's explicit ruling that uniform confidence
+  // reads as sharp and organized, which this character never is. Can't
+  // mechanically separate "the closing question" from "the dollar
+  // figure" out of raw transcript text — no structured fields for
+  // that — so this is a framing instruction for the model to apply
+  // differently to different KINDS of content within the same
+  // excerpt, not a programmatic extraction.
   return (
-    "PRIOR VOICEMAIL BRIEF — this is roughly what YOU said in your own " +
-    "earlier voicemail to them, not something you're reading off now, " +
-    "just something you'd already remember having said: \"" + excerpt +
-    "\" If they reference anything from it — a number, a detail, the " +
-    "question you left them with — stay consistent with this rather " +
-    "than inventing something new."
+    "PRIOR VOICEMAIL BRIEF — roughly what YOU said in your own earlier " +
+    "voicemail to them: \"" + excerpt + "\"\n" +
+    "Three different registers for three different kinds of content " +
+    "here, deliberately uneven, never uniform confidence:\n" +
+    "(1) THE FACT OF THE CALLBACK ITSELF — confident and warm, genuine " +
+    "recognition, no hedging at all: \"Oh, good — you got my " +
+    "message!\"\n" +
+    "(2) ANY CLOSING QUESTION YOU LEFT THEM WITH — sharp and eager, " +
+    "the one thing worth being precise about, since you genuinely want " +
+    "the answer: \"did you get a chance to think about what I asked " +
+    "you?\" If they don't seem to remember a question at all (a real, " +
+    "likely outcome — it was placed at the very end of an already-long " +
+    "message on purpose), reassure them warmly, never make them feel " +
+    "bad for missing it, and this is a good spot for genuine, specific " +
+    "self-deprecation about the voicemail's own length rather than a " +
+    "flat \"no worries\" — then re-state the actual question so they " +
+    "can answer it now; the reassurance isn't a replacement for asking " +
+    "again, it's what earns the second ask.\n" +
+    "(3) DOLLAR FIGURES, REFERENCE NUMBERS, OTHER ADMINISTRATIVE " +
+    "SPECIFICS — same hedge pattern as everywhere else in your " +
+    "character, never confident precision: \"I think I said $4,000? " +
+    "Don't hold me to that, I was kind of winging it when I left that " +
+    "message.\"\n" +
+    "This unevenness — precise about the question, warm about the " +
+    "callback, fuzzy about the numbers — is itself the character. " +
+    "Never let all three land with the same confidence."
   );
 }
 
@@ -881,7 +1010,15 @@ function formatCallerContextBrief(callerContext) {
     "PRE-CALL BRIEF — this is what you already picked up from their earlier " +
     "voicemail, not something you're reading off now: " +
     lines.join(" ") +
-    " Treat all of it as what THEY claimed, not confirmed fact."
+    " Treat all of it as what THEY claimed, not confirmed fact. " +
+    "PLANTED-DETAIL RIFF (2026-09-10, Phone Intake) — deploy these " +
+    "details the same way you'd use any other concrete thing you " +
+    "already know: naturally, when the conversation actually touches " +
+    "that ground. Never save one for a strategic payoff moment — that " +
+    "reads as calculated, the same failure mode as sounding like a " +
+    "system running a sequence rather than a person. Follow, don't " +
+    "lead: a detail surfaces when their own words genuinely intersect " +
+    "with it, not on a timer, not forced in for effect."
   );
 }
 
@@ -1282,6 +1419,17 @@ module.exports = async function handler(req, res) {
     const priorVoicemailBrief = formatPriorVoicemailBrief(
       phoneJobFields && phoneJobFields.transcript
     );
+    // Outbound-callback-only (slug.startsWith("ph-")) — this is
+    // guidance for a call WE placed potentially hitting THEIR
+    // voicemail; inbound calls are the scammer calling us, so there's
+    // no symmetrical "we might hit their machine" scenario there.
+    const voicemailBitDirective =
+      slug && slug.startsWith("ph-")
+        ? formatVoicemailBitDirective(
+            phoneJobFields && phoneJobFields.campaign_touch,
+            phoneJobFields && phoneJobFields.reference_code
+          )
+        : null;
     const askForDirective = formatAskForDirective(
       phoneJobFields && phoneJobFields.ask_for
     );
@@ -1335,6 +1483,7 @@ module.exports = async function handler(req, res) {
       dossierFloor,
       callerContextBrief,
       priorVoicemailBrief,
+      voicemailBitDirective,
       expectedPlaybookBlock,
       askForDirective,
       coldOpenDirective,
