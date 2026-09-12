@@ -1160,7 +1160,13 @@ export const BITS = [
     ],
     "arc_protection": true,
     "pool": "early",
-    "requires_context": "; on cold_open_inbound: one-line reaction only, no arc; [DOG_BARK]=discrete short clip only; [DOG_BARK_BG]=ambient loop, length flexible"
+    "requires_context": "[DOG_BARK]=discrete 2s clips only; [DOG_BARK_BG]=ambient 8-27s loops; on cold_open_inbound: one-line reaction only, no arc",
+    "clip_durations": {
+      "DOG_BARK_1": 2,
+      "DOG_BARK_2": 2,
+      "DOG_BARK_BG_1": 8,
+      "DOG_BARK_BG_2": 8
+    }
   },
   {
     "id": "BIT-303",
