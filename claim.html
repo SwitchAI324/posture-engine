@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claim Your Raids — SpamViking</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                   sans-serif;
+      background: #0d0d0d;
+      color: #f0f0f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      max-width: 460px;
+      width: 100%;
+      text-align: center;
+    }
+    .logo {
+      font-size: 2rem;
+      margin-bottom: 24px;
+    }
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: #fff;
+    }
+    p {
+      font-size: 1rem;
+      color: #aaa;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+    .email-display {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      color: #f0f0f0;
+      margin-bottom: 24px;
+      word-break: break-all;
+    }
+    .raid-count {
+      font-size: 3rem;
+      font-weight: 800;
+      color: #e8a020;
+      margin-bottom: 8px;
+    }
+    .raid-label {
+      font-size: 0.9rem;
+      color: #888;
+      margin-bottom: 32px;
+    }
+    .btn {
+      display: inline-block;
+      background: #e8a020;
+      color: #000;
+      font-weight: 700;
+      font-size: 1rem;
+      padding: 14px 32px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: #f0b030; }
+    .btn:disabled {
+      background: #444;
+      color: #888;
+      cursor: default;
+    }
+    .status {
+      margin-top: 16px;
+      font-size: 0.85rem;
+      color: #666;
+      min-height: 20px;
+    }
+    .error { color: #c0392b; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">⚔️</div>
+    <div id="view-loading">
+      <p>Loading your raids…</p>
+    </div>
+    <div id="view-no-email" style="display:none">
+      <h1>Nothing to claim here</h1>
+      <p>Open the link from your SpamViking invite email
+         to claim your raids.</p>
+    </div>
+    <div id="view-main" style="display:none">
+      <h1>Your raids are waiting</h1>
+      <p>We found raids linked to:</p>
+      <div class="email-display" id="email-display"></div>
+      <div class="raid-count" id="raid-count">—</div>
+      <div class="raid-label">raids on your behalf</div>
+      <p>Create your account to take credit, name your
+         Viking, and watch the chaos unfold.</p>
+      <a class="btn" id="claim-btn" href="#">
+        Claim my raids
+      </a>
+      <div class="status" id="status"></div>
+    </div>
+    <div id="view-error" style="display:none">
+      <h1>Something went wrong</h1>
+      <p class="error" id="error-msg"></p>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL =
+      'https://lxmzwftmshqghkyapibg.supabase.co'
+    const SUPABASE_KEY =
+      'sb_publishable_C3ypBZmycobb3Nf7_rVBbA_a-lzYp0G'
+
+    function show(id) {
+      ['view-loading','view-no-email',
+       'view-main','view-error'].forEach(v => {
+        document.getElementById(v).style.display =
+          v === id ? '' : 'none'
+      })
+    }
+
+    async function init() {
+      const params = new URLSearchParams(window.location.search)
+      const email = params.get('email')
+
+      if (!email) { show('view-no-email'); return }
+
+      document.getElementById('email-display').textContent = email
+
+      // Set claim button destination (onboarding signup)
+      const claimUrl =
+        'https://spamviking.com/join?email=' +
+        encodeURIComponent(email)
+      document.getElementById('claim-btn').href = claimUrl
+
+      try {
+        // Count sv_users rows where owner_email matches
+        // (proxy for raids linked to this forwarder email)
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/sv_users` +
+          `?owner_email=eq.${encodeURIComponent(email)}` +
+          `&select=id`,
+          {
+            headers: {
+              'apikey': SUPABASE_KEY,
+              'Authorization': `Bearer ${SUPABASE_KEY}`
+            }
+          }
+        )
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const rows = await res.json()
+        document.getElementById('raid-count').textContent =
+          rows.length
+        show('view-main')
+      } catch (err) {
+        document.getElementById('error-msg').textContent =
+          'Could not load your raid count. ' +
+          'Try opening your invite link again.'
+        show('view-error')
+        console.error(err)
+      }
+    }
+
+    init()
+  </script>
+</body>
+</html>
