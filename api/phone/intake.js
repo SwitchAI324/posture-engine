@@ -160,8 +160,8 @@ function replyFor(status, ctx) {
 
 "${ctx.transcript}"
 
-${ctx.pastHours ? `They said ${ctx.stated} and it's past that, so we'll` : `We'll`} call ${pretty(ctx.number)}${ctx.extension ? `, extension ${ctx.extension}` : ''}${ctx.askFor ? `, asking for ${ctx.askFor}` : ''} ${ctx.phrase}.${ctx.slipGuard === false ? '' : `
-If that's the wrong number or you'd rather we didn't, reply CANCEL.`}
+${ctx.pastHours ? `They said ${ctx.stated} and it's past that, so we'll` : `We'll`} call ${pretty(ctx.number)}${ctx.extension ? `, extension ${ctx.extension}` : ''}${ctx.askFor ? `, asking for ${ctx.askFor}` : ''} ${ctx.phrase}.
+If that's the wrong number or you'd rather we didn't, reply CANCEL.
 
 — SpamViking`,
     };
@@ -311,9 +311,11 @@ export default async function handler(req, res) {
 
     // 8. The job. Window from callback_time_rules; the wait doubles as the cancel window.
     const rules = await select('callback_time_rules', 'active=eq.true&select=*').catch(() => []);
-    // Slip guard (system_flags.slip_guard_phone): when false, the reply stops
-    // OFFERING the CANCEL window. The cancel endpoint still honours a CANCEL
-    // reply either way, and the delay itself is unchanged.
+    // Slip guard (system_flags.slip_guard_phone). ON: the user gets the
+    // "we'll call <number> at <time>, reply CANCEL" email. OFF: that email is
+    // not sent at all — the job is created and dials on schedule, and the user
+    // hears about it in the recap. (No half-measure: announcing a call the
+    // user can't stop is worse than not announcing it.)
     const [sysFlags] = await select('system_flags', 'select=slip_guard_phone&limit=1').catch(() => [null]);
     const slipGuard = sysFlags?.slip_guard_phone !== false;
     const lineType = await lineTypeFor(number);
@@ -346,9 +348,16 @@ export default async function handler(req, res) {
     // 9. Tell Scouting about the number (non-blocking)
     await pingScout(number);
 
+    if (!slipGuard) {
+      // Same shape as the duplicate path: Barbara marks it processed, sends nothing.
+      return res.status(200).json({
+        ok: true, intake_id: intakeId, status: 'queued', slip_guard: false,
+        reply_subject: null, reply_body: null,
+      });
+    }
     return res.status(200).json({
-      ok: true, intake_id: intakeId, status: 'queued',
-      ...replyFor('queued', { subject, transcript, number, phrase: plan.phrase, pastHours: plan.pastHours, stated: a.stated_hours, extension: a.extension, askFor: a.ask_for, slipGuard }),
+      ok: true, intake_id: intakeId, status: 'queued', slip_guard: true,
+      ...replyFor('queued', { subject, transcript, number, phrase: plan.phrase, pastHours: plan.pastHours, stated: a.stated_hours, extension: a.extension, askFor: a.ask_for }),
     });
   } catch (err) {
     console.error('phone-intake', err);
