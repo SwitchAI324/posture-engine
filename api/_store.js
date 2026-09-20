@@ -801,13 +801,23 @@ export async function saveTranscript(callId, slug, messages) {
 // INSERT CALL OUTCOME — Barbara's post-call follow-up ladder keys off a `calls`
 // row's call_outcome. Written on a silence/bail/hangup close by the agent, via
 // POST /api/calls?action=close (the agent has no DB access; PE writes the row).
-// Schema (confirmed): calls requires only target_id (NOT NULL FK to targets.id);
+// CORRECTED (2026-09-20, Data) — the line below used to claim
+// target_id is a "NOT NULL FK" at the schema level; that was never
+// actually verified against the real DB constraint, only inferred from
+// this function's own app-layer guard (calls.js's 400 check before
+// insert). Data confirmed the real schema: calls.target_id is
+// NULLABLE at the DB level. The requirement enforced here is
+// APPLICATION-layer only (this function + calls.js's 400), not a DB
+// constraint — worth knowing for anyone (e.g. Email/PostCallEngine)
+// inserting into `calls` directly rather than through this function,
+// since the DB will happily accept a null-target row; it just comes
+// out unroutable downstream (nothing to resolve owner/cadence from).
 // id auto-defaults; every other column is nullable. call_outcome is plain text
 // with NO check constraint, so any value inserts (canonical set:
 // completed|dropped|no_show|hung_up). We write ONLY the fields provided — a
-// minimal write is just { target_id, call_outcome }. targetId is REQUIRED here;
-// without it the insert fails the FK/NOT NULL (the real 400 risk, not the
-// outcome value). Mirrors the addArm POST shape.
+// minimal write is just { target_id, call_outcome }. targetId is REQUIRED by
+// THIS function (app-layer only, not a DB constraint) — omitting it here
+// throws before any insert is attempted. Mirrors the addArm POST shape.
 export async function insertCallOutcome({
   targetId,
   callOutcome,
