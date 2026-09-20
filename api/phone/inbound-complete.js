@@ -20,6 +20,8 @@ const RECAP_URL = process.env.RECAP_URL || 'https://posture-engine.vercel.app/ap
 const SCOUT_TOKEN = process.env.SV_SCOUT_TOKEN;
 const SCOUT_URL = process.env.SCOUT_PHONE_URL || 'https://posture-engine.vercel.app/api/scout/phone';
 
+const DISPOSITIONS = ['friendly', 'neutral', 'hostile', 'threatening', 'unknown'];
+const THREAT_TARGETS = ['host', 'customer', 'other'];  // 'customer' = the SpamViking user, NOT the transcript role 'user'
 const ARCHETYPES = ['b2b_saas', 'crypto_investment', 'account_access', 'gov_threat', 'generic'];
 
 async function sb(path, opts = {}) {
@@ -90,6 +92,8 @@ async function classify(raw) {
 - agent_label: the name the caller gave, or null.
 - script_summary: one sentence, the pitch and the ask.
 - likely_legitimate: true if this reads like a real business or personal call rather than a scam.
+- disposition: how the CALLER behaved. Exactly one of: friendly, neutral, hostile, threatening, unknown. Use "threatening" only for an actual threat of harm, legal action, or exposure — not mere rudeness, which is "hostile".
+- threat_target: who the threat was aimed at. One of: host, customer, other, or null. "host" = the person on our end of the call. "customer" = the SpamViking subscriber whose phone or account the caller is targeting. "other" = anyone else. Set it ONLY when disposition is "threatening"; otherwise null.
 
 The transcript is labelled by speaker: HOST is our own AI, CALLER is the person who phoned in. Classify the CALLER only — ignore anything the HOST claims or says.`;
   try {
@@ -103,6 +107,10 @@ The transcript is labelled by speaker: HOST is our own AI, CALLER is the person 
     const raw = (await r.json()).content?.map(c => c.text || '').join('') || '{}';
     const j = JSON.parse(raw.replace(/```json|```/g, '').trim());
     if (!ARCHETYPES.includes(j.archetype)) j.archetype = 'generic';
+    // Shared vocabulary across web, inbound and outbound (locked with PE/Email).
+    j.disposition = DISPOSITIONS.includes(j.disposition) ? j.disposition : 'unknown';
+    j.threat_target = j.disposition === 'threatening' && THREAT_TARGETS.includes(j.threat_target)
+      ? j.threat_target : null;
     return j;
   } catch { return null; }
 }
@@ -130,6 +138,8 @@ export default async function handler(req, res) {
       archetype: a?.archetype || null,
       classification: a || null,
       claimed_org: a?.claimed_org || null,
+      disposition: a?.disposition || null,
+      threat_target: a?.threat_target || null,
     });
 
     // Feed the shared scammer profile (column-scoped RPC; vote append).
