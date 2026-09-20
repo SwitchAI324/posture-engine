@@ -1,0 +1,131 @@
+// api/phone/outbound-disposition.js
+// ----------------------------------------------------------------------
+// POST /api/phone/outbound-disposition
+// Header: x-phone-intake-secret: <PHONE_INTAKE_SECRET>
+// Body:   { job_id }
+//
+// Locked chain (2026-09-20, Email/Voice/Phone Intake/Data, this session):
+// the phone hangup chain runs, in strict order, inside one shutdown
+// callback — mark_callback_job -> write transcript -> POST /api/phone/
+// recap {job_id}. Phone Intake's recap endpoint, AFTER its own work,
+// pings THIS endpoint with the same {job_id} — so by the time this fires,
+// callback_jobs.transcript for that job is guaranteed already committed.
+// Deliberately NOT triggered off LiveKit's egress_ended (Voice's own
+// ruling): that fires on RECORDING finalization, which isn't sequenced
+// against the transcript write, can land on either side of it, and never
+// fires at all when RECORDING_ENABLED=0 or the call never reached
+// egress — none of which stops a transcript from existing to classify.
+//
+// Phone Intake's ping is best-effort, 5s timeout, no retry, and only
+// fires once per job per recap kind (never for no-answer/voicemail-left
+// jobs, which have no transcript to classify) — so this endpoint doesn't
+// need its own dedupe or retry logic; a dropped ping just means that
+// one job never gets a disposition, which is the same "best-effort
+// enrichment, not critical path" shape as the web classifier.
+//
+// callback_jobs.transcript is TEXT (Data converted it from the earlier
+// jsonb plan — write_phone_transcript is being retired), one line per
+// turn, speaker-labelled "HOST: .../CALLER: ..." by Voice's writer. Per
+// Phone Intake's explicit instruction, only CALLER lines are classified
+// — see _disposition.js's callerLinesFromPhoneTranscript for why.
+//
+// Disposition write goes through the EXTENDED mark_callback_job RPC
+// (Data, 2026-09-20) — p_disposition/p_threat_target added alongside
+// the existing p_job_id/p_status/p_outcome/p_fail_reason. p_status is
+// REQUIRED on this RPC and must never carry a literal like 'completed'
+// (a failed job would be silently promoted) — so this endpoint reads
+// the job's OWN current status first and passes it straight back
+// unchanged, Data's interim-safe option (b). If Data later makes
+// p_status nullable/defaulted (option a), passing the real current
+// value back is still correct — just one field that becomes optional,
+// not a behavior change here.
+// ----------------------------------------------------------------------
+
+import { classifyDisposition, callerLinesFromPhoneTranscript } from "./_disposition.js";
+
+const SB = process.env.SUPABASE_URL;
+const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SECRET = process.env.PHONE_INTAKE_SECRET;
+
+async function sb(path, opts = {}) {
+  const r = await fetch(`${SB}/rest/v1/${path}`, {
+    ...opts,
+    headers: {
+      apikey: SB_KEY,
+      Authorization: `Bearer ${SB_KEY}`,
+      "Content-Type": "application/json",
+      Prefer: opts.prefer || "return=representation",
+      ...(opts.headers || {}),
+    },
+  });
+  const text = await r.text();
+  if (!r.ok) throw new Error(`supabase ${path} ${r.status}: ${text}`);
+  return text ? JSON.parse(text) : null;
+}
+const select = (table, filter) => sb(`${table}?${filter}`, { method: "GET" });
+const rpc = (fn, args) => sb(`rpc/${fn}`, { method: "POST", body: JSON.stringify(args) });
+
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ ok: false, error: "POST only" });
+  }
+  if (!SECRET || req.headers["x-phone-intake-secret"] !== SECRET) {
+    return res.status(401).json({ ok: false, error: "bad secret" });
+  }
+  if (!SB || !SB_KEY) {
+    return res.status(500).json({ ok: false, error: "store not configured" });
+  }
+
+  const jobId = req.body && req.body.job_id ? String(req.body.job_id).trim() : null;
+  if (!jobId) {
+    return res.status(400).json({ ok: false, error: "job_id required" });
+  }
+
+  try {
+    // Single read: the job's transcript (what to classify) and its
+    // current status (what to re-affirm on the RPC call, per Data's
+    // interim-safe instruction — never a hardcoded literal).
+    const [job] = await select(
+      "callback_jobs",
+      `id=eq.${encodeURIComponent(jobId)}&select=transcript,status&limit=1`
+    );
+    if (!job) {
+      // No such job — respond ok:false but 200, not 404. Phone Intake's
+      // ping is fire-and-forget/no-retry, so there's no meaningful
+      // recovery on their side either way; a clean, quiet no-op beats a
+      // confusing error on what could just be a race against their own
+      // still-committing transaction.
+      return res.status(200).json({ ok: false, job_id: jobId, error: "job not found" });
+    }
+    if (!job.transcript) {
+      return res.status(200).json({ ok: false, job_id: jobId, error: "no transcript on job" });
+    }
+
+    const callerLines = callerLinesFromPhoneTranscript(job.transcript);
+    const result = await classifyDisposition(callerLines);
+    if (!result) {
+      return res.status(200).json({ ok: false, job_id: jobId, error: "classify failed" });
+    }
+
+    await rpc("mark_callback_job", {
+      p_job_id: jobId,
+      // Re-affirm the job's OWN existing status — never a literal like
+      // 'completed', which would silently promote a failed job (Data's
+      // explicit warning). This RPC call's only real purpose is the two
+      // new params below; p_status just has to not change anything.
+      p_status: job.status,
+      p_disposition: result.disposition,
+      p_threat_target: result.threatTarget,
+    });
+
+    return res.status(200).json({
+      ok: true,
+      job_id: jobId,
+      disposition: result.disposition,
+      threat_target: result.threatTarget,
+    });
+  } catch (e) {
+    console.error("phone-outbound-disposition", e);
+    return res.status(500).json({ ok: false, error: String(e && e.message ? e.message : e) });
+  }
+}
