@@ -15,6 +15,7 @@ const SB = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SECRET = process.env.PHONE_INTAKE_SECRET;
 const RECORDING_LINK_URL = process.env.RECORDING_LINK_URL || 'https://posture-engine.vercel.app/api/recording-link';
+const PE_DISPOSITION_URL = process.env.PE_DISPOSITION_URL || 'https://posture-engine.vercel.app/api/phone/outbound-disposition';
 
 async function sb(path, opts = {}) {
   const r = await fetch(`${SB}/rest/v1/${path}`, {
@@ -49,6 +50,26 @@ async function recordingLink(jobId) {
     const j = await r.json().catch(() => null);
     return j?.url || j?.signed_url || j?.link || null;
   } catch { return null; }
+}
+
+// The agent's hangup chain is strictly ordered: mark_callback_job →
+// write_phone_transcript → POST /api/phone/recap. So by the time we run, the
+// transcript is committed and PE's read cannot race it. Best-effort: a failed
+// ping never fails the recap.
+async function pingDisposition(jobId) {
+  try {
+    const r = await fetch(PE_DISPOSITION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-phone-intake-secret': SECRET },
+      body: JSON.stringify({ job_id: jobId }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!r.ok) console.warn('outbound-disposition ping', r.status);
+    return r.ok;
+  } catch (e) {
+    console.warn('outbound-disposition ping failed (non-blocking)', String(e.message || e));
+    return false;
+  }
 }
 
 function kindFor(outcome) {
@@ -121,6 +142,7 @@ export default async function handler(req, res) {
 
     const dup = await select('phone_recaps', `job_id=eq.${job_id}&kind=eq.${kind}&select=id`);
     if (dup.length) return res.status(200).json({ ok: true, kind, queued: false, reason: 'already queued' });
+    // (A duplicate ping is PE's to ignore; we skip it here so one call = one classify.)
 
     const [user] = await select('sv_users', `id=eq.${job.user_id}&select=email,host_name`);
     const [settings] = await select('phone_settings', `user_id=eq.${job.user_id}&select=*`);
@@ -154,7 +176,10 @@ export default async function handler(req, res) {
       user_id: job.user_id, job_id, kind, to_email: user.email, subject, body,
     }, 'return=minimal');
 
-    return res.status(200).json({ ok: true, kind, queued: true });
+    // Classification only makes sense when something was actually said.
+    const pinged = job.transcript ? await pingDisposition(job_id) : false;
+
+    return res.status(200).json({ ok: true, kind, queued: true, classify_pinged: pinged });
   } catch (err) {
     console.error('phone-recap', err);
     return res.status(500).json({ ok: false, error: String(err.message || err) });
