@@ -1,5 +1,17 @@
 // api/phone/outbound-disposition.js
 // ----------------------------------------------------------------------
+// FILE LOCATION: this file goes in api/phone/, alongside cancel.js.
+// _disposition.js is the single shared copy at api/_disposition.js
+// (same folder as calls.js, which also imports it as "./_disposition.js")
+// — NOT duplicated into api/phone/. That's why the import below is
+// "../_disposition.js" (up one level from api/phone/ to api/), not
+// "./_disposition.js". Two different relative paths pointing at one
+// shared file living in two different places is exactly what broke the
+// api/bits deploy (Vercel: "referencing unsupported modules" on
+// api/calls.js's own "./_disposition.js", which resolved to a
+// nonexistent api/_disposition.js once the real file only existed under
+// api/phone/).
+//
 // POST /api/phone/outbound-disposition
 // Header: x-phone-intake-secret: <PHONE_INTAKE_SECRET>
 // Body:   { job_id }
@@ -46,7 +58,7 @@
 // deleted-by-send).
 // ----------------------------------------------------------------------
 
-import { classifyDisposition, callerLinesFromPhoneTranscript } from "./_disposition.js";
+import { classifyDisposition, callerLinesFromPhoneTranscript } from "../_disposition.js";
 
 const SB = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
