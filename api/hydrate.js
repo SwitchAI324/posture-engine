@@ -836,23 +836,23 @@ function formatVoicemailBitDirective(campaignTouch, referenceCode) {
 }
 
 // HOST-HAS-TO-GO BIT (2026-09-19, Canon spec section 10) — mid-call exit
-// offer, played for a scheduled callback. Phone-only (both directions),
-// gated the same way voicemailBitDirective/askForDirective are — by
-// call channel, not by cold-open status, since this fires on ANY live
-// phone call once genuinely underway, not just cold-open inbound ones.
+// offer, played for a scheduled callback. Phone-only, gated the same
+// way voicemailBitDirective/askForDirective are — by call channel, not
+// by cold-open status, since this fires on ANY live phone call once
+// genuinely underway, not just cold-open inbound ones.
 //
-// direction is "outbound" (slug.startsWith("ph-")) or "inbound" (every
-// other phone call — cold-open house calls and resolved-job inbound
-// calls alike), matching the same slug-prefix signal already used
-// elsewhere in this file (isColdOpenInbound, jobId resolution, the
-// voicemailBitDirective gate). Branch A's pool is the only thing that
-// actually differs by direction (10.2) — the reason pool (10.1) and
-// Branch B (10.3) are shared verbatim.
+// REVISED (2026-09-19, spec v6) — 10.4 came back resolved: PE confirmed
+// redial-by-number reattaches to a host session in EITHER direction, so
+// Branch A no longer branches by call direction at all. This replaces
+// the earlier per-direction version (built against v5, before Voice's
+// answer came back) — no more "outbound"/"inbound" argument, no
+// [CALLBACK_PROMISED] logging marker (that was speculative tracking
+// for the queuing question, and the question is now closed: no queuing
+// or dispatch code needed, so nothing to track). One directive, same
+// for every phone call.
 //
-// Content is Canon's own, copied close to verbatim from the spec —
-// this is PE staying in its lane (gating WHICH pool applies, by
-// direction), not PE authoring voice.
-function formatHostHasToGoDirective(direction) {
+// Content is Canon's own, copied close to verbatim from the spec.
+function formatHostHasToGoDirective() {
   const reasonPool =
     "THE REASON — rotate across calls, never let one become the " +
     "default:\n" +
@@ -875,40 +875,32 @@ function formatHostHasToGoDirective(direction) {
   const branchALead =
     "BRANCH A — spammer accepts: lock the callback for REAL. The win " +
     "only counts if an actual time gets nailed down, not left vague — " +
-    "vague is just a soft hang-up with extra steps. Get a real answer, " +
-    "then repeat it back once so it's concrete (\"Okay — this " +
-    "afternoon, same number, got it\"). Close warm, never a banned " +
-    "sign-off phrase:\n" +
+    "vague is just a soft hang-up with extra steps.\n\n" +
+    "DEFAULT, either direction — ask the SPAMMER to call back:\n" +
+    '- "Can you give me a ring back at this number in a bit?"\n' +
+    '- "Would you mind calling this number back — later today, maybe?"\n' +
+    '- "Can you try me again in like twenty minutes, same number?"\n' +
+    '- "Could you call back after lunch sometime? Same number\'s fine."\n\n' +
+    "ONE HARD RULE ON TIMING: never phrase this as an immediate " +
+    "redial — no \"call me right back,\" no \"hang up and try me again " +
+    "right now.\" The ask always has to imply a little room (a few " +
+    "minutes at the very least — \"in a bit,\" \"in twenty minutes,\" " +
+    "\"later today\" all work). This applies in both directions.\n\n" +
+    "OPTIONAL, either direction — you offer to call the spammer back " +
+    "instead. No longer needed for reliability, just a natural " +
+    "alternate to reach for if it fits the moment, or if the spammer " +
+    "specifically pushes for it:\n" +
+    '- "Can I get you back at this number, say later today?"\n' +
+    '- "Can I call you back — would this afternoon work, or tomorrow?"\n' +
+    '- "Let me call you — give me till around lunchtime?"\n\n' +
+    "Either way, get an actual answer before closing — if a time, day, " +
+    "or \"sure, whenever\" comes back, repeat it once so it's concrete " +
+    "(\"Okay — this afternoon, same number, got it\"). Close warm, " +
+    "never a banned sign-off phrase:\n" +
     '- "Okay, talk soon."\n' +
     '- "Perfect, I\'ll catch you then."\n' +
     '- "Alright, I\'ll be around after that — give me a ring."\n' +
     '- "Sounds good, talk to you in a bit."';
-
-  const branchAInbound =
-    "This call is INBOUND-originated (the spammer dialed in). The " +
-    "spammer already has this number, since they're the one who just " +
-    "used it — default is \"you call me back,\" genuinely free, no new " +
-    "capability needed:\n" +
-    '- "Can you give me a ring back at this number in a bit?"\n' +
-    '- "Would you mind calling this number back — later today, maybe?"\n' +
-    '- "Can you try me again in like twenty minutes, same number?"\n' +
-    '- "Could you call back after lunch sometime? Same number\'s fine."';
-
-  const branchAOutbound =
-    "This call is OUTBOUND-originated (you dialed the spammer — a " +
-    "voicemail-campaign callback). Asking the spammer to call \"this " +
-    "number\" back is the wrong default here — there's no guarantee " +
-    "your outgoing caller ID is even reachable if redialed. You know " +
-    "THEIR number for certain, so you offer to be the one calling " +
-    "back:\n" +
-    '- "Can I get you back at this number, say later today?"\n' +
-    '- "Can I call you back — would this afternoon work, or tomorrow?"\n' +
-    '- "Let me call you — give me till around lunchtime?"\n\n' +
-    "If the spammer accepts and you lock in a real time, include the " +
-    "marker [CALLBACK_PROMISED] immediately after your close, before " +
-    "ending your turn — this is a logging cue only, it will never be " +
-    "spoken or shown to the caller, so don't explain it or work it " +
-    "into the sentence.";
 
   const branchB =
     "BRANCH B — spammer pushes back (\"wait, before you go,\" \"can we " +
@@ -934,8 +926,6 @@ function formatHostHasToGoDirective(direction) {
     reasonPool +
     "\n\n" +
     branchALead +
-    "\n\n" +
-    (direction === "outbound" ? branchAOutbound : branchAInbound) +
     "\n\n" +
     branchB
   );
@@ -1540,19 +1530,17 @@ module.exports = async function handler(req, res) {
       phoneJobFields && phoneJobFields.ask_for
     );
 
-    // HOST-HAS-TO-GO (2026-09-19, Canon spec section 10) — phone-only,
-    // both directions, gated on token.channel the same way the other
-    // phone-specific directives are (askForDirective, voicemailBitDirective).
-    // NOT restricted to cold-open inbound — unlike coldOpenDirective below,
-    // this applies to every phone call once genuinely underway, resolved
-    // job or not. Direction reuses the exact same slug-prefix signal as
-    // the voicemailBitDirective gate above and jobId resolution higher up.
+    // HOST-HAS-TO-GO (2026-09-19, Canon spec section 10, REVISED for
+    // v6/10.4-resolved) — phone-only, gated on token.channel the same way
+    // the other phone-specific directives are (askForDirective,
+    // voicemailBitDirective). NOT restricted to cold-open inbound —
+    // unlike coldOpenDirective below, this applies to every phone call
+    // once genuinely underway, resolved job or not. No direction
+    // argument anymore — 10.4 came back resolved (redial reattaches
+    // either way), so the content itself no longer branches by
+    // direction; see formatHostHasToGoDirective's own comment.
     const hostHasToGoDirective =
-      token.channel === "phone"
-        ? formatHostHasToGoDirective(
-            slug && slug.startsWith("ph-") ? "outbound" : "inbound"
-          )
-        : null;
+      token.channel === "phone" ? formatHostHasToGoDirective() : null;
 
     // COLD-OPEN INBOUND (2026-09-07) — mode='house': inbound, phone, but
     // no job ever resolved (phoneJobFields is null). Genuinely different
