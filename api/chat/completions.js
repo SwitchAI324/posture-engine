@@ -5887,27 +5887,17 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
                     "should tear the room down after the goodbye line plays)"
                   );
                 }
-                // CALLBACK-PROMISED (2026-09-19, Canon spec section 10.4)
-                // — logging only, purely for tracking whether a promised
-                // outbound callback actually happens later; NOT required
-                // for the host-has-to-go bit to work and does NOT queue
-                // or schedule anything (that's the still-open half of
-                // 10.4, pending Voice's caller-ID-routing answer and
-                // Booking's dispatch mechanism). Same detect-and-strip
-                // shape as RECORDING_STOP/END_CALL_NO_CONSENT above —
-                // never spoken, never shown to the caller. No
-                // extra_content stamp either: nothing downstream consumes
-                // this yet, so a console line the callback-tracking work
-                // can grep for later is all this needs to be.
-                if (emit.indexOf("[CALLBACK_PROMISED]") >= 0) {
-                  emit = emit.replace(/\[CALLBACK_PROMISED\]/g, "");
-                  console.log(
-                    "CALLBACK-PROMISED fired — turn=" + (meta && meta.turn) +
-                    " callId=" + JSON.stringify(meta && meta.callId) +
-                    " (host locked in a scheduled callback this turn — " +
-                    "logging only, no queuing performed)"
-                  );
-                }
+                // REMOVED (2026-09-19) — [CALLBACK_PROMISED] logging
+                // marker for Canon spec section 10.4. Built speculatively
+                // while 10.4 was still an open question (whether the
+                // outbound "host calls back" half would need PE-side
+                // queuing/tracking). Voice's answer resolved 10.4
+                // entirely — redial-by-number reattaches to a host
+                // session either direction, no queuing or dispatch code
+                // needed, and the content itself no longer branches by
+                // direction (see hydrate.js's formatHostHasToGoDirective)
+                // — so there was never a "promised outbound callback" to
+                // track in the first place. Nothing to build here.
                 // First emitted chunk: also strip a leading wrapping quote.
                 if (!firstDeltaSeen && emit) {
                   firstDeltaSeen = true;
