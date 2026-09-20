@@ -574,22 +574,31 @@ async function readPhoneJobFields(jobId) {
   try {
     const r = await fetch(
       `${URL}/rest/v1/callback_jobs?id=eq.${encodeURIComponent(jobId)}` +
-        // REVISED (2026-09-10, Voice/campaign_touch thread) — added
-        // transcript to this same, already-existing single-row query.
-        // No new round trip: this row was already being fetched by
-        // job_id for dial_extension/ask_for/etc, so adding one more
-        // column costs nothing extra. Confirmed by Voice: jsonb array
-        // of {role, text, ts}, written at hangup via
-        // write_phone_transcript, live since main76 — this is the
-        // host's OWN prior voicemail content (what WE said), not the
-        // scammer's (that's caller_context, already handled separately
-        // by formatCallerContextBrief below).
+        // REMOVED (2026-09-20, Phone Intake — real production bug,
+        // caught before it did more damage). The 2026-09-10 revision
+        // below added `transcript` to this select on the strength of a
+        // "confirmed by Voice... live since main76" claim that turned
+        // out to be wrong: Phone Intake states outright that
+        // callback_jobs.transcript DOES NOT EXIST and never has for
+        // outbound callbacks — nothing captures a call transcript
+        // there today. Querying a column that doesn't exist makes
+        // PostgREST 400 the WHOLE request, which the `if (!r.ok) return
+        // null` below turns into a null for the ENTIRE row — not just
+        // transcript, but dial_extension/ask_for/caller_context/
+        // callback_number_id/campaign_touch too. So this one bad column
+        // name was silently degrading every phone job's hydrate to
+        // "no phone fields at all" the whole time it was live — the
+        // worst kind of bug here, since hydrate never throws, it just
+        // quietly serves a worse prompt. Column removed from the
+        // select entirely; see priorVoicemailBrief's own call site
+        // below for what this means for that feature (8.6) until Phone
+        // Intake's new outbound-transcript column actually exists.
         // REVISED (2026-09-10, Andrew — external scam-report signal for
         // the hunch mechanism) — added callback_number_id, the first
         // hop toward caller_profile (callback_jobs -> callback_numbers
         // -> caller_profile). Confirmed schema: callback_jobs.
         // callback_number_id -> callback_numbers.id.
-        `&select=dial_extension,ask_for,reference_code,caller_context,transcript,callback_number_id,campaign_touch&limit=1`,
+        `&select=dial_extension,ask_for,reference_code,caller_context,callback_number_id,campaign_touch&limit=1`,
       { headers: { apikey: KEY, authorization: `Bearer ${KEY}` } }
     );
     if (!r.ok) return null;
@@ -601,7 +610,6 @@ async function readPhoneJobFields(jobId) {
       ask_for: row.ask_for || null,
       reference_code: row.reference_code || null,
       caller_context: row.caller_context || null,
-      transcript: row.transcript || null,
       callback_number_id: row.callback_number_id || null,
       campaign_touch: row.campaign_touch || null,
     };
@@ -1512,9 +1520,18 @@ module.exports = async function handler(req, res) {
     const callerContextBrief = formatCallerContextBrief(
       phoneJobFields && phoneJobFields.caller_context
     );
-    const priorVoicemailBrief = formatPriorVoicemailBrief(
-      phoneJobFields && phoneJobFields.transcript
-    );
+    // DISABLED (2026-09-20, Phone Intake) — always null now, deliberately.
+    // callback_jobs.transcript, which this used to read, does not exist —
+    // see readPhoneJobFields' own comment for the full story. This
+    // feature (8.6, the host recalling its own prior voicemail on a
+    // callback) has had nothing to read from callback_jobs since it
+    // shipped; formatPriorVoicemailBrief has always been returning null
+    // for phone jobs as a result, silently. Passing null explicitly here
+    // (rather than removing the call) so this is one line to fix, not a
+    // rebuild, once Phone Intake's new outbound-transcript column and
+    // hangup POST actually exist and hydrate.js is told the real column
+    // name to read.
+    const priorVoicemailBrief = formatPriorVoicemailBrief(null);
     // Outbound-callback-only (slug.startsWith("ph-")) — this is
     // guidance for a call WE placed potentially hitting THEIR
     // voicemail; inbound calls are the scammer calling us, so there's

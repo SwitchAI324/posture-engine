@@ -36,7 +36,9 @@
 // don't overlap, so nobody double-writes.
 // ----------------------------------------------------------------------
 
-import { insertCallOutcome, saveTranscript, upsertRecording } from "./_store.js";
+import { insertCallOutcome, saveTranscript, upsertRecording, updateCallDisposition } from "./_store.js";
+import { classifyDisposition } from "./_disposition.js";
+import { waitUntil } from "@vercel/functions";
 
 export const config = { runtime: "edge" };
 
@@ -54,6 +56,19 @@ export const config = { runtime: "edge" };
 const SCOUT_CALL_URL =
   process.env.SCOUT_CALL_URL || "https://posture-engine.vercel.app/api/scout/call";
 const SCOUT_TOKEN = process.env.SV_SCOUT_TOKEN;
+
+// DISPOSITION CLASSIFIER (2026-09-20, Email/Voice contract, locked this
+// session) — MOVED to _disposition.js (2026-09-20, same day) so the
+// phone-outbound path Phone Intake is building can reuse the exact same
+// classifier instead of a second, drift-prone copy. See that file's own
+// header for the full contract (category boundary, threat_target
+// scoping). Reads body.conversation here, the SAME array the Scout
+// fan-out above already trusts as the agent's real session history (not
+// body.transcript, which calls.js documents elsewhere as a separately-
+// arriving, less reliable field). Runs under waitUntil (see the call
+// site below) so it never delays the agent's close response — this is
+// genuinely optional, best-effort enrichment, not something the agent's
+// shutdown should ever wait on.
 
 function jsonRes(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
@@ -186,6 +201,38 @@ export default async function handler(req) {
               messages: b.conversation,
             }),
           }).catch(() => {});
+        }
+        // DISPOSITION CLASSIFIER FAN-OUT (2026-09-20) — see the function's
+        // own header comment for the contract. TRUE fire-and-forget, via
+        // waitUntil rather than an awaited-then-swallowed fetch like the
+        // two consumers above: this one makes an LLM call, genuinely
+        // slower than a plain POST, and there's no reason to hold the
+        // agent's close response open for best-effort enrichment that
+        // isn't even in the response body. Same vapiCallId value as the
+        // insertCallOutcome call above (b.call_id ?? b.vapi_call_id),
+        // required so the later UPDATE matches the exact row just
+        // inserted — recomputed here rather than threaded through as a
+        // shared variable, since insertCallOutcome already ran and this
+        // needs no ordering guarantee against it (updateCallDisposition
+        // PATCHes by vapi_call_id independent of insert timing).
+        const dispositionCallId = b.call_id ?? b.vapi_call_id ?? null;
+        if (dispositionCallId) {
+          waitUntil(
+            classifyDisposition(b.conversation)
+              .then((result) => {
+                if (!result) return null;
+                return updateCallDisposition(dispositionCallId, {
+                  disposition: result.disposition,
+                  threatTarget: result.threatTarget,
+                });
+              })
+              .catch((e) => {
+                console.log(
+                  "calls.js: disposition classify/update threw: " +
+                  (e && e.message ? e.message : e)
+                );
+              })
+          );
         }
       }
       return jsonRes({
