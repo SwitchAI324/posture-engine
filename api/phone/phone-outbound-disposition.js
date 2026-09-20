@@ -23,22 +23,27 @@
 // one job never gets a disposition, which is the same "best-effort
 // enrichment, not critical path" shape as the web classifier.
 //
-// callback_jobs.transcript is TEXT (Data converted it from the earlier
-// jsonb plan — write_phone_transcript is being retired), one line per
-// turn, speaker-labelled "HOST: .../CALLER: ..." by Voice's writer. Per
-// Phone Intake's explicit instruction, only CALLER lines are classified
-// — see _disposition.js's callerLinesFromPhoneTranscript for why.
+// callback_jobs.transcript is jsonb (Data reverted the brief TEXT
+// conversion same-day, 2026-09-20 — the Sep 4-18 rows confirmed the
+// jsonb shape survived intact) — an array of turns { ts, role, text },
+// role:"user"=caller, role:"assistant"=host, written natively by Voice's
+// write_phone_transcript. Per Phone Intake's explicit instruction, only
+// CALLER (role:"user") turns are classified — see _disposition.js's
+// callerLinesFromPhoneTranscript for why.
 //
-// Disposition write goes through the EXTENDED mark_callback_job RPC
-// (Data, 2026-09-20) — p_disposition/p_threat_target added alongside
-// the existing p_job_id/p_status/p_outcome/p_fail_reason. p_status is
-// REQUIRED on this RPC and must never carry a literal like 'completed'
-// (a failed job would be silently promoted) — so this endpoint reads
-// the job's OWN current status first and passes it straight back
-// unchanged, Data's interim-safe option (b). If Data later makes
-// p_status nullable/defaulted (option a), passing the real current
-// value back is still correct — just one field that becomes optional,
-// not a behavior change here.
+// Disposition write goes through set_phone_disposition(p_job_id,
+// p_disposition, p_threat_target) (Data, 2026-09-20) — a DEDICATED
+// function, not an overload of mark_callback_job. Voice's revised ask,
+// for two reasons: (1) mark_callback_job has already thrown PGRST203
+// (ambiguous function) on a signature change once; a distinct name can't
+// collide that way. (2) This endpoint no longer has to re-read and
+// re-affirm the job's own status just to write two unrelated columns —
+// that dance only existed because the write was bolted onto a status
+// function. SECURITY DEFINER, writes only disposition/threat_target on
+// callback_jobs, execute granted to service_role. HOME is callback_jobs,
+// decided (not phone_recaps — Phone Intake's outbound email queue has no
+// disposition concept, PE has no access to it, and its rows are
+// deleted-by-send).
 // ----------------------------------------------------------------------
 
 import { classifyDisposition, callerLinesFromPhoneTranscript } from "./_disposition.js";
@@ -82,12 +87,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Single read: the job's transcript (what to classify) and its
-    // current status (what to re-affirm on the RPC call, per Data's
-    // interim-safe instruction — never a hardcoded literal).
+    // Single read: just the transcript to classify. No status re-read
+    // needed anymore — set_phone_disposition doesn't touch p_status at
+    // all, unlike the earlier mark_callback_job-overload plan.
     const [job] = await select(
       "callback_jobs",
-      `id=eq.${encodeURIComponent(jobId)}&select=transcript,status&limit=1`
+      `id=eq.${encodeURIComponent(jobId)}&select=transcript&limit=1`
     );
     if (!job) {
       // No such job — respond ok:false but 200, not 404. Phone Intake's
@@ -97,7 +102,9 @@ export default async function handler(req, res) {
       // still-committing transaction.
       return res.status(200).json({ ok: false, job_id: jobId, error: "job not found" });
     }
-    if (!job.transcript) {
+    // jsonb array — check for empty/absent explicitly, since `[]` is
+    // truthy and would otherwise slip past a bare `!job.transcript`.
+    if (!Array.isArray(job.transcript) || !job.transcript.length) {
       return res.status(200).json({ ok: false, job_id: jobId, error: "no transcript on job" });
     }
 
@@ -107,13 +114,8 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: false, job_id: jobId, error: "classify failed" });
     }
 
-    await rpc("mark_callback_job", {
+    await rpc("set_phone_disposition", {
       p_job_id: jobId,
-      // Re-affirm the job's OWN existing status — never a literal like
-      // 'completed', which would silently promote a failed job (Data's
-      // explicit warning). This RPC call's only real purpose is the two
-      // new params below; p_status just has to not change anything.
-      p_status: job.status,
       p_disposition: result.disposition,
       p_threat_target: result.threatTarget,
     });

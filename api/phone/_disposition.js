@@ -21,8 +21,17 @@
 // "hostile" even when aimed squarely at the host — the host's persona
 // invites that, so hostile is expected to be common and mostly noise.
 // threat_target only matters when disposition is "threatening": Email's
-// branch pages a human only on threat_target='user' (a real threat
+// branch pages a human only on threat_target='customer' (a real threat
 // against the SpamViking account holder), not on 'host' or 'other'.
+//
+// NAMING NOTE (2026-09-20, Voice's catch): threat_target uses 'customer',
+// NOT 'user', even though "the account holder" is what everyone calls
+// the SpamViking user elsewhere. That's deliberate: transcript turns use
+// role:"user" for the SCAMMER (fixed by the LLM API's own vocabulary,
+// can't be renamed) and role:"assistant" for the host. If threat_target
+// also used 'user' for the account holder, "pull the transcript for
+// threat_target='user' calls" would silently mean two different people
+// depending which column you're reading. Kept apart on purpose.
 //
 // Callers pass a plain [{role, content}, ...] array — for web calls
 // that's body.conversation (calls.js); for phone outbound calls it will
@@ -35,31 +44,30 @@ const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 const DISPOSITION_MODEL = () => process.env.MODEL || "claude-sonnet-5";
 
-// PHONE TRANSCRIPT NORMALIZER (2026-09-20, Phone Intake) — callback_jobs.
-// transcript is TEXT (Data converted it from the earlier, never-actually-
-// live jsonb plan), one line per turn, speaker-labelled by Voice's
-// writer: "HOST: ..." / "CALLER: ...". Phone Intake's own explicit
-// instruction: classify the CALLER's disposition only — HOST lines are
-// PE's own agent and including them would skew the result (same
-// normalization Phone Intake already applies before classifying inbound
-// transcripts). So this extracts ONLY the caller-labelled lines and
-// returns them as a bare [{role:"user", content}] array — deliberately
-// NOT including any assistant/host entries at all, unlike the web path
-// (calls.js), which passes the full two-sided conversation because
-// there the model is told to focus on caller demeanor from within full
-// context. Phone Intake wants the host physically absent from the input,
-// not just instructed-around, so this drops those lines rather than
-// keeping-and-hoping the model ignores them.
-export function callerLinesFromPhoneTranscript(transcriptText) {
-  if (typeof transcriptText !== "string" || !transcriptText.trim()) return [];
-  return transcriptText
-    .split(/\r?\n/)
-    .map((line) => {
-      const m = line.match(/^\s*CALLER:\s*(.*)$/i);
-      return m ? m[1].trim() : null;
-    })
-    .filter((line) => line && line.length)
-    .map((content) => ({ role: "user", content }));
+// PHONE TRANSCRIPT NORMALIZER (2026-09-20, Data/PE — REVISED same day,
+// supersedes the TEXT-format version) — callback_jobs.transcript is
+// jsonb, an array of turns shaped { ts, role, text }; role:"user" is the
+// caller/scammer, role:"assistant" is the AI host. Data confirmed this
+// shape against the 19 surviving Sep 4–18 rows and is reverting the
+// earlier TEXT conversion, which was premature; write_phone_transcript
+// already produces this shape natively. Phone Intake's instruction still
+// stands regardless of encoding: classify the CALLER's disposition only
+// — HOST turns are PE's own agent and including them would skew the
+// result. So this filters to role:"user" turns and returns them as a
+// bare [{role:"user", content}] array — deliberately NOT including any
+// assistant/host entries, unlike the web path (calls.js), which passes
+// the full two-sided conversation because there the model is told to
+// focus on caller demeanor from within full context. Phone Intake wants
+// the host physically absent from the input, not just instructed-around,
+// so this drops those turns rather than keeping-and-hoping the model
+// ignores them.
+export function callerLinesFromPhoneTranscript(transcriptTurns) {
+  if (!Array.isArray(transcriptTurns)) return [];
+  return transcriptTurns
+    .filter(
+      (t) => t && t.role === "user" && typeof t.text === "string" && t.text.trim()
+    )
+    .map((t) => ({ role: "user", content: t.text.trim() }));
 }
 
 export async function classifyDisposition(conversation) {
@@ -89,14 +97,14 @@ export async function classifyDisposition(conversation) {
       "unknown — transcript too short, garbled, or unclear to judge.\n\n" +
       "If disposition is \"threatening\", also report threat_target — " +
       "who the threat is actually aimed at: \"host\" (the AI persona), " +
-      "\"user\" (the real SpamViking account holder behind the host — " +
-      "their home, family, personal information, safety, or identity), " +
+      "\"customer\" (the real SpamViking account holder behind the host " +
+      "— their home, family, personal information, safety, or identity), " +
       "or \"other\" (someone/something else — law enforcement, a third " +
       "party, etc). threat_target is null whenever disposition is not " +
       "\"threatening\".\n\n" +
       "Reply EXACTLY, compact JSON only, no prose: " +
       "{\"disposition\":\"friendly\"|\"neutral\"|\"hostile\"|\"threatening\"|\"unknown\"," +
-      "\"threat_target\":\"host\"|\"user\"|\"other\"|null}";
+      "\"threat_target\":\"host\"|\"customer\"|\"other\"|null}";
     const r = await fetch(ANTHROPIC_URL, {
       method: "POST",
       headers: {
@@ -136,7 +144,7 @@ export async function classifyDisposition(conversation) {
       return null;
     }
     const VALID_DISPOSITIONS = ["friendly", "neutral", "hostile", "threatening", "unknown"];
-    const VALID_TARGETS = ["host", "user", "other"];
+    const VALID_TARGETS = ["host", "customer", "other"];
     const disposition = VALID_DISPOSITIONS.includes(parsed.disposition) ? parsed.disposition : null;
     if (!disposition) {
       console.log("classifyDisposition REASON=invalid_disposition raw=" + JSON.stringify(parsed.disposition));
