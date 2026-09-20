@@ -835,6 +835,112 @@ function formatVoicemailBitDirective(campaignTouch, referenceCode) {
   );
 }
 
+// HOST-HAS-TO-GO BIT (2026-09-19, Canon spec section 10) — mid-call exit
+// offer, played for a scheduled callback. Phone-only (both directions),
+// gated the same way voicemailBitDirective/askForDirective are — by
+// call channel, not by cold-open status, since this fires on ANY live
+// phone call once genuinely underway, not just cold-open inbound ones.
+//
+// direction is "outbound" (slug.startsWith("ph-")) or "inbound" (every
+// other phone call — cold-open house calls and resolved-job inbound
+// calls alike), matching the same slug-prefix signal already used
+// elsewhere in this file (isColdOpenInbound, jobId resolution, the
+// voicemailBitDirective gate). Branch A's pool is the only thing that
+// actually differs by direction (10.2) — the reason pool (10.1) and
+// Branch B (10.3) are shared verbatim.
+//
+// Content is Canon's own, copied close to verbatim from the spec —
+// this is PE staying in its lane (gating WHICH pool applies, by
+// direction), not PE authoring voice.
+function formatHostHasToGoDirective(direction) {
+  const reasonPool =
+    "THE REASON — rotate across calls, never let one become the " +
+    "default:\n" +
+    '- "Oh, hang on — is something burning? I think I left something ' +
+    "on the stove. Can you hold that thought a second — actually, can " +
+    'I just call you back?"\n' +
+    '- "Sorry, hang on, the dog\'s going nuts at the door, I think ' +
+    'someone\'s here — can I grab this and call you right back?"\n' +
+    '- "Oh, hold on, that\'s the dryer doing its thing again, it walks ' +
+    "itself clear across the laundry room if I don't catch it in time " +
+    '— can I call you back in a bit?"\n' +
+    '- "Hang on, someone\'s leaning on my doorbell — probably a ' +
+    'delivery, but I should get it. Can I ring you back?"\n' +
+    '- "Oh — that\'s actually my other line, I should probably grab ' +
+    'that. Can I call you right back?"\n' +
+    '- "Sorry, hold on, the microwave\'s been beeping for like a full ' +
+    "minute and I have no idea why — let me go deal with that, can I " +
+    'call you back?"';
+
+  const branchALead =
+    "BRANCH A — spammer accepts: lock the callback for REAL. The win " +
+    "only counts if an actual time gets nailed down, not left vague — " +
+    "vague is just a soft hang-up with extra steps. Get a real answer, " +
+    "then repeat it back once so it's concrete (\"Okay — this " +
+    "afternoon, same number, got it\"). Close warm, never a banned " +
+    "sign-off phrase:\n" +
+    '- "Okay, talk soon."\n' +
+    '- "Perfect, I\'ll catch you then."\n' +
+    '- "Alright, I\'ll be around after that — give me a ring."\n' +
+    '- "Sounds good, talk to you in a bit."';
+
+  const branchAInbound =
+    "This call is INBOUND-originated (the spammer dialed in). The " +
+    "spammer already has this number, since they're the one who just " +
+    "used it — default is \"you call me back,\" genuinely free, no new " +
+    "capability needed:\n" +
+    '- "Can you give me a ring back at this number in a bit?"\n' +
+    '- "Would you mind calling this number back — later today, maybe?"\n' +
+    '- "Can you try me again in like twenty minutes, same number?"\n' +
+    '- "Could you call back after lunch sometime? Same number\'s fine."';
+
+  const branchAOutbound =
+    "This call is OUTBOUND-originated (you dialed the spammer — a " +
+    "voicemail-campaign callback). Asking the spammer to call \"this " +
+    "number\" back is the wrong default here — there's no guarantee " +
+    "your outgoing caller ID is even reachable if redialed. You know " +
+    "THEIR number for certain, so you offer to be the one calling " +
+    "back:\n" +
+    '- "Can I get you back at this number, say later today?"\n' +
+    '- "Can I call you back — would this afternoon work, or tomorrow?"\n' +
+    '- "Let me call you — give me till around lunchtime?"\n\n' +
+    "If the spammer accepts and you lock in a real time, include the " +
+    "marker [CALLBACK_PROMISED] immediately after your close, before " +
+    "ending your turn — this is a logging cue only, it will never be " +
+    "spoken or shown to the caller, so don't explain it or work it " +
+    "into the sentence.";
+
+  const branchB =
+    "BRANCH B — spammer pushes back (\"wait, before you go,\" \"can we " +
+    "just finish this,\" \"it'll only take two minutes\"): you cave, " +
+    "and the cave IS the joke — the reason downgrades from urgent to " +
+    "not-really, in your own words, then the call just continues, same " +
+    "register as before, no lingering awkwardness:\n" +
+    '- "Yeah, okay — actually, it\'s probably fine for a few more ' +
+    'minutes."\n' +
+    '- "You know, it can wait, it\'s not that big a deal — go ahead."\n' +
+    '- "Eh, it\'s fine, it\'s not going anywhere. What were you saying?"\n' +
+    '- "Alright, alright — two minutes, but that\'s it. Go on."';
+
+  return (
+    "HOST-HAS-TO-GO BIT — once this call is genuinely underway (never " +
+    "the first exchange), you may float a specific, mundane reason " +
+    "you have to step away. This is NEVER a real end of the call: " +
+    "either the spammer takes it and you lock in a real scheduled " +
+    "callback (a second full call — worth more than finishing this " +
+    "one), or the spammer pushes back and you admit the reason was " +
+    "overstated and stay on the line. There is no version where you " +
+    "just leave.\n\n" +
+    reasonPool +
+    "\n\n" +
+    branchALead +
+    "\n\n" +
+    (direction === "outbound" ? branchAOutbound : branchAInbound) +
+    "\n\n" +
+    branchB
+  );
+}
+
 function formatPriorVoicemailBrief(transcript) {
   if (!Array.isArray(transcript) || !transcript.length) return null;
   const assistantTurns = transcript
@@ -1434,6 +1540,20 @@ module.exports = async function handler(req, res) {
       phoneJobFields && phoneJobFields.ask_for
     );
 
+    // HOST-HAS-TO-GO (2026-09-19, Canon spec section 10) — phone-only,
+    // both directions, gated on token.channel the same way the other
+    // phone-specific directives are (askForDirective, voicemailBitDirective).
+    // NOT restricted to cold-open inbound — unlike coldOpenDirective below,
+    // this applies to every phone call once genuinely underway, resolved
+    // job or not. Direction reuses the exact same slug-prefix signal as
+    // the voicemailBitDirective gate above and jobId resolution higher up.
+    const hostHasToGoDirective =
+      token.channel === "phone"
+        ? formatHostHasToGoDirective(
+            slug && slug.startsWith("ph-") ? "outbound" : "inbound"
+          )
+        : null;
+
     // COLD-OPEN INBOUND (2026-09-07) — mode='house': inbound, phone, but
     // no job ever resolved (phoneJobFields is null). Genuinely different
     // from every other phone case: no caller_context, no ask_for, and —
@@ -1486,6 +1606,7 @@ module.exports = async function handler(req, res) {
       voicemailBitDirective,
       expectedPlaybookBlock,
       askForDirective,
+      hostHasToGoDirective,
       coldOpenDirective,
       archetypeSignal,
       channelSignal,
