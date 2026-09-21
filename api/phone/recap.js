@@ -40,6 +40,9 @@ const fmtTime = (iso, tz) => {
   catch { return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); }
 };
 
+// Returns { url, expiresAt } — the link is signed and dies after 7 days, so
+// the recap has to name the date; an email opened later is otherwise a dead
+// link with no explanation.
 async function recordingLink(jobId) {
   try {
     const r = await fetch(`${RECORDING_LINK_URL}?slug=ph-${jobId}`, {
@@ -48,9 +51,19 @@ async function recordingLink(jobId) {
     });
     if (!r.ok) return null;
     const j = await r.json().catch(() => null);
-    return j?.url || j?.signed_url || j?.link || null;
+    const url = j?.url || j?.signed_url || j?.link || null;
+    if (!url) return null;
+    return { url, expiresAt: j?.expires_at || null };
   } catch { return null; }
 }
+
+const fmtDate = (iso, tz) => {
+  try {
+    return new Date(iso).toLocaleDateString('en-US', {
+      month: 'long', day: 'numeric', timeZone: tz || 'America/New_York',
+    });
+  } catch { return null; }
+};
 
 // The agent's hangup chain is strictly ordered: mark_callback_job →
 // write_phone_transcript → POST /api/phone/recap. So by the time we run, the
@@ -100,7 +113,14 @@ function compose(kind, ctx) {
     lines.push(`Your callback to ${pretty(number)} happened at ${at}. A human answered.`);
     if (minutes) lines.push(`${host} kept them on for ${minutes} minutes.`);
     lines.push('');
-    lines.push(link ? `Listen: ${link}\n(link works for 7 days)` : 'Recording is still processing — we\'ll send the link when it\'s ready.');
+    if (link) {
+      lines.push(`Listen: ${link}`);
+      lines.push(ctx.linkExpires
+        ? `That link stops working after ${ctx.linkExpires} — save the audio before then if you want to keep it.`
+        : 'That link stops working after 7 days — save the audio before then if you want to keep it.');
+    } else {
+      lines.push('Recording is still processing — we\'ll send the link when it\'s ready.');
+    }
   } else if (kind === 'voicemail_left') {
     subject = `${host} left ${who} a message`;
     lines.push(`Nobody picked up at ${pretty(number)} at ${at}, so ${host} left a voicemail.`);
@@ -155,7 +175,7 @@ export default async function handler(req, res) {
     const others = num?.e164 ? await select('callback_numbers', `e164=eq.${encodeURIComponent(num.e164)}&select=user_id`) : [];
     const userCount = new Set(others.map(o => o.user_id)).size;
     const attempts = await select('call_attempts', `job_id=eq.${job_id}&order=dial_started_at.desc&limit=1&select=ring_seconds,answered_at,dial_started_at`);
-    const link = kind === 'recap' ? await recordingLink(job_id) : null;
+    const rec = kind === 'recap' ? await recordingLink(job_id) : null;
 
     const ctx = {
       jobId: job_id,
@@ -164,7 +184,8 @@ export default async function handler(req, res) {
       org: job.caller_context?.claimed_org || profile?.claimed_org || null,
       minutes: job.minutes_used || null,
       at: fmtTime(attempts[0]?.answered_at || attempts[0]?.dial_started_at || job.scheduled_at, settings?.tz),
-      link,
+      link: rec?.url || null,
+      linkExpires: rec?.expiresAt ? fmtDate(rec.expiresAt, settings?.tz) : null,
       refCode: job.reference_code || null,
       about: aboutNumber(profile, userCount),
       ringSeconds: attempts[0]?.ring_seconds || null,
