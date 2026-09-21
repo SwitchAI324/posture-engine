@@ -468,7 +468,14 @@ $("join").addEventListener("click", function(){
             callId = tok.room || null; // use the room name as our call handle
             // 2) connect to the room + publish mic. agent.py auto-joins and
             //    hydrates from the slug in the token metadata.
-            room = new Room();
+            // RED OFF (Voice fix — co-edited LiveKit-join block): desktop Chrome
+            // publishes the mic with RED (REDundant coding) enabled by default.
+            // The call recorder (egress) can't decode RED, so laptop/desktop-Chrome
+            // callers came out SILENT in recordings while iPhone callers were fine.
+            // publishDefaults.red:false forces a plain track the recorder can read.
+            // Do not remove without pinging Voice — this is their change living in
+            // Booking's file. (Booking owns the page; Voice owns this join block.)
+            room = new Room({ publishDefaults: { red: false } });
             wireRoom(room);
             return room.connect(tok.url, tok.token).then(function(){
               return room.localParticipant.setMicrophoneEnabled(true);
