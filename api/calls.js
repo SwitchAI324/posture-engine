@@ -242,6 +242,17 @@ export default async function handler(req) {
         call_outcome: b.call_outcome ?? null,
       });
     } catch (e) {
+      // LOGGED (2026-09-21, Recording — a real gap, not defensive extra):
+      // this always RETURNED the error in the response body, but never
+      // wrote it to the function's own log stream. A 500 with an empty-
+      // looking Vercel log entry (Recording's report on a web test call,
+      // 2026-09-21) was this: the real error text was only ever visible
+      // to whoever read the agent's own response, which nothing here
+      // does — Vercel's log view shows the invocation, not the body.
+      console.log(
+        "calls.js action=close FAILED target_id=" + targetId + ": " +
+        (e && e.message ? e.message : e)
+      );
       return jsonRes(
         { ok: false, error: String(e && e.message ? e.message : e) },
         500
@@ -278,6 +289,12 @@ export default async function handler(req) {
       });
       return jsonRes({ ok: true, slug, recording: row });
     } catch (e) {
+      // Same logging gap fixed here for consistency — see the close
+      // handler's catch above for the full story.
+      console.log(
+        "calls.js action=recording_ready FAILED slug=" + slug + ": " +
+        (e && e.message ? e.message : e)
+      );
       return jsonRes(
         { ok: false, error: String(e && e.message ? e.message : e) },
         500

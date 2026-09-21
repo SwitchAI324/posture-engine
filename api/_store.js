@@ -884,6 +884,48 @@ export async function insertCallOutcome({
   if (!r.ok) throw new Error(`calls insert failed: ${r.status} ${await r.text()}`);
   return true;
 }
+
+// UPDATE CALL DISPOSITION (2026-09-20, Email/Voice contract) — a SEPARATE
+// write from insertCallOutcome above, on purpose: disposition is computed
+// asynchronously, after the close row already exists (a classifier call
+// against the transcript, fired-and-forgotten from calls.js so it never
+// delays the agent's close response — see calls.js's own comment at the
+// call site). This is a PATCH by vapi_call_id, not an insert — the row
+// from insertCallOutcome must already exist, or this matches nothing and
+// silently no-ops (treated as "nothing to update yet", not an error; the
+// classifier firing before the outcome insert lands is not expected given
+// call order in calls.js, but this function makes no assumption about it
+// either way).
+//
+// Columns confirmed by Data (2026-09-20): calls.disposition (text,
+// nullable, no CHECK — friendly|neutral|hostile|threatening|unknown) and
+// calls.threat_target (text, nullable, no CHECK — host|user|other|null).
+// threatTarget is passed through as-is (including null) whenever the
+// caller provides it, so a disposition that isn't "threatening" can
+// explicitly clear a stale threat_target rather than leaving one from an
+// earlier write; omit it entirely to leave the column untouched.
+export async function updateCallDisposition(vapiCallId, { disposition, threatTarget } = {}) {
+  if (!isConfigured() || !vapiCallId) return false;
+  const row = {};
+  if (disposition !== undefined) row.disposition = disposition;
+  if (threatTarget !== undefined) row.threat_target = threatTarget;
+  if (!Object.keys(row).length) return false;
+  const r = await fetch(
+    `${URL}/rest/v1/${CALLS}?vapi_call_id=eq.${encodeURIComponent(vapiCallId)}`,
+    {
+      cache: "no-store",
+      method: "PATCH",
+      headers: {
+        apikey: KEY, authorization: `Bearer ${KEY}`,
+        "content-type": "application/json", prefer: "return=minimal",
+      },
+      body: JSON.stringify(row),
+    }
+  );
+  if (!r.ok) throw new Error(`calls disposition update failed: ${r.status} ${await r.text()}`);
+  return true;
+}
+
 // CANCEL a pending force — the Director's in-flight un-fire. Same shape as
 // fireForce but the terminal status is "cancelled" rather than "fired", so the
 // two are distinguishable in the control history (did it land, or did the
@@ -939,7 +981,14 @@ export async function cancelForce(callId, { bitId } = {}) {
 // phone, else web) every time, including on an update to an existing
 // row — harmless since the same slug always yields the same channel,
 // never actually changes call to call.
-export async function upsertRecording({ slug, recordingUrl, durationSec, status }) {
+//
+// userId (2026-09-21, owner-at-write-time stamping, Voice's option c) —
+// optional, only written when the caller resolved one. Only
+// livekit-webhook.js's phone/house-mode branches pass this today; web
+// calls resolveRecordingOwner() to null on purpose (held, see that
+// file's header), so web rows keep user_id null until that's settled.
+// "only write when provided" pattern, same as every other field here.
+export async function upsertRecording({ slug, recordingUrl, durationSec, status, userId }) {
   if (!isConfigured()) throw new Error("store not configured");
   if (!slug) throw new Error("slug required");
   // FIXED (2026-09-09, Recording — confirmed via real production rows:
@@ -951,6 +1000,7 @@ export async function upsertRecording({ slug, recordingUrl, durationSec, status 
   if (recordingUrl !== undefined) row.recording_url = recordingUrl;
   if (durationSec !== undefined) row.duration_sec = durationSec;
   if (status !== undefined) row.status = status;
+  if (userId !== undefined) row.user_id = userId;
   const r = await fetch(`${URL}/rest/v1/recordings?on_conflict=slug`, {
     cache: "no-store",
     method: "POST",
@@ -964,5 +1014,49 @@ export async function upsertRecording({ slug, recordingUrl, durationSec, status 
   if (!r.ok) throw new Error(`upsertRecording failed: ${r.status} ${await r.text()}`);
   const rows = await r.json();
   return Array.isArray(rows) ? rows[0] || null : null;
+}
+
+// CALLBACK JOB OWNER LOOKUP (2026-09-21, recording ownership stamping) —
+// callback_jobs.user_id is confirmed to exist as a column (cancel.js
+// already queries callback_jobs?user_id=eq.<userId>). This is the read
+// direction: given a job id, return its owner, or null if the job
+// doesn't exist or has no owner. Never throws — a lookup failure just
+// means no owner gets stamped on the recording, not a broken webhook.
+export async function getCallbackJobOwner(jobId) {
+  if (!isConfigured() || !jobId) return null;
+  const r = await fetch(
+    `${URL}/rest/v1/callback_jobs?id=eq.${encodeURIComponent(jobId)}&select=user_id&limit=1`,
+    { cache: "no-store", headers: { apikey: KEY, authorization: `Bearer ${KEY}` } }
+  );
+  if (!r.ok) {
+    console.log("getCallbackJobOwner: non-ok response for jobId=" + jobId + ": " + r.status);
+    return null;
+  }
+  const rows = await r.json().catch(() => null);
+  return Array.isArray(rows) && rows[0] && rows[0].user_id ? rows[0].user_id : null;
+}
+
+// HOUSE CALL MATCHED-JOB LOOKUP (2026-09-21, Voice's option c) — a
+// house-mode call (in-<house_call_id> slug) may or may not be matched to
+// a specific callback_jobs row (house_calls.matched_job_id — column name
+// as given by Andrew/Voice, NOT independently verified against Data's
+// schema by PE). A house call with no matched job has no provable
+// owner — returning null there is the correct admin-only outcome, not a
+// failure. ⚠ Unverified: whether matched_job_id is really the column
+// name and whether house_calls is keyed by id the way ph- jobs are
+// keyed by callback_jobs.id — worth a quick Data confirmation before
+// this is trusted for anything beyond "best effort."
+export async function getHouseCallMatchedJobId(houseCallId) {
+  if (!isConfigured() || !houseCallId) return null;
+  const r = await fetch(
+    `${URL}/rest/v1/house_calls?id=eq.${encodeURIComponent(houseCallId)}&select=matched_job_id&limit=1`,
+    { cache: "no-store", headers: { apikey: KEY, authorization: `Bearer ${KEY}` } }
+  );
+  if (!r.ok) {
+    console.log("getHouseCallMatchedJobId: non-ok response for houseCallId=" + houseCallId + ": " + r.status);
+    return null;
+  }
+  const rows = await r.json().catch(() => null);
+  return Array.isArray(rows) && rows[0] ? rows[0].matched_job_id || null : null;
 }
 
