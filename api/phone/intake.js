@@ -1,13 +1,21 @@
 // api/phone/intake.js
 // Phone Intake v1 (voicemail share). Called by Barbara's Apps Script when a
 // message to raid@spamviking.com carries a voicemail — either as an audio
-// attachment or as a carrier text transcript in the body.
+// attachment or as a carrier text transcript in the body — or a SCREENSHOT
+// of a scam text message (image attachment).
+//
+// Screenshot rule (Andrew's ruling): we only ever dial a number WRITTEN IN
+// the text message. The number the text came FROM (shown at the top of the
+// screenshot) is read and stored for the record, but is never dialed —
+// scammers often text from borrowed numbers.
 //
 // POST JSON (audio): { sender_email, subject, attachment_base64,
 //                      attachment_mime, host_name, message_id?,
 //                      voicemail_datetime? }
 // POST JSON (text):  { sender_email, subject, transcript, host_name,
 //                      message_id?, voicemail_datetime? }
+// POST JSON (image): same as audio, with attachment_mime image/png|jpeg|
+//                    gif|webp. Treated as a screenshot of a text message.
 // Duplicate (same sender + message_id already seen) → 200
 //   { ok:true, status:'duplicate', reply_body:null } — send nothing.
 // Header:            x-phone-intake-secret: <PHONE_INTAKE_SECRET>
@@ -37,7 +45,7 @@ const ARCHETYPES = ['b2b_saas', 'crypto_investment', 'account_access', 'gov_thre
 const CODE_ARCHETYPES = ['b2b_saas', 'account_access', 'gov_threat']; // reference code ON
 const BUCKET = 'voicemails';
 
-export const config = { api: { bodyParser: { sizeLimit: '4mb' } } };
+export const config = { api: { bodyParser: { sizeLimit: '4.5mb' } } };  // Vercel's hard ceiling
 
 // ---------- Supabase helpers (REST, service role) ----------
 async function sb(path, opts = {}) {
@@ -83,6 +91,45 @@ async function transcribe(buf, mime) {
 }
 
 // ---------- Anthropic (classification + number extraction) ----------
+// ---------- Screenshot reader (Anthropic vision) ----------
+// Splits the screenshot into the SENDER number (header, never dialed) and the
+// MESSAGE text (what the scammer wrote). Only the message text is classified.
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+async function readScreenshot(base64, mime) {
+  const system = `You read screenshots of phone text messages. Respond with a single JSON object and nothing else — no prose, no code fences.
+Fields:
+- is_text_message: true if this is a screenshot of an SMS/iMessage/chat conversation, else false.
+- sender_number: the phone number or short code shown as the SENDER (usually at the top of the screen), as displayed, or null.
+- sender_label: any name shown for the sender (e.g. a contact suggestion), or null.
+- message_text: the full text of the message bubble(s) FROM the sender, verbatim, joined with newlines. Exclude the phone's own UI text (headers, "Text Message", timestamps, "Report Message", spam warnings, suggestions).
+- received_at: the date/time shown for the message, as displayed, or null.`;
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': ANTHROPIC, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: 1200,
+      system,
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: mime, data: base64 } },
+        { type: 'text', text: 'Read this screenshot.' },
+      ] }],
+    }),
+  });
+  if (!r.ok) throw new Error(`anthropic vision ${r.status}: ${await r.text()}`);
+  const raw = (await r.json()).content?.map(c => c.text || '').join('') || '{}';
+  return JSON.parse(raw.replace(/```json|```/g, '').trim());
+}
+
+const digitsOf = s => String(s || '').replace(/\D/g, '');
+// A number counts as "written in the message" only if its digits (with or
+// without the leading country code) appear in the message text's digits.
+function writtenIn(e164, text) {
+  const d = digitsOf(text);
+  const n = digitsOf(e164);
+  return !!n && (d.includes(n) || (n.length === 11 && n.startsWith('1') && d.includes(n.slice(1))));
+}
+
 async function analyze(transcript) {
   const system = `You classify scam voicemails. Respond with a single JSON object and nothing else — no prose, no code fences.
 Fields:
@@ -156,7 +203,7 @@ function replyFor(status, ctx) {
     return {
       reply_subject: subj,
       reply_body:
-`Got it. Here's what we heard:
+`Got it. ${ctx.screenshot ? "Here's what the text says" : "Here's what we heard"}:
 
 "${ctx.transcript}"
 
@@ -181,6 +228,51 @@ be dialed.
 — SpamViking`,
     };
   }
+  if (status === 'rejected' && ctx.screenshot) {
+    return {
+      reply_subject: subj,
+      reply_body:
+`Got it. Here's what the text says:
+
+"${ctx.transcript}"
+
+It doesn't include a number to call, so there's nothing for us to dial. We
+never call the number a text came from — scammers often borrow other
+people's numbers. If they text again with a number to call, forward that
+one.
+
+— SpamViking`,
+    };
+  }
+  if (status === 'not_a_text') {
+    return {
+      reply_subject: subj,
+      reply_body:
+`Got your image, but it doesn't look like a screenshot of a text message,
+so there's nothing for us to act on. Screenshot the scam text itself and
+send that.
+
+— SpamViking`,
+    };
+  }
+  if (status === 'rejected' && ctx.pasted) {
+    // Pasted into the email body: could be a scam text or a carrier's
+    // voicemail transcript — wording has to fit both.
+    return {
+      reply_subject: subj,
+      reply_body:
+`Got it. Here's what the message says:
+
+"${ctx.transcript}"
+
+It doesn't include a number to call, so there's nothing for us to dial. We
+never call the number a message came from — scammers often send from
+borrowed or faked numbers, so that number may not reach them at all. If
+they send another message with a number to call, forward that one.
+
+— SpamViking`,
+    };
+  }
   if (status === 'rejected') {
     return {
       reply_subject: subj,
@@ -190,7 +282,8 @@ be dialed.
 "${ctx.transcript}"
 
 We didn't hear a callback number in the recording, so there's nothing for
-us to dial. We only ever call numbers a scammer says out loud.
+us to dial. If they leave another message with a number to call, forward
+that one.
 
 — SpamViking`,
     };
@@ -208,12 +301,15 @@ export default async function handler(req, res) {
   const { sender_email, subject, attachment_base64, attachment_mime, host_name,
           message_id, voicemail_datetime } = req.body || {};
   const textTranscript = typeof req.body?.transcript === 'string' ? req.body.transcript.trim() : '';
-  const isAudio = !!attachment_base64;
-  if (!sender_email || (!isAudio && !textTranscript)) {
+  const rawMime = String(attachment_mime || '').toLowerCase();
+  const isImage = !!attachment_base64 && rawMime.startsWith('image/');
+  const isAudio = !!attachment_base64 && !isImage;
+  if (!sender_email || (!attachment_base64 && !textTranscript)) {
     return res.status(400).json({ ok: false, error: 'sender_email plus attachment_base64 or transcript required' });
   }
-  const mime = attachment_mime || 'audio/m4a';
-  const provenance = isAudio ? 'stated_in_audio' : 'stated_in_text';
+  const mime = rawMime || 'audio/m4a';
+  const provenance = isImage ? 'stated_in_image' : isAudio ? 'stated_in_audio' : 'stated_in_text';
+  const source = isImage ? 'screenshot_share' : 'voicemail_share';
 
   let intakeId = null;
   try {
@@ -254,14 +350,32 @@ export default async function handler(req, res) {
 
     // 3. Open the intake; store audio if we have it
     const [intake] = await insert('phone_intakes', {
-      user_id: userId, source: 'voicemail_share', status: 'received',
+      user_id: userId, source, status: 'received',
       message_id: message_id || null,
       voicemail_at: voicemail_datetime || null,
     });
     intakeId = intake.id;
 
     let transcript;
-    if (isAudio) {
+    let shot = null;   // screenshot reading, kept for the record
+    if (isImage) {
+      if (!IMAGE_TYPES.includes(mime)) {
+        await update('phone_intakes', `id=eq.${intakeId}`, { status: 'rejected' });
+        return res.status(200).json({ ok: true, intake_id: intakeId, status: 'not_a_text', ...replyFor('not_a_text', { subject }) });
+      }
+      const buf = Buffer.from(attachment_base64, 'base64');
+      const ext = mime.split('/')[1].replace('jpeg', 'jpg');
+      const imgPath = await uploadAudio(`${userId}/${intakeId}.${ext}`, buf, mime);
+      await update('phone_intakes', `id=eq.${intakeId}`, { audio_path: imgPath });
+      // 4c. Read the screenshot. Only the MESSAGE text goes on to be
+      //     classified; the sender number is stored, never dialed.
+      shot = await readScreenshot(attachment_base64, mime);
+      if (!shot?.is_text_message || !String(shot.message_text || '').trim()) {
+        await update('phone_intakes', `id=eq.${intakeId}`, { status: 'rejected', classification: { screenshot: shot } });
+        return res.status(200).json({ ok: true, intake_id: intakeId, status: 'not_a_text', ...replyFor('not_a_text', { subject }) });
+      }
+      transcript = String(shot.message_text).trim();
+    } else if (isAudio) {
       const buf = Buffer.from(attachment_base64, 'base64');
       const audioPath = await uploadAudio(`${userId}/${intakeId}.${mime.includes('wav') ? 'wav' : 'm4a'}`, buf, mime);
       await update('phone_intakes', `id=eq.${intakeId}`, { audio_path: audioPath });
@@ -276,6 +390,13 @@ export default async function handler(req, res) {
 
     // 5. Classify (every forward is treated as a scam by design)
     const a = await analyze(transcript);
+    if (isImage) {
+      // Belt and braces: keep only numbers actually written in the message
+      // body. The sender number can never slip through as a "stated" one.
+      a.stated_numbers = a.stated_numbers.filter(n => writtenIn(n, transcript));
+      a.international_numbers = (a.international_numbers || []).filter(n => writtenIn(n, transcript));
+      a.text_sender = { number: shot.sender_number || null, label: shot.sender_label || null, received_at: shot.received_at || null };
+    }
     await update('phone_intakes', `id=eq.${intakeId}`, {
       archetype: a.archetype, confidence: a.confidence, is_scam: true,
       stated_numbers: a.stated_numbers, classification: { ...a, provenance }, status: 'classified',
@@ -288,7 +409,7 @@ export default async function handler(req, res) {
     }
     if (!a.stated_numbers.length) {
       await update('phone_intakes', `id=eq.${intakeId}`, { status: 'rejected' });
-      return res.status(200).json({ ok: true, intake_id: intakeId, status: 'rejected', ...replyFor('rejected', { subject, transcript }) });
+      return res.status(200).json({ ok: true, intake_id: intakeId, status: 'rejected', ...replyFor('rejected', { subject, transcript, screenshot: isImage, pasted: !isImage && !isAudio }) });
     }
     const number = a.stated_numbers[0];
 
@@ -316,8 +437,12 @@ export default async function handler(req, res) {
     // not sent at all — the job is created and dials on schedule, and the user
     // hears about it in the recap. (No half-measure: announcing a call the
     // user can't stop is worse than not announcing it.)
-    const [sysFlags] = await select('system_flags', 'select=slip_guard_phone&limit=1').catch(() => [null]);
-    const slipGuard = sysFlags?.slip_guard_phone !== false;
+    // Screenshots have their own switch (slip_guard_screenshot), so voicemail
+    // calls can run silently while screenshot calls still warn, or vice versa.
+    const [sysFlags] = await select('system_flags', 'select=slip_guard_phone,slip_guard_screenshot&limit=1').catch(() => [null]);
+    const slipGuard = isImage
+      ? sysFlags?.slip_guard_screenshot !== false
+      : sysFlags?.slip_guard_phone !== false;
     const lineType = await lineTypeFor(number);
     const plan = planCallback({ number, a, settings, rules, lineType });
     const scheduledAt = plan.scheduledAt.toISOString();
@@ -357,7 +482,7 @@ export default async function handler(req, res) {
     }
     return res.status(200).json({
       ok: true, intake_id: intakeId, status: 'queued', slip_guard: true,
-      ...replyFor('queued', { subject, transcript, number, phrase: plan.phrase, pastHours: plan.pastHours, stated: a.stated_hours, extension: a.extension, askFor: a.ask_for }),
+      ...replyFor('queued', { subject, transcript, number, phrase: plan.phrase, pastHours: plan.pastHours, stated: a.stated_hours, extension: a.extension, askFor: a.ask_for, screenshot: isImage }),
     });
   } catch (err) {
     console.error('phone-intake', err);
