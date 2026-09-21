@@ -80,8 +80,23 @@ function formatChannelSignal(channel) {
 // replaces the earlier objection-exit design entirely). Design change
 // from the first build: on explicit objection, do NOT end the call —
 // stop recording and continue normally. Applies to outbound and inbound
-// identically, AND to web calls (REVISED 2026-09-07 — gate lifted from
-// channel='phone' to unconditional, since web calls get recorded too).
+// identically. Originally lifted to unconditional (2026-09-07) on the
+// reasoning that web calls get recorded too — that reasoning about
+// RECORDING was correct, but the DIRECTIVE TEXT below wasn't: it
+// presupposes a spoken recording notice already happened earlier in the
+// call ("triggered by the recording notice... right after the notice"),
+// and that notice is a phone-only turn-1 beat (see the mandatory-first-
+// utterance recording notice referenced elsewhere in this file) — video
+// calls never get one. Reproduced live 2026-09-21 (Recording, two
+// separate video test calls): with no real notice to react to, the
+// model INVENTED one on its own turn ("this thing's set to record,
+// some setting I flipped by accident ages ago..."), consistent across
+// both calls. RE-GATED (2026-09-21, Andrew's explicit call) back to
+// channel='phone' only — a genuine product decision, not a revert to
+// "we didn't think about web": video calls currently get NO recording-
+// objection directive at all as a result. If a video caller ever raises
+// an objection anyway, there's nothing scripted for it right now — that
+// gap is accepted for the moment, not solved, per Andrew.
 //
 // DETECTION — unchanged from the first design, still mine, still
 // deliberately conservative per Recording's instruction: only a
@@ -1588,12 +1603,14 @@ module.exports = async function handler(req, res) {
     // entirely for cold-open inbound — see isColdOpenInbound above.
     const archetypeSignal = isColdOpenInbound ? null : formatArchetypeSignal(token.archetype);
     const channelSignal = formatChannelSignal(token.channel);
-    // REVISED (2026-09-07, Recording) — gate lifted from channel='phone'
-    // to unconditional: recording_stop applies to web calls too, not
-    // just phone. Web calls get recorded the same way phone calls do
-    // (calls.recording_* in the close path is channel-agnostic), so the
-    // objection handling needs to be too.
-    const recordingObjectionExit = formatRecordingObjectionExitDirective();
+    // RE-GATED (2026-09-21, Andrew) back to channel='phone' — see this
+    // function's own header comment for the full story (the directive
+    // text presupposes a phone-only spoken notice; unconditional
+    // inclusion made the model invent a fake one on video calls,
+    // reproduced twice live). null on web, filtered out below same as
+    // every other optional block in this array.
+    const recordingObjectionExit =
+      token.channel === "phone" ? formatRecordingObjectionExitDirective() : null;
 
     // Folded into dossierFloor itself (not a separate cfg field) — this
     // guarantees it actually reaches the compiled prefix through the
