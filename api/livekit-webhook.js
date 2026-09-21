@@ -18,6 +18,22 @@
 // that finished ready, fires a recap trigger — fire-and-forget, logs a
 // non-2xx, never fails the webhook over it.
 //
+// OWNER RESOLUTION (2026-09-21, Voice's option c) — before the upsert,
+// resolveRecordingOwner() fills recordings.user_id by slug prefix:
+//   ph-<job_id>       -> callback_jobs.user_id directly
+//   in-<house_call_id> -> house_calls.matched_job_id -> callback_jobs.
+//                         user_id; no matched job = null (house-mode,
+//                         admin-only, not a failure)
+//   anything else (web) -> null, ON PURPOSE, HELD. Voice is still
+//                         settling the new web file-naming scheme and
+//                         Data still has open questions about
+//                         booking_tokens' lifetime; guessing a web join
+//                         here risks stamping the WRONG owner, which is
+//                         worse than stamping none. Revisit once both
+//                         land.
+// Never throws — a lookup failure degrades to null (unowned), same as
+// the "no provable owner" case, never blocks the recording write.
+//
 // ⚠ VERIFICATION STATUS — same standard as dial.js. I installed the real
 // livekit-server-sdk/@livekit/protocol and confirmed every field path
 // below against their actual TypeScript definitions (WebhookReceiver's
@@ -29,7 +45,12 @@
 // ----------------------------------------------------------------------
 
 const { WebhookReceiver, EgressStatus, authorizeHeader } = require("livekit-server-sdk");
-const { upsertRecording, getHouseCallBySlug } = require("./_store.js");
+const {
+  upsertRecording,
+  getHouseCallBySlug,
+  getCallbackJobOwner,
+  getHouseCallMatchedJobId,
+} = require("./_store.js");
 
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
@@ -195,6 +216,40 @@ async function sendAdminRecordingNotification({ slug, recordingUrl, durationSec,
   } catch (e) {
     console.log("livekit-webhook: admin notification send threw for " + slug + ": " + (e && e.message ? e.message : e));
   }
+}
+
+// See file header for the full design. Returns a user_id or null; never
+// throws (each branch catches its own lookup failure and logs it).
+async function resolveRecordingOwner(slug) {
+  if (!slug) return null;
+  if (slug.startsWith("ph-")) {
+    const jobId = slug.slice(3);
+    try {
+      return await getCallbackJobOwner(jobId);
+    } catch (e) {
+      console.log(
+        "livekit-webhook: resolveRecordingOwner callback_jobs lookup failed for jobId=" +
+          jobId + ": " + (e && e.message ? e.message : e)
+      );
+      return null;
+    }
+  }
+  if (slug.startsWith("in-")) {
+    const houseCallId = slug.slice(3);
+    try {
+      const matchedJobId = await getHouseCallMatchedJobId(houseCallId);
+      if (!matchedJobId) return null; // house-mode, no matched job — admin-only, correct
+      return await getCallbackJobOwner(matchedJobId);
+    } catch (e) {
+      console.log(
+        "livekit-webhook: resolveRecordingOwner house_calls lookup failed for houseCallId=" +
+          houseCallId + ": " + (e && e.message ? e.message : e)
+      );
+      return null;
+    }
+  }
+  // WEB — HELD, returns null on purpose. See file header.
+  return null;
 }
 
 async function triggerPhoneRecap(slug) {
@@ -363,12 +418,15 @@ module.exports = async function handler(req, res) {
   const durationSec =
     file && file.duration != null ? Math.round(Number(file.duration) / 1e9) : null;
 
+  const userId = await resolveRecordingOwner(slug);
+
   try {
     await upsertRecording({
       slug,
       recordingUrl,
       durationSec,
       status,
+      userId,
     });
   } catch (e) {
     console.log("livekit-webhook: upsertRecording failed for slug=" + slug + ": " + (e && e.message ? e.message : e));
