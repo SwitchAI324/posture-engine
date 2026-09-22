@@ -154,7 +154,20 @@ async function sendAdminRecordingNotification({ slug, recordingUrl, durationSec,
         const linkBody = await linkRes.json().catch(() => null);
         if (linkBody && linkBody.url) signedLink = linkBody.url;
       } else {
-        console.log("livekit-webhook: recording-link fetch non-ok for slug=" + slug + ": " + linkRes.status);
+        // BODY NOW LOGGED (2026-09-22, PE — real gap Recording hit:
+        // recording-link.js's own error responses always carry a real
+        // message in the JSON body (e.g. { error: "supabase ... 500: ..." }),
+        // but this only ever logged the bare status code, so a 500 here
+        // showed up in the log with zero diagnostic detail — exactly what
+        // Recording reported for slug=test-andy. .text() first, not
+        // .json(), since a non-2xx body is still expected to be the same
+        // { error } shape recording-link.js always sends, but reading as
+        // text first means this can't itself throw on a malformed/empty body.
+        const linkErrText = await linkRes.text().catch(() => "");
+        console.log(
+          "livekit-webhook: recording-link fetch non-ok for slug=" + slug +
+          ": " + linkRes.status + " " + linkErrText.slice(0, 300)
+        );
       }
     } catch (e) {
       console.log("livekit-webhook: recording-link fetch failed for slug=" + slug + ": " + (e && e.message ? e.message : e));
