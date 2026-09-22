@@ -282,8 +282,9 @@ they send another message with a number to call, forward that one.
 "${ctx.transcript}"
 
 We didn't hear a callback number in the recording, so there's nothing for
-us to dial. If they leave another message with a number to call, forward
-that one.
+us to dial. We never call the number that showed up on your caller ID —
+it's easy to fake, and it may not reach the scammer at all. If they leave
+another message with a number to call, forward that one.
 
 — SpamViking`,
     };
