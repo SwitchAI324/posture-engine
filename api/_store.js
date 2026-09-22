@@ -24,15 +24,6 @@ export function isConfigured() {
   return Boolean(URL && KEY);
 }
 
-// HOUSE CALL LOOKUP BY RECORDING SLUG (2026-09-10, Recording — admin
-// notification email needs call_start and a transcript excerpt).
-// house_calls schema confirmed directly from Recording's own paste,
-// not assumed: recording_slug (text), started_at (timestamptz, NOT
-// NULL), transcript (text — stores JSON as a string, matching
-// Recording's own verification query which explicitly casts it via
-// transcript::jsonb; NOT a native jsonb column, so this reads it back
-// as a string and this function's caller must JSON.parse it, same cast
-// shape, just done in JS instead of SQL).
 export async function getHouseCallBySlug(slug) {
   if (!isConfigured() || !slug) return null;
   const url =
@@ -49,36 +40,20 @@ export async function getHouseCallBySlug(slug) {
   const rows = await r.json().catch(() => null);
   return Array.isArray(rows) && rows[0] ? rows[0] : null;
 }
-// READ BY SLUG KEY — fallback for the pre-call hydrate. The hydrate can run
-// BEFORE the Vapi call_id exists, writing the prefix under call_id="slug:<slug>"
-// (a pseudo-key). When the real first turn arrives and its call_id row has no
-// prefix yet (the hydrate raced and lost, or hasn't been re-keyed), completions
-// reads this slug row instead. This removes the hydrate-vs-first-turn race:
-// the prefix is guaranteed present before the call starts, keyed by slug.
-// No schema change — same call_prefix table, a row whose call_id is "slug:...".
 export async function getCallBySlug(slug) {
   if (!slug) return null;
   return getCall("slug:" + slug);
 }
-// READ — the one sanctioned hot-path lookup (indexed PK, not an LLM call).
-// Returns { prefix, postureLine } or null (not found / not configured).
 export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-   `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used,pending_bench_awareness,latest_call_id,active_generation,bench_present,first_seen_at,caller_presenting,pitch_summary,host_name`;
+   `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used,pending_bench_awareness,latest_call_id,active_generation,bench_present,first_seen_at,caller_presenting,pitch_summary,host_name,recording_notice_given,host_turn_count`;
   const r = await fetch(url, {
     cache: "no-store",
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
   if (!r.ok) {
-    // SURFACE THE REAL ERROR (Aug 6, found live — this exact silence hid a
-    // missing-column bug for the entire debugging session). A non-ok
-    // response was being treated identically to "zero rows found," which
-    // made a genuine query failure (a 400, a schema mismatch, anything)
-    // indistinguishable from an empty result. Log the actual body so the
-    // next failure like this is visible in one log line, not a full
-    // Supabase log export.
     const errBody = await r.text().catch(() => "");
     console.log("getCall FAILED status=" + r.status + " callId=" + callId + " body=" + errBody.slice(0, 300));
     return null;
@@ -88,132 +63,52 @@ export async function getCall(callId) {
   return {
     prefix: rows[0].prefix,
     postureLine: rows[0].posture_line,
-    // gear/slip/accuseFloor REMOVED (Aug 5, gears removal) — suspicion axis
-    // retired entirely, no replacement. The gear/slip/accuse_floor DB columns
-    // are left as-is (harmless unused legacy), just no longer read/written.
     pressure: rows[0].pressure || "calm",
     engagement: rows[0].engagement || "hooked",
-    phase: rows[0].phase ?? "opening", // Stage-4 call phase (async read)
-    targetId: rows[0].target_id ?? null, // the target the booking token was
-                                         // minted for; compiled at hydrate,
-                                         // stamped on every Mead Hall event so
-                                         // the board can watch by target before
-                                         // the call_id exists
-    arrivalState: rows[0].arrival_state ?? null, // v2 bench: in-progress arrival (jsonb)
-    benchLog: rows[0].bench_log ?? [], // v2 bench: [{bench_id,arrived_turn}] for pacing/cap
-    controlUrl: rows[0].control_url ?? null, // Vapi per-call monitor.controlUrl (for handoff)
-    pendingHandoff: rows[0].pending_handoff ?? null, // telegraph->handoff two-beat state
-    stallCount: rows[0].stall_count ?? 0, // turns_since_pitch_or_ask (extended_stall)
+    phase: rows[0].phase ?? "opening",
+    targetId: rows[0].target_id ?? null,
+    arrivalState: rows[0].arrival_state ?? null,
+    benchLog: rows[0].bench_log ?? [],
+    controlUrl: rows[0].control_url ?? null,
+    pendingHandoff: rows[0].pending_handoff ?? null,
+    stallCount: rows[0].stall_count ?? 0,
     lastBitId: rows[0].last_bit_id || null,
     lastBitTurn: rows[0].last_bit_turn ?? null,
-    // Number() because PostgREST can hand bigint back as a string; the
-    // re-injection window does arithmetic on it.
     lastBitAt: rows[0].last_bit_at != null ? Number(rows[0].last_bit_at) : null,
     businessLatched: rows[0].business_latched ?? false,
     openerOverlay: rows[0].opener_overlay ?? null,
     businessOverlay: rows[0].business_overlay ?? null,
     archetype: rows[0].archetype || null,
-    characterId: rows[0].character_id || null, // host_posture for the calls record
-    // STEP 1 live-event flag (commitment_push). Persisted per turn so the
-    // completions consumer can read the PRIOR turn's detector result. Defaults
-    // false when the column is absent/null — a call that never saw a payment
-    // demand reads false, same as the detector-off case.
+    characterId: rows[0].character_id || null,
     commitmentPush: rows[0].commitment_push ?? false,
-    // UNIVERSAL FIRE HISTORY (Aug 6, generalized from texture-only
-    // textureLastFire, replaces it — see _bits_scorer.js's own comment for
-    // the full shape: { [bitId]: { lastFiredTurn, totalFires,
-    // lastCountedTurn } }). jsonb column, defaults {} for a call that
-    // predates this feature (or a fresh row where it's null). An
-    // absent/never-fired entry reads as "eligible" everywhere it's checked.
     bitFireHistory: rows[0].bit_fire_history ?? {},
-    // STALL RESOLUTION SIGNALS (rung count + caller-redirect). Both default
-    // to their "nothing has happened yet" state so a call that predates
-    // these reads exactly as if the feature didn't exist.
     huntRungCount: rows[0].hunt_rung_count ?? 0,
-    // huntRungTurn: the turn the rung counter was last bumped at — the race
-    // guard so same-turn preemptive-gen siblings don't each independently
-    // increment. null = never bumped (fresh call, or just resolved).
     huntRungTurn: rows[0].hunt_rung_turn ?? null,
-    // TEXTURE POST-EVENT COOLDOWN: the turn a stall/hunt last resolved, read
-    // FORWARD by the texture gate (not cleared on read, unlike the hunt-state
-    // fields above). null = never resolved / fresh call.
     lastStallResolvedTurn: rows[0].last_stall_resolved_turn ?? null,
-    // EXPERTISE-LEVEL DIAL (Aug 6): the level PE actually USED last turn —
-    // separate from the Director's live control (getControls), which is
-    // "what SHOULD it be now." Comparing these two each turn is how a
-    // change gets detected (this persisted value lags one turn behind by
-    // definition). null = never set yet (fresh call, uses the default).
     expertiseLevelUsed: rows[0].expertise_level_used ?? null,
-    // BENCH TAKEOVER AWARENESS (Aug 8) — the last takeover's {character,
-    // line}, consumed exactly once by the NEXT turn (injected as an
-    // awareness note, then cleared). Without this the host has zero
-    // knowledge a bench character even spoke — the line only ever rode in
-    // metadata to the agent, never into the model's own context.
     pendingBenchAwareness: rows[0].pending_bench_awareness ?? null,
     callerRedirected: rows[0].caller_redirected ?? false,
-    // CALLER-CRUDE signal: raw per-turn classification + two running counts.
-    // Defaults match "nothing crude has happened yet" for a call that
-    // predates this feature or a fresh row.
     callerCrude: rows[0].caller_crude ?? "none",
     crudeImpersonalCount: rows[0].crude_impersonal_count ?? 0,
     crudePersonalCount: rows[0].crude_personal_count ?? 0,
-    // MARKER AWARENESS: per-marker running counts + per-marker last-fired
-    // turn (both jsonb objects keyed by marker token, e.g. "COFFEE_CUP_
-    // BREAK"). Empty objects for a call that predates this feature or a
-    // fresh row — same "nothing has happened yet" default as everything else.
     markerCounts: rows[0].marker_counts ?? {},
     markerLastTurn: rows[0].marker_last_turn ?? {},
-    // PRICING RAISED: one-way latch, default false (nothing quoted yet).
     pricingRaised: rows[0].pricing_raised ?? false,
-    // TEXTURE INVITED: momentary, defaults PERMISSIVE (true) — a missing/
-    // absent read must never silently suppress all texture; only an
-    // explicit false (this turn's reader judgment) does that.
     textureInvited: rows[0].texture_invited ?? true,
-    // LATEST CALL ID (Aug 12, completing the Aug 10 self-correcting
-    // call_id fix — was written by hydrate.js's writePrefix() this whole
-    // time but never actually persisted: missing from setCall()'s own
-    // destructured params below, AND missing from this function's SELECT
-    // clause above, so control.js's `?slug=` lookup always got null no
-    // matter what the caller did right. Only meaningful on the
-    // "slug:<slug>" row (stamped there by hydrate.js); null everywhere
-    // else, which is correct — nothing else should set or read it.
     latestCallId: rows[0].latest_call_id ?? null,
-    // ACTIVE GENERATION (Aug 12, uncancelled-stacking fix) — a random
-    // token stamped by whichever completions.js request most recently
-    // STARTED for this call_id. Every request stamps its own token when
-    // it begins (see setCall's own comment on the write side), then
-    // re-reads this field right before the expensive Anthropic fetch —
-    // if it no longer matches the token it stamped, a NEWER request has
-    // since started for the same call, and this one abandons itself
-    // rather than burning a full generation nobody will use. Best-
-    // effort, not airtight (the write is async/waitUntil, so a rare
-    // ordering race could let a stale request "win") — but the failure
-    // mode is only ever "didn't cancel something it should have," never
-    // worse than the current baseline of cancelling nothing at all.
-    // null = no request has stamped this call yet (fresh call, or a
-    // call this feature predates).
     activeGeneration: rows[0].active_generation ?? null,
-    // BENCH PRESENCE (Aug 14, Voice's join/continue/drop proposal) —
-    // per-call map of bench tag -> "present" | "dropped". Absent key =
-    // never joined this call (same as "not present" for read purposes).
-    // Only ever written by the takeover branch in completions.js's
-    // runBenchArrival — join/continue set "present", drop sets
-    // "dropped". Empty object, not null, when nothing has joined yet —
-    // simpler truthy checks downstream than distinguishing null/{}.
     benchPresent: rows[0].bench_present ?? {},
-    // Number() for the same PostgREST bigint-as-string reason as lastBitAt
-    // above — OPENER_SILENCE_RESOLVE does arithmetic on this.
     firstSeenAt: rows[0].first_seen_at != null ? Number(rows[0].first_seen_at) : null,
     callerPresenting: rows[0].caller_presenting ?? false,
     pitchSummary: rows[0].pitch_summary ?? "",
     hostName: rows[0].host_name || null,
+    recordingNoticeGiven: rows[0].recording_notice_given ?? false,
+    hostTurnCount: rows[0].host_turn_count ?? 0,
   };
 }
-// WRITE (upsert) — used at pre-snap to freeze the prefix, and later by the
-// posture engine to update just the posture line.
 export async function setCall(
   callId,
-  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed, pendingBenchAwareness, latestCallId, activeGeneration, benchPresent, firstSeenAt, callerPresenting, pitchSummary, hostName }
+  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed, pendingBenchAwareness, latestCallId, activeGeneration, benchPresent, firstSeenAt, callerPresenting, pitchSummary, hostName, recordingNoticeGiven, hostTurnCount }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -223,111 +118,46 @@ export async function setCall(
   const row = { call_id: callId, updated_at: new Date().toISOString() };
   if (prefix !== undefined) row.prefix = prefix;
   if (postureLine !== undefined) row.posture_line = postureLine;
-  // gear/slip/accuseFloor REMOVED (Aug 5, gears removal) — suspicion axis
-  // retired entirely, no replacement.
   if (pressure !== undefined) row.pressure = pressure;
   if (engagement !== undefined) row.engagement = engagement;
-  if (phase !== undefined) row.phase = phase; // Stage-4 call phase (async read)
-  if (targetId !== undefined) row.target_id = targetId; // booking_tokens.target_id,
-                                                        // written once at hydrate
-  if (arrivalState !== undefined) row.arrival_state = arrivalState; // v2 bench (jsonb, nullable)
-  if (benchLog !== undefined) row.bench_log = benchLog; // v2 bench arrival log (jsonb array)
-  if (controlUrl !== undefined) row.control_url = controlUrl; // Vapi monitor.controlUrl
-  if (pendingHandoff !== undefined) row.pending_handoff = pendingHandoff; // telegraph->handoff state
-  if (stallCount !== undefined) row.stall_count = stallCount; // extended_stall counter
+  if (phase !== undefined) row.phase = phase;
+  if (targetId !== undefined) row.target_id = targetId;
+  if (arrivalState !== undefined) row.arrival_state = arrivalState;
+  if (benchLog !== undefined) row.bench_log = benchLog;
+  if (controlUrl !== undefined) row.control_url = controlUrl;
+  if (pendingHandoff !== undefined) row.pending_handoff = pendingHandoff;
+  if (stallCount !== undefined) row.stall_count = stallCount;
   if (lastBitId !== undefined) row.last_bit_id = lastBitId;
   if (lastBitTurn !== undefined) row.last_bit_turn = lastBitTurn;
-  // lastBitAt: ms-epoch of the last REAL bit fire. Powers REINJECT_WINDOW_MS in
-  // completions — re-injection is only valid for a preemptive regeneration
-  // (sub-second), never for a silence bare-turn (tens of seconds later).
   if (lastBitAt !== undefined) row.last_bit_at = lastBitAt;
-  // businessLatched: one-way phase-overlay latch. Once the call leaves
-  // "opening" this pins the BUSINESS overlay for the rest of the call so a
-  // wobbling phase read can't drag the opener machinery back on turn 20.
   if (businessLatched !== undefined) row.business_latched = businessLatched;
-  // opener/business overlays: the two swappable phase blocks, written once at
-  // hydrate. completions appends the phase-selected one after the cached
-  // prefix. WITHOUT THESE PERSISTED THE SPLIT SILENTLY FALLS BACK TO CORE-ONLY.
   if (openerOverlay !== undefined) row.opener_overlay = openerOverlay;
   if (businessOverlay !== undefined) row.business_overlay = businessOverlay;
   if (archetype !== undefined) row.archetype = archetype;
-  if (characterId !== undefined) row.character_id = characterId; // host_posture source
-  // commitmentPush: STEP 1 live-event flag. Only written when provided (the
-  // detector-off case never passes it, so the column stays at its default).
-  // Persisting it is what lets the NEXT turn's consumer read the demand — the
-  // field was previously dropped here, so stored.commitmentPush was always
-  // undefined and the consumer guard never passed.
+  if (characterId !== undefined) row.character_id = characterId;
   if (commitmentPush !== undefined) row.commitment_push = commitmentPush;
-  // bitFireHistory: universal per-bit fire-history map (jsonb), generalized
-  // Aug 6 from texture-only textureLastFire. Only written when provided —
-  // same pattern as every other field here.
   if (bitFireHistory !== undefined) row.bit_fire_history = bitFireHistory;
-  // STALL RESOLUTION SIGNALS: rung counter (huntRungCount) and the reader's
-  // caller-redirect judgment (callerRedirected). Same "only write when
-  // provided" pattern as every other field here.
   if (huntRungCount !== undefined) row.hunt_rung_count = huntRungCount;
-  // huntRungTurn: the race-guard companion to huntRungCount (see completions.js
-  // for why) — only written when provided, same pattern as every field here.
   if (huntRungTurn !== undefined) row.hunt_rung_turn = huntRungTurn;
-  // TEXTURE POST-EVENT COOLDOWN: same "only write when provided" pattern.
   if (lastStallResolvedTurn !== undefined) row.last_stall_resolved_turn = lastStallResolvedTurn;
-  // EXPERTISE-LEVEL DIAL: the level PE actually used THIS turn, persisted so
-  // NEXT turn can compare against it to detect a change. Same "only write
-  // when provided" pattern as everything else here.
   if (expertiseLevelUsed !== undefined) row.expertise_level_used = expertiseLevelUsed;
-  // BENCH TAKEOVER AWARENESS: written with the {character, line} object
-  // when a takeover fires; written with null by the VERY NEXT turn once
-  // it's consumed (one-shot, same pattern as the expertise-dial transition
-  // note — never re-injects after the first read).
   if (pendingBenchAwareness !== undefined) row.pending_bench_awareness = pendingBenchAwareness;
-  // LATEST CALL ID (Aug 12 fix — see getCall()'s own comment on this same
-  // field for the full story). Only ever passed by hydrate.js's
-  // writePrefix() on the "slug:<slug>" row. "only write when provided"
-  // pattern like everything else here — undefined leaves any existing
-  // value alone, explicit null clears it.
   if (latestCallId !== undefined) row.latest_call_id = latestCallId;
-  // ACTIVE GENERATION: see getCall()'s own comment for the full
-  // mechanism. Written unconditionally by EVERY completions.js request
-  // as it starts (always overwrites — that's the point: "most recent
-  // write wins" is what makes an older request detect it's been
-  // superseded). "only write when provided" pattern like everything
-  // else here.
   if (activeGeneration !== undefined) row.active_generation = activeGeneration;
   if (benchPresent !== undefined) row.bench_present = benchPresent;
-  // FIRST-SEEN STAMP (Aug 16) — stamped once, on the first request a call
-  // ever produces, never rewritten after (completions.js only calls setCall
-  // with this when !stored.firstSeenAt). Feeds OPENER_SILENCE_RESOLVE: a
-  // stable wall-clock "how long has this call actually been open" signal
-  // that stays accurate even when turn/phase are frozen by pure caller
-  // silence. Same "only write when provided" pattern as every field here.
   if (firstSeenAt !== undefined) row.first_seen_at = firstSeenAt;
-  // CALLER_PRESENTING / PITCH_SUMMARY (Aug 16) — per PE spec
-  // pe_spec_aug16_triggers_and_archetypes.md, items 1 and 3. Same "only
-  // write when provided" pattern as every field above.
   if (callerPresenting !== undefined) row.caller_presenting = callerPresenting;
   if (pitchSummary !== undefined) row.pitch_summary = pitchSummary;
-  // HOST-NAME PERSISTENCE (Aug 18) — resolved once at hydrate time from the
-  // booking token (the reliable source on LiveKit; completions.js's own
-  // metadata-path checks are Vapi-era and empty on LiveKit, confirmed via
-  // HOSTNAME-DIAG). Same "only write when provided" pattern as every field
-  // here.
   if (hostName !== undefined) row.host_name = hostName;
+  if (recordingNoticeGiven !== undefined) row.recording_notice_given = recordingNoticeGiven;
+  if (hostTurnCount !== undefined) row.host_turn_count = hostTurnCount;
   if (callerRedirected !== undefined) row.caller_redirected = callerRedirected;
-  // CALLER-CRUDE: raw classification + the two running counts. Same "only
-  // write when provided" pattern as every other field here.
   if (callerCrude !== undefined) row.caller_crude = callerCrude;
   if (crudeImpersonalCount !== undefined) row.crude_impersonal_count = crudeImpersonalCount;
   if (crudePersonalCount !== undefined) row.crude_personal_count = crudePersonalCount;
-  // MARKER AWARENESS: both jsonb, same "only write when provided" pattern.
   if (markerCounts !== undefined) row.marker_counts = markerCounts;
   if (markerLastTurn !== undefined) row.marker_last_turn = markerLastTurn;
-  // PRICING RAISED: only ever written as true (see blendRead's one-way-latch
-  // comment) — "only write when provided" naturally means a false/absent
-  // read never overwrites an existing true.
   if (pricingRaised !== undefined) row.pricing_raised = pricingRaised;
-  // TEXTURE INVITED: momentary boolean, same "only write when provided"
-  // pattern — no latch logic needed here, blendRead already handles that
-  // this field is per-turn, not sticky.
   if (textureInvited !== undefined) row.texture_invited = textureInvited;
   const r = await fetch(`${URL}/rest/v1/${TABLE}`, {
     cache: "no-store",
@@ -345,12 +175,6 @@ export async function setCall(
   }
   return true;
 }
-// CONTROLS — Director's live commands (death_blow + arms + bench) live in
-// call_controls, one row each, distinguished by control_type. PE owns the row
-// shape: control-specific fields ride in payload; rung_id is the only death-
-// blow-specific column. getControls reads them all in one query (run
-// concurrently with getCall, so no added hot-path latency). Only pending/armed
-// rows are "live"; fired/cleared drop.
 export async function getControls(callId) {
   const empty = { deathBlow: null, armed: [], sentBench: null, forced: null, absurdityCeiling: null, expertiseLevel: null };
   if (!isConfigured() || !callId) return empty;
@@ -372,8 +196,6 @@ export async function getControls(callId) {
   for (const row of rows) {
     const p = row.payload || {};
     if (row.control_type === "death_blow") {
-      // return regardless of status (turn loop guards on pending; callend needs
-      // to see "fired" to avoid double-emitting a natural ending).
       deathBlow = {
         id: row.id, rung_id: row.rung_id, rung_name: p.rung_name ?? null,
         final_line: p.final_line ?? null, idem: row.idempotency_key || null,
@@ -385,46 +207,30 @@ export async function getControls(callId) {
         armed_turn: p.armed_turn ?? null, idem: row.idempotency_key || null,
       });
     } else if (row.control_type === "bench" && live(row.status)) {
-      // Director sent in a specific bench character. Last live one wins.
-      // mode (Aug 8): "weave" (default, absent on any pre-mode row — those
-      // read as weave, exactly their existing behavior, zero regression)
-      // or "takeover".
       sentBench = {
         id: row.id, bench_id: p.bench_id ?? null,
         sent_turn: p.sent_turn ?? null, idem: row.idempotency_key || null,
         mode: p.mode === "takeover" ? "takeover" : "weave",
       };
     } else if (row.control_type === "force" && row.status === "pending") {
-      // Director forced a bit to fire next turn. Last pending one wins.
       forced = {
         id: row.id, bit_id: p.bit_id ?? null,
         forced_turn: p.forced_turn ?? null, idem: row.idempotency_key || null,
       };
     } else if (row.control_type === "absurdity_ceiling" && live(row.status)) {
-      // Director-set session-level absurdity cap (Aug 6). Last live one wins,
-      // same pattern as sentBench. null = no Director override; the caller
-      // falls back to whatever default/archetype logic applies.
       absurdityCeiling = p.ceiling ?? null;
     } else if (row.control_type === "expertise_level" && live(row.status)) {
-      // Director-set topical-expertise level (Aug 6, one-time-per-call dial —
-      // "above average" default, dial turns it up or down). Last live one
-      // wins, same pattern as absurdityCeiling. null = no Director override;
-      // the caller falls back to the default level.
       expertiseLevel = p.level ?? null;
     }
   }
   return { deathBlow, armed, sentBench, forced, absurdityCeiling, expertiseLevel };
 }
-// DEATH BLOW (Trigger A) — insert one pending death_blow row. The partial unique
-// index keeps it to one per call_id; a duplicate (same call or same idem) comes
-// back 409, which we treat as already-armed (idempotent). rung_id is a column;
-// rung_name + final_line ride in payload.
 export async function setDeathBlow(callId, { rungId, rungName, finalLine, idem, director } = {}) {
   if (!isConfigured() || !callId) throw new Error("store not configured");
   const row = {
     call_id: callId,
     control_type: "death_blow",
-    rung_id: rungId ?? null, // rungs are gone; column kept nullable for the row
+    rung_id: rungId ?? null,
     director_user_id: director ?? null,
     idempotency_key: idem ?? null,
     status: "pending",
@@ -439,7 +245,7 @@ export async function setDeathBlow(callId, { rungId, rungName, finalLine, idem, 
     },
     body: JSON.stringify(row),
   });
-  if (r.status === 409) return true; // already armed for this call — idempotent
+  if (r.status === 409) return true;
   if (!r.ok) throw new Error(`death-blow set failed: ${r.status} ${await r.text()}`);
   return true;
 }
@@ -460,10 +266,6 @@ export async function clearDeathBlow(callId, status = "fired") {
   );
   return r.ok;
 }
-// ARM — one row per armed item. addArm inserts (idempotency_key collapses double
-// clicks via 409). stampArm writes armed_turn into payload on first sight (the
-// escalation clock). fireArm marks a row fired when its bit lands. Setlist max-3
-// is enforced in the arm endpoint (product rule), not here.
 export async function addArm(callId, { bitId, hookId, idem, director }) {
   if (!isConfigured() || !callId) throw new Error("store not configured");
   const row = {
@@ -483,19 +285,10 @@ export async function addArm(callId, { bitId, hookId, idem, director }) {
     },
     body: JSON.stringify(row),
   });
-  if (r.status === 409) return true; // duplicate idem — idempotent
+  if (r.status === 409) return true;
   if (!r.ok) throw new Error(`arm set failed: ${r.status} ${await r.text()}`);
   return true;
 }
-// UNARM / DISARM — free a setlist slot. getControls counts an arm as live only
-// while status is "pending" or "armed"; setting it to "disarmed" drops it from
-// the live count immediately, so a stuck Director (3 armed, none firing) can
-// re-choose. We PATCH the arm rows for this call+bit that are still live
-// (status in pending,armed) to status "disarmed". Idempotent: if no live arm
-// matches (already disarmed, already fired, or never armed) it's a no-op that
-// still returns ok — disarm is "make sure this bit is not armed", not "there
-// must have been an arm". Fired arms are left alone (they already happened); we
-// only clear ones that never landed, which is exactly the stuck case.
 export async function removeArm(callId, { bitId }) {
   if (!isConfigured() || !callId) throw new Error("store not configured");
   const q =
@@ -513,16 +306,9 @@ export async function removeArm(callId, { bitId }) {
     },
     body: JSON.stringify({ status: "disarmed" }),
   });
-  // 200/204 = patched (or matched zero rows, still ok — idempotent no-op).
   if (!r.ok) throw new Error(`unarm failed: ${r.status} ${await r.text()}`);
   return true;
 }
-// FORCE — Director forces ONE bit to fire on the next host turn, bypassing the
-// score/deploy-bar gate (the pick is stuck because it never clears the bar).
-// One row, control_type "force"; payload carries bit_id. getControls surfaces
-// it as `forced` while status is pending. completions.js reads it next turn,
-// fires the bit bypassing the bar (like the gag-open path), then calls
-// fireForce to mark it fired (one-shot — never re-fires). Mirrors setBench.
 export async function forceBit(callId, { bitId, idem, director }) {
   if (!isConfigured() || !callId) throw new Error("store not configured");
   const row = {
@@ -542,13 +328,10 @@ export async function forceBit(callId, { bitId, idem, director }) {
     },
     body: JSON.stringify(row),
   });
-  if (r.status === 409) return true; // duplicate idem — idempotent
+  if (r.status === 409) return true;
   if (!r.ok) throw new Error(`force set failed: ${r.status} ${await r.text()}`);
   return true;
 }
-// Mark a force row fired (one-shot). completions.js calls this the turn it
-// fires the forced bit, so it can't fire again. PATCHes the live force row for
-// this call+bit to status "fired".
 export async function fireForce(callId, { bitId }) {
   if (!isConfigured() || !callId) throw new Error("store not configured");
   const q =
@@ -569,10 +352,6 @@ export async function fireForce(callId, { bitId }) {
   if (!r.ok) throw new Error(`fireForce failed: ${r.status} ${await r.text()}`);
   return true;
 }
-// BENCH — Director sends in a specific bench character mid-call. One row,
-// control_type "bench"; payload carries the chosen bench_id. Mirrors addArm.
-// The next host turn reads it (via getControls.sentBench) and weaves that
-// character in, overriding the automatic arrival schedule.
 export async function setBench(callId, { benchId, idem, mode, director }) {
   if (!isConfigured() || !callId) throw new Error("store not configured");
   const row = {
@@ -581,10 +360,6 @@ export async function setBench(callId, { benchId, idem, mode, director }) {
     director_user_id: director ?? null,
     idempotency_key: idem ?? null,
     status: "pending",
-    // mode (Aug 8): "weave" (default, folds the line into the host's own
-    // turn) or "takeover" (the bench character's own voice speaks, host
-    // silent that turn). Stored in payload alongside bench_id — no schema
-    // change, same jsonb column every other control already uses.
     payload: { bench_id: benchId ?? null, sent_turn: null, mode: mode || "weave" },
   };
   const r = await fetch(`${URL}/rest/v1/${CONTROLS}`, {
@@ -596,20 +371,10 @@ export async function setBench(callId, { benchId, idem, mode, director }) {
     },
     body: JSON.stringify(row),
   });
-  if (r.status === 409) return true; // duplicate idem — idempotent
+  if (r.status === 409) return true;
   if (!r.ok) throw new Error(`bench set failed: ${r.status} ${await r.text()}`);
   return true;
 }
-// CLEAR BENCH (Aug 8, found live — a real gap, not defensive extra). Same
-// pattern as clearDeathBlow: PATCH the row's status once it's actually
-// been consumed. Before this, nothing anywhere ever marked a sentBench row
-// non-live again — weave-in mostly got away with it because the
-// multi-turn arrival sequence and benchLog's 3-slot ceiling happened to
-// limit how often it could re-fire, but a takeover has no such natural
-// limit and would silently re-trigger every turn until someone noticed.
-// Called immediately once a takeover's line is generated (fire-and-forget
-// is NOT safe here — this has to land before the next turn reads
-// getControls again, so it's awaited, not waitUntil'd).
 export async function clearBench(callId, status = "fired") {
   if (!isConfigured() || !callId) return false;
   const r = await fetch(
@@ -653,13 +418,6 @@ export async function fireArm(id) {
   });
   return r.ok;
 }
-// APPEND a per-turn breadcrumb to gear_events — the history that powers the
-// gear-trace graph. Append-only (one row per turn), best-effort, and only
-// ever called via waitUntil() so it never touches the hot path. Failures are
-// swallowed: telemetry must never break a call.
-// suspicion/slip REMOVED from the payload (Aug 5, gears removal) — the
-// gear_events TABLE/columns are left as-is (harmless unused legacy), the
-// call site simply no longer sends them.
 export async function appendGearEvent(
   callId,
   { turn, pressure, engagement, accusation, utterance }
@@ -686,9 +444,6 @@ export async function appendGearEvent(
   });
   return r.ok;
 }
-// APPEND a per-turn FIT read to bit_events — the top-ranked bit and its score
-// breakdown, plus whether it fired. This is how fit becomes measurable: one row
-// per turn, off the hot path, best-effort.
 export async function appendBitEvent(
   callId,
   { turn, bit_id, name, score, fit, gear_bias, recency, fired, why }
@@ -710,35 +465,10 @@ export async function appendBitEvent(
   });
   return r.ok;
 }
-// TRANSCRIPT — upsert the full conversation-so-far every turn, keyed by
-// call_id (the LiveKit room name). Last write wins, so the row always holds
-// the complete transcript up to the latest turn — including when the call
-// ends or crashes, with no end-of-call event needed. The system prompt is
-// EXCLUDED (it's the ~4,700-token prefix resent every turn; storing it per
-// call would bloat every row with a copy of the same prompt — the prefix
-// already lives in call_prefix). Best-effort, only ever called via
-// waitUntil(): telemetry must never break a call.
-// Table (run once):
-//   create table if not exists call_transcripts (
-//     call_id    text primary key,
-//     slug       text,
-//     messages   jsonb,
-//     updated_at timestamptz default now()
-//   );
 export async function saveTranscript(callId, slug, messages) {
   if (!isConfigured() || !callId || !Array.isArray(messages)) return false;
   const convo = messages.filter((m) => m && m.role !== "system");
   if (!convo.length) return false;
-  // CLOBBER GUARD: saveTranscript upserts the whole incoming array by call_id
-  // (merge-duplicates), so the LAST write wins. A bare/short turn — e.g. a
-  // silence poke whose array is truncated, or any regeneration carrying fewer
-  // messages — would overwrite a longer, good transcript and make it vanish.
-  // Before writing, read the stored row's length and SKIP the write only when
-  // the incoming array is strictly shorter. Growing/equal always writes.
-  // Defensive: if the read fails or returns nothing, fall through and write —
-  // the guard only suppresses a write it can POSITIVELY confirm would shrink
-  // the record; it never blocks a legitimate save. Best-effort (called under
-  // waitUntil), so the read-then-write race is harmless.
   let storedMessages = [];
   try {
     const g = await fetch(
@@ -754,25 +484,11 @@ export async function saveTranscript(callId, slug, messages) {
         Array.isArray(rows) && rows[0] && Array.isArray(rows[0].messages)
           ? rows[0].messages
           : [];
-      if (storedMessages.length > convo.length) return true; // would shrink — skip, not an error
+      if (storedMessages.length > convo.length) return true;
     }
   } catch {
     /* read failed — fall through and write; storedMessages stays [] */
   }
-  // PER-MESSAGE TIMESTAMPS (Aug 14) — real answer to "when did this line
-  // actually happen," not just updated_at (which only ever reflects the
-  // LAST turn's save time for the WHOLE array — useless for reconstructing
-  // a call's real timeline, which every debugging session tonight had to
-  // do by hand cross-referencing the Vercel log instead). Reuses the SAME
-  // read this function already does for the clobber guard above — no
-  // second round-trip. Messages already saved keep their original
-  // timestamp (positional match against storedMessages, guarded by a role
-  // check so a shifted/mismatched array degrades to "treat as new" instead
-  // of silently reusing the wrong timestamp); only genuinely NEW messages
-  // (beyond what was stored, or a role mismatch) get stamped with now.
-  // This is "when the message first reached PE," not "when it was
-  // literally spoken" — a small, real propagation lag, but monotonic and
-  // far better than nothing.
   const nowIso = new Date().toISOString();
   const stamped = convo.map((m, i) => {
     const prior = storedMessages[i];
@@ -798,26 +514,6 @@ export async function saveTranscript(callId, slug, messages) {
   });
   return r.ok;
 }
-// INSERT CALL OUTCOME — Barbara's post-call follow-up ladder keys off a `calls`
-// row's call_outcome. Written on a silence/bail/hangup close by the agent, via
-// POST /api/calls?action=close (the agent has no DB access; PE writes the row).
-// CORRECTED (2026-09-20, Data) — the line below used to claim
-// target_id is a "NOT NULL FK" at the schema level; that was never
-// actually verified against the real DB constraint, only inferred from
-// this function's own app-layer guard (calls.js's 400 check before
-// insert). Data confirmed the real schema: calls.target_id is
-// NULLABLE at the DB level. The requirement enforced here is
-// APPLICATION-layer only (this function + calls.js's 400), not a DB
-// constraint — worth knowing for anyone (e.g. Email/PostCallEngine)
-// inserting into `calls` directly rather than through this function,
-// since the DB will happily accept a null-target row; it just comes
-// out unroutable downstream (nothing to resolve owner/cadence from).
-// id auto-defaults; every other column is nullable. call_outcome is plain text
-// with NO check constraint, so any value inserts (canonical set:
-// completed|dropped|no_show|hung_up). We write ONLY the fields provided — a
-// minimal write is just { target_id, call_outcome }. targetId is REQUIRED by
-// THIS function (app-layer only, not a DB constraint) — omitting it here
-// throws before any insert is attempted. Mirrors the addArm POST shape.
 export async function insertCallOutcome({
   targetId,
   callOutcome,
@@ -835,25 +531,8 @@ export async function insertCallOutcome({
 }) {
   if (!isConfigured()) throw new Error("store not configured");
   if (!targetId) throw new Error("target_id required");
-  // Build the row from ONLY the provided fields — omit undefined so we never
-  // send a null that overwrites a column default (e.g. next_steps default []).
   const row = { target_id: targetId };
   if (callOutcome !== undefined) row.call_outcome = callOutcome;
-  // vapi_call_id (2026-09-03, corrected per Data) — CONFIRMED this is the
-  // ONLY column on `calls` for the external/telephony call reference; there
-  // is no separate call_id column on this table (that gap only exists on
-  // engagement_events/bit_deployments, which confusingly name the SAME
-  // kind of value `call_id` — a real cross-table naming inconsistency Data
-  // flagged, not a missing column here). An earlier version of this file
-  // wrongly assumed calls needed the same fix call_transcripts got on
-  // Aug 8 (a dedicated call_id field, because vapi_call_id was found empty
-  // there) — that precedent was real but table-specific; it doesn't carry
-  // over to this table, and adding a call_id column write here would have
-  // silently hit a column that doesn't exist. Caller (calls.js) is
-  // responsible for passing the RELIABLE value into vapiCallId — the
-  // LiveKit room name, not necessarily whatever legacy vapi_call_id field
-  // the agent might also send — this function just persists whatever it's
-  // given under the correct real column name.
   if (vapiCallId !== undefined) row.vapi_call_id = vapiCallId;
   if (startedAt !== undefined) row.started_at = startedAt;
   if (endedAt !== undefined) row.ended_at = endedAt;
@@ -862,16 +541,11 @@ export async function insertCallOutcome({
   if (hostPosture !== undefined) row.host_posture = hostPosture;
   if (transcript !== undefined) row.transcript = transcript;
   if (status !== undefined) row.status = status;
-  // RECORDING FIELDS (2026-09-03, Recording chat) — genuine gap fixed:
-  // calls.js was already passing these three through, but this function
-  // never destructured them, so they were silently dropped before ever
-  // reaching `row` — never persisted, no error, no sign anything was
-  // wrong. Column names match the wire-level field names Recording's
-  // agent sends (recording_url, recording_duration_sec) plus the
-  // derived recording_status calls.js computes.
-  if (recordingUrl !== undefined) row.recording_url = recordingUrl;
+  // recording_url and recording_status are NOT columns on `calls` (confirmed
+  // against Data's information_schema paste) — removed 2026-09-22 after
+  // Recording found every web close was 500ing because of this.
+  // recording_duration_sec DOES exist and stays.
   if (recordingDurationSeconds !== undefined) row.recording_duration_sec = recordingDurationSeconds;
-  if (recordingStatus !== undefined) row.recording_status = recordingStatus;
   const r = await fetch(`${URL}/rest/v1/${CALLS}`, {
     cache: "no-store",
     method: "POST",
@@ -885,25 +559,6 @@ export async function insertCallOutcome({
   return true;
 }
 
-// UPDATE CALL DISPOSITION (2026-09-20, Email/Voice contract) — a SEPARATE
-// write from insertCallOutcome above, on purpose: disposition is computed
-// asynchronously, after the close row already exists (a classifier call
-// against the transcript, fired-and-forgotten from calls.js so it never
-// delays the agent's close response — see calls.js's own comment at the
-// call site). This is a PATCH by vapi_call_id, not an insert — the row
-// from insertCallOutcome must already exist, or this matches nothing and
-// silently no-ops (treated as "nothing to update yet", not an error; the
-// classifier firing before the outcome insert lands is not expected given
-// call order in calls.js, but this function makes no assumption about it
-// either way).
-//
-// Columns confirmed by Data (2026-09-20): calls.disposition (text,
-// nullable, no CHECK — friendly|neutral|hostile|threatening|unknown) and
-// calls.threat_target (text, nullable, no CHECK — host|user|other|null).
-// threatTarget is passed through as-is (including null) whenever the
-// caller provides it, so a disposition that isn't "threatening" can
-// explicitly clear a stale threat_target rather than leaving one from an
-// earlier write; omit it entirely to leave the column untouched.
 export async function updateCallDisposition(vapiCallId, { disposition, threatTarget } = {}) {
   if (!isConfigured() || !vapiCallId) return false;
   const row = {};
@@ -926,17 +581,6 @@ export async function updateCallDisposition(vapiCallId, { disposition, threatTar
   return true;
 }
 
-// CANCEL a pending force — the Director's in-flight un-fire. Same shape as
-// fireForce but the terminal status is "cancelled" rather than "fired", so the
-// two are distinguishable in the control history (did it land, or did the
-// Director pull it?). getControls only surfaces PENDING force rows, so once
-// this lands the consumer can never pick the bit up.
-// Idempotent: if no pending force matches (already fired, already cancelled,
-// or never forced) it PATCHes zero rows and still returns ok — cancel means
-// "make sure this is not in flight", not "there must have been one".
-// NOTE ON THE RACE: if the bit fires in the same instant, fireForce may win and
-// set "fired" first; this then matches nothing and no-ops. That is correct —
-// the endpoint reports already-fired and the UI jumps to the fired state.
 export async function cancelForce(callId, { bitId } = {}) {
   if (!isConfigured() || !callId) throw new Error("store not configured");
   let q =
@@ -944,8 +588,6 @@ export async function cancelForce(callId, { bitId } = {}) {
     `?call_id=eq.${encodeURIComponent(callId)}` +
     `&control_type=eq.force` +
     `&status=eq.pending`;
-  // bitId optional: omit to cancel whatever is in flight for this call (the
-  // one-in-flight model means there is at most one).
   if (bitId) q += `&payload->>bit_id=eq.${encodeURIComponent(bitId)}`;
   const r = await fetch(q, {
     cache: "no-store",
@@ -960,41 +602,9 @@ export async function cancelForce(callId, { bitId } = {}) {
   return true;
 }
 
-// RECORDINGS UPSERT (2026-09-03, Data's ruling) — REPLACES the earlier
-// updateCallRecording approach entirely. Phone jobs never hit
-// ?action=close on this file at all, so matching against a calls row
-// (by any column) could never work for them — recordings now live in
-// their own table, `recordings`, uuid id PK + UNIQUE slug, upserted by
-// slug. This table is the sole source of truth for recording status;
-// it does NOT mirror into `calls` (calls.recording_* stays exactly as
-// shipped, web-close-time only, untouched by this function).
-//
-// Genuine upsert (POST + on_conflict=slug + resolution=merge-duplicates),
-// not an UPDATE — the row may not exist yet (first time this slug's
-// recording resolves), and upsert creates it in that case rather than
-// silently no-op'ing. That's also why this needs no 202/retry signal
-// the way the old by-call_id UPDATE did: an upsert can't "match zero
-// rows", it either updates the existing row or creates it — the race
-// that used to require a retry is handled by the upsert itself.
-//
-// channel is deterministically inferred from the slug prefix (ph- =
-// phone, else web) every time, including on an update to an existing
-// row — harmless since the same slug always yields the same channel,
-// never actually changes call to call.
-//
-// userId (2026-09-21, owner-at-write-time stamping, Voice's option c) —
-// optional, only written when the caller resolved one. Only
-// livekit-webhook.js's phone/house-mode branches pass this today; web
-// calls resolveRecordingOwner() to null on purpose (held, see that
-// file's header), so web rows keep user_id null until that's settled.
-// "only write when provided" pattern, same as every other field here.
 export async function upsertRecording({ slug, recordingUrl, durationSec, status, userId }) {
   if (!isConfigured()) throw new Error("store not configured");
   if (!slug) throw new Error("slug required");
-  // FIXED (2026-09-09, Recording — confirmed via real production rows:
-  // every inbound call was stamped channel=web). This only ever checked
-  // ph-, never in- — every inbound slug fell through to the else branch
-  // by construction. Both phone-call prefixes now recognized.
   const channel = /^(ph-|in-)/.test(String(slug)) ? "phone" : "web";
   const row = { slug, channel };
   if (recordingUrl !== undefined) row.recording_url = recordingUrl;
@@ -1016,12 +626,6 @@ export async function upsertRecording({ slug, recordingUrl, durationSec, status,
   return Array.isArray(rows) ? rows[0] || null : null;
 }
 
-// CALLBACK JOB OWNER LOOKUP (2026-09-21, recording ownership stamping) —
-// callback_jobs.user_id is confirmed to exist as a column (cancel.js
-// already queries callback_jobs?user_id=eq.<userId>). This is the read
-// direction: given a job id, return its owner, or null if the job
-// doesn't exist or has no owner. Never throws — a lookup failure just
-// means no owner gets stamped on the recording, not a broken webhook.
 export async function getCallbackJobOwner(jobId) {
   if (!isConfigured() || !jobId) return null;
   const r = await fetch(
@@ -1036,16 +640,6 @@ export async function getCallbackJobOwner(jobId) {
   return Array.isArray(rows) && rows[0] && rows[0].user_id ? rows[0].user_id : null;
 }
 
-// HOUSE CALL MATCHED-JOB LOOKUP (2026-09-21, Voice's option c) — a
-// house-mode call (in-<house_call_id> slug) may or may not be matched to
-// a specific callback_jobs row (house_calls.matched_job_id — column name
-// as given by Andrew/Voice, NOT independently verified against Data's
-// schema by PE). A house call with no matched job has no provable
-// owner — returning null there is the correct admin-only outcome, not a
-// failure. ⚠ Unverified: whether matched_job_id is really the column
-// name and whether house_calls is keyed by id the way ph- jobs are
-// keyed by callback_jobs.id — worth a quick Data confirmation before
-// this is trusted for anything beyond "best effort."
 export async function getHouseCallMatchedJobId(houseCallId) {
   if (!isConfigured() || !houseCallId) return null;
   const r = await fetch(
@@ -1059,4 +653,3 @@ export async function getHouseCallMatchedJobId(houseCallId) {
   const rows = await r.json().catch(() => null);
   return Array.isArray(rows) && rows[0] ? rows[0].matched_job_id || null : null;
 }
-
