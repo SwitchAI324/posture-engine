@@ -4067,7 +4067,25 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       body?.metadata?.opener_done ?? body?.extra_body?.metadata?.opener_done ?? null;
     const isSilenceBeatRequest =
       (body?.metadata?.silence_beat ?? body?.extra_body?.metadata?.silence_beat ?? null) != null;
+    // CHANNEL GATE (2026-09-22, PE — Recording's second confirmed bug on
+    // slug=test-andy: the block-removal fix for RECORDING OBJECTION was
+    // channel-scoped, but this notice injection and its backstop below
+    // were not, and the backstop fired on a video call anyway
+    // (backstopByTime=true, ~21s in, CHANNEL confirmed "video call" in
+    // the compiled prefix). Same root cause hydrate.js already documents
+    // for the objection directive: the spoken recording-notice beat is
+    // phone-only by design (Andrew, 2026-09-10 "2 turns or 15 seconds"
+    // framing was written for phone calls) — video calls were just never
+    // excluded in code. Read off the same compiled-prefix CHANNEL line
+    // hydrate.js writes (formatChannelSignal), same pattern already used
+    // for isColdOpenCall a few lines below — no new plumbing.
+    const isPhoneCall = !!(
+      stored &&
+      stored.prefix &&
+      stored.prefix.includes("this is a real phone call")
+    );
     if (
+      isPhoneCall &&
       !(stored && stored.recordingNoticeGiven) &&
       !isSilenceBeatRequest
     ) {
@@ -4134,8 +4152,16 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     const backstopByTurn = effectiveHostTurnCount >= RECORDING_BACKSTOP_TURN_THRESHOLD;
     const backstopByTime =
       elapsedSinceFirstSeenMs != null && elapsedSinceFirstSeenMs >= RECORDING_BACKSTOP_MS;
+    // isPhoneCall now gates this too — see the channel-gate comment above
+    // the injection block. Previously this ran on turn/time alone with
+    // no channel check at all, so a video call's elapsed-time clock
+    // could still trip it even though the notice itself never fires on
+    // video (isColdOpenCall was already logged here for visibility but
+    // never actually used as a condition — same gap, different field).
     const recordingBackstopWillFire =
-      (backstopByTurn || backstopByTime) && !(stored && stored.recordingNoticeGiven);
+      isPhoneCall &&
+      (backstopByTurn || backstopByTime) &&
+      !(stored && stored.recordingNoticeGiven);
     // DIAGNOSTIC LOG (2026-09-10, Recording's explicit request, step 4:
     // "add an explicit log line every time the backstop evaluates —
     // whether it fired or not, and why not. Right now the only evidence
@@ -4145,6 +4171,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     console.log(
       "RECORDING-BACKSTOP-EVAL callId=" + JSON.stringify(callId) +
       " willFire=" + recordingBackstopWillFire +
+      " isPhoneCall=" + isPhoneCall +
       " effectiveHostTurnCount=" + effectiveHostTurnCount +
       " backstopByTurn=" + backstopByTurn +
       " elapsedSinceFirstSeenMs=" + elapsedSinceFirstSeenMs +
