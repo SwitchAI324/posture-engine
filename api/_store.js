@@ -44,19 +44,43 @@ export async function getCallBySlug(slug) {
   if (!slug) return null;
   return getCall("slug:" + slug);
 }
+const CALL_PREFIX_COLUMNS = "prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,opener_overlay_continuing,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used,pending_bench_awareness,latest_call_id,active_generation,bench_present,first_seen_at,caller_presenting,pitch_summary,host_name,recording_notice_given,host_turn_count,history_rev_seen,opener_served";
 export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
-  const url =
-    `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-   `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,opener_overlay_continuing,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used,pending_bench_awareness,latest_call_id,active_generation,bench_present,first_seen_at,caller_presenting,pitch_summary,host_name,recording_notice_given,host_turn_count`;
-  const r = await fetch(url, {
+  const baseUrl = `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}`;
+  let r = await fetch(baseUrl + `&select=${CALL_PREFIX_COLUMNS}`, {
     cache: "no-store",
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
   });
   if (!r.ok) {
     const errBody = await r.text().catch(() => "");
     console.log("getCall FAILED status=" + r.status + " callId=" + callId + " body=" + errBody.slice(0, 300));
-    return null;
+    // SCHEMA-MISMATCH FALLBACK (2026-09-23) — built after a real incident: a
+    // pending migration (opener_overlay_continuing) hadn't been run yet when
+    // a test call went live, and PostgREST's "column does not exist" (42703)
+    // fails the ENTIRE select — not just the missing field — so getCall()
+    // returned null for EVERY turn of that call, silently starving it of its
+    // whole host prompt (CORE/OPENER/BUSINESS all empty). That's a much
+    // worse failure than "one new field is temporarily missing." If the
+    // failure looks like a missing-column error specifically, retry once
+    // with select=* so a forgotten migration degrades to "new fields default
+    // via ??" instead of "the whole call runs blind." Any other failure
+    // (auth, network, a genuinely bad callId) is NOT retried — this only
+    // catches the specific 42703 schema-mismatch shape.
+    if (r.status === 400 && /42703/.test(errBody)) {
+      console.log("getCall SCHEMA MISMATCH — retrying with select=* (a migration is likely pending) callId=" + callId);
+      r = await fetch(baseUrl + `&select=*`, {
+        cache: "no-store",
+        headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
+      });
+      if (!r.ok) {
+        const retryErrBody = await r.text().catch(() => "");
+        console.log("getCall FALLBACK ALSO FAILED status=" + r.status + " callId=" + callId + " body=" + retryErrBody.slice(0, 300));
+        return null;
+      }
+    } else {
+      return null;
+    }
   }
   const rows = await r.json();
   if (!rows || !rows.length) return null;
@@ -115,11 +139,23 @@ export async function getCall(callId) {
     hostName: rows[0].host_name || null,
     recordingNoticeGiven: rows[0].recording_notice_given ?? false,
     hostTurnCount: rows[0].host_turn_count ?? 0,
+    // HISTORY-REV / OPENER-SERVED (2026-09-23, Voice's fix for the shared-
+    // speculative-generation-state bug) — see completions.js's own comment
+    // at the overlay-selection site for the full rationale. historyRevSeen
+    // is the highest metadata.history_rev this call has ever reported;
+    // openerServed is PE's OWN durable record that the opener has genuinely
+    // been served at least once, set only from evidence PE trusts (a
+    // non-stale request whose messages array actually shows an assistant
+    // turn) — never from a single request's shape alone, so a later request
+    // with a corrupted/reset messages array can't un-teach PE what it
+    // already confirmed.
+    historyRevSeen: rows[0].history_rev_seen ?? null,
+    openerServed: rows[0].opener_served ?? false,
   };
 }
 export async function setCall(
   callId,
-  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, openerOverlayContinuing, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed, pendingBenchAwareness, latestCallId, activeGeneration, benchPresent, firstSeenAt, callerPresenting, pitchSummary, hostName, recordingNoticeGiven, hostTurnCount }
+  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, openerOverlayContinuing, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed, pendingBenchAwareness, latestCallId, activeGeneration, benchPresent, firstSeenAt, callerPresenting, pitchSummary, hostName, recordingNoticeGiven, hostTurnCount, historyRevSeen, openerServed }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -163,6 +199,8 @@ export async function setCall(
   if (hostName !== undefined) row.host_name = hostName;
   if (recordingNoticeGiven !== undefined) row.recording_notice_given = recordingNoticeGiven;
   if (hostTurnCount !== undefined) row.host_turn_count = hostTurnCount;
+  if (historyRevSeen !== undefined) row.history_rev_seen = historyRevSeen;
+  if (openerServed !== undefined) row.opener_served = openerServed;
   if (callerRedirected !== undefined) row.caller_redirected = callerRedirected;
   if (callerCrude !== undefined) row.caller_crude = callerCrude;
   if (crudeImpersonalCount !== undefined) row.crude_impersonal_count = crudeImpersonalCount;
