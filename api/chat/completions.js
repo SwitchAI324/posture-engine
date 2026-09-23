@@ -141,152 +141,17 @@ function hostNameFromBody(body) {
   );
 }
 
-// Host's timezone, for the fast-join opener's hour-of-day read. The spammer's
-// browser can't tell us the HOST's local hour, so the proxy derives it here.
-// The SV user picks their timezone at onboarding; it rides the booking token
-// into the call as variableValues.sv_host_tz. Env HOST_TZ is the fallback, and
-// US Eastern is the final default if neither is set.
-const HOST_TZ_DEFAULT = process.env.HOST_TZ || "America/New_York";
-function hostTzFromBody(body) {
-  if (!body) return HOST_TZ_DEFAULT;
-  const vv =
-    body.call?.assistantOverrides?.variableValues ||
-    body.assistantOverrides?.variableValues ||
-    {};
-  const tz =
-    body.call?.metadata?.host_tz ||
-    body.metadata?.host_tz ||
-    vv.sv_host_tz ||
-    body.host_tz ||
-    HOST_TZ_DEFAULT;
-  return tz || HOST_TZ_DEFAULT;
-}
-function hostLocalHour(iso, tz) {
-  if (!iso) return null;
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return null;
-  try {
-    const h = new Intl.DateTimeFormat("en-US", {
-      hour: "numeric", hour12: false, timeZone: tz || HOST_TZ_DEFAULT,
-    }).format(new Date(t));
-    const n = parseInt(h, 10);
-    return Number.isFinite(n) ? n % 24 : null;
-  } catch {
-    // Bad/unknown tz string -> retry with the safe default rather than going dark.
-    try {
-      const h2 = new Intl.DateTimeFormat("en-US", {
-        hour: "numeric", hour12: false, timeZone: HOST_TZ_DEFAULT,
-      }).format(new Date(t));
-      const n2 = parseInt(h2, 10);
-      return Number.isFinite(n2) ? n2 % 24 : null;
-    } catch {
-      return null;
-    }
-  }
-}
-
-// The fast-join opener instruction. Only built on the host's FIRST line of a
-// fast-join call. Branches on the host-local hour (so a 1 AM booking never gets
-// "great afternoon"), and only does the "saw you in the waiting room" callback
-// when they actually sat there (waited seconds past a real threshold). Returns
-// "" when this isn't a fast-join opener moment, so normal calls are untouched.
-function fastJoinOpener(body, turn) {
-  if (turn > 0) return ""; // opener is the host's first line only
-  const vv =
-    body?.call?.assistantOverrides?.variableValues ||
-    body?.assistantOverrides?.variableValues ||
-    {};
-  const isFast = /^(1|true|yes|on)$/i.test(String(vv.sv_fast_join || ""));
-  if (!isFast) return "";
-
-  const hour = hostLocalHour(vv.sv_booked_slot, hostTzFromBody(body));
-  const waited = parseInt(vv.sv_waited_secs || "0", 10) || 0;
-  const name = hostNameFromBody(body);
-
-  // Time-of-day flavor, in the host's own frame.
-  let timeCue;
-  if (hour == null) {
-    timeCue = "Greet them warmly without naming a time of day.";
-  } else if (hour >= 8 && hour < 18) {
-    timeCue =
-      "It's the middle of your working day — sound like a busy exec who " +
-      "happened to have a window open: \"perfect, I had a gap\".";
-  } else if (hour >= 18 && hour < 22) {
-    timeCue =
-      "It's your evening — sound like someone wrapping up the day who's " +
-      "happy to squeeze this in.";
-  } else {
-    timeCue =
-      "It's late night / very early morning in your time zone — lean into " +
-      "that as a small joke (\"I was up anyway\", or \"caught me burning the " +
-      "midnight oil\"). NEVER greet them with \"good afternoon\" or similar.";
-  }
-
-  const waitCue =
-    waited >= 45
-      ? "They were already sitting in the waiting room when you joined — open " +
-        "by acknowledging it warmly: \"saw you were already in there waiting — " +
-        "appreciate you hopping on at short notice.\""
-      : "Open by appreciating that they jumped on at such short notice.";
-
-  // ===== MESSY OPEN (Host Canon §7) — self-flub, TEXT ONLY ==================
-  // Gated by FLUB_OPEN (env "1" to enable). When on, pick a size tier via the
-  // FLUB_MIX knob and tell the host to ARRIVE MID-MESS on this first line, then
-  // recover into warmth. The Canon's §7 in the master prompt defines what each
-  // tier IS and how the recovery reads; here we only (a) switch it on and (b)
-  // pass the chosen tier label so the master-prompt §7 text knows the size.
-  // This is the SELF-FLUB (verbal) messy open — no audio clip, works on TTS now.
-  var flubOpen = "";
-  if (/^(1|true|yes|on)$/i.test(String(process.env.FLUB_OPEN || ""))) {
-    var tier = pickFlubTier(); // "medium" | "bigger" | "big"
-    flubOpen =
-      " MESSY OPEN — instead of a clean composed greeting, ARRIVE MID-MESS on " +
-      "this first line: you're caught already mid-fumble (talking to someone " +
-      "off-mic, wrangling a thing that just went wrong, half a sentence already " +
-      "in motion) and only now landing on the caller. Size of the mess this " +
-      "call: [" + tier + "] — follow the §7 tier guidance for that size. Let it " +
-      "resolve into warmth FAST — the mess is the entrance, not the whole line; " +
-      "you recover and greet them within a breath. Rotate hard; never the same " +
-      "mess twice. It stays self-directed chaos, never aimed at the caller.";
-  }
-
-  return (
-    "\n\nOPENER — this is your FIRST line of the call, and it's a fast-turnaround " +
-    "booking they grabbed just now. You are " + name + ", an eager, slightly " +
-    "self-important host who likes to keep the calendar full. " + timeCue + " " +
-    waitCue + flubOpen + " Keep it to one or two warm sentences, fully in " +
-    "character, then hand it to them. Do not mention scheduling software, slots, " +
-    "or the word \"fast-join\"."
-  );
-}
+// fastJoinOpener() + hostTzFromBody()/hostLocalHour() + FLUB_OPEN/FLUB_MIX/
+// pickFlubTier() REMOVED (2026-09-23) — a Vapi-era fast-turnaround-booking
+// opener path, gated on variableValues.sv_fast_join, that carried its own
+// independent time-of-day language and its own independent "messy open"
+// mechanic (separate from Canon's own opener content — a real stacking-
+// solutions source). Confirmed dead by all four relevant chats (Email,
+// Booking, Data, Voice: nothing sets or reads sv_fast_join anywhere).
+// Full original code archived: memory /areas/vapi-expunge.md.
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
-
-// ===== FLUB_MIX KNOB (Host Canon §7 messy-open size ratio) =================
-// The messy-open has three size tiers: medium / bigger / big. Andrew tunes the
-// mix by flipping ONE env var — no prompt or code edit. FLUB_MIX is three
-// comma-separated weights [medium,bigger,big]; default leans big per the Canon.
-// pickFlubTier() does a weighted random per call and returns the tier label,
-// which the opener passes to the model so the Canon's tier text picks the size.
-const FLUB_MIX = () => {
-  const raw = String(process.env.FLUB_MIX || "20,30,50");
-  const parts = raw.split(",").map((n) => parseInt(n.trim(), 10));
-  const [m, b, big] = [parts[0], parts[1], parts[2]].map((n) =>
-    Number.isFinite(n) && n >= 0 ? n : 0
-  );
-  const total = m + b + big;
-  return total > 0 ? { medium: m, bigger: b, big: big } : { medium: 20, bigger: 30, big: 50 };
-};
-function pickFlubTier() {
-  const w = FLUB_MIX();
-  const total = w.medium + w.bigger + w.big;
-  let r = Math.random() * total;
-  if ((r -= w.medium) < 0) return "medium";
-  if ((r -= w.bigger) < 0) return "bigger";
-  return "big";
-}
-
 
 // Set ANTHROPIC_MODEL in Vercel to whatever gives the best latency/wit
 // tradeoff for the live voice. Haiku is the low-latency default for voice;
@@ -1520,11 +1385,8 @@ function blendRead(read) {
   // that persists the blended state (no extra write). Fail-safe: if no phase was
   // read this turn, we don't latch (stays opener until a real non-opening read).
   if (out.phase && out.phase !== "opening") out.businessLatched = true;
-  // suspicion AND pressure/engagement merging REMOVED (Aug 5 + Aug 26,
-  // gears removal, completed) — neither axis exists anymore; CORE's
-  // permanent anti-break framework carries that job instead of a
-  // dedicated per-turn directive. The reader is no longer even asked
-  // for these (see readCall's prompt).
+  // suspicion/pressure/engagement merging REMOVED — gears removal
+  // (memory /areas/vapi-expunge.md). CORE's anti-break framework covers it.
   return out;
 }
 
@@ -1980,6 +1842,7 @@ export default async function handler(req) {
                 bySlug.prefix = refreshed.prefix;
                 bySlug.hostName = freshHostName;
                 bySlug.openerOverlay = refreshed.openerOverlay;
+                bySlug.openerOverlayContinuing = refreshed.openerOverlayContinuing;
                 bySlug.businessOverlay = refreshed.businessOverlay;
                 console.log("HOST-NAME-DRIFT resolved slug=" + JSON.stringify(slug) + " newHostName=" + freshHostName);
               }
@@ -2022,6 +1885,11 @@ export default async function handler(req) {
               // no cache at all (~prefix alone, and a different block 0 so the
               // cache never hit). Prefer live state, else the slug row.
               openerOverlay: stored.openerOverlay || bySlug.openerOverlay,
+              // TURN-AWARE OPENER SPLIT (2026-09-23) — same carry-gap fix
+              // as openerOverlay/businessOverlay right above (and the
+              // matching write-side fix a few lines down): this field hits
+              // the exact same slug-row-only trap if not carried here too.
+              openerOverlayContinuing: stored.openerOverlayContinuing || bySlug.openerOverlayContinuing,
               businessOverlay: stored.businessOverlay || bySlug.businessOverlay,
               archetype: stored.archetype || bySlug.archetype }
           : bySlug;
@@ -2061,6 +1929,7 @@ export default async function handler(req) {
               prefix: bySlug.prefix,
               postureLine: stored.postureLine || bySlug.postureLine,
               openerOverlay: bySlug.openerOverlay,
+              openerOverlayContinuing: bySlug.openerOverlayContinuing,
               businessOverlay: bySlug.businessOverlay,
             }).catch(() => {})
           );
@@ -2300,50 +2169,57 @@ export default async function handler(req) {
       " silentTooLong=" + silentTooLong +
       " useBusiness=" + useBusiness
     );
-    // OPENER-SILENCE-DIAG (2026-09-22, PE — Recording's report of
-    // silentTooLong firing at turnNow=1 well after the caller had
-    // genuinely already replied). Two different mechanisms could produce
-    // that symptom and the logs above can't tell them apart:
-    //   (a) GENERATION RACE — this is a genuinely stale/superseded
-    //       request (activeGeneration mechanism, see myGeneration/
-    //       SUPERSEDED below) that's still executing minutes after a
-    //       newer request already took over the call, so its OWN
-    //       messages snapshot is honestly out of date.
-    //   (b) STALE PAYLOAD — this request is NOT stale by generation, but
-    //       whatever sent it (the agent, on a silence-nudge or retry)
-    //       handed over a `messages` array that itself doesn't yet
-    //       contain the caller's real reply, even though wall-clock time
-    //       has moved on.
-    // Logging the raw message count, the actual last-message content
-    // (same truncated-probe pattern as RX CONTENT PROBE above), and
-    // myGeneration/current activeGeneration side by side at the exact
-    // moment silentTooLong is decided — not just before the Anthropic
-    // call, where a later overwrite could already have papered over
-    // which one this really was — should let the next repro of this bug
-    // point at (a) or (b) instead of guessing. NOT a behavior change:
-    // this never touches silentTooLong or useBusiness, evidence-only.
-    if (OPENER_SILENCE_RESOLVE) {
-      try {
-        const lastForDiag = messages && messages.length ? messages[messages.length - 1] : null;
-        const lastContentForDiag =
-          lastForDiag && typeof lastForDiag.content === "string"
-            ? lastForDiag.content.slice(0, 200)
-            : JSON.stringify(lastForDiag && lastForDiag.content).slice(0, 200);
-        const genCheckForDiag = await getCall(callId).catch(() => null);
-        console.log(
-          "OPENER-SILENCE-DIAG callId=" + JSON.stringify(callId) +
-          " rawMessagesLength=" + (messages ? messages.length : null) +
-          " lastMessageRole=" + (lastForDiag ? lastForDiag.role : null) +
-          " lastMessageContent=" + JSON.stringify(lastContentForDiag) +
-          " myGeneration=" + myGeneration +
-          " currentActiveGeneration=" + (genCheckForDiag ? genCheckForDiag.activeGeneration : null) +
-          " alreadySuperseded=" + !!(genCheckForDiag && genCheckForDiag.activeGeneration && genCheckForDiag.activeGeneration !== myGeneration)
-        );
-      } catch (e) {
-        console.log("OPENER-SILENCE-DIAG probe failed (non-fatal): " + (e && e.message ? e.message : e));
-      }
-    }
-    const overlay = useBusiness ? stored.businessOverlay : stored.openerOverlay;
+    // OPENER-SILENCE-DIAG (2026-09-22) REMOVED (2026-09-23, cleanup pass) —
+    // built to distinguish generation-race vs. stale-payload as the cause of
+    // a silentTooLong misfire; the actual turn-2+ re-open bug it was chasing
+    // was root-caused separately (a NEVER-RE-OPEN turn-counting bug), so
+    // this diagnostic never got its answer and had no remaining purpose.
+    // Full detail: memory /areas/vapi-expunge.md.
+    // TURN-AWARE OPENER SPLIT (2026-09-23) — structural fix for the
+    // recurring turn-2+ re-mess/re-open bug (see providers.js's
+    // splitOpenerByTurn for the full rationale). Once the host has already
+    // spoken this call, the OPENER overlay swaps to the leaner
+    // openerOverlayContinuing (turn-one-only "arrive out of a mess"
+    // content structurally absent) instead of resending the full opener
+    // every turn while phase=opening. Same hostAlreadySpokeThisCall check
+    // the NEVER-RE-OPEN gate uses further down in this function, inlined
+    // here rather than shared state since it's cheap and this runs first.
+    // Falls back to the full openerOverlay whenever openerOverlayContinuing
+    // isn't populated yet (older hydrate, or Canon's source doc hasn't
+    // added the TURN-ONE-ONLY/CONTINUING sub-markers) — no regression.
+    const hostAlreadySpokeForOverlay =
+      Array.isArray(messages) && messages.some((m) => m && m.role === "assistant");
+    // BUG CAUGHT BEFORE DEPLOY (2026-09-23, self-review): the first version
+    // of this used `||`, which treats a legitimately EMPTY
+    // openerOverlayContinuing ("" — Canon marked literally everything as
+    // turn-one-only, nothing left for continuing) the same as "not
+    // populated yet," silently falling back to the FULL opener on turn 2+
+    // and defeating the entire fix in exactly the case where Canon's
+    // content most aggressively uses it. Fixed to check `!= null`
+    // specifically — only an actually-unpopulated field (older hydrate, or
+    // Canon's source doc not yet marked up) falls back to the full opener;
+    // a populated-but-empty string is used as-is (no overlay text at all).
+    const continuingAvailable =
+      stored.openerOverlayContinuing !== null && stored.openerOverlayContinuing !== undefined;
+    const usedContinuing = !useBusiness && hostAlreadySpokeForOverlay && continuingAvailable;
+    const overlay = useBusiness
+      ? stored.businessOverlay
+      : usedContinuing
+        ? stored.openerOverlayContinuing
+        : stored.openerOverlay;
+    // OPENER-OVERLAY-SELECT (2026-09-23) — verifiability line, per Andrew's
+    // standing "don't just claim shipped, confirm it took" pattern this
+    // session. Lets a post-deploy test call be checked directly against
+    // logs for whether the leaner turn-2+ overlay actually engaged,
+    // instead of inferring it from transcript text alone.
+    console.log(
+      "OPENER-OVERLAY-SELECT callId=" + JSON.stringify(callId) +
+      " useBusiness=" + useBusiness +
+      " hostAlreadySpoke=" + hostAlreadySpokeForOverlay +
+      " continuingAvailable=" + continuingAvailable +
+      " usedContinuing=" + usedContinuing +
+      " overlayChars=" + (overlay ? overlay.length : 0)
+    );
     if (overlay) baseSystem = baseSystem + "\n\n" + overlay;
   }
   // Telegraph beat: fold the host's "someone's joining" warning into its prompt.
@@ -3279,9 +3155,8 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // removed, Aug 26) and writes the result for the NEXT turn.
     if (callId && isConfigured()) {
       const priorRead = { phase };
-      // firedLastTurn REMOVED (Aug 26) — its only consumer was blow_landed's
-      // trigger condition, already removed above; this became genuinely
-      // dead code once that happened, not just unused-but-harmless.
+      // firedLastTurn REMOVED — dead once blow_landed's trigger (its only
+      // consumer) was removed. Gears removal, /areas/vapi-expunge.md.
       // Same bench-line strip as the host's own generation (see that
       // fix's own comment for the full root-cause trace) — the phase
       // reader judges the conversation's dynamic, and a bench
@@ -3321,11 +3196,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
                 })
               );
             }
-            // BLOW-LANDED metric — DROPPED (Aug 26, Andrew's decision).
-            // Structurally couldn't work without engagement (its whole
-            // logic was an engagement-before/after comparison), so this
-            // was already removed rather than left broken; now confirmed
-            // as the final call, not a pending question.
+            // BLOW-LANDED metric DROPPED — gears removal, /areas/vapi-expunge.md.
             return Promise.all(chain);
           })
           .catch((e) => {
@@ -4681,11 +4552,8 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         "few turns didn't happen.";
     }
 
-    // FAST-JOIN OPENER: on the host's first line of a fast-turnaround booking,
-    // prepend a time-aware, in-character opener (and the "saw you waiting"
-    // callback when they actually sat). Empty string for every normal call/turn.
-    const opener = fastJoinOpener(body, turn);
-    if (opener) mutable += opener;
+    // FAST-JOIN OPENER (fastJoinOpener) REMOVED (2026-09-23) — dead Vapi-era
+    // path, see comment near ANTHROPIC_URL above. memory /areas/vapi-expunge.md.
     // NAME HANDLING (host's first line only): if Scouting's email dissection
     // gave us a name (sender_identity — Channel 2, facts.name, fixed
     // 2026-08-04 alongside title/company), the host says it confidently —
@@ -4741,16 +4609,11 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       // sanding was systemic across every multi-beat bit. A fire is now a
       // command to PERFORM the specific routine, not ambient guidance.
       //
-      // PRUNED (Aug 4): a "THIS OVERRIDES your ordinary-receiving-turn
-      // habits..." sentence lived here briefly, added while chasing the
-      // "bits fire but leave no trace" investigation (same theory as
-      // providers.js's now-also-pruned yield clause and bit carve-out — see
-      // that file's history). All three were reasonable, evidence-based
-      // hypotheses that turned out not to be the cause: a live diagnostic
-      // trace proved the injected directive was reaching the model intact
-      // on every fire, and the actual fix was swapping the production model
-      // off Haiku onto a larger tier. Removed as inert prompt weight now
-      // that the real cause is known — the HARDENED FRAMING above (Jul 15)
+      // PRUNED (Aug 4): a since-removed override sentence added here while
+      // chasing "bits fire but leave no trace" turned out to target the
+      // wrong cause (real fix was the Haiku→Sonnet model swap, not prompt
+      // wording) — don't re-add it. Full history: /areas/vapi-expunge.md.
+      // The HARDENED FRAMING above (Jul 15)
       // is the durable fix that actually matters here.
       const bitDirective =
         BIT_DIRECTIVES && BIT_DIRECTIVES[top.id] && String(BIT_DIRECTIVES[top.id]).trim()
@@ -5039,8 +4902,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         // is reconstructable from the event alone.
         fit_score: top.score != null ? +top.score.toFixed(2) : null,
         deploy_bar: turn <= WARMUP_TURNS ? "warmup" : +bar.toFixed(2),
-        // gears_at_fire REMOVED (Aug 26, gears removal — pressure/
-        // engagement no longer exist at all).
+        // gears_at_fire REMOVED — gears removal, /areas/vapi-expunge.md.
       };
       if (sameTurnReinject) {
         // Already traced when this bit fired earlier on this same turn. The
@@ -5238,11 +5100,8 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       },
       "engine"
     );
-    // gear_transition emit REMOVED (Aug 5, gears removal) — had no meaning
-    // left once suspicion (the only axis it tracked) was gone. blow_landed
-    // was relocated here first, then dropped entirely (Aug 26, Andrew's
-    // decision) once engagement itself was removed — nothing left of it
-    // anywhere in this file now.
+    // gear_transition/blow_landed emits REMOVED — gears removal, full
+    // history /areas/vapi-expunge.md.
     if (top) {
       console.log(
         "fit " +
@@ -5274,11 +5133,8 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // callerRedirected). Added to the write gate below so an increment isn't
     // silently dropped on a turn where nothing ELSE changed (fire/
     // archetypeNew could all be false while crude still needs counting).
-    // "dirty" REMOVED (Aug 5, gears removal) — it used to mean "did
-    // suspicion/pressure/engagement change via keyword detection this turn";
-    // there's no more keyword layer to report that, and pressure/engagement
-    // are gone entirely now (no replacement). The write below still fires
-    // for all the OTHER real reasons it always did.
+    // "dirty" REMOVED — gears removal (/areas/vapi-expunge.md). The write
+    // below still fires for all the other real reasons it always did.
     const crudeDetected = !!(stored && (stored.callerCrude === "impersonal" || stored.callerCrude === "personal"));
     // BIT-FIRE-SUMMARY (2026-09-23, Andrew) — hoisted the totalFires bump out
     // of the setCall object literal below so this same freshly-updated tally
@@ -5323,8 +5179,8 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     if (!stored || fire || archetypeNew || crudeDetected || expertiseChanged) {
       waitUntil(
         setCall(callId, {
-          // gear/slip/accuseFloor/pressure/engagement all REMOVED (Aug 5 +
-          // Aug 26, gears removal complete) — nothing left to persist here.
+          // gear/slip/accuseFloor/pressure/engagement all REMOVED — gears
+          // removal, /areas/vapi-expunge.md.
           // EXPERTISE-LEVEL DIAL: persist what was actually USED this turn,
           // unconditionally whenever this gate fires at all — not just on
           // the transition turn. If this only wrote on the transition turn
@@ -5413,12 +5269,8 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       ); // never awaited
     }
 
-    // Gear-event history logging REMOVED (Aug 26, gears removal complete) —
-    // appendGearEvent() existed entirely to log gear axis values over time;
-    // with pressure/engagement/suspicion all gone, there's no gear event
-    // left to append. accusation is still logged inline above (the
-    // console.log a few lines up), just not persisted to this
-    // now-meaningless history table anymore.
+    // Gear-event history logging (appendGearEvent) REMOVED — gears removal,
+    // /areas/vapi-expunge.md. accusation is still logged inline above.
     if (top) {
       // FAMILY/LANE (2026-09-23, Andrew — cross-call bit-fire analytics) —
       // denormalized onto the row so a Supabase SQL query can group/count by
@@ -6088,17 +5940,10 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
                     "should tear the room down after the goodbye line plays)"
                   );
                 }
-                // REMOVED (2026-09-19) — [CALLBACK_PROMISED] logging
-                // marker for Canon spec section 10.4. Built speculatively
-                // while 10.4 was still an open question (whether the
-                // outbound "host calls back" half would need PE-side
-                // queuing/tracking). Voice's answer resolved 10.4
-                // entirely — redial-by-number reattaches to a host
-                // session either direction, no queuing or dispatch code
-                // needed, and the content itself no longer branches by
-                // direction (see hydrate.js's formatHostHasToGoDirective)
-                // — so there was never a "promised outbound callback" to
-                // track in the first place. Nothing to build here.
+                // [CALLBACK_PROMISED] logging (Canon §10.4) REMOVED
+                // (2026-09-19) — Voice's answer resolved 10.4 without it
+                // (redial-by-number reattaches either direction, no
+                // queuing needed). Full history /areas/vapi-expunge.md.
                 // First emitted chunk: also strip a leading wrapping quote.
                 if (!firstDeltaSeen && emit) {
                   firstDeltaSeen = true;
