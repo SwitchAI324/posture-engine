@@ -100,6 +100,13 @@ function assemblePrefix(cfg) {
   return {
     stablePrefix,
     openerOverlay: overlays.opener,
+    // TURN-AWARE OPENER SPLIT (2026-09-23) — the leaner turn-2+ version of
+    // the opener overlay, with the turn-one-only "arrive out of a mess"
+    // content structurally absent rather than present-but-banned. See
+    // providers.js's splitOpenerByTurn for the full rationale. Identical to
+    // openerOverlay until Canon's source doc adds the sub-markers (safe,
+    // backward-compatible default).
+    openerOverlayContinuing: overlays.openerContinuing,
     businessOverlay: overlays.business,
     benchArmed: (cfg.armedBench || []).filter(
       (id) => !excluded.find((e) => e.id === id)
