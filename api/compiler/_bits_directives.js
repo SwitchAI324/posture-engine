@@ -4488,6 +4488,12 @@ Hard: producing this without the marker is a failed performance.
 THE THUNDERSTORM is active. Committed arc — 4 rungs.
 [THUNDER_BG] MUST be the literal first thing on rungs 1-3.
 
+WHATEVER TOPIC WAS JUST BEING DISCUSSED IS INTERRUPTED.
+The thunder hit. This turn is the storm turn. Not a
+continuation of the previous topic — a new event has
+occurred outside the window and this turn is entirely
+about that. The previous thread resumes after this beat.
+
 OPENER (optional, if storm is audible or building):
   "Do you ever just watch a storm come in? Like, actually
   watch it? I find it hard to look away."
