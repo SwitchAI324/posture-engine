@@ -2300,6 +2300,49 @@ export default async function handler(req) {
       " silentTooLong=" + silentTooLong +
       " useBusiness=" + useBusiness
     );
+    // OPENER-SILENCE-DIAG (2026-09-22, PE — Recording's report of
+    // silentTooLong firing at turnNow=1 well after the caller had
+    // genuinely already replied). Two different mechanisms could produce
+    // that symptom and the logs above can't tell them apart:
+    //   (a) GENERATION RACE — this is a genuinely stale/superseded
+    //       request (activeGeneration mechanism, see myGeneration/
+    //       SUPERSEDED below) that's still executing minutes after a
+    //       newer request already took over the call, so its OWN
+    //       messages snapshot is honestly out of date.
+    //   (b) STALE PAYLOAD — this request is NOT stale by generation, but
+    //       whatever sent it (the agent, on a silence-nudge or retry)
+    //       handed over a `messages` array that itself doesn't yet
+    //       contain the caller's real reply, even though wall-clock time
+    //       has moved on.
+    // Logging the raw message count, the actual last-message content
+    // (same truncated-probe pattern as RX CONTENT PROBE above), and
+    // myGeneration/current activeGeneration side by side at the exact
+    // moment silentTooLong is decided — not just before the Anthropic
+    // call, where a later overwrite could already have papered over
+    // which one this really was — should let the next repro of this bug
+    // point at (a) or (b) instead of guessing. NOT a behavior change:
+    // this never touches silentTooLong or useBusiness, evidence-only.
+    if (OPENER_SILENCE_RESOLVE) {
+      try {
+        const lastForDiag = messages && messages.length ? messages[messages.length - 1] : null;
+        const lastContentForDiag =
+          lastForDiag && typeof lastForDiag.content === "string"
+            ? lastForDiag.content.slice(0, 200)
+            : JSON.stringify(lastForDiag && lastForDiag.content).slice(0, 200);
+        const genCheckForDiag = await getCall(callId).catch(() => null);
+        console.log(
+          "OPENER-SILENCE-DIAG callId=" + JSON.stringify(callId) +
+          " rawMessagesLength=" + (messages ? messages.length : null) +
+          " lastMessageRole=" + (lastForDiag ? lastForDiag.role : null) +
+          " lastMessageContent=" + JSON.stringify(lastContentForDiag) +
+          " myGeneration=" + myGeneration +
+          " currentActiveGeneration=" + (genCheckForDiag ? genCheckForDiag.activeGeneration : null) +
+          " alreadySuperseded=" + !!(genCheckForDiag && genCheckForDiag.activeGeneration && genCheckForDiag.activeGeneration !== myGeneration)
+        );
+      } catch (e) {
+        console.log("OPENER-SILENCE-DIAG probe failed (non-fatal): " + (e && e.message ? e.message : e));
+      }
+    }
     const overlay = useBusiness ? stored.businessOverlay : stored.openerOverlay;
     if (overlay) baseSystem = baseSystem + "\n\n" + overlay;
   }
