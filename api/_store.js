@@ -444,15 +444,48 @@ export async function appendGearEvent(
   });
   return r.ok;
 }
+// CONFIRMED LIVE (2026-09-23, Andrew checked information_schema) — this
+// table already exists in Supabase and already has real data (BIT-233,
+// BIT-106, BIT-330 fire counts in the hundreds) — it predates this file's
+// own CREATE TABLE comment further up (call_prefix's), which is why one
+// never existed here. It does NOT have a created_at column yet. Migration
+// to run once in the Supabase SQL editor (safe/idempotent either way):
+//   alter table bit_events add column if not exists family text;
+//   alter table bit_events add column if not exists lane text;
+//   alter table bit_events add column if not exists archetype text;
+//   alter table bit_events add column if not exists channel text;
+//   alter table bit_events add column if not exists created_at timestamptz;
+// One row per scored turn (the TOP-ranked candidate that turn, whether or
+// not it actually fired) — `fired=true` rows are the cross-call bit-fire
+// analytics Andrew asked for (2026-09-23): count/categorize which bits
+// actually fired, by id, family, lane, archetype, channel, or date, across
+// any number of calls, with plain SQL in the Supabase editor instead of
+// hand-collecting BIT-INJECT log lines per call. Deliberately extending
+// the EXISTING table rather than adding a second one — Andrew's explicit
+// ask was no Supabase clutter.
 export async function appendBitEvent(
   callId,
-  { turn, bit_id, name, score, fit, gear_bias, recency, fired, why }
+  { turn, bit_id, name, score, fit, gear_bias, recency, fired, why, family, lane, archetype, channel }
 ) {
   if (!isConfigured() || !callId) return false;
   const row = {
     call_id: callId, turn, bit_id, name,
     score, fit, gear_bias, recency,
     fired: !!fired, why: (why || "").slice(0, 300),
+    // family/lane (2026-09-23) — denormalized registry category, so cross-
+    // call analysis ("which bit categories fire too much/too little") can
+    // be a plain SQL group-by in Supabase instead of cross-referencing the
+    // registry JS file. null for either is a valid, expected state (not
+    // every bit has a lane).
+    family: family || null,
+    lane: lane || null,
+    // archetype/channel/created_at (2026-09-23, Andrew — "by date, by
+    // channel, by archetype" combo request). Stamped explicitly here
+    // (not left to a DB default) so this works the moment the columns
+    // exist, regardless of whether a default was set on them.
+    archetype: archetype || null,
+    channel: channel || null,
+    created_at: new Date().toISOString(),
   };
   const r = await fetch(`${URL}/rest/v1/bit_events`, {
     cache: "no-store",
