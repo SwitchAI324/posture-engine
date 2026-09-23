@@ -5402,8 +5402,26 @@ function splitMessages(openaiMessages) {
     mapped.push({ role, content: text });
   }
 
-  // Anthropic requires the first message to be `user`.
-  while (mapped.length && mapped[0].role !== "user") mapped.shift();
+  // Anthropic requires the first message to be `user`. FIXED (2026-09-23,
+  // real bug, confirmed causing the turn-2 double-open dupe on a live test
+  // call): this used to `.shift()` any leading non-user entries off — but
+  // per the mapping above, the ONLY role that can land here besides "user"
+  // is "assistant" (system entries are already filtered out further up).
+  // So on any request whose messages array happened to open with an
+  // assistant turn (confirmed happening on turn 2 of a real call, where the
+  // array was effectively [assistant(turn1), user(turn2)]), this SILENTLY
+  // DELETED that assistant message — which is real host history, not
+  // garbage. Downstream, `messagesShowAssistant` (completions handler) reads
+  // this exact `messages` array to decide whether the host has already
+  // spoken; losing the leading assistant entry made it read false, which
+  // made PE re-serve the FULL turn-one opener overlay (flub+landing
+  // instructions) on a turn where the host had already opened — and the
+  // model, correctly following the (wrongly re-served) instruction, ran a
+  // second fumble-and-land. Fix: satisfy Anthropic's constraint by
+  // PREPENDING a synthetic user turn instead of deleting real content.
+  if (mapped.length && mapped[0].role !== "user") {
+    mapped.unshift({ role: "user", content: "(call connected)" });
+  }
 
   // Merge consecutive same-role turns.
   const merged = [];
