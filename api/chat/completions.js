@@ -2187,8 +2187,64 @@ export default async function handler(req) {
     // Falls back to the full openerOverlay whenever openerOverlayContinuing
     // isn't populated yet (older hydrate, or Canon's source doc hasn't
     // added the TURN-ONE-ONLY/CONTINUING sub-markers) — no regression.
-    const hostAlreadySpokeForOverlay =
+    // HISTORY-REV / DURABLE OPENER-SERVED LATCH (2026-09-23, Voice + PE) —
+    // built after a real incident: a duplicate/retried request arrived 15s
+    // after the host's genuine first line, carrying messages=[1 user msg,
+    // 0 assistant] — as if the host hadn't spoken yet — even though it had.
+    // Traced to Voice's side (opener_done was stamped onto a dict shared
+    // across concurrent speculative generations; fixed there). Voice also
+    // added metadata.history_rev, a monotonic counter that only increments
+    // on a PERMANENTLY COMMITTED turn (never per speculative generation),
+    // specifically so a request's messages/turn fields can be checked for
+    // staleness independent of their own content. Belt-and-suspenders, per
+    // Voice's explicit ask: PE tracks "opener already served" as its OWN
+    // durable per-callId state (stored.openerServed), set only from
+    // evidence PE itself trusts — never inferred fresh from a single
+    // request's messages array — so a later request with a corrupted/reset
+    // messages array can't un-teach PE something it already confirmed.
+    //
+    // KNOWN RESIDUAL GAP, stated plainly rather than oversold: this cannot
+    // retroactively have caught the ORIGINAL incident, because the corrupted
+    // request arrived before any OTHER correct request had a chance to set
+    // the latch — there was no "good" evidence yet to have durably recorded.
+    // What this closes is every case AFTER the first confirmed sighting: once
+    // any non-stale request shows the host has genuinely spoken, no later
+    // request — however corrupted — can make PE forget that again for the
+    // rest of the call.
+    const historyRevMeta =
+      body?.metadata?.history_rev ?? body?.extra_body?.metadata?.history_rev ?? null;
+    const priorHistoryRevSeen = (stored && stored.historyRevSeen) ?? null;
+    const isStaleGeneration =
+      historyRevMeta != null && priorHistoryRevSeen != null && historyRevMeta < priorHistoryRevSeen;
+    const messagesShowAssistant =
       Array.isArray(messages) && messages.some((m) => m && m.role === "assistant");
+    const openerServedPersisted = !!(stored && stored.openerServed);
+    const hostAlreadySpokeForOverlay =
+      openerServedPersisted || (!isStaleGeneration && messagesShowAssistant);
+    // Latch new evidence durably the first time we see it (idempotent —
+    // repeated writes of `true` are harmless). Never latch FROM a stale
+    // generation's messages array, even if it happens to show an assistant
+    // turn — a stale snapshot could be right by coincidence but isn't
+    // evidence to build on.
+    if (!openerServedPersisted && !isStaleGeneration && messagesShowAssistant) {
+      waitUntil(setCall(callId, { openerServed: true }).catch(() => {}));
+    }
+    // Track the high-water mark regardless of staleness — a stale request's
+    // OWN value doesn't move the mark forward, but we still want to know
+    // about it for the log line below.
+    const nextHistoryRevSeen =
+      historyRevMeta != null ? Math.max(historyRevMeta, priorHistoryRevSeen || 0) : priorHistoryRevSeen;
+    if (nextHistoryRevSeen != null && nextHistoryRevSeen !== priorHistoryRevSeen) {
+      waitUntil(setCall(callId, { historyRevSeen: nextHistoryRevSeen }).catch(() => {}));
+    }
+    console.log(
+      "HISTORY-REV-CHECK callId=" + JSON.stringify(callId) +
+      " historyRevMeta=" + historyRevMeta +
+      " priorHistoryRevSeen=" + priorHistoryRevSeen +
+      " isStaleGeneration=" + isStaleGeneration +
+      " messagesShowAssistant=" + messagesShowAssistant +
+      " openerServedPersisted=" + openerServedPersisted
+    );
     // BUG CAUGHT BEFORE DEPLOY (2026-09-23, self-review): the first version
     // of this used `||`, which treats a legitimately EMPTY
     // openerOverlayContinuing ("" — Canon marked literally everything as
