@@ -2794,6 +2794,12 @@ export default async function handler(req) {
       ? (STALL_TYPE_SPLIT ? stallTypeOf(built.firedBitId) : true)
       : false,
     stallBit: turnIsStall && built ? built.firedBitId : null, // -> pe_stall_bit (agent logging)
+    // MARKER-COMPLIANCE OVERRIDE win-rate check (2026-09-22) — set only when
+    // this turn injected the override for BIT-302/307/331 (see
+    // buildSystemBlocks). finishUp reads this against the REAL generated
+    // text (search MARKER-COMPLIANCE-CHECK below) to log a win/loss per
+    // Bits' request, without needing to hardcode a single marker token.
+    markerComplianceCheck: built ? built.markerComplianceCheck : null,
     // SSML EMOTION TAG (Aug 14) — see firedVocalTag's own comment above for
     // the full mechanism. Consumed at the first-content-chunk point in
     // anthropicToOpenAISSE below; dormant (never set on takeover/synthetic
@@ -3096,6 +3102,11 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
   ammo = ammo || { ammunition: [], byHook: {} };
   let deathBlowFiring = false; // set true on the turn a Death Blow lands
   let firedBitId = null; // fired bit id, set inside the scoring block (where top/fire live); returned for the pe_stall flag
+  // MARKER-COMPLIANCE OVERRIDE win-rate tracking (see the override text itself,
+  // injected below where top/fire are live) — set only on a turn where the
+  // override actually fired, so finishUp (downstream, after generation) can
+  // check the REAL output against it and log a win/loss per Bits' request.
+  let markerComplianceCheck = null;
   const blocks = [
     { type: "text", text: baseSystem, cache_control: { type: "ephemeral" } },
   ];
@@ -4787,6 +4798,38 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
             "exactly as if the sound hadn't happened.]"
           : "";
 
+      // MARKER-COMPLIANCE OVERRIDE (2026-09-22, Bits correction) — 302/307/331
+      // are multi-rung arc bits where a correctly-worded directive still loses
+      // to narrative momentum: the model finishes whatever it was already
+      // saying instead of (a) leading with [MARKER] as the literal first
+      // thing and (b) stopping after one short beat to wait. Per Bits, this
+      // is a wording-strength ceiling, not something more emphasis in the
+      // base directive fixes — so it's injected as its own override, on the
+      // SAME turn the rung directive fires (this whole branch only runs on
+      // a fire), rather than reacting N turns later. Kept deliberately
+      // simple per Andrew's call ("keep this simpler than some solutions —
+      // it's not the worst of the issues"): no truncation, no rewriting
+      // BIT_DIRECTIVES text, no verify-and-retry loop — just a same-turn
+      // instruction layered on top, same pattern as coldOpenSoundBitOverride
+      // above. Doesn't hardcode a single marker token (a bit can have more
+      // than one valid marker for different beats — e.g. BIT-302's discrete
+      // DOG_BARK vs. ambient DOG_BARK_BG) — instead points at whichever
+      // bracket marker THIS rung's own beat text specifies, so it stays
+      // correct across rungs without parsing the directive.
+      const MARKER_COMPLIANCE_OVERRIDE_BITS = ["BIT-302", "BIT-307", "BIT-331"];
+      const markerComplianceOverrideActive = MARKER_COMPLIANCE_OVERRIDE_BITS.includes(top.id);
+      const markerComplianceOverride = markerComplianceOverrideActive
+        ? "\n\n[MARKER-COMPLIANCE OVERRIDE for this bit — this beats out " +
+          "\"finish the thought first.\" Begin your reply with the exact " +
+          "bracketed sound marker THIS rung's beat specifies below (copy " +
+          "it exactly as written, brackets included, as the literal first " +
+          "characters of your reply — not after a word of dialogue, not " +
+          "after an \"oh\" or a beat of reaction). Then perform ONLY that " +
+          "one beat, four sentences or fewer. Then stop and wait for the " +
+          "caller. Do NOT finish whatever you were saying before this bit " +
+          "fired — that continues, if at all, on a later turn.]"
+        : "";
+
       if (top.trigger && String(top.trigger).includes("browsed_tmi:")) {
         const wantedId = String(top.trigger)
           .split("|")
@@ -4866,6 +4909,13 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       // protect what it can't measure, so it's simply never a protected-
       // in-progress candidate until Bits adds the field).
       const declaredMarkers = (topRegistryEntry && topRegistryEntry.sound_markers) || null;
+      if (markerComplianceOverrideActive) {
+        markerComplianceCheck = {
+          bitId: top.id,
+          turn,
+          markers: (declaredMarkers || []).filter((m) => !m.endsWith("_STOP")),
+        };
+      }
       let priorFiresForRung;
       if (declaredMarkers && declaredMarkers.length) {
         priorFiresForRung = confirmedFireCount(topRegistryEntry, stored);
@@ -4903,12 +4953,13 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
             "beats, its required moves, its sequence. Do NOT produce behavior " +
             "that is merely consistent with the bit's tone — that is a failed " +
             "performance.\n\n" + bitDirective + (browsedTmiPayload || "") +
-            (coldOpenSoundBitOverride || "") + "\n\n"
+            (coldOpenSoundBitOverride || "") + (markerComplianceOverride || "") + "\n\n"
           : "Its full directive is under " + top.id + " in your ARMED BITS " +
             "section. Perform THAT routine's specific structure: hit its " +
             "beats, its required moves, its sequence. Do NOT produce behavior " +
             "that is merely consistent with the bit's tone — that is a failed " +
-            "performance. " + (browsedTmiPayload || "") + (coldOpenSoundBitOverride || "")) +
+            "performance. " + (browsedTmiPayload || "") + (coldOpenSoundBitOverride || "") +
+            (markerComplianceOverride || "")) +
         // PERMISSION TO DECLINE (Aug 5) — texture fires ONLY. Scenario/stall
         // mechanics (the hunt, etc.) stay mandatory once fired; those are
         // load-bearing state machines, not ambient color, and making them
@@ -5229,6 +5280,46 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // are gone entirely now (no replacement). The write below still fires
     // for all the OTHER real reasons it always did.
     const crudeDetected = !!(stored && (stored.callerCrude === "impersonal" || stored.callerCrude === "personal"));
+    // BIT-FIRE-SUMMARY (2026-09-23, Andrew) — hoisted the totalFires bump out
+    // of the setCall object literal below so this same freshly-updated tally
+    // can drive a single readable log line, not just the persisted state.
+    // Andrew's ask: reviewing one call's log export shouldn't require
+    // hand-collecting every individual BIT-INJECT line to see which bits
+    // fired and how many times — one line, updated every fire, with the
+    // running cumulative count. Grouped by family too (registry field)
+    // since "which CATEGORY of bit is firing too much/too little" is
+    // usually the real question. Console.log only, no new persistence —
+    // cross-call analytics live in bit_events (Supabase) instead, see that
+    // table's write below.
+    const nextBitFireHistory =
+      fire && !sameTurnReinject
+        ? {
+            ...(scorerState.bitFireHistory || {}),
+            [top.id]: {
+              lastFiredTurn: turn,
+              totalFires: ((scorerState.bitFireHistory || {})[top.id]?.totalFires || 0) + 1,
+              lastCountedTurn: turn,
+            },
+          }
+        : null;
+    if (nextBitFireHistory) {
+      try {
+        const byBit = {};
+        for (const [id, rec] of Object.entries(nextBitFireHistory)) byBit[id] = rec.totalFires;
+        const byFamily = {};
+        for (const [id, count] of Object.entries(byBit)) {
+          const fam = (BITS.find((b) => b.id === id) || {}).family || "unknown";
+          byFamily[fam] = (byFamily[fam] || 0) + count;
+        }
+        console.log(
+          "BIT-FIRE-SUMMARY callId=" + JSON.stringify(callId) +
+          " turn=" + turn +
+          " totalFires=" + Object.values(byBit).reduce((a, b) => a + b, 0) +
+          " byBit=" + JSON.stringify(byBit) +
+          " byFamily=" + JSON.stringify(byFamily)
+        );
+      } catch { /* summary logging must never break scoring */ }
+    }
     if (!stored || fire || archetypeNew || crudeDetected || expertiseChanged) {
       waitUntil(
         setCall(callId, {
@@ -5305,18 +5396,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           // hunt-rung stamp) — a same-turn preemptive-gen sibling for the
           // SAME bit does not double-bump totalFires, exactly the guard
           // huntRungTurn already uses for the same underlying race.
-          ...(fire && !sameTurnReinject
-            ? {
-                bitFireHistory: {
-                  ...(scorerState.bitFireHistory || {}),
-                  [top.id]: {
-                    lastFiredTurn: turn,
-                    totalFires: ((scorerState.bitFireHistory || {})[top.id]?.totalFires || 0) + 1,
-                    lastCountedTurn: turn,
-                  },
-                },
-              }
-            : {}),
+          ...(nextBitFireHistory ? { bitFireHistory: nextBitFireHistory } : {}),
           // CALLER-CRUDE running counts ("caller_crude" signal, two-level).
           // Incremented on CONSUMPTION (this turn reading last turn's
           // reader judgment), not on the judgment turn itself — same
@@ -5340,6 +5420,12 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // console.log a few lines up), just not persisted to this
     // now-meaningless history table anymore.
     if (top) {
+      // FAMILY/LANE (2026-09-23, Andrew — cross-call bit-fire analytics) —
+      // denormalized onto the row so a Supabase SQL query can group/count by
+      // category directly, without joining against the registry JS file
+      // (which isn't queryable from SQL at all). Same registry lookup
+      // buildSystemBlocks already uses elsewhere in this file.
+      const topRegistryEntryForEvent = BITS.find((b) => b.id === top.id);
       waitUntil(
         appendBitEvent(callId, {
           turn,
@@ -5351,6 +5437,20 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           recency: top.breakdown.recency,
           fired: fire,
           why: (top.breakdown.why || []).join("; "),
+          family: (topRegistryEntryForEvent && topRegistryEntryForEvent.family) || null,
+          lane: laneOf(top.id) || null,
+          // ARCHETYPE/CHANNEL (2026-09-23, Andrew — "by date, by channel, by
+          // archetype" combo request). Denormalized onto the row, same
+          // reasoning as family/lane: both are already computed values in
+          // this exact scope (archetype from the scoring block above,
+          // isPhoneCall from the recording-backstop channel check earlier
+          // in this function) — reusing them here costs nothing and avoids
+          // a join against call_prefix (whose archetype/channel-ish state
+          // can drift/overwrite across the call's lifetime, whereas this
+          // stamps the value AS OF the actual scored turn). "date" is
+          // covered by created_at (added to the table alongside these).
+          archetype: archetype || null,
+          channel: isPhoneCall ? "phone" : "video",
         }).catch(() => {})
       );
     }
@@ -5364,7 +5464,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
   // handler can set the pe_stall SSE flag when it's a stall-lane bit — the agent
   // reads that to hold its re-engage nudge for a cycle. Keyed off the fired bit's
   // LANE downstream, never the host's text (isSilenceNudge scar).
-  return { blocks, deathBlowFiring, firedBitId };
+  return { blocks, deathBlowFiring, firedBitId, markerComplianceCheck };
 }
 
 function lastUserText(messages) {
@@ -5739,6 +5839,37 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
             );
           }
         } catch { /* marker detection must never break the stream */ }
+        // MARKER-COMPLIANCE-CHECK (2026-09-22, Bits' win-rate request) — only
+        // runs on a turn where buildSystemBlocks actually injected the
+        // override (meta.markerComplianceCheck set), so this never fires on
+        // ordinary turns. Checks the REAL generated text (hostText, same
+        // string finishUp uses everywhere else) against the two rules Bits
+        // named as the losing ones: (a) a declared marker as the literal
+        // first thing in the reply, and (b) a short reply that stops instead
+        // of running on (the four-sentences-or-fewer / stop-and-wait ask —
+        // approximated here by sentence count, since "did it stop and wait"
+        // isn't otherwise observable from text alone). Logged, never used to
+        // gate anything — this is measurement for Bits to tune wording with,
+        // not a new enforcement mechanism.
+        try {
+          if (meta.markerComplianceCheck && meta.markerComplianceCheck.markers?.length) {
+            const { bitId, markers, turn: injectedTurn } = meta.markerComplianceCheck;
+            const trimmed = String(hostText || "").trimStart();
+            const leadMatch = trimmed.match(/^\[([A-Z0-9_]{2,32})\]/);
+            const leadToken = leadMatch ? leadMatch[1] : null;
+            const ledWithMarker = !!leadToken && markers.includes(leadToken);
+            const sentenceCount = (trimmed.match(/[.!?](\s|$)/g) || []).length;
+            console.log(
+              "MARKER-COMPLIANCE-CHECK id=" + bitId +
+              " turn=" + (meta.turn ?? injectedTurn) +
+              " win=" + ledWithMarker +
+              " leadToken=" + JSON.stringify(leadToken) +
+              " expectedMarkers=" + JSON.stringify(markers) +
+              " approxSentenceCount=" + sentenceCount +
+              " textSample=" + JSON.stringify(trimmed.slice(0, 160))
+            );
+          }
+        } catch { /* win-rate logging must never break the stream */ }
         let benchTxt = null;
         if (appendText && !appendSent) {
           appendSent = true;
