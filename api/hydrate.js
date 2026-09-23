@@ -1330,6 +1330,13 @@ async function writePrefix(callId, prefix, archetype, postureLine, targetId, ove
     postureLine,
     targetId: targetId ?? null,
     openerOverlay: (overlays && overlays.openerOverlay) ?? null,
+    // TURN-AWARE OPENER SPLIT (2026-09-23) — see providers.js's
+    // splitOpenerByTurn for the full rationale. Optional/undefined-safe
+    // like everything else here — an older caller that never set this key
+    // just doesn't write it, and getCall's ?? null fallback in
+    // completions.js means turn-2+ selection falls back to the full
+    // openerOverlay (today's behavior) until this is populated.
+    openerOverlayContinuing: (overlays && overlays.openerOverlayContinuing) ?? null,
     businessOverlay: (overlays && overlays.businessOverlay) ?? null,
     ...(latestCallId !== undefined ? { latestCallId } : {}),
     // HOST-NAME PERSISTENCE (Aug 18) — resolved here from the booking token
@@ -1381,6 +1388,7 @@ async function rehydrateSlug(slug) {
   const assembled = assemblePrefix(cfg);
   let prefix = assembled.stablePrefix;
   let openerOverlay = assembled.openerOverlay || "";
+  let openerOverlayContinuing = assembled.openerOverlayContinuing || "";
   let businessOverlay = assembled.businessOverlay || "";
   // Same substitution sequence as the HTTP handler below, kept identical
   // on purpose — a drift-triggered rebuild must produce byte-for-byte the
@@ -1399,6 +1407,7 @@ async function rehydrateSlug(slug) {
   const hostName = (cfg.host_name && String(cfg.host_name).trim()) || "Chris";
   prefix = prefix.split("[HOST NAME]").join(hostName);
   openerOverlay = openerOverlay.split("[HOST NAME]").join(hostName);
+  openerOverlayContinuing = openerOverlayContinuing.split("[HOST NAME]").join(hostName);
   businessOverlay = businessOverlay.split("[HOST NAME]").join(hostName);
   prefix = prefix.replace(
     /YOUR IDENTITY[\s\S]*?same energy, different voice\./,
@@ -1407,10 +1416,10 @@ async function rehydrateSlug(slug) {
   );
   prefix = prefix.split("Andrea").join(hostName);
   const initialPosture = posture.toUpperCase() + " — warm and forward.";
-  const overlays = { openerOverlay, businessOverlay };
+  const overlays = { openerOverlay, openerOverlayContinuing, businessOverlay };
   await writePrefix("slug:" + slug, prefix, cfg.tactic, initialPosture, cfg.target, overlays, null, hostName);
   console.log("rehydrateSlug: refreshed slug=" + slug + " hostName=" + hostName);
-  return { prefix, hostName, openerOverlay, businessOverlay };
+  return { prefix, hostName, openerOverlay, openerOverlayContinuing, businessOverlay };
 }
 
 module.exports = async function handler(req, res) {
@@ -1740,6 +1749,7 @@ module.exports = async function handler(req, res) {
     // prefix (assemble.js returns them separately; NOT baked into stablePrefix).
     // completions.js appends the phase-selected one after the cached region.
     let openerOverlay = assembled.openerOverlay || "";
+    let openerOverlayContinuing = assembled.openerOverlayContinuing || "";
     let businessOverlay = assembled.businessOverlay || "";
 
     // [HOST NAME] substitution: the Master Host Prompt uses [HOST NAME] as a
@@ -1768,6 +1778,7 @@ module.exports = async function handler(req, res) {
     // BUSINESS overlay has none — the sub is a safe no-op there). Substitute in
     // both so no raw placeholder ships in an overlay either.
     openerOverlay = openerOverlay.split("[HOST NAME]").join(hostName);
+    openerOverlayContinuing = openerOverlayContinuing.split("[HOST NAME]").join(hostName);
     businessOverlay = businessOverlay.split("[HOST NAME]").join(hostName);
     // Remove the ENTIRE dual-identity section (the "YOUR IDENTITY" header through
     // the ANDREA description) and replace with a single clear line, so the model
@@ -1787,7 +1798,7 @@ module.exports = async function handler(req, res) {
 
     // ALWAYS write the slug key (pre-call safe, removes the race). Also write
     // the call_id row if we have it (the direct hit).
-    const overlays = { openerOverlay, businessOverlay };
+    const overlays = { openerOverlay, openerOverlayContinuing, businessOverlay };
     // latestCallId only ever passed here (the slug: row) — null when callId
     // isn't known yet at this point in the request (still correct: means
     // "no live call for this slug right now," which is real information).
@@ -1832,6 +1843,7 @@ module.exports = async function handler(req, res) {
         // Returned here so the LiveKit agent, which reads the prompt from this
         // response at call start, has them alongside the prefix.
         openerOverlay,
+        openerOverlayContinuing,
         businessOverlay,
         postureLine: initialPosture,
         // target_id — resolved from booking_tokens by slug at call start. The

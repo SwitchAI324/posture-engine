@@ -48,7 +48,7 @@ export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const url =
     `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}` +
-   `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used,pending_bench_awareness,latest_call_id,active_generation,bench_present,first_seen_at,caller_presenting,pitch_summary,host_name,recording_notice_given,host_turn_count`;
+   `&select=prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,opener_overlay_continuing,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used,pending_bench_awareness,latest_call_id,active_generation,bench_present,first_seen_at,caller_presenting,pitch_summary,host_name,recording_notice_given,host_turn_count`;
   const r = await fetch(url, {
     cache: "no-store",
     headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
@@ -77,6 +77,17 @@ export async function getCall(callId) {
     lastBitAt: rows[0].last_bit_at != null ? Number(rows[0].last_bit_at) : null,
     businessLatched: rows[0].business_latched ?? false,
     openerOverlay: rows[0].opener_overlay ?? null,
+    // TURN-AWARE OPENER SPLIT (2026-09-23, structural fix for the recurring
+    // turn-2+ re-mess/re-open bug) — openerOverlay above is the FULL opener
+    // content (used on turn 1 / before the host has spoken). This is the
+    // leaner version for every turn after that: the "arrive out of a mess"
+    // content is structurally absent rather than present-but-banned, so the
+    // model never sees the temptation to begin with. null on any call
+    // hydrated before this shipped, or if Canon's source doc hasn't added
+    // the TURN-ONE-ONLY/CONTINUING sub-markers yet — completions.js falls
+    // back to the full openerOverlay in that case (old behavior, no
+    // regression).
+    openerOverlayContinuing: rows[0].opener_overlay_continuing ?? null,
     businessOverlay: rows[0].business_overlay ?? null,
     archetype: rows[0].archetype || null,
     characterId: rows[0].character_id || null,
@@ -108,7 +119,7 @@ export async function getCall(callId) {
 }
 export async function setCall(
   callId,
-  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed, pendingBenchAwareness, latestCallId, activeGeneration, benchPresent, firstSeenAt, callerPresenting, pitchSummary, hostName, recordingNoticeGiven, hostTurnCount }
+  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, openerOverlayContinuing, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed, pendingBenchAwareness, latestCallId, activeGeneration, benchPresent, firstSeenAt, callerPresenting, pitchSummary, hostName, recordingNoticeGiven, hostTurnCount }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -132,6 +143,7 @@ export async function setCall(
   if (lastBitAt !== undefined) row.last_bit_at = lastBitAt;
   if (businessLatched !== undefined) row.business_latched = businessLatched;
   if (openerOverlay !== undefined) row.opener_overlay = openerOverlay;
+  if (openerOverlayContinuing !== undefined) row.opener_overlay_continuing = openerOverlayContinuing;
   if (businessOverlay !== undefined) row.business_overlay = businessOverlay;
   if (archetype !== undefined) row.archetype = archetype;
   if (characterId !== undefined) row.character_id = characterId;
