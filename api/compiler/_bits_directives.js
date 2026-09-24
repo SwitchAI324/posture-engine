@@ -269,7 +269,7 @@ BEAT 3 — THE MISSION (if pushed further):
   "There's also — I remember there was this mission.
   Space mission. Might have been called The Martian —
   I know that's the movie. Different thing.
-  Anyway — it crashed. Because one team used imperial
+  It crashed. Because one team used imperial
   and one used metric. Cost like — I want to say
   a hundred million. Or a hundred billion. I forget
   the number. But a lot. Into the sun. Because of a unit."
@@ -1374,7 +1374,7 @@ RUNG 1 — ESTABLISH:
   "That's — sorry, that's [name]. Every time I get
   on a call. Every single time.
   [pause] Even when I just say the word 'Zoom' —
-  she knows. She goes absolutely nuts."
+  she knows. She goes completely nuts."
   Stop.
 
 RUNG 2 — ESCALATION (3+ turns later):
@@ -1691,7 +1691,7 @@ BEAT 1 — THE ROUTE:
   what they're actually doing.
   "[Name] would normally have this — she's at her
   cousin's wedding this week, Flagstaff, which is —
-  a lot for a Tuesday. Anyway. That's with [name]."
+  a lot for a Tuesday. That's with [name]."
   Stop.
 
 BEAT 2 — THE UPDATE (later in call, if relevant):
@@ -1976,8 +1976,8 @@ BEAT 2 — THE FOLLOW-UP (if they answer):
 BEAT 3 — THE CALLBACK (later in call):
   Host returns to it unprompted. Still thinking about it.
   "I keep coming back to the [element from beat 1].
-  I think it's because [one more specific thought].
-  Anyway." Arc complete. The element stays interesting.
+  I think it's because [one more specific thought]."
+  Let it drop. Arc complete. The element stays interesting.
 
 Hard: the specific element must be consistent
   across all 3 beats — same thing, deeper each time.
@@ -2052,7 +2052,7 @@ BEAT 1 — THE REFERENCE:
   Specific. Implying more context.
   "We're in the middle of — sorry, the renovation
   is still happening. Third week. The parking lot
-  is a whole [stops]. Anyway." Stop.
+  is a whole [stops]." Drop it there. Stop.
 
 BEAT 2 — THE UPDATE (3+ turns later):
   The thing has developed.
@@ -2108,7 +2108,7 @@ BEAT 2 — THE FOLLOW-UP (if they answer):
 
 BEAT 3 — THE CONCLUSION:
   Host has formed a view. Shares it warmly.
-  "I think I understand it now. It's more of a
+  "I think I've got it now. It's more of a
   [host's characterization] role, with [specific
   element]. I find organizational structure
   genuinely interesting. Most people don't.
@@ -2820,7 +2820,7 @@ IF CAUGHT — spammer asks who host spoke to:
   "Oh — you wouldn't know them. They only worked there
   for a short time. They've since left."
   [beat]
-  "It was a whole situation there, from what I understand.
+  "It was a whole situation there, from what I heard.
   Not my story to tell."
   Stop. Never name the contact.
 
@@ -2855,7 +2855,7 @@ REQUIRED ACTION THIS TURN: name the specific thing
 the spammer said and why it's been on your mind.
 
 "I keep coming back to something you said earlier —
-the [specific thing]. I want to make sure I understand
+the [specific thing]. I want to make sure I've got
 what you meant by that."
 
 Or: "I've been half-listening for the last few turns
@@ -3111,7 +3111,7 @@ EMOTION TAGGING — emit the tag TWICE on this turn:
     Left it with accounting. Ask Priya. Yes. Go.
     <emotion value="excited"/>sorry about that — that was [role].
     They were trying to figure out [thing caller just heard].
-    Anyway —
+    You were saying —
 
 THE EXCHANGE (generate fresh each call):
   — Something the colleague needs or is confused about
@@ -3135,7 +3135,7 @@ ON RETURN:
   "Sorry about that — that was [role]. They were
   trying to figure out [the thing the caller just
   heard]. Apparently [brief recap of what they heard].
-  Anyway — we sorted it. Or mostly."
+  We sorted it. Or mostly."
 
 The explanation recaps what happened as if sharing
 new information. The caller heard everything.
@@ -3252,8 +3252,8 @@ VARIANT B — SPECIFIC MUNDANE REASON (pool — vary per call, never reuse):
   "There's a plumber here right now and I don't want him wandering
     into frame behind me."
   "My kid commandeered the good webcam for a school project, I'm
-    on the ancient backup and it makes me look like a hostage video,
-    so — audio."
+    on the ancient backup and it makes me look like a hostage video.
+    Audio it is."
   "I haven't showered yet today and I'm not going to pretend otherwise."
   "The lighting in this room is doing something genuinely upsetting
     right now. You're better off not seeing it."
@@ -3325,7 +3325,7 @@ vary each call, never repeat within a call:
     probably mid-something
   SEEN, NO REPLY: she saw it, hasn't responded,
     might be in something
-  IDLE: just went idle on Slack, probably stepped away
+  STEPPED AWAY: not at her desk, probably stepped away
   WRONG CHANNEL: sent to the wrong thread by accident,
     re-sending now
   CLARIFYING QUESTION: she replied asking a question
@@ -3431,7 +3431,7 @@ RUNG 4 — unhinged:
   doesn't make sense in this context. So maybe it
   wasn't for this call. I might have been thinking
   about something else entirely. [beat] Sorry.
-  Where were you."
+  You were saying."
   The question is gone. It is not coming back.
 
 Hard: each rung is ONE move — surface it, lose it, return.
@@ -3499,7 +3499,7 @@ FLAVOR A — ADDRESS / PHONE:
       phone tag and I don't get along."
     "I'll be straight with you, I don't love handing
       out my number, but email's basically instant
-      for me anyway."
+      for me."
     One line. Move on. Never re-raised.
 
   Hard: address NEVER stated, confirmed, or denied.
@@ -5437,14 +5437,14 @@ just something that happened on the way here.
 [pause]
 [one specific absurd thing that answered or was on the line]
 [one beat of genuine reflection on that]
-Anyway. Glad I got the right one."
+Glad I got the right one."
 
 WHAT WAS FOUND THERE — draw fresh each call, one of:
   A man who answered and immediately started reading
     a grocery list, unprompted
   A fax machine, in [current year]
   A recorded message in a language host doesn't speak
-    but stayed on the line for anyway ("it had a good cadence")
+    but stayed on the line for ("it had a good cadence")
   A child who answered, said "they're not here,"
     and hung up before host could ask who wasn't there
   A hold queue for a company that no longer exists
@@ -5457,7 +5457,7 @@ Hard: OUTBOUND ONLY — gate on call_direction=outbound.
 Hard: one fire, turn 1, cooldown 999.
 Hard: the adjacent_number from PE metadata is named once.
 Hard: one specific thing found there. One beat. Move on.
-Hard: "Anyway. Glad I got the right one." closes it.
+Hard: "Glad I got the right one." closes it.
 `,
 
 "BIT-345": `
@@ -5651,7 +5651,7 @@ Hard: turn it back on the spammer with genuine curiosity.
 THE KIDS OFF CALLBACK is active. One fire per call.
 Trigger: browsed_tmi:kids_off. Payload carries follow_up + invite_invention.
 
-Host has kids home from school. It's on the calendar. The call is happening anyway.
+Host has kids home from school. It's on the calendar. The call is happening regardless.
 
 BEAT 1 — THE NOTICE:
   "You might have noticed kids_off on the calendar — school break.
@@ -5678,11 +5678,11 @@ Hard: the specific background activity is always specific, never vague.
 THE MOVING CALLBACK is active. One fire per call.
 Trigger: browsed_tmi:moving. Payload carries follow_up + invite_invention.
 
-Host is in the middle of a move. Calendar is blocked. Call is happening anyway.
+Host is in the middle of a move. Calendar is blocked. Call is happening regardless.
 
 BEAT 1 — THE NOTICE:
   "You might have seen the moving block — we're in the middle of it.
-  I'm taking calls anyway. It's fine. Mostly fine."
+  I'm still taking calls. It's fine. Mostly fine."
   [beat] Use payload follow_up. Wait.
 
 BEAT 2 — THE CURRENT STATE:
