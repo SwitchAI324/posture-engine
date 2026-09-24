@@ -3042,6 +3042,55 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
   const blocks = [
     { type: "text", text: baseSystem, cache_control: { type: "ephemeral" } },
   ];
+  // HAND-THE-FLOOR MESS-REMOVAL MIRROR (Sep 24, mirrors the turn-2
+  // opener-served latch elsewhere in this file) — the "you never start the
+  // business" hand-off phrase pool ("hit me, what've you got," "lay it on
+  // me," etc., 8 total) is documented in the prompt as firing ONCE, but
+  // prompt-only enforcement is still failing live — confirmed on a real test
+  // call (RM_hwpdSTheaFe2): the host re-invited the caller to start
+  // ("what'd you want to walk me through?", echoing phrase #8) after the
+  // caller had already said "continue" mid-topic. Detected the same
+  // deterministic way as the opener latch: scan the HOST's own prior turns
+  // in `messages` for any of the 8 listed phrases; once seen, latch
+  // `handoffGiven` durably (survives the same class of history-array gaps
+  // the opener latch exists for) and inject a directive every subsequent
+  // turn instead of relying on the model to remember on its own.
+  const HANDOFF_PHRASES = [
+    "hit me, what've you got", "so what's the story", "lay it on me",
+    "i'm listening", "okay, you've got me", "so what's going on there",
+    "alright, walk me through it", "what've we got here",
+  ];
+  const handoffAlreadyInHistory =
+    Array.isArray(messages) &&
+    messages.some(
+      (m) =>
+        m && m.role === "assistant" && typeof m.content === "string" &&
+        HANDOFF_PHRASES.some((p) => m.content.toLowerCase().includes(p))
+    );
+  const handoffGivenPersisted = !!(stored && stored.handoffGiven);
+  const handoffGiven = handoffGivenPersisted || handoffAlreadyInHistory;
+  if (!handoffGivenPersisted && handoffAlreadyInHistory) {
+    waitUntil(setCall(callId, { handoffGiven: true }).catch(() => {}));
+  }
+  if (handoffGiven) {
+    blocks.push({
+      type: "text",
+      text:
+        "YOU ALREADY HANDED THEM THE FLOOR. Earlier this call you already " +
+        "invited them to start (one of the \"hit me, what've you got\" / " +
+        "\"lay it on me\" family). Do not do it again in any form, reworded " +
+        "or not — that reads as \"tell me again,\" not warmth. Respond to " +
+        "what they actually said instead: ask about the specific thing (the " +
+        "email, the number, the point) they raised, not a fresh invitation " +
+        "to begin.",
+    });
+  }
+  console.log(
+    "HANDOFF-CHECK callId=" + JSON.stringify(callId) +
+    " handoffAlreadyInHistory=" + handoffAlreadyInHistory +
+    " handoffGivenPersisted=" + handoffGivenPersisted +
+    " handoffGiven=" + handoffGiven
+  );
   // TEMP (env-gated, CONRAD_RELAY=1): host-ventriloquism probe. If the caller
   // asks for Conrad / whether anyone else is on, the HOST brings Conrad in
   // within its own turn (no separate voice/call) — a beat in Conrad's blunt
@@ -6036,13 +6085,22 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
                   // and carries a vocal_tag, prepend the tag once, here, to
                   // the very first real content chunk — a single atomic
                   // insertion before any content streams, so there's nothing
-                  // for a chunk boundary to split. Cartesia parses it from
-                  // the text stream itself; no agent-side change needed.
-                  // Dormant until Cartesia is confirmed live in production
-                  // (ElevenLabs doesn't parse this tag the same way) — see
-                  // bench-takeover.md item 7 for the SSML tracking entry.
+                  // for a chunk boundary to split.
+                  // FORMAT SWITCHED (Sep 24, Canon's question) — this used to
+                  // emit the old `<emotion value="X"/>` shape, built when
+                  // Cartesia's live status was unconfirmed ("dormant until
+                  // confirmed"). Confirmed live since Aug 16, AND Canon
+                  // confirmed this is pure emotion-coloring (bit_registry's
+                  // vocal_tag values — excited/surprised/sad/mysterious/
+                  // neutral/content — have no structural "shift" meaning,
+                  // unlike Canon's aside-marker), so this is the textbook
+                  // case for Voice's actual per-sentence delivery tag.
+                  // Nothing in this file parses/keys off the tag shape
+                  // either way (grep confirms zero — it's pure pass-through
+                  // text the model/TTS reads), so this change is a pure
+                  // format swap, no logic risk.
                   if (meta && meta.vocalTag) {
-                    emit = '<emotion value="' + meta.vocalTag + '"/>' + emit;
+                    emit = '<expr type="expression" label="' + meta.vocalTag + '"/>' + emit;
                   }
                 }
                 if (emit) send({ content: emit });
