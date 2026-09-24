@@ -400,12 +400,25 @@ function wireRoom(rm){
   // (host tile or a bench tile). LAYOUT (Booking).
   rm.on(RoomEvent.ActiveSpeakersChanged, function(speakers){ paintSpeakers(speakers); });
   // Captions: if the agent publishes transcriptions, show them.
+  // MARKER-STRIP FIX (Sep 24) — this used to only strip old-style [[...]]
+  // double-bracket markers, a format nothing emits anymore. The live feed
+  // this listener reads (session.history, per Voice) still carries the
+  // literal <expr type="expression" label="X"/> tag PE emits for TTS
+  // delivery coloring (see completions.js ~line 6189) — that tag is only
+  // stripped once, by Voice, for the final POST-CALL saved transcript, not
+  // for this live stream. So it was passing straight through to the on-
+  // screen caption here. Now strips both the current <expr .../> shape and
+  // the older <emotion .../> shape it lowers to, in case anything upstream
+  // ever emits that directly.
   rm.on(RoomEvent.TranscriptionReceived, function(segments){
     try {
       var txt = (segments || []).map(function(s){ return s.text; }).join(" ").trim();
       if(txt){
         $("caption").style.display = "block";
-        $("captionText").textContent = txt.replace(/\\[\\[[^\\]]*\\]\\]/g, "").trim();
+        $("captionText").textContent = txt
+          .replace(/\\[\\[[^\\]]*\\]\\]/g, "")
+          .replace(/<(?:expr|emotion)\b[^>]*\/>/g, "")
+          .trim();
       }
     } catch(e){}
   });
