@@ -6084,10 +6084,21 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
                 // than chasing a prompt cause that doesn't exist. Targets
                 // a specific, known list of common HTML tag names only —
                 // deliberately NOT a blanket "strip anything in angle
-                // brackets" rule, since <emotion value="X"/> is a real,
-                // intentional marker (agent-consumed, same family as the
-                // sound markers above) that must survive untouched. Any
-                // tag name not on this list — including "emotion" — is
+                // brackets" rule, since <expr type="expression" label="X"/>
+                // (this file's own vocalTag insert, ~line 6189) and Canon's
+                // structural <aside_marker kind="X"/> / <expr type="break"
+                // label="Ys"/> pause tags are real, intentional markers
+                // (agent/TTS-consumed, same family as the sound markers
+                // above) that must survive untouched. UPDATED (Sep 24,
+                // Canon v0.9) — Canon's aside/greeting marker used to be
+                // <emotion value="X"/> too, which collided with this file's
+                // vocalTag tag once it lowered to Cartesia's own native
+                // <emotion value="X"/> shape (confirmed live); Canon
+                // renamed their side to <aside_marker kind="X"/> to end the
+                // collision, so "emotion" here now only ever refers to
+                // Cartesia's own converted wire format, never Canon's
+                // prompt text directly. Any tag name not on this list —
+                // including "expr", "emotion", and "aside_marker" — is
                 // left alone.
                 svScrubBuf = svScrubBuf.replace(
                   /<\/?(br|p|div|span|b|i|strong|em|ul|ol|li|h[1-6]|hr)\s*\/?>/gi,
