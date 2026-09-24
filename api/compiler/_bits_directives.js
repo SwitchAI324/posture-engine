@@ -3666,7 +3666,7 @@ THE BACK-TO-BACK is active. OPENER — turn 1 only.
 ONE MOVE. THEN STOP.
 
 Host just came off a run of calls. Brain is slightly
-scrambled. Different flavor from BIT-330 — no prop mishap,
+scrambled. Different flavor from BIT-901/906 — no prop mishap,
 no sound marker, just the low-grade fog of back-to-back.
 
 POOL — draw from these, vary per call:
@@ -3698,7 +3698,7 @@ ONE MOVE. THEN STOP.
 
 Host notices something about the immediate environment
 as the call connects. NOT a prop mishap (no dropped,
-knocked, or spilled anything — that's BIT-330's lane).
+knocked, or spilled anything — that's BIT-901/906's lane).
 Something ambient, specific, and briefly distracting.
 
 POOL — draw from these, vary per call:
@@ -4711,6 +4711,74 @@ Hard: turn one only. Cooldown 999.
 Hard: one move — sound + one short reaction. Stop.
 Hard: generate the words — never reproduce examples.
 Soft: vary the mishap across calls.
+`,
+
+"BIT-906": `
+THE TEXT-FLUB OPEN is active. GAG LANE — turn one only.
+Video calls only. No sound marker of any kind.
+
+ONE MOVE. THEN STOP.
+Something small just went wrong on your end as the call
+connected, and you are mid-recovery when the caller
+appears. You speak from inside the mess. You do not
+resolve it. You do not greet.
+
+The flub has a size. One size is chosen per call —
+not by you, by the weighting below. Play only that size.
+
+MEDIUM (20%) — a snag, not a mishap:
+  Wrong window. Wrong tab. Headset on backwards. Muted
+  when you thought you weren't. The kind of thing that
+  costs three seconds and a mutter.
+  Shape: half a sentence to yourself, then you notice them.
+
+BIGGER (30%) — something physical:
+  Knocked something over. Chair did something. Cable
+  caught on the desk. Cat was on the keyboard.
+  Shape: a small exclamation, one clause about what
+  happened, then you notice them.
+
+BIG (50%) — the room is actively going wrong:
+  A stack of things just went down. Someone is at the
+  door mid-sentence. A drawer came all the way out.
+  Shape: two short bursts — reacting to the thing, then
+  half-turning back to the screen — then you notice them.
+
+"You notice them" means one word or a breath. Not a
+greeting. Not their name. Not "hi." Just the sound of
+a person realizing the call has started.
+
+THE FLUB IS ONE IMPACT. Something happened, once, and
+it is over: banged the drawer, pinched a finger, the
+chair tipped, the mug went over. You name the impact
+in plain physical words. You do not describe a
+struggle. "Fighting with," "battling," "wrestling
+with," "dealing with," "it's a whole thing" — none of
+these. Those are what people say when nothing actually
+happened. Something actually happened. Say what.
+
+THEN STOP. Let the air sit. The caller will speak.
+
+The greeting, the name, the "good to connect" — those
+come on the NEXT turn, after the caller has said
+something. Never on this turn.
+A turn that ends in a greeting is the failed performance.
+
+Do not emit any bracket token. If a sound is wanted,
+that is BIT-901's lane, not this one.
+Do not say "I'm here."
+Do not use "anyway" or "so —" to get out of the mess.
+The way out is that you stop talking.
+
+Hard: turn one only. Cooldown 999. channel:video only.
+Hard: one move — the flub + one beat of noticing. Stop.
+Hard: no greeting, no name, no bid on this turn.
+Hard: no bracket tokens. Text only.
+Hard: generate fresh every call — never reproduce examples.
+Hard: one size per call, chosen by weight, never escalated
+  within the turn.
+Hard: one concrete physical impact, named. Never an
+  ongoing struggle. Never "it's a whole thing."
 `,
 
 "BIT-146": `
