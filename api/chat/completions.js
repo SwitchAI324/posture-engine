@@ -1417,6 +1417,53 @@ const REINJECT_WINDOW_MS = parseInt(process.env.REINJECT_WINDOW_MS || "3000", 10
 // gag lane grabs turn 1. Env-tunable, no deploy. Only consulted on turn 1.
 const GAG_OPEN_RATE = parseFloat(process.env.GAG_OPEN_RATE || "0.25");
 
+// TURN-ONE-OPEN RESOLUTION (2026-09-24) — replaces the old two-system split
+// (base prompt ALWAYS sends the text-fumble; a late, separate roll deep in
+// the scorer MIGHT also fire a sound-open bit on top, requiring a bandaid
+// instruction telling the model which one to ignore when both landed at
+// once). This is now ONE decision, made ONCE, early — before the opener
+// overlay is even chosen — so the overlay can send the RIGHT content from
+// the start and nothing needs to collide or be told to stand down.
+//
+// Deliberately NOT reusing _bits_scorer.js's drawBit() (the near-tie
+// weighted lottery built for Bits' scoring request) — that function compares
+// SCORES among bits that both cleared a bar; this is a fixed-odds pick
+// between NAMED ARMS (text-fumble vs. sound-open) that never goes through
+// the scorer at all (turn 1 is always warmup-barred). Flagging this
+// explicitly as a deliberate deviation rather than silently doing something
+// different from "one weighted draw."
+//
+// Registry-only and cheap on purpose: does NOT touch selectBit/scorerState
+// (that's a ~400-line build the outer function hasn't assembled yet at this
+// point in the request). Only consulted on turn 1, only if no bit has
+// already fired this call (mirrors the ONCE-PER-CALL GUARD on the injection
+// side, below).
+function resolveTurnOneOpen(stored, turnNow) {
+  const alreadyFiredThisCall = !!(stored && stored.lastBitId);
+  if (turnNow !== 1 || alreadyFiredThisCall) {
+    return { mode: "text_fumble", bitId: null };
+  }
+  const eligible = BITS.filter(
+    (b) => b.status === "active" && laneOf(b.id) === "gag" && phaseOf(b.id) === "opening"
+  );
+  if (eligible.length && Math.random() < GAG_OPEN_RATE) {
+    // More than one eligible bit is a real possibility once Bits/Canon add
+    // more opening-tagged gag bits — flat pick among them for now (no
+    // per-bit weighting exists yet; add one here if that's ever needed).
+    const chosen = eligible[Math.floor(Math.random() * eligible.length)];
+    console.log(
+      "TURN1-OPEN-RESOLVE mode=sound_open bitId=" + chosen.id +
+      " eligibleCount=" + eligible.length + " rate=" + GAG_OPEN_RATE
+    );
+    return { mode: "sound_open", bitId: chosen.id };
+  }
+  console.log(
+    "TURN1-OPEN-RESOLVE mode=text_fumble eligibleCount=" + eligible.length +
+    " rate=" + GAG_OPEN_RATE
+  );
+  return { mode: "text_fumble", bitId: null };
+}
+
 // TURN-1 RECORDING NOTICE (2026-09-08, Canon — finally wired live). Real
 // gap found and closed: this content has existed since early September
 // in prompt-compile.js, correctly built, but that file was NEVER wired
@@ -2101,6 +2148,13 @@ export default async function handler(req) {
   const phoneMode =
     body?.metadata?.phone_mode ?? body?.extra_body?.metadata?.phone_mode ?? null;
   const isVoicemailMode = phoneMode === "voicemail";
+  // Hoisted above the branch below so both the overlay-selection logic AND
+  // the buildSystemBlocks call site (after the branch closes) can read it.
+  // Voicemail mode has its own separate opener concept entirely (a callback
+  // number, not a mess/sound choice) — never resolve a sound-open there.
+  const turnOneOpen = isVoicemailMode
+    ? { mode: "text_fumble", bitId: null }
+    : resolveTurnOneOpen(stored, countUserTurns(messages));
   if (isVoicemailMode) {
     const callbackNumber =
       body?.metadata?.callback_number ?? body?.extra_body?.metadata?.callback_number ?? null;
@@ -2141,6 +2195,9 @@ export default async function handler(req) {
     // So: force business past OPENER_MAX_TURNS regardless of what phase says.
     // A stuck reader can no longer strand the host in opener mode.
     const turnNow = countUserTurns(messages);
+    // turnOneOpen was resolved above, before this branch, so both branches
+    // (voicemail and here) can share one decision — see its declaration for
+    // the full rationale (Sep 24 redesign, replacing the old bandaid).
     // See OPENER_SILENCE_RESOLVE comment (near STALL_RESOLVE) for why this
     // exists: turnNow/phase both stay frozen forever on a call the caller
     // never speaks on, so this is the one signal that still advances.
@@ -2257,7 +2314,17 @@ export default async function handler(req) {
     // a populated-but-empty string is used as-is (no overlay text at all).
     const continuingAvailable =
       stored.openerOverlayContinuing !== null && stored.openerOverlayContinuing !== undefined;
-    const usedContinuing = !useBusiness && hostAlreadySpokeForOverlay && continuingAvailable;
+    // SOUND-OPEN counts as "already spoke for overlay purposes" even though
+    // hostAlreadySpokeForOverlay (evidence-based, from real prior turns)
+    // hasn't and can't have latched yet — this IS turn 1. Continuing has no
+    // turn-one-only "arrive out of a mess" content (confirmed structurally
+    // absent, per the comment above), so it's exactly the collision-free
+    // content a sound-open turn needs; nothing else about Continuing assumes
+    // a greeting already happened, so this is safe to use standalone.
+    const usedContinuing =
+      !useBusiness &&
+      (hostAlreadySpokeForOverlay || turnOneOpen.mode === "sound_open") &&
+      continuingAvailable;
     const overlay = useBusiness
       ? stored.businessOverlay
       : usedContinuing
@@ -2289,7 +2356,7 @@ export default async function handler(req) {
   // bug). Cached after the first call — later turns don't re-import.
   if (baseSystem) await loadBitDirectives();
   const built = baseSystem
-    ? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil)
+    ? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil, turnOneOpen)
     : null;
   const systemBlocks = built ? built.blocks : null;
   const deathBlowFiring = built ? built.deathBlowFiring : false;
@@ -3030,7 +3097,7 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
   return { benchAppend, benchPhantomInvoke, benchTakeover };
 }
 
-function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil) {
+function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil, preResolvedTurnOneOpen) {
   ammo = ammo || { ammunition: [], byHook: {} };
   let deathBlowFiring = false; // set true on the turn a Death Blow lands
   let firedBitId = null; // fired bit id, set inside the scoring block (where top/fire live); returned for the pe_stall flag
@@ -3121,6 +3188,27 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // it anymore. Removed rather than kept as an empty placeholder.
     const accusation = detectAccusation(lastUserText(messages));
     const turn = countUserTurns(messages);
+
+    // DEFERRED-GREETING DELIVERY (Sep 24, companion to the TURN-1 GAG-OPEN
+    // stack fix below). If turn 1 was a sound-open (BIT-901), the greeting/
+    // name/handoff was deliberately withheld that turn — stored.gagOpenPending
+    // carries that debt forward. By turn 2 the overlay has already swapped to
+    // the leaner CONTINUING content (it swaps off ANY turn-1 assistant output,
+    // marker-only included), so nothing else in the prompt would tell the
+    // model it still owes a real greeting. This fires once, on the first turn
+    // after the pending flag was set, then clears itself.
+    if (stored && stored.gagOpenPending && turn > 1) {
+      blocks.push({
+        type: "text",
+        text:
+          "YOU STILL OWE THEM THE GREETING. Turn one was a sound-flub only " +
+          "(marker + one short reaction) — you deliberately held back the " +
+          "greeting, their name, and handing them the floor. Do that now, " +
+          "naturally, before moving into anything else. This is the only " +
+          "turn this applies to.",
+      });
+      waitUntil(setCall(callId, { gagOpenPending: false }).catch(() => {}));
+    }
 
     // --- MEAD HALL TRACE (dark unless TRACE_ENABLED=1) ---------------------
     const trace = makeTrace(callId, turn, waitUntil, stored?.targetId);
@@ -3807,46 +3895,44 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     }
 
     // TURN-1 GAG-OPEN — the narrow first slice of the gag lane.
-    // The messy text-open (HOST prompt) is the baseline for turn 1. But a
-    // "sound-open" gag bit (BIT-330: cup/dog/door, lane:"gag" + phase_pref:
-    // "opening" + turn-one-only) can OPEN the call instead — a puncture in the
-    // first breath. It CANNOT fire through the normal path: effectiveBar(1) is
-    // Infinity (warmup) so `fire` above is always false on turn 1. This is the
-    // gag lane's whole point — a SEPARATE clock that bypasses warmup/MIN_GAP/
-    // deploy-bar. Scope kept deliberately tiny here (turn 1 only, no suspend/
-    // resume, no slow-burn thread to pause — nothing is running yet on turn 1):
-    //   - only on turn === 1, and only if the normal path didn't already fire
-    //   - find an eligible gag+opening bit in the ranked pool (it's IN the pool;
-    //     the opening gate admits phase_pref "opening", the pool cap admits it
-    //     if listed — it just can't clear the warmup BAR, which we bypass here)
-    //   - roll GAG_OPEN_RATE (Call Design's text-vs-sound ratio knob)
-    //   - on a hit, fire it, bypassing bar + MIN_GAP
-    // A miss (or no eligible gag) leaves `fire` false -> the text-open runs.
+    // REDESIGNED (Sep 24) — the decision itself (text-fumble vs. sound-open)
+    // now happens ONCE, early, in the outer handler (resolveTurnOneOpen),
+    // before the opener overlay is even chosen, so the overlay can send the
+    // RIGHT content from the start (Continuing — no text-fumble — on a
+    // sound-open turn) instead of always sending the text-fumble and then
+    // patching a collision after the fact. This block's job now is just to
+    // CONSUME that decision and perform the injection; it never rolls dice
+    // itself. `preResolvedTurnOneOpen` is the param the outer handler passes;
+    // the sim-call path (runHostTurn, which has no overlay split to
+    // coordinate with) doesn't pass one, so it resolves fresh here instead —
+    // equally correct, just without the overlay coordination that path
+    // doesn't need anyway.
     let gagOpen = false;
-    // ONCE-PER-CALL GUARD (added 2026-07-23 after the live test): the agent
-    // fires a BARE TURN on silence, resending the same minimal message array —
-    // so countUserTurns still returns 1 and this block re-entered on EVERY
-    // silence nudge, re-firing the gag with the same directive and emitting the
-    // identical line three times ~25s apart (the "totally repetitive talk
-    // track"). turn===1 is NOT sufficient on its own because turn is derived
-    // from the caller-turn count, which a bare turn does not advance. Gate on
-    // whether ANY bit has already fired this call: stored.lastBitId is set the
-    // moment one does, so a second pass can never re-open. BIT-330's
-    // cooldown:999 does not help here — the gag-open path deliberately bypasses
-    // the scorer, so it bypasses cooldown too.
-    const alreadyFiredThisCall = !!(stored && stored.lastBitId);
-    if (!fire && turn === 1 && !alreadyFiredThisCall) {
-      const gagBit = ranked.find(
-        (r) =>
-          !r.excluded &&
-          r.score > -Infinity &&
-          laneOf(r.id) === "gag" &&
-          phaseOf(r.id) === "opening"
-      );
-      if (gagBit && Math.random() < GAG_OPEN_RATE) {
+    const turnOneOpen =
+      preResolvedTurnOneOpen || resolveTurnOneOpen(stored, turn);
+    if (!fire && turnOneOpen.mode === "sound_open" && turnOneOpen.bitId) {
+      const gagBit = ranked.find((r) => r.id === turnOneOpen.bitId);
+      if (gagBit) {
         top = gagBit;
         fire = true;
         gagOpen = true;
+        // Persist gagOpenPending so the NEXT turn knows it still owes the
+        // caller an actual greeting — BIT-901's own directive defers it, and
+        // nothing else would carry that forward (see the deferred-greeting
+        // block near `turn`'s definition, above). No override-instruction
+        // needed anymore: the overlay this turn is Continuing, which never
+        // contained the text-fumble content in the first place, so there's
+        // nothing to collide with.
+        waitUntil(setCall(callId, { gagOpenPending: true }).catch(() => {}));
+      } else {
+        // Defensive only — resolveTurnOneOpen picked this bitId from the
+        // same "active + gag + opening" registry filter `ranked` is built
+        // from, so this should be unreachable. Log loudly if it ever isn't,
+        // rather than silently fall through to a turn with no opener at all.
+        console.log(
+          "TURN1-OPEN-MISS resolved bitId=" + turnOneOpen.bitId +
+          " but not found in ranked pool — falling back to text-fumble"
+        );
       }
     }
 
