@@ -44,7 +44,7 @@ export async function getCallBySlug(slug) {
   if (!slug) return null;
   return getCall("slug:" + slug);
 }
-const CALL_PREFIX_COLUMNS = "prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,opener_overlay_continuing,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used,pending_bench_awareness,latest_call_id,active_generation,bench_present,first_seen_at,caller_presenting,pitch_summary,host_name,recording_notice_given,host_turn_count,history_rev_seen,opener_served";
+const CALL_PREFIX_COLUMNS = "prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,opener_overlay_continuing,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used,pending_bench_awareness,latest_call_id,active_generation,bench_present,first_seen_at,caller_presenting,pitch_summary,host_name,recording_notice_given,host_turn_count,history_rev_seen,opener_served,handoff_given";
 export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const baseUrl = `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}`;
@@ -151,11 +151,17 @@ export async function getCall(callId) {
     // already confirmed.
     historyRevSeen: rows[0].history_rev_seen ?? null,
     openerServed: rows[0].opener_served ?? false,
+    // HANDOFF-GIVEN (2026-09-24) — mirrors openerServed above, for the
+    // "you never start the business" hand-off phrase pool (see
+    // completions.js buildSystemBlocks for the full rationale). True once
+    // any of the 8 listed hand-off phrases has genuinely appeared in a
+    // non-corrupted host turn this call; never un-set.
+    handoffGiven: rows[0].handoff_given ?? false,
   };
 }
 export async function setCall(
   callId,
-  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, openerOverlayContinuing, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed, pendingBenchAwareness, latestCallId, activeGeneration, benchPresent, firstSeenAt, callerPresenting, pitchSummary, hostName, recordingNoticeGiven, hostTurnCount, historyRevSeen, openerServed }
+  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, openerOverlayContinuing, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed, pendingBenchAwareness, latestCallId, activeGeneration, benchPresent, firstSeenAt, callerPresenting, pitchSummary, hostName, recordingNoticeGiven, hostTurnCount, historyRevSeen, openerServed, handoffGiven }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -201,6 +207,7 @@ export async function setCall(
   if (hostTurnCount !== undefined) row.host_turn_count = hostTurnCount;
   if (historyRevSeen !== undefined) row.history_rev_seen = historyRevSeen;
   if (openerServed !== undefined) row.opener_served = openerServed;
+  if (handoffGiven !== undefined) row.handoff_given = handoffGiven;
   if (callerRedirected !== undefined) row.caller_redirected = callerRedirected;
   if (callerCrude !== undefined) row.caller_crude = callerCrude;
   if (crudeImpersonalCount !== undefined) row.crude_impersonal_count = crudeImpersonalCount;

@@ -888,8 +888,63 @@ export function loadout(state, { pool = BITS } = {}) {
     return true; // everything else is eligible; gear/score decides ranking
   });
 }
+// RANDOMNESS LAYER (Sep 24, Andrew: scoring felt "fruitless" — selectBit
+// always took the literal #1 score, and an exact tie always broke the same
+// way (registry order, via Array.sort's ES2019+ stability) — confirmed on
+// BIT-507 vs "You Were Going To"/"I Thought You Said" tying at 2.0 every
+// call, same winner forever. Covers Bits' options 1+2+3 from that
+// discussion, folded into one mechanism rather than three separate ones:
+//   1. exact ties no longer resolve by registry order — they're just the
+//      LOTTERY_MARGIN=0 case of the draw below, so a real coin-flip.
+//   2. near-ties (anything within LOTTERY_MARGIN of the top score) enter a
+//      WEIGHTED lottery (weight = score) instead of the top score winning
+//      outright — a 2.0 fuel match still beats a 1.5 phase match more often
+//      than not, just not literally every single time.
+//   3. "small random jitter" is implemented as the weighted draw itself
+//      (Math.random() against cumulative weight) rather than adding noise
+//      directly to each score before sort — additive jitter would corrupt
+//      the exact numbers rankBits()/scoreBit() hand to Mead Hall's panel for
+//      audit ("why" breakdown), which needs to stay deterministic and
+//      readable. Only the FINAL PICK is randomized; the displayed scores and
+//      ranking order are untouched.
+// A contender must independently clear `threshold` to enter the draw — the
+// lottery can promote a near-tie ABOVE the top pick, never a bit that
+// wouldn't have qualified on its own.
+const LOTTERY_MARGIN = 0.75;
+function drawBit(ranked, threshold) {
+  const top = ranked[0].score;
+  const contenders = ranked.filter(
+    (r) => r.score >= threshold && top - r.score <= LOTTERY_MARGIN
+  );
+  let chosen;
+  if (contenders.length <= 1) {
+    chosen = ranked[0];
+  } else {
+    const weights = contenders.map((r) => Math.max(r.score, 0.01));
+    const total = weights.reduce((a, b) => a + b, 0);
+    let pick = Math.random() * total;
+    chosen = contenders[contenders.length - 1]; // float rounding fallback
+    for (let i = 0; i < contenders.length; i++) {
+      pick -= weights[i];
+      if (pick <= 0) { chosen = contenders[i]; break; }
+    }
+  }
+  // DRAW LOGGING (Sep 24, Bits' ask, following the weighted-lottery ship) —
+  // one line per fire showing the actual draw pool and pick, so a non-top
+  // pick reads as "the lottery did this on purpose" in the logs instead of
+  // looking like a bug when it doesn't match the Mead Hall panel's displayed
+  // top score. Logs the real contenders (>=1 entries; a single-candidate
+  // "draw" still logs so the line is consistently greppable per turn).
+  const bare = (id) => String(id).replace(/^BIT-/, "");
+  const drawPool = (contenders.length ? contenders : [ranked[0]])
+    .map((r) => bare(r.id) + ":" + r.score.toFixed(1))
+    .join(", ");
+  console.log("BIT-DRAW pool=[" + drawPool + "] pick=" + bare(chosen.id));
+  return chosen;
+}
 // Mid-call pick: rank the LOADOUT (not the whole registry) and take the top if
-// it clears the deploy bar; else null ("just keep talking").
+// it clears the deploy bar; else null ("just keep talking"). Among near-ties
+// at the top, drawBit() runs the weighted lottery above instead of a fixed pick.
 export function selectBit(state, { threshold = DEPLOY_THRESHOLD, pool = BITS } = {}) {
   const loadoutPool = loadout(state, { pool });
   const ranked = rankBits(state, { pool: loadoutPool });
@@ -897,7 +952,8 @@ export function selectBit(state, { threshold = DEPLOY_THRESHOLD, pool = BITS } =
   if (!top || top.score < threshold) {
     return { bit: null, reason: "below deploy threshold", ranked, pool: loadoutPool.length };
   }
-  return { bit: top, reason: "fires", ranked, pool: loadoutPool.length };
+  const chosen = drawBit(ranked, threshold);
+  return { bit: chosen, reason: "fires", ranked, pool: loadoutPool.length };
 }
 // Death Blow: the top 700-series finisher, always thrown (threshold bypassed).
 // Special rules from the Bits handoff: BIT-704 (Colleague Pull) overrides all
