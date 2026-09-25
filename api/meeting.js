@@ -417,7 +417,7 @@ function wireRoom(rm){
         $("caption").style.display = "block";
         $("captionText").textContent = txt
           .replace(/\\[\\[[^\\]]*\\]\\]/g, "")
-          .replace(/<(?:expr|emotion)\b[^>]*\/>/g, "")
+          .replace(/<(?:expr|emotion)\\b[^>]*\\/>/g, "")
           .trim();
       }
     } catch(e){}
