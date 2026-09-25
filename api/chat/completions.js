@@ -2777,6 +2777,12 @@ export default async function handler(req) {
     t0,
     genStart,
     callId,
+    // SECOND SUPERSESSION CHECKPOINT (Sep 24) — carried in so
+    // anthropicToOpenAISSE can re-check it once, right before the first
+    // token would actually reach the caller. See that check's own comment
+    // for why the ORIGINAL Aug 12 checkpoint (right before this fetch)
+    // isn't enough by itself.
+    myGeneration,
     turn: countUserTurns(messages),
     hostName: hostNameFromBody(body), // per-call host name for the utterance trace
     // target the booking token was minted for — stamped on the utterance event
@@ -5727,6 +5733,7 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
       let appendSent = false;
       let hostText = "";
       let firstDeltaSeen = false; // for the first-delta stage-direction/quote scrub
+      let supersedeChecked = false; // SECOND SUPERSESSION CHECKPOINT, see below
       let svScrubBuf = "";        // holds partial *action*/[tag] across deltas
       let svSneezeSent = false;   // diagnostic: did [SNEEZE] actually go downstream?
       let svSneezeRawLogged = false; // one mid-stream "raw" log per turn (survives disconnects)
@@ -5983,6 +5990,40 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
         while (true) {
           const { done: streamDone, value } = await reader.read();
           if (streamDone) break;
+          // SECOND SUPERSESSION CHECKPOINT (Sep 24) — the Aug 12 "UNCANCELLED-
+          // STACKING FIX" only checks once, right before this fetch starts.
+          // Confirmed live (three separate real test calls) that two requests
+          // can both pass that single check and both stream real content: if
+          // request B doesn't stamp over request A's token until AFTER A's
+          // check already ran, A has no way to know. This is the second,
+          // later checkpoint that closes most of that gap — checked exactly
+          // once, on the FIRST chunk of real data back from Anthropic (before
+          // anything has been decoded/enqueued to the caller), by which point
+          // a genuinely-newer request has almost always already stamped its
+          // own token (request entry happens fast; this is typically 1s+
+          // into generation). Not airtight — a request that arrives in the
+          // narrow window between this check and controller.enqueue could
+          // still slip through — but it eliminates the two documented
+          // duplicate-generation calls' shape. Runs at most once per
+          // generation (one extra getCall read), never per-chunk.
+          if (!supersedeChecked) {
+            supersedeChecked = true;
+            if (meta && meta.myGeneration && meta.callId) {
+              const liveCheck = await getCall(meta.callId).catch(() => null);
+              if (liveCheck && liveCheck.activeGeneration && liveCheck.activeGeneration !== meta.myGeneration) {
+                console.log(
+                  "SUPERSEDED-POST — a newer request took over during our " +
+                  "own Anthropic call; discarding before the first token " +
+                  "reached the caller. mine=" + meta.myGeneration +
+                  " current=" + liveCheck.activeGeneration
+                );
+                try { firstTokenController && firstTokenController.abort(); } catch { /* best effort */ }
+                send({}, "stop");
+                done();
+                return;
+              }
+            }
+          }
           buffer += decoder.decode(value, { stream: true });
 
           let idx;
