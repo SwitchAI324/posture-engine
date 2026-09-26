@@ -2397,14 +2397,57 @@ export default async function handler(req) {
   // metadata, and FALL BACK to the plain line if it's absent (older agent, or a
   // bare turn PE inferred from role alone). Never a hard dependency.
   let messagesForModel = messages;
+  // Hoisted out of the block below so the PE_FLUB gate further down (see
+  // isFlubTurn's own comment near the meta object) can tell a genuine
+  // turn-1 flub completion (lastMessageRole !== "assistant", host hasn't
+  // spoken yet this call) apart from a later re-ask on the SAME
+  // countUserTurns()===1 message count (a silence/reaction-check nudge
+  // AFTER the flub already aired, where lastMessageRole === "assistant").
+  let lastMessageRole = null;
   {
     const lastRole =
       messages && messages.length
         ? messages[messages.length - 1] && messages[messages.length - 1].role
         : null;
+    lastMessageRole = lastRole;
     const callerHasSpoken =
       messages && messages.filter((m) => m && m.role === "user").length > 0;
     if (lastRole === "assistant" && callerHasSpoken) {
+      // REACTION-CHECK (Sep 25, Voice) — a dedicated, faster check distinct
+      // from the general silence_beat ladder. Voice arms a one-shot 5.0s
+      // timer off the pe_flub-stamped completion (see isFlubTurn below);
+      // if the caller stays quiet the full 5s, Voice fires ONE request
+      // tagged metadata.reaction_check=true (never mixed with
+      // silence_beat — Voice's own spec) before its normal ladder resumes
+      // from zero. Checked BEFORE the beat escalation below so it always
+      // wins when present. Content stays a stage direction, not dictated
+      // words, same convention as every other synthetic line here — Bits/
+      // Canon's directive text (already shipped on BIT-901/902/903/904/906
+      // + the v0.13 baseline) supplies the actual callback+check-in line.
+      // Name handling (Bits' Q4): no PE-side name flag needed — the model
+      // already has the caller's name in its own fuel/dossier context when
+      // one exists (same fact BIT-517 and others already quote from), so
+      // the directive itself can say "use it if you have it, skip it if
+      // you don't" and the model's own context answers that, cleanly,
+      // without PE plumbing a separate boolean through.
+      const reactionCheck =
+        body?.metadata?.reaction_check ??
+        body?.extra_body?.metadata?.reaction_check ??
+        body?.call?.metadata?.reaction_check ??
+        null;
+      if (reactionCheck) {
+        const reactionSynthetic =
+          "[This is the reaction-check moment: the caller has stayed quiet " +
+          "since your flub-recovery line landed. Give ONE short callback+" +
+          "check-in line — briefly reference what you just said falling " +
+          "flat, then check if they're there. Use their first name ONLY if " +
+          "it's already in your context; if it isn't, skip the name " +
+          "entirely rather than guessing or inventing one. This is still " +
+          "NOT the greeting — do not greet them, do not hand them the " +
+          "floor, do not restart. One line, then stop.]";
+        messagesForModel = messages.concat([{ role: "user", content: reactionSynthetic }]);
+        console.log("REACTION-CHECK — dedicated post-flub check-in line requested");
+      } else {
       const beatRaw =
         body?.metadata?.silence_beat ??
         body?.extra_body?.metadata?.silence_beat ??
@@ -2468,8 +2511,29 @@ export default async function handler(req) {
           "[Still nothing. Stop wondering about the connection — you're now genuinely concerned about them as a person, not the call. Reach out with real, warm concern for how they are; the pitch and the line no longer matter to you.]";
       }
       messagesForModel = messages.concat([{ role: "user", content: synthetic }]);
+      }
     }
   }
+
+  // PE_FLUB MARKER (Sep 25, Voice/Bits) — true only on the genuine turn-1
+  // opener/flub completion itself: the bit-fired sound_open path AND the
+  // baseline text_fumble path both count (resolveTurnOneOpen's mode is an
+  // overloaded sentinel — "text_fumble" also covers every turn that ISN'T
+  // turn 1 at all, so mode alone can't gate this; countUserTurns===1 plus
+  // lastMessageRole !== "assistant" is what actually pins it to "the host's
+  // very first reply this call"). Excludes: voicemail mode (its own
+  // register, no callback-beat concept); any later re-ask that shares the
+  // same countUserTurns()===1 count but comes AFTER the flub already aired
+  // (silence_beat or reaction_check nudges — those have lastMessageRole
+  // === "assistant", since the flub is the last thing in history by then).
+  // Consumed below in chunkStr: stamped as delta.extra_content.pe_flub on
+  // the first/role chunk, same extra_content -> delta.extra channel as
+  // pe_stall/bench_speak. Voice arms its one-shot 5.0s reaction-check timer
+  // off this stamp; see the reaction_check branch above for the other half.
+  const isFlubTurn =
+    !isVoicemailMode &&
+    countUserTurns(messages) === 1 &&
+    lastMessageRole !== "assistant";
 
   // STRIP BENCH-SPOKEN LINES FROM THE HOST'S OWN CONTEXT (Aug 9, found
   // live — a real, confirmed bug, not defensive extra). Root cause traced
@@ -2819,6 +2883,9 @@ export default async function handler(req) {
     benchSpeak: benchTakeover && BENCH_VOICED_CHARACTERS.includes(benchTakeover.character)
       ? benchTakeover
       : null,
+    // PE_FLUB (Sep 25) — see isFlubTurn's own comment above for the full
+    // gate. Consumed in chunkStr below, same stamping pattern as pe_stall.
+    flub: isFlubTurn,
   };
 
   return new Response(anthropicToOpenAISSE(upstream.body, meta, benchAppend, firstTokenController), {
@@ -5669,6 +5736,19 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
       outDelta = {
         ...outDelta,
         extra_content: { ...(outDelta.extra_content || {}), bench_speak: meta.benchSpeak },
+      };
+    }
+    // PE_FLUB (Sep 25, Voice/Bits — built) — same channel/pattern as
+    // pe_stall/bench_speak above: extra_content survives the LiveKit plugin
+    // translation to delta.extra, stamped on the FIRST chunk only (identified
+    // by delta.role), merged rather than overwriting so it can coexist with
+    // pe_stall/bench_speak if those ever coincide. Voice reads
+    // delta.extra.pe_flub to arm its one-shot 5.0s reaction-check timer; see
+    // isFlubTurn's comment (above, near the meta object build) for the gate.
+    if (meta.flub && delta && delta.role) {
+      outDelta = {
+        ...outDelta,
+        extra_content: { ...(outDelta.extra_content || {}), pe_flub: true },
       };
     }
     // RECORDING-STOP SIGNAL (2026-09-07, Recording — REVISED design,
