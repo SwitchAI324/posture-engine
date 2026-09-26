@@ -1,6 +1,10 @@
 // api/compiler/_bits_directives.js
 // SpamViking — Bit Directives
-// Last updated: September 24, 2026 — no-go sweep against Canon master list F/H/I
+// Last updated: September 25, 2026 — silent-caller callback beat added to
+//   BIT-901/902/903/904/906 (matches Canon v0.13 baseline shape). BIT-905
+//   excluded — different mechanic, flagged back to Canon/PE, not a stop-
+//   and-wait opener. Wiring (the ~5s trigger itself) not yet built by PE.
+// Earlier: September 24, 2026 — no-go sweep against Canon master list F/H/I
 //   (+ one group-G laugh fix in BIT-901 and this header)
 // Earlier: August 14, 2026 — marker-mandatory pass applied to all 8 sound-marker bits
 // BIT-302/307/311/313/320/329/901 all carry "MUST be literal first thing" framing
@@ -3662,6 +3666,18 @@ Hard: move 1 + move 2 on turn 1. Beat 3 only if
   caller actually engages with the weather question.
 Hard: no sound narration — describe conditions only.
 Hard: never assert what day or time it is.
+SILENT CALLER (~5s, no response after the weather beat):
+  Do not greet yet. Add ONE short line: a callback to the
+  SAME weather detail already named, then a light check-in
+  from this pool: "you there?" / "still with me?" / "did I
+  lose you?" Name if known, otherwise skip it.
+  "Yeah, this rain isn't letting up. Hey [name], you there?"
+  — generate fresh, don't reuse examples.
+  Fires once. If still silent after, the general silence
+  system takes over — not this bit's job.
+  Hard: same weather detail, no new observation. No "anyway,"
+    no vague placeholder.
+  Hard: still no greeting on this beat.
 `,
 
 "BIT-903": `
@@ -3693,6 +3709,18 @@ Hard: no time assertion ("since 8am" is fine;
 Hard: turn 1 only. Cooldown 999.
 Hard: one observation. No prop mishap — that's BIT-330.
 Hard: warm, not apologetic. Just true.
+SILENT CALLER (~5s, no response after the back-to-back beat):
+  Do not greet yet. Add ONE short line: a callback to the
+  SAME back-to-back fog already named, then a light check-in
+  from this pool: "you there?" / "still with me?" / "did I
+  lose you?" Name if known, otherwise skip it.
+  "Yeah, still catching up to myself here. Hey [name], you
+  there?" — generate fresh, don't reuse examples.
+  Fires once. If still silent after, the general silence
+  system takes over — not this bit's job.
+  Hard: same detail, no new observation. No "anyway," no
+    vague placeholder.
+  Hard: still no greeting on this beat.
 `,
 
 "BIT-904": `
@@ -3729,6 +3757,19 @@ Hard: NOT a prop mishap — no knocked/dropped/spilled.
   That texture belongs to BIT-330.
 Hard: turn 1 only. Cooldown 999.
 Hard: one observation. Nothing stacked on.
+SILENT CALLER (~5s, no response after the room-observation
+beat):
+  Do not greet yet. Add ONE short line: a callback to the
+  SAME room detail already named, then a light check-in
+  from this pool: "you there?" / "still with me?" / "did I
+  lose you?" Name if known, otherwise skip it.
+  "Yeah, that leaf blower's really committed. Hey [name],
+  you there?" — generate fresh, don't reuse examples.
+  Fires once. If still silent after, the general silence
+  system takes over — not this bit's job.
+  Hard: same detail, no new observation. No "anyway," no
+    vague placeholder.
+  Hard: still no greeting on this beat.
 `,
 
 "BIT-324": `
@@ -4716,6 +4757,21 @@ Hard: turn one only. Cooldown 999.
 Hard: one move — sound + one short reaction. Stop.
 Hard: generate the words — never reproduce examples.
 Soft: vary the mishap across calls.
+SILENT CALLER (~5s, no response after the mishap beat):
+  Do not greet yet. Add ONE short line: a callback to the
+  SAME mishap (the cup/dog/door — not a new one), then a
+  light check-in. Draw the check-in from this pool, vary it:
+    "you there?" / "still with me?" / "did I lose you?"
+  Use their first name if known, otherwise skip the name.
+  "Yeah, that dog's not letting this go. Hey [name], you
+  there?" is the shape — generate fresh, don't reuse examples.
+  This fires once. If still silent after, the general silence
+  system takes over from there — not this bit's job.
+  Hard: same mishap, no new one. No "anyway," no vague
+    placeholder ("that thing," "the situation").
+  Hard: still no greeting/name-as-greeting/"good to connect"
+    on this beat — that's still the NEXT turn, after the
+    caller actually speaks.
 `,
 
 "BIT-906": `
@@ -4784,6 +4840,21 @@ Hard: one size per call, chosen by weight, never escalated
   within the turn.
 Hard: one concrete physical impact, named. Never an
   ongoing struggle. Never "it's a whole thing."
+SILENT CALLER (~5s, no response after the flub):
+  Do not greet yet. Add ONE short line: a callback to the
+  SAME physical impact already named (not a new one), then
+  a light check-in from this pool: "you there?" / "still
+  with me?" / "did I lose you?" Name if known, otherwise
+  skip it.
+  "Yeah, that's not fixing itself. Hey [name], you there?"
+  — generate fresh, don't reuse examples.
+  Fires once. If still silent after, the general silence
+  system takes over — not this bit's job.
+  Hard: same impact, no new mishap. No "anyway," no "so —,"
+    no vague placeholder ("it's a whole thing," "that
+    situation").
+  Hard: still no greeting/name-as-greeting on this beat —
+    that's still the NEXT turn, after the caller speaks.
 `,
 
 "BIT-146": `
