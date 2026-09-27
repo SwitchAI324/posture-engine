@@ -2314,16 +2314,30 @@ export default async function handler(req) {
     // a populated-but-empty string is used as-is (no overlay text at all).
     const continuingAvailable =
       stored.openerOverlayContinuing !== null && stored.openerOverlayContinuing !== undefined;
-    // SOUND-OPEN counts as "already spoke for overlay purposes" even though
-    // hostAlreadySpokeForOverlay (evidence-based, from real prior turns)
-    // hasn't and can't have latched yet — this IS turn 1. Continuing has no
-    // turn-one-only "arrive out of a mess" content (confirmed structurally
-    // absent, per the comment above), so it's exactly the collision-free
-    // content a sound-open turn needs; nothing else about Continuing assumes
-    // a greeting already happened, so this is safe to use standalone.
+    // REVERTED (Sep 27) — sound-open used to ALSO swap to Continuing here,
+    // on the theory that Continuing (minus the turn-one-only "arrive out
+    // of a mess" content) was the collision-free choice for a bit-driven
+    // turn 1. That reasoning missed something that became true only
+    // AFTER this was written: Canon has since put real governance rules
+    // INSIDE the turn-one-only block — the hard turn-one-greeting-ban
+    // (v0.11) and the post-flub check-in beat (v0.13) both live there,
+    // not just flub-composition narrative. Swapping to Continuing on a
+    // sound-open turn silently withheld BOTH of those from the model on
+    // every turn-1 bit fire (BIT-901 through 906), not just the "arrive
+    // out of a mess" text this was meant to skip. CONFIRMED on two real
+    // test calls same day (2026-09-27, BIT-902 and BIT-904): both stacked
+    // a greeting onto the flub in the same breath — exactly the failure
+    // the withheld ban exists to stop, on the ONLY two sound-open samples
+    // checked. This turn is turn 1 no matter who supplied its content, so
+    // it gets the FULL openerOverlay like any other turn 1; the modest
+    // cost (the model re-reading flub-composition guidance it may not
+    // need this turn) is far cheaper than silently dropping governance
+    // rules a bit can't recite on PE's behalf. Continuing now swaps in
+    // ONLY on real evidence the host has already spoken (turn 2+), same
+    // as a baseline-flub call.
     const usedContinuing =
       !useBusiness &&
-      (hostAlreadySpokeForOverlay || turnOneOpen.mode === "sound_open") &&
+      hostAlreadySpokeForOverlay &&
       continuingAvailable;
     const overlay = useBusiness
       ? stored.businessOverlay
