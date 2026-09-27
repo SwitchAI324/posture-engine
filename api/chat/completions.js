@@ -1438,13 +1438,26 @@ const GAG_OPEN_RATE = parseFloat(process.env.GAG_OPEN_RATE || "0.25");
 // point in the request). Only consulted on turn 1, only if no bit has
 // already fired this call (mirrors the ONCE-PER-CALL GUARD on the injection
 // side, below).
+// TURN-1 HARD EXCLUSION (2026-09-27, Andrew) — BIT-905 (The Punctuality)
+// requires too much verbiage for a turn-1 flub (its own scripted minimum is
+// ~49 words across 3 mandatory beats; a real call ran it to 92). Andrew's
+// Sep 24/25 ruling for this slot was specifically a short flub, then stop.
+// Excluded here directly rather than waiting on Bits to re-tag the registry
+// (lane/phase_pref) — remove this once BIT-905 is properly relocated out of
+// the opener_turn1 family on Bits' side, at which point this becomes a no-op.
+const TURN1_OPEN_EXCLUDE = ["BIT-905"];
+
 function resolveTurnOneOpen(stored, turnNow) {
   const alreadyFiredThisCall = !!(stored && stored.lastBitId);
   if (turnNow !== 1 || alreadyFiredThisCall) {
     return { mode: "text_fumble", bitId: null };
   }
   const eligible = BITS.filter(
-    (b) => b.status === "active" && laneOf(b.id) === "gag" && phaseOf(b.id) === "opening"
+    (b) =>
+      b.status === "active" &&
+      laneOf(b.id) === "gag" &&
+      phaseOf(b.id) === "opening" &&
+      !TURN1_OPEN_EXCLUDE.includes(b.id)
   );
   if (eligible.length && Math.random() < GAG_OPEN_RATE) {
     // More than one eligible bit is a real possibility once Bits/Canon add
