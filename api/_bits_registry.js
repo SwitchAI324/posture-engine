@@ -1,9 +1,15 @@
 // SpamViking — Bits Registry
+// v1 — Sep 27, 2026 — BIT-903/904/906 parked, BIT-905 moved out of
+//   opener_turn1 (now family:personal_observation, pool:middle),
+//   BIT-907 (The Arrival) added. opener_turn1 family is now 901/902/907.
 // Source of truth: SpamViking_BitsRegistry.json + session edits
-// Last updated: September 8, 2026
 // CRITICAL: archetypes field restored — do not remove until PE confirms scorer gate update
 // family field: 37 fine-grained subgroups
 // channel enum: audio | video | phone
+// VERSIONING: this file carries a version integer (v1, v2, ...) on line 2,
+// bumped by exactly 1 on every edit, with a one-line change description.
+// Treat the integer as the check — if it doesn't match what you last saw,
+// this isn't the copy you think it is. Don't rely on the date alone.
 
 export const BITS = [
   {
@@ -2095,7 +2101,8 @@ export const BITS = [
   {
     "id": "BIT-903",
     "name": "The Back-To-Back",
-    "status": "active",
+    "status": "parked",
+    "park_reason": "Andrew, Sep 27 \u2014 not funny as a turn-1 opener; may return as mid-call filler for a tangent/coincidence moment, not decided",
     "lane": "gag",
     "phase_pref": "opening",
     "family": "opener_turn1",
@@ -2111,7 +2118,8 @@ export const BITS = [
   {
     "id": "BIT-904",
     "name": "The Room Observation",
-    "status": "active",
+    "status": "parked",
+    "park_reason": "Andrew, Sep 27 \u2014 not funny enough as-is; no sound behind it, unlike the rest of the family",
     "lane": "gag",
     "phase_pref": "opening",
     "family": "opener_turn1",
@@ -2121,6 +2129,40 @@ export const BITS = [
     "max_fires_per_call": 1,
     "absurdity": 2,
     "vocal_tag": "content",
+    "category": "900s \u2014 Opener",
+    "archetypes": "universal"
+  },
+  {
+    "id": "BIT-906",
+    "name": "The Text-Flub Open",
+    "status": "parked",
+    "park_reason": "Andrew, Sep 27 \u2014 redundant with BIT-901 (same physical-mishap premise, no sound behind it); park",
+    "lane": "gag",
+    "phase_pref": "opening",
+    "family": "opener_turn1",
+    "pool": "early",
+    "trigger": "call_turn_1",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 2,
+    "vocal_tag": "neutral",
+    "channel": "video",
+    "category": "900s \u2014 Opener",
+    "archetypes": "universal"
+  },
+  {
+    "id": "BIT-907",
+    "name": "The Arrival",
+    "status": "active",
+    "lane": "gag",
+    "phase_pref": "opening",
+    "family": "opener_turn1",
+    "pool": "early",
+    "trigger": "call_turn_1",
+    "cooldown": 999,
+    "max_fires_per_call": 1,
+    "absurdity": 2,
+    "vocal_tag": "neutral",
     "category": "900s \u2014 Opener",
     "archetypes": "universal"
   },
