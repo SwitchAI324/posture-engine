@@ -1,4 +1,9 @@
 // SpamViking — Bits Registry
+// v2 — Sep 28, 2026 — added compliance_check field (pilot) to BIT-509
+//   through BIT-513: a short semantic description of what satisfies that
+//   bit's REQUIRED ACTION, for PE to check turn content against post-hoc.
+//   Pilot scope only — not yet extended to the other ~25 REQUIRED-ACTION
+//   bits pending results.
 // v1 — Sep 27, 2026 — BIT-903/904/906 parked, BIT-905 moved out of
 //   opener_turn1 (now family:personal_observation, pool:middle),
 //   BIT-907 (The Arrival) added. opener_turn1 family is now 901/902/907.
@@ -1777,6 +1782,7 @@ export const BITS = [
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "prior contact confirmed, spammer made a commitment",
+    "compliance_check": "the turn references something specific the caller committed to on a prior call (a named thing they said they'd do), not a general follow-up",
     "archetypes": "universal"
   },
   {
@@ -1792,6 +1798,7 @@ export const BITS = [
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "prior contact confirmed, spammer made a claim",
+    "compliance_check": "the turn names a specific discrepancy between something the caller said before and what they're saying now, framed as confusion not a challenge",
     "archetypes": "universal"
   },
   {
@@ -1807,6 +1814,7 @@ export const BITS = [
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "prior contact confirmed, spammer committed to send materials",
+    "compliance_check": "the turn references a specific document or material the caller said they'd send on a prior call, and asks about it",
     "archetypes": "universal"
   },
   {
@@ -1822,6 +1830,7 @@ export const BITS = [
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "prior contact confirmed, location known",
+    "compliance_check": "the turn checks in on the specific status of something that was left in motion (undecided/in progress) on a prior call, not a generic status check",
     "archetypes": "universal"
   },
   {
@@ -1837,6 +1846,7 @@ export const BITS = [
     "absurdity": 2,
     "vocal_tag": "excited",
     "requires_context": "prior contact confirmed, materials received",
+    "compliance_check": "the turn names a specific detail from the caller's own materials (deck, website, or similar), not a generic reference to \"your materials\"",
     "archetypes": "universal"
   },
   {
