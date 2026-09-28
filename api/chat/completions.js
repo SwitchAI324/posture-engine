@@ -5939,6 +5939,38 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
       let svScrubBuf = "";        // holds partial *action*/[tag] across deltas
       let svSneezeSent = false;   // diagnostic: did [SNEEZE] actually go downstream?
       let svSneezeRawLogged = false; // one mid-stream "raw" log per turn (survives disconnects)
+      // TURN1-NAME-STRIP (2026-09-28, PE backstop, v2 — widened after
+      // checking Canon's SOURCE doc worked example against the two real
+      // calls it names). Turn 1 is the outbound opener, generated before
+      // the target has said a word (same meta.turn===1 convention the
+      // TURN-1 CACHE MISS log above already relies on). CORE/Canon's rule
+      // is the host never names the target or greets them with "good/great
+      // to meet you" until AFTER the target has spoken — reinforced three
+      // separate times (base CORE rule, a worked-example citation, BIT-
+      // 902's own dedicated global rule) and still leaking on real calls.
+      // v1 of this only checked the LEADING clause of turn 1 and gave up
+      // after the first sentence/80 chars. That's wrong against the actual
+      // evidence: Canon's own worked example gives both real shapes —
+      // "William, good to meet you" cold on turn 1 (sv-test-andy-
+      // mulo1igtwwid / mukgvvpny2wx shape), AND "Hi — William, good to
+      // meet you" BURIED inside a turn that also stacked a flub, a reset,
+      // a second flub, and a garbled-input check first (mukgtc06iu1q,
+      // confirmed root cause: BIT-904 drew live off a registry-path
+      // mismatch and never got the turn-1 no-greeting line 901/902/907
+      // carry). A leading-clause-only check can never catch that second
+      // shape. So v2 scans continuously across the WHOLE of turn 1, not
+      // just its opening clause, using the standard streaming-regex
+      // pattern: hold back a trailing window (T1_HOLDBACK chars) of
+      // accumulated text on every delta — large enough that no match can
+      // be mid-formed right at the cut point — strip any complete matches
+      // in the safe-to-emit prefix, and only release the holdback (with a
+      // final strip pass) once the turn ends. Still a deterministic string
+      // cut, never a regenerate — the cost is a small constant trailing
+      // lag on turn 1 only, not a redo of the whole turn.
+      let t1Buf = "";               // accumulated turn-1 text not yet safely emitted
+      const T1_HOLDBACK = 150;      // chars held back each round — comfortably longer than any realistic match
+      const T1_NAME_STRIP_RE =
+        /(?:\b(?:hi|hey|hello|oh)\b[\s,.!—-]*)?["“”]?\b[A-Z][A-Za-z’.-]*(?:\s+[A-Z][A-Za-z’.-]*){0,2}\s*,\s*(?:it'?s\s+|so\s+|really\s+)*(?:good|great|nice|lovely)\s+to\s+(?:meet|talk to|hear from|connect with)\s+you\b[.,!—-]*\s*/gi;
       // utterance emitter: turn+0.5 so the host line sorts after this turn's
       // analysis events but before the next turn — no seq collision.
       const utterTrace =
@@ -6453,6 +6485,11 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
                 // (redial-by-number reattaches either direction, no
                 // queuing needed). Full history /areas/vapi-expunge.md.
                 // First emitted chunk: also strip a leading wrapping quote.
+                // Runs BEFORE the TURN1-NAME-STRIP buffering below, on the
+                // real raw first chunk — TTFT, the quote-strip, and the
+                // vocalTag insertion all care about the true first token
+                // from the model, not about whichever chunk happens to
+                // clear the name-strip holdback window first.
                 if (!firstDeltaSeen && emit) {
                   firstDeltaSeen = true;
                   // LATENCY INSTRUMENTATION (Aug 12) — real time-to-first-
@@ -6488,9 +6525,54 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
                     emit = '<expr type="expression" label="' + meta.vocalTag + '"/>' + emit;
                   }
                 }
+                // TURN1-NAME-STRIP: continuous sliding-window strip across
+                // all of turn 1 (see the state-var comment above for why —
+                // the confirmed leak shapes aren't all at the very front).
+                // Accumulate into t1Buf, strip any COMPLETE matches, and
+                // only release everything except the trailing T1_HOLDBACK
+                // chars (which might still be a match forming) — same
+                // shape as the stage-direction scrub above, applied for
+                // the whole turn instead of per-marker. Deliberately AFTER
+                // the firstDeltaSeen block above, so this only delays
+                // SENDING, never the TTFT measurement or the one-time
+                // quote/vocalTag transforms.
+                if (meta && meta.turn === 1) {
+                  t1Buf += emit;
+                  emit = "";
+                  t1Buf = t1Buf.replace(T1_NAME_STRIP_RE, function (m) {
+                    console.log(
+                      "TURN1-NAME-STRIP fired — turn=1 callId=" +
+                      JSON.stringify(meta && meta.callId) +
+                      " cut=" + JSON.stringify(m.trim())
+                    );
+                    return "";
+                  });
+                  if (t1Buf.length > T1_HOLDBACK) {
+                    emit = t1Buf.slice(0, t1Buf.length - T1_HOLDBACK);
+                    t1Buf = t1Buf.slice(t1Buf.length - T1_HOLDBACK);
+                  }
+                }
                 if (emit) send({ content: emit });
               }
             } else if (p.type === "message_stop" || p.type === "error") {
+              // TURN1-NAME-STRIP: resolve and flush any still-held buffer
+              // (a very short turn 1 could hit message_stop before 80
+              // chars accumulated in the per-delta check above). Run the
+              // same strip once more over whatever's left (a match could
+              // be sitting right at the tail we were holding back) and
+              // release all of it — there's no more text coming to wait on.
+              if (meta && meta.turn === 1 && t1Buf) {
+                t1Buf = t1Buf.replace(T1_NAME_STRIP_RE, function (m) {
+                  console.log(
+                    "TURN1-NAME-STRIP fired (at flush) — turn=1 callId=" +
+                    JSON.stringify(meta && meta.callId) +
+                    " cut=" + JSON.stringify(m.trim())
+                  );
+                  return "";
+                });
+                if (t1Buf) send({ content: t1Buf });
+                t1Buf = "";
+              }
               // Flush any held buffer. If it still contains an UNCLOSED action/
               // tag opener (a "*" or "[" with no closer), drop from that point —
               // an unterminated stage direction should never reach TTS.
