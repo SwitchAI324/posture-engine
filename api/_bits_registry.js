@@ -1,4 +1,10 @@
 // SpamViking — Bits Registry
+// v4 — Sep 28, 2026 — BIT-907 (The Arrival): added channel:"video",
+//   matching BIT-126. opener_turn1 is now video-only for 907 — audio-only
+//   calls draw from 901/902 only. Flagged to PE separately.
+// v3 — Sep 28, 2026 — BIT-126 (The Aside): added channel:"video" — video
+//   only, per directive v3 (two-round off-mike back-and-forth needs the
+//   caller to actually see the room).
 // v2 — Sep 28, 2026 — added compliance_check field (pilot) to BIT-509
 //   through BIT-513: a short semantic description of what satisfies that
 //   bit's REQUIRED ACTION, for PE to check turn content against post-hoc.
@@ -351,6 +357,7 @@ export const BITS = [
     "family": "reactive_intrusion",
     "absurdity": 4,
     "vocal_tag": "neutral",
+    "channel": "video",
     "archetypes": "universal"
   },
   {
@@ -2173,6 +2180,7 @@ export const BITS = [
     "max_fires_per_call": 1,
     "absurdity": 2,
     "vocal_tag": "neutral",
+    "channel": "video",
     "category": "900s \u2014 Opener",
     "archetypes": "universal"
   },
