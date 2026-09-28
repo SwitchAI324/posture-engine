@@ -1313,6 +1313,78 @@ async function readCall(messages, prior) {
   }
 }
 
+// HARD-BIT COMPLIANCE CHECK (2026-09-28, pilot per Bits/Andrew) — semantic
+// post-hoc judge for bits that declare a registry `compliance_check` field
+// (piloted on BIT-509–513, family:dossier_prior_reference, registry v2).
+// These bits paraphrase their REQUIRED ACTION fresh every turn by design, so
+// unlike MARKER-COMPLIANCE-CHECK (a literal token match, see
+// anthropicToOpenAISSE below) this can't be string-matched — it needs actual
+// judgment, hence a real (cheap, terse) model call. Same forced-JSON shape as
+// readCall() above: disabled thinking, small max_tokens, fail-open on any
+// HTTP/parse failure (a broken classifier is not evidence of a violation).
+// Always called from a waitUntil() — see the call site for why this never
+// touches the live call.
+async function checkHardCompliance(hostText, requirement) {
+  try {
+    const sys =
+      "You are checking whether a single turn of dialogue satisfied one " +
+      "specific content requirement for a comedy bit. Reply as compact " +
+      "JSON only, no prose: {\"compliant\":true|false,\"reason\":\"..\"}\n\n" +
+      "REQUIRED ACTION: " + requirement + "\n\n" +
+      "Judge the turn ONLY against whether this specific thing actually " +
+      "happened in it — not tone, not quality, not delivery. The turn will " +
+      "paraphrase and won't use fixed wording, so judge the substance, not " +
+      "any particular phrase. \"reason\" is one short sentence explaining " +
+      "the verdict, citing what in the turn did or didn't satisfy it.";
+    const r = await fetch(ANTHROPIC_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": ANTHROPIC_VERSION,
+      },
+      body: JSON.stringify({
+        model: MODEL(),
+        max_tokens: 300,
+        thinking: { type: "disabled" },
+        system: sys,
+        messages: [{ role: "user", content: "TURN: " + (hostText || "") + "\n\nJSON:" }],
+      }),
+    });
+    if (!r.ok) {
+      console.log("HARD-COMPLIANCE-CHECK-CALL REASON=http_not_ok status=" + r.status);
+      return null;
+    }
+    const j = await r.json();
+    const txt = (j.content || []).map((c) => c.text || "").join("").trim();
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (!m) {
+      console.log(
+        "HARD-COMPLIANCE-CHECK-CALL REASON=no_json_found raw=" + JSON.stringify(txt.slice(0, 150)) +
+        " stop_reason=" + (j.stop_reason || "?")
+      );
+      return null;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(m[0]);
+    } catch (e) {
+      console.log(
+        "HARD-COMPLIANCE-CHECK-CALL REASON=parse_error err=" + (e && e.message ? e.message : e) +
+        " raw=" + JSON.stringify(m[0].slice(0, 150))
+      );
+      return null;
+    }
+    return {
+      compliant: parsed.compliant === true,
+      reason: typeof parsed.reason === "string" ? parsed.reason.slice(0, 200) : "",
+    };
+  } catch (e) {
+    console.log("HARD-COMPLIANCE-CHECK-CALL REASON=threw err=" + (e && e.message ? e.message : e));
+    return null;
+  }
+}
+
 // Merge the async read into persisted call state. Phase is the async read's
 // alone. Suspicion and pressure/engagement (gears) are both retired — no
 // merge logic left for them. Signature simplified (Aug 26) — used to take a
@@ -2896,6 +2968,12 @@ export default async function handler(req) {
     // text (search MARKER-COMPLIANCE-CHECK below) to log a win/loss per
     // Bits' request, without needing to hardcode a single marker token.
     markerComplianceCheck: built ? built.markerComplianceCheck : null,
+    // HARD-BIT COMPLIANCE CHECK (2026-09-28 pilot) — set only when this
+    // turn's fired bit declares a registry `compliance_check` field (see
+    // buildSystemBlocks). anthropicToOpenAISSE reads this against the REAL
+    // generated text, post-stream, via a small async model call — log-only,
+    // never gates or blocks anything. See checkHardCompliance's own comment.
+    hardComplianceCheck: built ? built.hardComplianceCheck : null,
     // SSML EMOTION TAG (Aug 14) — see firedVocalTag's own comment above for
     // the full mechanism. Consumed at the first-content-chunk point in
     // anthropicToOpenAISSE below; dormant (never set on takeover/synthetic
@@ -3206,6 +3284,12 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
   // override actually fired, so finishUp (downstream, after generation) can
   // check the REAL output against it and log a win/loss per Bits' request.
   let markerComplianceCheck = null;
+  // HARD-BIT COMPLIANCE CHECK (2026-09-28 pilot) — set only on a turn where
+  // the fired bit declares a registry `compliance_check` field (see
+  // checkHardCompliance's own comment above). Carried the same way as
+  // markerComplianceCheck: through the return value here, into meta, read
+  // downstream in anthropicToOpenAISSE against the REAL generated text.
+  let hardComplianceCheck = null;
   const blocks = [
     { type: "text", text: baseSystem, cache_control: { type: "ephemeral" } },
   ];
@@ -5070,6 +5154,17 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           markers: (declaredMarkers || []).filter((m) => !m.endsWith("_STOP")),
         };
       }
+      // HARD-BIT COMPLIANCE CHECK (2026-09-28 pilot) — set whenever the
+      // fired bit declares a registry `compliance_check` field. Independent
+      // of markerComplianceOverrideActive above (different bits, different
+      // mechanism — this is semantic judgment, not a literal marker match).
+      if (topRegistryEntry && topRegistryEntry.compliance_check) {
+        hardComplianceCheck = {
+          bitId: top.id,
+          turn,
+          check: topRegistryEntry.compliance_check,
+        };
+      }
       let priorFiresForRung;
       if (declaredMarkers && declaredMarkers.length) {
         priorFiresForRung = confirmedFireCount(topRegistryEntry, stored);
@@ -5607,7 +5702,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
   // handler can set the pe_stall SSE flag when it's a stall-lane bit — the agent
   // reads that to hold its re-engage nudge for a cycle. Keyed off the fired bit's
   // LANE downstream, never the host's text (isSilenceNudge scar).
-  return { blocks, deathBlowFiring, firedBitId, markerComplianceCheck };
+  return { blocks, deathBlowFiring, firedBitId, markerComplianceCheck, hardComplianceCheck };
 }
 
 function lastUserText(messages) {
@@ -6045,6 +6140,51 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
             );
           }
         } catch { /* win-rate logging must never break the stream */ }
+        // HARD-COMPLIANCE-CHECK (2026-09-28, pilot per Bits/Andrew) — only
+        // runs on a turn where the fired bit declared a registry
+        // `compliance_check` field (meta.hardComplianceCheck set — see
+        // buildSystemBlocks). Unlike MARKER-COMPLIANCE-CHECK just above (a
+        // literal token match), these bits' REQUIRED ACTION paraphrases
+        // fresh every turn by design, so this needs an actual judgment call,
+        // not a regex — checkHardCompliance() makes one small, terse,
+        // thinking-disabled model call per fired turn. Fired via waitUntil,
+        // same as the Governor pattern noted at the bottom of this file:
+        // runs AFTER this turn's line has already reached the caller, never
+        // blocks or gates anything, log-only. Fail-open on any classifier
+        // failure (null result) — a broken check is not evidence of a
+        // violation, so it's logged distinctly (ERROR) rather than as FAIL.
+        try {
+          if (meta.hardComplianceCheck && meta.hardComplianceCheck.check) {
+            const { bitId, turn: checkTurn, check } = meta.hardComplianceCheck;
+            const textForCheck = String(hostText || "");
+            waitUntil(
+              checkHardCompliance(textForCheck, check)
+                .then((result) => {
+                  if (!result) {
+                    console.log(
+                      "HARD-COMPLIANCE-CHECK id=" + bitId +
+                      " turn=" + (meta.turn ?? checkTurn) +
+                      " result=ERROR (classifier failed — not counted as a violation)"
+                    );
+                    return;
+                  }
+                  console.log(
+                    "HARD-COMPLIANCE-CHECK id=" + bitId +
+                    " turn=" + (meta.turn ?? checkTurn) +
+                    " result=" + (result.compliant ? "PASS" : "FAIL") +
+                    " reason=" + JSON.stringify(result.reason || "") +
+                    " textSample=" + JSON.stringify(textForCheck.trim().slice(0, 160))
+                  );
+                })
+                .catch(() => {
+                  console.log(
+                    "HARD-COMPLIANCE-CHECK id=" + bitId +
+                    " turn=" + (meta.turn ?? checkTurn) + " result=ERROR (threw)"
+                  );
+                })
+            );
+          }
+        } catch { /* compliance-check dispatch must never break the stream */ }
         let benchTxt = null;
         if (appendText && !appendSent) {
           appendSent = true;
