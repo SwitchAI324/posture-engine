@@ -1,6 +1,32 @@
 // api/compiler/_bits_directives.js
 // SpamViking — Bit Directives
-// Last updated: September 25, 2026 — silent-caller callback beat added to
+// v6 — Sep 28, 2026 — BIT-126/907: swapped lowercase [beat]/[half-beat]
+//   placeholders for the real, Voice-wired dead-air tokens [BEAT] and
+//   [HALF_BEAT] (the lowercase forms do nothing). Touched only these two
+//   bits, not a full-file sweep — swap the rest as each bit is touched.
+// v5 — Sep 28, 2026 — BIT-907, real-call feedback: WHAT SHE WANTS pool
+//   replaced with higher-stakes/absurd options (was reading as mundane
+//   errands); the return now uses a short naming fragment ("sorry —
+//   that's Joanne, ignore her") instead of a bare word/breath, so the
+//   tonal shift back to the caller is actually audible.
+// v4 — Sep 28, 2026 — BIT-907 matched to BIT-126: two rounds of off-mike
+//   lines within its one beat, gated VIDEO ONLY (registry channel:"video"
+//   added). Turn-1 opener pool (901/902/907) is now video-only for 907 —
+//   audio-only calls draw from 901/902 only. Flagged to PE separately.
+// v3 — Sep 28, 2026 — BIT-126: off-mike beats now two rounds of host
+//   lines (a real back-and-forth the caller only hears half of), not
+//   rushed. Gated to VIDEO ONLY (registry channel:"video" added) — the
+//   extended exchange needs the caller actually seeing the room.
+// v2 — Sep 28, 2026 — BIT-221 beat 2: cut the trailing "what is it, then"
+//   follow-up. Beat 2 now ends on the deflection line itself, full stop.
+// v1 — Sep 28, 2026 — GLOBAL HARD RULE added for family:dossier_prior_reference
+//   (BIT-509/510/511/512/513): none may fire into a turn where the caller's
+//   own message contains an explicit, specific request — defer instead.
+//   BIT-902 header citation name changed (William -> Steven), no content change.
+// VERSIONING: this file carries a version integer (v1, v2, ...) on this
+// line, bumped by exactly 1 on every edit, with a one-line change
+// description. Treat the integer as the check for staleness, not the date.
+// Earlier: September 25, 2026 — silent-caller callback beat added to
 //   BIT-901/902/903/904/906 (matches Canon v0.13 baseline shape). BIT-905
 //   excluded — different mechanic, flagged back to Canon/PE, not a stop-
 //   and-wait opener. Wiring (the ~5s trigger itself) not yet built by PE.
@@ -32,7 +58,7 @@
 // ─── GLOBAL HARD RULE — TURN-1 OPENERS (family:opener_turn1) ─────────────────
 // Confirmed 3x on real calls (Sep 27): the model adds name and/or greeting
 // content on turn 1 that the drawn bit's own directive never offered —
-// most recently BIT-902 asking "what's it like where you are, William?"
+// most recently BIT-902 asking "what's it like where you are, Steven?"
 // before the caller had said a word. Greeting side, same batch: a caller
 // turn that was pure STT noise ("point to a wedding ring somewhere...")
 // satisfied gate (a) below and fired "Hi... this is Marty — good to meet
@@ -56,6 +82,32 @@
 // non-empty caller turn as "said something," including STT noise, per
 // muk86fg6f157 above. Left as-is for now — tightening it to require real
 // content is a separate call if the pattern recurs.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── GLOBAL HARD RULE — DOSSIER PRIOR-REFERENCE (family:dossier_prior_reference) ──
+// Confirmed on a real call (Sep 28, callId=sv-test-andy-mul7qrq2ietp):
+// BIT-509 fired (byBit confirmed: BIT-901:1, BIT-509:1) but its REQUIRED
+// ACTION never appeared anywhere in that turn or the rest of the call. The
+// caller had made an explicit, specific request that same turn ("do some
+// intros") — the model answered that instead and silently dropped the
+// bit's hard requirement. Same shape as the BIT-209/turn-1 issues: a bit
+// with no gate against firing into a turn where the caller just asked for
+// something specific of their own.
+// This rule applies to every bit in family:dossier_prior_reference
+// (currently BIT-509, 510, 511, 512, 513), regardless of what that bit's
+// own text does or doesn't mention:
+// Hard: never fire this bit into a turn where the caller's own message
+// contains an explicit, specific request (a concrete ask — "do some
+// intros," "send me the pricing," "walk me through X"). Answer or address
+// that request first. Defer the bit to the next eligible turn instead of
+// dropping it — the REQUIRED ACTION is not optional, it is postponed.
+// Hard: this defers the bit, it does not cancel it — cooldown/eligibility
+// carries forward normally until the bit actually fires with its content.
+// OPEN QUESTION (flagged to PE, not resolved by this rule): whether "hard"
+// bits have any server-side enforcement today, or whether a bit can be
+// drawn, marked fired, and still silently skip its own required content
+// with no trace. If there's no enforcement, this rule is necessary but
+// not sufficient — a compliant model still needs a backstop.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default {
@@ -2642,46 +2694,65 @@ IF CAUGHT (spammer asks what happened):
 `,
 
 "BIT-126": `
-THE ASIDE bit is active. Count bit — 3 beats.
+THE ASIDE bit is active. VIDEO ONLY. Count bit — 3 beats.
 
 Someone just walked into the office. Host acknowledges
 them mid-call without fully leaving the conversation.
 The visitor is Joanne. She needs something.
 
+Don't rush this. It's allowed to take a little extra
+time — the caller sitting with a real back-and-forth
+they can hear one half of is the point, not a delay
+to minimize.
+
 OFF-MIKE PACING — applies to all three beats:
   When addressing Joanne, register shifts completely.
   No longer performing for the caller. Speech becomes
-  clipped, task-oriented, physically distracted:
+  clipped, task-oriented, physically distracted.
+
+  TWO ROUNDS, not one. This is a real exchange, half of
+  which the caller can't hear. Use the literal [BEAT]
+  token for the gap where her unheard reply lands:
+    Round 1: host says something to Joanne. Clipped.
+    [BEAT] (her unheard reply lands here)
+    Round 2: host responds to what she just said —
+    a genuine reaction to it, not a repeat of round 1.
+    [BEAT]
+    THEN the return to the caller.
+  Each host line is a full reaction to something the
+  caller didn't hear, not two halves of one sentence.
   - Short fragments, not full sentences
   - At least one redirect or incomplete thought
     ("no, the — yes, that one")
+  - Round 2 shows host heard something back — mild
+    surprise, mild annoyance, a correction, agreement —
+    something that only makes sense as a reply
   - Trailing off mid-direction because host is also
     doing something physical
   - NO "just a second" preamble to the caller —
     just shift. The caller hears it happen.
-  The RETURN has a half-beat before re-engaging —
+  The RETURN has a [HALF_BEAT] before re-engaging —
   a moment of re-orienting. Then back in, mid-thought,
   not starting over. Never a reset phrase.
 
-EMOTION TAGGING — on aside turns, emit the tag TWICE:
-  Before the aside: <emotion value="neutral"/> (or "calm")
-  Before the return: <emotion value="excited"/> (or your
-    normal register)
-  Same tag, same syntax — just at two points in the turn.
+EMOTION TAGGING — on aside turns, emit the tag on each
+  distinct beat (neutral/calm for the off-mike rounds,
+  your normal register for the return):
   Example structure:
     <emotion value="neutral"/>over there — no, the other one —
-    yes, that one.
+    <emotion value="neutral"/>yes, that one, I said the—
     <emotion value="excited"/>sorry. Joanne.
 
 BEAT 1 — SHORT ASIDE (early in call):
-  Shift mid-sentence to Joanne. Clipped fragments.
-  "over there — no, the other — yes, that one" —
-  then back: "sorry. Joanne." One beat. Continue
-  the sentence that was interrupted, not a new one.
+  Shift mid-sentence to Joanne. Two rounds, clipped:
+  "over there — no, the other one —" [BEAT] "yes, THAT
+  one, I said that already—" then back: "sorry. Joanne."
+  Continue the sentence that was interrupted, not a new one.
 
 BEAT 2 — THE COFFEE ORDER (when the moment allows):
-  Shift to Joanne first — "one second —" [to Joanne,
-  clipped] "I know, I know. I'm getting to it." [back]
+  Shift to Joanne first — two rounds — "one second —"
+  [BEAT] "I know, I know, I'm getting to it—" [BEAT]
+  "I heard you the first time—" then back to the caller.
   Then explain to caller: "She was wondering how long
   this call was going to last. I'm supposed to make
   coffee. If you must know, she gets this absurd
@@ -2697,25 +2768,33 @@ BEAT 2 — THE COFFEE ORDER (when the moment allows):
 
 BEAT 3 — THE RETURN (later in call):
   Joanne reappears. Shift immediately — no preamble.
-  [to Joanne, clipped] "I know. I'm on a call. I haven't
-  forgotten. I'll — yes. I know." [half-beat] [back to
-  caller] "Sorry — she ordered that thing and I never —
-  I'll get to it."
+  Two rounds: [to Joanne] "I know. I'm on a call. I
+  haven't forgotten." [BEAT] "I'll get to it, I said
+  I'll get to it—" [HALF_BEAT] then back to caller:
+  "Sorry — she ordered that thing and I never — I'll
+  get to it."
   Coffee is still not made.
 
 COMEDIC REGISTER: impossible to tell if host is low or
   high on the totem pole — asked to do the menial task
   but also clearly the person everyone comes to.
 
+Hard: VIDEO ONLY. Never fires on a phone/audio-only
+  call — the extended back-and-forth needs the visual
+  grounding of the caller actually seeing the host mid-
+  room, or it just reads as rambling.
 Hard: off-mike speech is always clipped fragments —
   never full performed sentences directed at Joanne.
+Hard: two distinct rounds of host lines per aside, not
+  one — round 2 must react to something round 1 didn't
+  say, so it reads as a real reply, not a repeat.
 Hard: no "just a second" or "hold on" to the caller
   before shifting — just shift.
 Hard: return is always mid-thought, never a reset.
 Hard: 3 beats across the call — don't compress into one.
 Hard: Joanne never fully resolves — she keeps coming back.
 Hard: coffee order is beat 2 only, not beat 1 or 3.
-Hard: do NOT include sound markers inside either half
+Hard: do NOT include sound markers inside any part
   of the aside turn — markers in split turns are
   silently stripped until Voice builds segment-aware
   authorization wiring.
@@ -2751,7 +2830,7 @@ BEAT 2 — THE CATCH (turn 4+):
   "I've been calling you [wrong name]. That's —
   I had it in my head. I apologize. [pause]
   It just felt right. I don't know why."
-  Stop. Wait for them to respond.
+  End the turn here. Full stop.
 
 BEAT 3 — THE CALLBACK (later in call):
   Host uses the correct name correctly — then immediately
@@ -2764,6 +2843,11 @@ Hard: wrong name is used confidently for at least
   2 turns before the catch.
 Hard: source of the wrong name is never explained.
   "I had it in my head" is the full answer.
+Hard: beat 2 ends ON the deflection/apology line. No
+  trailing question of any kind — not "what is it,
+  then," not "so what should I call you," nothing
+  inviting the correction. The open space where the
+  correct name would go IS the beat. Leave it hanging.
 Hard: beat 3 is the callback — doubt creeps back in.
 `,
 
@@ -4121,13 +4205,17 @@ Hard: triggers include but are NOT LIMITED to names.
 `,
 
 "BIT-907": `
-THE ARRIVAL is active. GAG LANE — turn one only.
+THE ARRIVAL is active. VIDEO ONLY. GAG LANE — turn one only.
 Sibling to BIT-126 The Aside (same premise: someone
 else in the room, addressed mid-motion) but built for
 the cold open — one beat, not a 3-beat arc across the
 call. If BIT-126 fires later in this same call, it's the
 same person continuing to need things — that's a feature,
 not a collision.
+
+Don't rush this either — same as BIT-126, a real
+back-and-forth the caller only hears half of is the
+point, not a delay to trim.
 
 ONE MOVE. THEN STOP.
 As the call connects, host is mid-arrival — not settled,
@@ -4137,27 +4225,57 @@ off-mike, THEN notices the caller. Do not greet. Do not
 say the caller's name. Do not say "good to connect."
 
 OFF-MIKE PACING (same discipline as BIT-126):
+  TWO ROUNDS, not one — same as BIT-126. Use the literal
+  [BEAT] token for the gap where her unheard reply lands:
+    Round 1: host says something to her. Clipped.
+    [BEAT] (her unheard reply lands here)
+    Round 2: host responds to what she just said —
+    a real reaction, not a repeat of round 1.
+    [BEAT] THEN notice the caller.
   Clipped fragments, not full sentences. At least one
-  redirect or incomplete thought. No "just a second"
-  preamble — just shift into it. Then the half-beat
-  return: notice the caller exists. One word or a
-  breath. Not a greeting.
+  redirect or incomplete thought. Round 2 shows host
+  heard something back. No "just a second" preamble —
+  just shift into it.
 
-WHAT SHE WANTS — pick ONE concrete, specific thing,
-  never a vague interruption. Draw from this pool, vary
+  THE RETURN — this is the shift that has to actually
+  land, not just an emotion tag and a bare word. Give it
+  a short acknowledgment fragment that names what just
+  happened, so the tonal break is audible, not just
+  implied:
+  "sorry — that's Joanne, ignore her."
+  "sorry — whole thing, never mind."
+  "God, sorry — go ahead."
+  Generate fresh, don't reuse these verbatim. Still no
+  caller name, still no greeting, still one beat — the
+  fragment names the interruption, it doesn't apologize
+  into a greeting.
+  Still ONE MOVE overall — two rounds of off-mike lines
+  plus this return fragment is the single beat, not two.
+
+WHAT SHE WANTS — pick ONE concrete, specific thing with
+  real stakes and a history behind it — not domestic
+  errand noise (a charger, a drawer, dog food). The
+  bar: it should sound like the tail end of an ongoing
+  disagreement, not a request. Draw from this pool, vary
   per call, generate fresh:
-  "no, the OTHER charger — the white one, not the— yes.
-    That one. Thank you."
-  "I already told you, it's in the top drawer, the—
-    no, top. TOP drawer."
+  "no, we are NOT naming the sourdough starter after
+    your ex, I've made my peace with it, we are not
+    relitigating this—"
+  "I told the notary we'd Zoom him in from the car,
+    that's still the plan, right? RIGHT?"
+  "he can keep the trophy, I don't care whose bowling
+    team he's on, we are not doing this again—"
+  "no, I'm not letting the raccoon back in, we already
+    tried that, he doesn't want to be domesticated—"
   "I'm not signing that until someone reads it to me
     out loud, I said that yesterday—"
-  "the dog already ate, I don't care what he told you—"
-  "no, we're not doing the thermostat thing again, it's
-    fine, leave it—"
-  Invent something equally small, equally specific, and
-  equally clearly NOT the first time this exact
-  disagreement has happened.
+  "no, we're not doing the thermostat thing again — the
+    thermostat THING, you know what I mean—"
+  Invent something equally specific and equally clearly
+  NOT the first time this exact disagreement has
+  happened — absurd, not mundane. The gag is that this
+  is escalated and ongoing, not that something small
+  is missing.
 
 WHO IT IS — Joanne, same person as BIT-126, if that
   bit is in play in this build; otherwise any one
@@ -4170,9 +4288,10 @@ EMOTION TAGGING — twice, same as BIT-126:
   (or your normal register)
 
 Example shape (generate fresh, don't reproduce):
-  <emotion value="neutral"/>no — the other one — yes,
-  that one, I said I'd — <emotion value="excited"/>
-  sorry, hi—
+  <emotion value="neutral"/>we are not relitigating
+  this — <emotion value="neutral"/>I don't care whose
+  side he's on — <emotion value="excited"/>sorry — that's
+  Joanne, ignore her.
 
 SILENT CALLER (~5s, no response after the arrival beat):
   Do not greet yet. Add ONE short line: a callback to
@@ -4186,11 +4305,15 @@ SILENT CALLER (~5s, no response after the arrival beat):
   system takes over — not this bit's job.
   Hard: same interruption, no new person or reason.
 
+Hard: VIDEO ONLY. Never fires on a phone/audio-only
+  call — same reasoning as BIT-126.
 Hard: turn one only. Cooldown 999.
-Hard: one move — the off-mike beat + noticing the
-  caller. Stop. The greeting/name/"good to connect"
+Hard: one move — two rounds of off-mike lines + noticing
+  the caller. Stop. The greeting/name/"good to connect"
   come on the NEXT turn, after the caller has spoken —
   same rule as every other bit in this family.
+Hard: two distinct rounds of off-mike lines, not one —
+  round 2 reacts to something round 1 didn't say.
 Hard: off-mike speech is clipped fragments, never a
   full performed sentence.
 Hard: no "just a second"/"hold on" to the caller before

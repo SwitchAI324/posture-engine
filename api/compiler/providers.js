@@ -211,6 +211,37 @@ try {
 // the new section and still correctly ends on the tail echo. Verified
 // via exact diff match against the source (not just spot-checked).
 //
+// v2.4 SECTIONED (2026-09-28), from HOST_CANON, rebuilt from
+// Host_Prompt_SOURCE_for_providers_rebuild__17_.md. Supersedes v2.3. Diffed
+// directly against the prior embedded content before splicing (not assumed
+// from Canon's description) — three real additions, all confirmed present
+// in Canon's own LIVE render too, not just this SOURCE doc:
+//   - "WHEN YOU'VE GOTTEN SOMETHING WRONG" (CORE) — trail off on a
+//     corrected mistake and stop; never "so what is it, then" or any other
+//     direct follow-up. Generalizes the fix PE flagged on BIT-221's beat 2
+//     (the deflection-then-question leak on a real call) to a standing
+//     CORE rule covering any bit that hits this pattern, not just BIT-221.
+//   - Aside-then-greeting WORKED EXAMPLE (OPENER) — a fresh, genuinely
+//     absurd scene (Priya / a projector-cart situation) replacing the
+//     abstract "NAME them" instruction that wasn't landing on real calls
+//     (confirmed: a charger aside shipped with no name, no marker, no
+//     register shift). Explicitly bans reusing "a folder, not a charger"
+//     as stale, and gives the exact closing-line shape PE requested: "Oh —
+//     sorry, I was just finishing up with [name], my bad."
+//   - Turn-one no-exception rule (OPENER) — "nothing that fires on turn
+//     one is ever an exception to it... a bit's silence on this point is
+//     never permission." Closes the BIT-904 class of gap (a bit missing
+//     its own copy of the no-greeting line) at the CORE/OPENER level
+//     instead of requiring every future bit to carry it individually.
+// Also carried in this sync, unprompted by any open PE item: every
+// placeholder name varied (no more repeated "William" — Steven, Marcus,
+// Owen, Derek, Nathan, Gregory, Patrick, each used once), a once-per-call
+// "propose intros yourself" exception, and a fix for padding a stop with a
+// vague tag ("about this whole thing") instead of stopping clean.
+// splitHostPrompt() re-run against this content — three delimiters found
+// in order (CORE @0, OPENER @62709, BUSINESS @97379), core/opener/business
+// all extract cleanly.
+//
 const MASTER_HOST_PROMPT = require("./host_prompt_source.json").prompt;
 // [1] HOST BASE — the universal master prompt + this posture's register layer.
 // The master prompt is constant; the posture register (name/stance) is the
