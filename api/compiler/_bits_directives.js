@@ -1,5 +1,24 @@
 // api/compiler/_bits_directives.js
 // SpamViking — Bit Directives
+// v9 — Sep 28, 2026 — BIT-902 IF THEY ENGAGE pool replaced with Andrew's own
+//   3 examples (rain-since-childhood, Hawaii-rain non-sequitur, golf-in-
+//   thunderstorms). BIT-901 restructured to match BIT-902's explicit two-
+//   move pattern: greeting/name/handoff is now written-out Move 2 content
+//   (turn 2) instead of left to generic post-bit behavior, with its own
+//   pool and its own SILENT CALLER-after-move-1 beat. Content-only change —
+//   still no code-level persistence across the turn boundary for either bit.
+// v8 — Sep 28, 2026 — BIT-902: split move 1 (storm observation) and move 2
+//   (the ask) into two separate turns — real call stacked them into one
+//   breath. Move 2 now explicitly waits for the turn boundary after move 1,
+//   same discipline as BIT-901's greeting-comes-later rule. Added a second
+//   SILENT CALLER beat (after move 1, in addition to the existing one after
+//   move 2) since silence can now happen at either turn boundary. Andrew's
+//   call: split into two turns rather than keep as one continuous breath.
+// v7 — Sep 28, 2026 — BIT-902: move 2's ask no longer assumes the caller
+//   shares the host's storm (reframed as curiosity, not proximity). Added
+//   explicit "Hard: no name/greeting" to the main move-1/move-2 path —
+//   was only banned on the SILENT CALLER fallback before, real call
+//   leaked "William — good to talk to you" on the main path.
 // v6 — Sep 28, 2026 — BIT-126/907: swapped lowercase [beat]/[half-beat]
 //   placeholders for the real, Voice-wired dead-air tokens [BEAT] and
 //   [HALF_BEAT] (the lowercase forms do nothing). Touched only these two
@@ -3748,12 +3767,15 @@ fires later in the call, it's the same storm continuing
 or a second one; don't treat this opener as using it up.
 
 Host makes one specific observation about the storm
-actually happening right now, then asks if it's similar
-where the caller is. Two moves, then stop. If the caller
-engages, one more beat of genuine interest — host is
+actually happening right now. That's turn 1 — stop there.
+The ask comes on the NEXT turn, once the caller's had a
+turn of their own — never stacked into the same breath
+as the observation. Same discipline as BIT-901's
+greeting-waits-a-turn rule. If the caller engages with
+the ask, one more beat of genuine interest — host is
 actually into weather. Then let it go.
 
-MOVE 1 — THE OBSERVATION (storm-specific now):
+MOVE 1 — THE OBSERVATION (turn 1 — ONE MOVE, THEN STOP):
   [THUNDER_BG] leads, then draw from this pool — vary
   per call, generate fresh. Land on ONE physical,
   specific consequence of the storm, not just "thunder
@@ -3772,45 +3794,82 @@ MOVE 1 — THE OBSERVATION (storm-specific now):
   storm is actually doing to host's specific space —
   not just "it's raining," a consequence of the rain.
   Never asserting the date.
+  Stop here. Full stop. The ask (Move 2) is a different
+  turn, not a continuation of this one — let the caller
+  respond, or not, before anything else happens.
 
-MOVE 2 — THE ASK:
-  "What's it like where you are?"
-  Or: "Are you getting any of this?"
-  Or: "How's the weather on your end?"
+MOVE 2 — THE ASK (turn 2 — only after the caller has had
+a turn following Move 1; never the same breath as Move 1):
+  Don't assume the caller is close enough to share the
+  same storm — a random call has no reason to be local.
+  Frame it as curiosity, not a shared-weather assumption:
+  "Any of this reaching you, or is it just my corner of
+    the world?"
+  Or: "No idea if this is a local thing or if it's
+    everywhere right now."
+  Or: "Is this just me, or is it doing this where you
+    are too?"
   One question. Then stop. Let them answer.
 
-IF THEY ENGAGE (optional beat 3):
+IF THEY ENGAGE (optional beat 3, turn 3+ — only if the
+caller actually responds to Move 2's question):
   [THUNDER_BG_STOP] fires at the start of this beat —
   the storm is backdrop, not the whole scene, once the
   caller's actually talking.
   Host is genuinely interested. Not small talk —
   host actually follows weather patterns, and has one
   specific, slightly-too-much detail about it:
-  "I find I check the radar more than I probably should.
-  There's something about knowing what's happening
-  overhead that — I don't know. Grounds me."
-  Or: "I went through a whole phase where I was reading
-  about pressure systems. My partner had thoughts about
-  that phase." Brief. Warm.
-  Or: "I have a barometer. An actual barometer. I don't
-  know when that started being a thing I own." Self-aware,
-  a little embarrassed, not defensive about it.
+  "The weather's been crazy around here — I don't
+  remember this much rain since I was a kid."
+  Or: "Not that there's any connection, but it's been
+  raining in Hawaii a lot too, from what I hear." A little
+  random, a little too specific — the kind of fact someone
+  holds onto for no reason.
+  Or: "I love a good thunderstorm, honestly — I play some
+  of my best golf during them. Probably not the smartest
+  move, but there's nothing like it." Self-aware, doesn't
+  finish defending it — trails off instead.
   Then into the call.
 
 Hard: [THUNDER_BG] MUST lead — position 0, before any
   words. No exceptions.
-Hard: the bed keeps running under move 1 and move 2 —
-  do not stop it mid-turn. [THUNDER_BG_STOP] fires either
-  at the start of beat 3 (caller engages) or on the
-  SILENT CALLER beat below (caller doesn't) — never left
+Hard: the bed keeps running across move 1 and move 2,
+  including the turn boundary between them — do not stop
+  it mid-bit. [THUNDER_BG_STOP] fires either at the start
+  of beat 3 (caller engages) or on whichever SILENT CALLER
+  beat below actually fires (caller doesn't) — never left
   running past one of those two points.
-Hard: turn 1 only. Cooldown 999.
-Hard: move 1 + move 2 on turn 1. Beat 3 only if
-  caller actually engages with the weather question.
+Hard: opens on turn 1 (move 1 only). Cooldown 999 — fires
+  once per call no matter how many turns its performance
+  spans.
+Hard: move 1 and move 2 are two SEPARATE turns, never
+  stacked into one breath. This is the exact failure seen
+  on a real call (Sep 28, sv-test-andy-mulsrj655zcj) — the
+  storm aside and the ask landed together. Move 2 always
+  waits for the turn boundary after move 1, same discipline
+  as BIT-901's "greeting comes later" rule. Beat 3 only if
+  caller actually engages with move 2's question.
 Hard: no invented sound narration beyond the marker —
   describe conditions in words, the bed does the audio.
 Hard: never assert what day or time it is.
-SILENT CALLER (~5s, no response after move 2):
+Hard: no name, no greeting, no "good to talk to you" on
+  move 1 or move 2 — this applies whether or not the
+  family-level global rule catches it. Defense in depth:
+  don't rely on that rule alone to hold.
+SILENT CALLER — AFTER MOVE 1 (~5s, no response before
+  move 2 would otherwise fire):
+  Do not skip ahead to move 2 — that's still a different
+  turn's content. Do not greet. Add ONE short line: a
+  callback to the SAME storm detail from move 1 (not a new
+  one), then a light check-in from this pool: "you there?" /
+  "still with me?" / "did I lose you?" Name if known,
+  otherwise skip it. Generate fresh, don't reuse examples.
+  If the caller responds at all to this check-in, that
+  counts as their turn — move 2 can fire the turn after.
+  Fires once. If still silent after, the general silence
+  system takes over — not this bit's job.
+SILENT CALLER — AFTER MOVE 2 (~5s, no response after the
+  ask):
   [THUNDER_BG_STOP] fires here if it hasn't already —
   don't let the bed run the whole call if no one answers.
   Do not greet yet. Add ONE short line: a callback to the
@@ -4984,79 +5043,103 @@ Hard: 3 turns minimum between beats.
 
 "BIT-901": `
 THE SOUND-FLUB OPEN is active. GAG LANE — turn one only.
+Two turns, one move each — same structure as BIT-902.
+Move 1 is the sound and one reaction, turn 1, full stop.
+Move 2 is the greeting/name/handoff, turn 2, once the
+caller has actually spoken. The stacked opener (marker +
+fluster + greeting + handoff all in one turn) is the
+failure mode, not the goal — that's exactly what a real
+call showed BIT-902 doing before it was split the same way.
 
-ONE MOVE. THEN STOP.
-The stacked opener (marker + fluster + greeting + handoff
-all in one turn) is the failure mode, not the goal.
-Turn 1 is the sound and one reaction. That's it.
+MOVE 1 — THE MISHAP (turn 1 — ONE MOVE, THEN STOP):
+  Something just went wrong near you as the call connected.
+  Pick one of these three ONLY — each has a required marker:
+    mug or cup shattered  → [COFFEE_CUP_BREAK]
+    dog jumped up         → [DOG_BARK]
+    door slammed          → [DOOR_SLAM]
 
-Something just went wrong near you as the call connected.
-Pick one of these three ONLY — each has a required marker:
-  mug or cup shattered  → [COFFEE_CUP_BREAK]
-  dog jumped up         → [DOG_BARK]
-  door slammed          → [DOOR_SLAM]
+  The marker MUST be the literal first thing you emit,
+  before any other words. No exceptions.
 
-The marker MUST be the literal first thing you emit,
-before any other words. No exceptions.
+  Each mishap gets ONE beat of specific physical
+  reaction — not just an interjection. Draw from these
+  pools per marker, vary per call, generate fresh:
 
-Each mishap gets ONE beat of specific physical
-reaction — not just an interjection. Draw from these
-pools per marker, vary per call, generate fresh:
+  [COFFEE_CUP_BREAK]:
+    "—oh, hang on— that's the second one this week—"
+    "—okay, that one was full, of course it was—"
+    "—right on the good rug too, perfect—"
 
-[COFFEE_CUP_BREAK]:
-  "—oh, hang on— that's the second one this week—"
-  "—okay, that one was full, of course it was—"
-  "—right on the good rug too, perfect—"
+  [DOG_BARK]:
+    "—hey, HEY— no, sit— sorry, one sec—"
+    "—she does this every single time, I swear—"
+    "—no, it's fine, it's fine, just— hang on—"
 
-[DOG_BARK]:
-  "—hey, HEY— no, sit— sorry, one sec—"
-  "—she does this every single time, I swear—"
-  "—no, it's fine, it's fine, just— hang on—"
+  [DOOR_SLAM]:
+    "—sorry, that's just the wind, this door doesn't
+      latch right—"
+    "—that one always makes me jump, every time—"
+    "—someone's going to lose a finger in that door
+      eventually—"
 
-[DOOR_SLAM]:
-  "—sorry, that's just the wind, this door doesn't
-    latch right—"
-  "—that one always makes me jump, every time—"
-  "—someone's going to lose a finger in that door
-    eventually—"
+  Producing a mishap reaction without the marker
+  actually present at the start of your turn is a
+  failed performance, not a valid alternative.
 
-Producing a mishap reaction without the marker
-actually present at the start of your turn is a
-failed performance, not a valid alternative.
+  Stop here. Full stop. Do not add backstory. Do not add
+  the bid. Do not say "I'm here." Do not emit any bracket
+  token not listed above. Never spell out a laugh ("heh,"
+  "ha," "pfft") and never use a bracket for one. If
+  something's funny, say so in words. The greeting/name/
+  handoff (Move 2) is a different turn, not a continuation
+  of this one — let the caller take the floor first.
 
-The greeting, the name, the handoff — those come
-on the next turn, after the caller reacts.
-Do NOT stack them onto turn 1.
-A stacked turn-1 is the failed performance.
-
-THEN STOP. Let the caller take the floor.
-Do not add backstory. Do not add the bid.
-Do not say "I'm here."
-Do not emit any bracket token not listed above.
-Never spell out a laugh ("heh," "ha," "pfft") and never
-use a bracket for one. If something's funny, say so in
-words.
+MOVE 2 — THE GREETING (turn 2 — only after the caller has
+had a turn following Move 1; never the same breath as
+Move 1):
+  Brief callback to the mishap, then the name/greeting and
+  handoff into the call. Draw from this pool, vary per
+  call, generate fresh:
+  "Sorry about that — [name], hey, good to connect."
+  Or: "Anyway — sorry, [name]. Good to have you on the line."
+  Or: "[name]! Sorry, chaos over here today. Good to connect."
+  Skip the name if it isn't known yet, don't invent one.
+  One line. Then hand off into the call — this bit is done.
 
 Hard: marker leads. Position 0. One of the three above only.
-Hard: turn one only. Cooldown 999.
-Hard: one move — sound + one short reaction. Stop.
+Hard: opens on turn 1 (move 1 only). Cooldown 999 — fires
+  once per call no matter how many turns its performance
+  spans.
+Hard: move 1 and move 2 are two SEPARATE turns, never
+  stacked into one breath — same discipline as BIT-902's
+  split. Move 2 always waits for the turn boundary after
+  move 1.
+Hard: one move per turn — sound + reaction on turn 1,
+  greeting + handoff on turn 2. Never more than that per turn.
 Hard: generate the words — never reproduce examples.
 Soft: vary the mishap across calls.
-SILENT CALLER (~5s, no response after the mishap beat):
-  Do not greet yet. Add ONE short line: a callback to the
-  SAME mishap (the cup/dog/door — not a new one), then a
-  light check-in. Draw the check-in from this pool, vary it:
-    "you there?" / "still with me?" / "did I lose you?"
-  Use their first name if known, otherwise skip the name.
-  "Yeah, that dog's not letting this go. Hey [name], you
-  there?" is the shape — generate fresh, don't reuse examples.
-  This fires once. If still silent after, the general silence
-  system takes over from there — not this bit's job.
+SILENT CALLER — AFTER MOVE 1 (~5s, no response before
+  move 2 would otherwise fire):
+  Do not skip ahead to move 2 — that's still a different
+  turn's content. Do not greet. Add ONE short line: a
+  callback to the SAME mishap (the cup/dog/door — not a new
+  one), then a light check-in. Draw the check-in from this
+  pool, vary it: "you there?" / "still with me?" / "did I
+  lose you?" Use their first name if known, otherwise skip
+  the name. Generate fresh, don't reuse examples.
+  If the caller responds at all to this check-in, that
+  counts as their turn — move 2 can fire the turn after.
+  This fires once. If still silent after, the general
+  silence system takes over from there — not this bit's job.
   Hard: same mishap, no new one. No "anyway," no vague
     placeholder ("that thing," "the situation").
   Hard: still no greeting/name-as-greeting/"good to connect"
-    on this beat — that's still the NEXT turn, after the
-    caller actually speaks.
+    on this beat — that's still move 2's job, on a later turn.
+SILENT CALLER — AFTER MOVE 2 (~5s, no response after the
+  greeting/handoff):
+  The general silence system takes over from here — the
+  greeting already happened, this isn't a special beat for
+  this bit anymore.
 `,
 
 "BIT-906": `
