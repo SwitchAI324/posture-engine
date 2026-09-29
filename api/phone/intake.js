@@ -148,6 +148,13 @@ async function transcribe(buf, mime) {
 // kind: 'voicemail' (spoken audio/carrier transcript) or 'text' (a typed
 // message and/or OCR'd screenshot text). Wording adjusts to match; the
 // output shape is identical either way.
+//
+// pitch_topic and amount_mentioned (added Sep 29, 2026, Recording's ask)
+// exist to build the intake acknowledgement email's subject/summary line
+// without ever showing the carrier's raw attachment filename or restating
+// the full one-sentence `pitch` field, which reads fine in a body but is
+// too long/formal for a subject line or a one-line "here's what we pulled"
+// summary.
 async function analyze(content, kind = 'voicemail') {
   const noun = kind === 'text' ? 'message' : 'voicemail';
   const speaker = kind === 'text' ? 'sender' : 'speaker';
@@ -162,10 +169,12 @@ Fields:
 - claimed_org: the organization the ${speaker} claims to be from, or null.
 - agent_label: the name the ${speaker} gives for themselves ("this is Steve"), or null.
 - account_refs: any account, case, reference, or invoice numbers the ${speaker} cites, as strings. Empty array if none.
+- amount_mentioned: a specific dollar amount the ${speaker} mentions, written naturally as it would appear in a sentence (e.g. "$215,000"), or null if no specific amount is stated.
 - stated_hours: the hours the ${speaker} says to call back, verbatim ("8AM to 5PM Pacific"), or null.
 - stated_hours_start: those hours as 24h "HH:MM" start, or null.
 - stated_hours_end: those hours as 24h "HH:MM" end, or null.
 - stated_tz: the time zone the ${speaker} named, as an IANA zone ("America/Los_Angeles", "America/New_York", "America/Chicago", "America/Denver"), or null if none named.
+- pitch_topic: a short 2-4 word label for what's being pitched, in plain everyday words a recipient would recognize at a glance ("business financing", "irs back taxes", "crypto investment", "amazon account issue"), or null if it doesn't cleanly reduce to a short label.
 - pitch: one short sentence, what the ${speaker} claims is going on.
 - the_ask: one short sentence, what the ${speaker} wants the recipient to do.
 - script_summary: one sentence, the pitch and the ask.`;
@@ -195,6 +204,8 @@ Fields:
   j.agent_label = typeof j.agent_label === 'string' && j.agent_label.trim() ? j.agent_label.trim().slice(0, 60) : null;
   if (!j.ask_for && j.agent_label) j.ask_for = j.agent_label;   // "this is Steve" → ask for Steve
   j.account_refs = Array.isArray(j.account_refs) ? j.account_refs.map(String).slice(0, 10) : [];
+  j.pitch_topic = typeof j.pitch_topic === 'string' && j.pitch_topic.trim() ? j.pitch_topic.trim().slice(0, 40) : null;
+  j.amount_mentioned = typeof j.amount_mentioned === 'string' && j.amount_mentioned.trim() ? j.amount_mentioned.trim().slice(0, 20) : null;
   return j;
 }
 
@@ -430,22 +441,71 @@ async function handleSms(req, res) {
 // refCode above). Matches the copy already used in recap.js/cancel.js.
 const pretty = e164 => /^\+1\d{10}$/.test(e164 || '') ? `${e164.slice(2, 5)}-${e164.slice(5, 8)}-${e164.slice(8)}` : (e164 || 'that number');
 
+const firstName = label => {
+  const s = (label || '').trim();
+  return s ? s.split(/\s+/)[0] : null;
+};
+
+// Subject line for the voicemail-intake acknowledgement (Sep 29, 2026,
+// Recording's ask). Built from what the classifier pulled out of the
+// transcript — never the carrier's raw attachment filename. Falls back to
+// a plain line when pitch_topic didn't parse, rather than guessing at
+// content we didn't actually extract.
+function queuedSubject(a) {
+  if (!a.pitch_topic) return "Got it — we're on it.";
+  const who = firstName(a.agent_label);
+  let subj = who ? `Got it — ${who}, ${a.pitch_topic}. The raid begins.` : `Got it — ${a.pitch_topic}. The raid begins.`;
+  if (subj.length > 60) subj = who ? `Got it — ${who}, ${a.pitch_topic}.` : `Got it — ${a.pitch_topic}.`;
+  if (subj.length > 60) subj = subj.slice(0, 57) + '...';
+  return subj;
+}
+
 function replyFor(status, ctx) {
-  const subj = 'Re: ' + (ctx.subject || 'your forwarded voicemail');
   if (status === 'queued') {
-    return {
-      reply_subject: subj,
-      reply_body:
+    const {
+      subject, transcript, number, extension, askFor, pastHours, stated, phrase,
+      minutesUntil, callerName, pitchTopic, amount,
+    } = ctx;
+    const reply_subject = queuedSubject({ agent_label: callerName, pitch_topic: pitchTopic });
+
+    // Extraction failed to produce a usable pitch topic — fall back to the
+    // original transcript-first body wholesale rather than guessing at a
+    // summary we don't actually have.
+    if (!pitchTopic) {
+      return {
+        reply_subject,
+        reply_body:
 `Got it. Here's what we heard:
 
-"${ctx.transcript}"
+"${transcript}"
 
-${ctx.pastHours ? `They said ${ctx.stated} and it's past that, so we'll` : `We'll`} call ${pretty(ctx.number)}${ctx.extension ? `, extension ${ctx.extension}` : ''}${ctx.askFor ? `, asking for ${ctx.askFor}` : ''} ${ctx.phrase}.
+${pastHours ? `They said ${stated} and it's past that, so we'll` : `We'll`} call ${pretty(number)}${extension ? `, extension ${extension}` : ''}${askFor ? `, asking for ${askFor}` : ''} ${phrase}.
 If that's the wrong number or you'd rather we didn't, reply SKIP.
 
 — SpamViking`,
+      };
+    }
+
+    const intro = `SpamViking received your voicemail${callerName ? ` from ${firstName(callerName)}` : ''} about ${pitchTopic}. The raid begins now.`;
+    const detailsLine = `${callerName || 'The caller'}, claiming to offer ${pitchTopic}${amount ? ` up to ${amount}` : ''}, asking you to call ${pretty(number)}${extension ? `, extension ${extension}` : ''}${askFor ? `, and to ask for ${askFor}` : ''}.`;
+    const nextSteps = `${pastHours ? `They said ${stated} and it's past that, so ` : ''}Your host will call them back ${phrase}, in character — we'll email you when the call is done.`;
+    const cancelLine = `Don't want us to call? Reply SKIP in the next ${minutesUntil} minute${minutesUntil === 1 ? '' : 's'} and we'll drop it.`;
+
+    return {
+      reply_subject,
+      reply_body: [
+        intro,
+        detailsLine,
+        nextSteps,
+        cancelLine,
+        '---',
+        'What they actually said:',
+        `"${transcript}"`,
+      ].join('\n\n') + '\n\n— SpamViking',
     };
   }
+
+  const subj = 'Re: ' + (ctx.subject || 'your forwarded voicemail');
   if (status === 'international') {
     return {
       reply_subject: subj,
@@ -481,7 +541,8 @@ us to dial. We only ever call numbers a scammer says out loud.
 // Reply for the text/screenshot path (B): link findings (always read-only)
 // plus, when applicable, the warn-before-dial line for a number found
 // directly in the text (dial.kind: 'none' | 'queued' | 'international' |
-// 'blocked').
+// 'blocked'). Untouched by the Sep 29, 2026 intake-acknowledgement rework
+// — that was scoped to the voicemail-share path only.
 function replyForTextShare(subject, textMessage, linkRows, skippedImages, dial) {
   const subj = 'Re: ' + (subject || 'your forwarded text');
   const skippedNote = skippedImages
@@ -781,6 +842,10 @@ export default async function handler(req, res) {
     const lineType = await lineTypeFor(number);
     const plan = planCallback({ number, a, settings, rules, lineType });
     const scheduledAt = plan.scheduledAt.toISOString();
+    // Real minutes until dial, for the acknowledgement email's cancel line
+    // — was previously omitted entirely; the delay window IS the cancel
+    // window, so the user should see the actual number, not a vague "soon".
+    const minutesUntil = Math.max(1, Math.round((plan.scheduledAt.getTime() - Date.now()) / 60000));
     await insert('callback_jobs', {
       user_id: userId, intake_id: intakeId, callback_number_id: gate.id,
       archetype: a.archetype, scheduled_at: scheduledAt, status: 'approved',
@@ -810,7 +875,12 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true, intake_id: intakeId, status: 'queued',
-      ...replyFor('queued', { subject, transcript, number, phrase: plan.phrase, pastHours: plan.pastHours, stated: a.stated_hours, extension: a.extension, askFor: a.ask_for }),
+      ...replyFor('queued', {
+        subject, transcript, number, phrase: plan.phrase, pastHours: plan.pastHours,
+        stated: a.stated_hours, extension: a.extension, askFor: a.ask_for,
+        callerName: a.agent_label, pitchTopic: a.pitch_topic, amount: a.amount_mentioned,
+        minutesUntil,
+      }),
     });
   } catch (err) {
     console.error('phone-intake', err);

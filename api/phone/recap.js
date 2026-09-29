@@ -5,6 +5,12 @@
 // Triggers:
 //   - Recording webhook: POST {job_id} when recordings.status='ready'
 //   - Dispatcher: POST {job_id} after mark_callback_job for any outcome
+// Neither documented trigger sends an explicit `kind` — kind is always
+// derived from callback_jobs.outcome (see kindFor), never taken from the
+// request body. An earlier version trusted a body-supplied `kind` when
+// present, which let an outcome/kind mismatch slip through and produce an
+// email claiming a human answered on a call that was actually a voicemail
+// drop (fixed Sep 29, 2026, Recording's report on job d60efc68).
 // Header: x-phone-intake-secret
 // Returns: { ok, kind, queued:boolean, reason? }
 //
@@ -15,7 +21,6 @@ const SB = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SECRET = process.env.PHONE_INTAKE_SECRET;
 const RECORDING_LINK_URL = process.env.RECORDING_LINK_URL || 'https://posture-engine.vercel.app/api/recording-link';
-const PE_DISPOSITION_URL = process.env.PE_DISPOSITION_URL || 'https://posture-engine.vercel.app/api/phone/outbound-disposition';
 
 async function sb(path, opts = {}) {
   const r = await fetch(`${SB}/rest/v1/${path}`, {
@@ -39,10 +44,8 @@ const fmtTime = (iso, tz) => {
   try { return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz || 'America/New_York' }); }
   catch { return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); }
 };
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-// Returns { url, expiresAt } — the link is signed and dies after 7 days, so
-// the recap has to name the date; an email opened later is otherwise a dead
-// link with no explanation.
 async function recordingLink(jobId) {
   try {
     const r = await fetch(`${RECORDING_LINK_URL}?slug=ph-${jobId}`, {
@@ -51,46 +54,33 @@ async function recordingLink(jobId) {
     });
     if (!r.ok) return null;
     const j = await r.json().catch(() => null);
-    const url = j?.url || j?.signed_url || j?.link || null;
-    if (!url) return null;
-    return { url, expiresAt: j?.expires_at || null };
+    return j?.url || j?.signed_url || j?.link || null;
   } catch { return null; }
-}
-
-const fmtDate = (iso, tz) => {
-  try {
-    return new Date(iso).toLocaleDateString('en-US', {
-      month: 'long', day: 'numeric', timeZone: tz || 'America/New_York',
-    });
-  } catch { return null; }
-};
-
-// The agent's hangup chain is strictly ordered: mark_callback_job →
-// write_phone_transcript → POST /api/phone/recap. So by the time we run, the
-// transcript is committed and PE's read cannot race it. Best-effort: a failed
-// ping never fails the recap.
-async function pingDisposition(jobId) {
-  try {
-    const r = await fetch(PE_DISPOSITION_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-phone-intake-secret': SECRET },
-      body: JSON.stringify({ job_id: jobId }),
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!r.ok) console.warn('outbound-disposition ping', r.status);
-    return r.ok;
-  } catch (e) {
-    console.warn('outbound-disposition ping failed (non-blocking)', String(e.message || e));
-    return false;
-  }
 }
 
 function kindFor(outcome) {
   if (!outcome) return null;
+  // Voice confirmed (Sep 29, 2026) callback_jobs.outcome for phone calls is
+  // never "uncertain" — Voice only ever writes answered_human,
+  // voicemail_left, answered_ivr, or a failure outcome. The 'uncertain'
+  // branch that briefly lived here is dead code for this endpoint; removed
+  // rather than left inert, per Voice's ask. The real ambiguous case is
+  // answered_human with no proof anyone actually spoke (see `unproven`,
+  // computed in the handler from the transcript) — that's a variant of
+  // 'recap', not a separate kind.
   if (outcome.startsWith('answered')) return 'recap';
   if (outcome === 'voicemail_left') return 'voicemail_left';
   if (['no_answer', 'rang_out', 'busy'].includes(outcome)) return 'no_answer';
   return null; // failed, disconnected, rejected → no email
+}
+
+// answered_human is unproven when the transcript has no caller-side turns
+// at all — either the backstop's zero-turns case slipped through (transcript
+// capture itself failed, so there was nothing for the backstop to check),
+// or a legitimately empty/missing transcript. Treated identically: no
+// caller turns means no proof, regardless of why.
+function hasCallerTurns(transcript) {
+  return Array.isArray(transcript) && transcript.some(t => t && t.role === 'user');
 }
 
 function aboutNumber(profile, userCount) {
@@ -103,46 +93,67 @@ function aboutNumber(profile, userCount) {
 }
 
 function compose(kind, ctx) {
-  const { host, number, org, minutes, at, link, refCode, about, ringSeconds } = ctx;
+  const { host, number, org, minutes, at, link, refCode, about, ringSeconds, unproven } = ctx;
   const who = org ? `"${org}"` : pretty(number);
   const lines = [];
   let subject;
 
-  if (kind === 'recap') {
-    subject = minutes ? `${host} wasted ${minutes} minutes of ${who}` : `${host} called ${who} back`;
-    lines.push(`Your callback to ${pretty(number)} happened at ${at}. A human answered.`);
-    if (minutes) lines.push(`${host} kept them on for ${minutes} minutes.`);
+  if (kind === 'recap' && unproven) {
+    // answered_human with no confirmed caller turns (Sep 29, 2026, Voice's
+    // ask) — could be a real conversation whose transcript just failed to
+    // capture, a bad connection, or a fast hangup. Don't claim certainty we
+    // don't have, and lead with RETRY since that's the most useful action
+    // here specifically — unlike a normal recap, there's real doubt this
+    // one landed at all.
+    subject = `Not sure how ${host}'s call to ${who} went`;
+    lines.push(`Your callback to ${pretty(number)} happened at ${at}, but we can't confirm anyone actually spoke — could be a bad connection, a fast hangup, or our own recording missing the other side.`);
     lines.push('');
-    if (link) {
-      lines.push(`Listen: ${link}`);
-      lines.push(ctx.linkExpires
-        ? `That link stops working after ${ctx.linkExpires} — save the audio before then if you want to keep it.`
-        : 'That link stops working after 7 days — save the audio before then if you want to keep it.');
-    } else {
-      lines.push('Recording is still processing — we\'ll send the link when it\'s ready.');
-    }
+    lines.push(link ? `Listen for yourself: ${link}\n(link works for 7 days)` : 'Recording is still processing — we\'ll send the link when it\'s ready.');
+    lines.push('');
+    lines.push('Reply RETRY to try again, SKIP to cancel any follow-up call already queued, or BLOCK to never call this number again.');
+  } else if (kind === 'recap') {
+    subject = minutes ? `${host} wasted ${plural(minutes, 'minute')} of ${who}` : `${host} called ${who} back`;
+    lines.push(`Your callback to ${pretty(number)} happened at ${at}. A human answered.`);
+    if (minutes) lines.push(`${host} kept them on for ${plural(minutes, 'minute')}.`);
+    lines.push('');
+    lines.push(link ? `Listen: ${link}\n(link works for 7 days)` : 'Recording is still processing — we\'ll send the link when it\'s ready.');
+    // Reference-code aside removed (Sep 29, 2026, Recording's ask) — it's
+    // an internal matching device with nothing for the user to act on.
   } else if (kind === 'voicemail_left') {
-    subject = `${host} left ${who} a message`;
-    lines.push(`Nobody picked up at ${pretty(number)} at ${at}, so ${host} left a voicemail.`);
+    subject = `${host} left a voicemail for ${pretty(number)}`;
+    lines.push(`${host} called ${pretty(number)} at ${at} — nobody picked up, so he left a message in character with a callback number.`);
+    lines.push('');
+    lines.push(`If they call back, ${host} answers and the real time-wasting starts.`);
     if (refCode) lines.push(`Reference number planted: ${refCode}. If they call back asking for it, we'll know it's them.`);
     if (ctx.moreTouches > 0) {
       lines.push(ctx.moreTouches === 1
-        ? `If they don't call back, ${host} will try once more over the next week.`
-        : `If they don't call back, ${host} will try ${ctx.moreTouches} more times over the next week.`);
+        ? `If we don't hear from them, ${host} will try once more over the next week.`
+        : `If we don't hear from them, ${host} will try ${ctx.moreTouches} more times over the next week.`);
+    } else {
+      lines.push(`If we don't hear from them, that's it for this one.`);
     }
+    lines.push('');
+    lines.push(`Recording to follow once it's processed.`);
+  } else if (kind === 'recording_ready') {
+    subject = `Recording ready — ${host}'s call to ${who}`;
+    lines.push(`The recording from that call is ready.`);
+    lines.push('');
+    lines.push(`Listen: ${link}\n(link works for 7 days)`);
   } else {
     subject = `No answer at ${pretty(number)}`;
     lines.push(`We called ${pretty(number)} at ${at}${ringSeconds ? ` and it rang about ${ringSeconds} seconds` : ''} — no answer.`);
-    lines.push('Reply RETRY to try again, or STOP to never call this number.');
+    lines.push('Reply RETRY to try again, or BLOCK to never call this number.');
   }
 
-  if (about) { lines.push(''); lines.push(about); }
-  if (kind === 'recap' && refCode) { lines.push(''); lines.push(`Reference number ${host} planted: ${refCode}.`); }
-  lines.push('');
-  lines.push('Reply STOP and we\'ll never call this number again.');
+  if (about && kind !== 'recording_ready') { lines.push(''); lines.push(about); }
+  if (kind !== 'recording_ready' && !unproven) {
+    lines.push('');
+    lines.push('Reply BLOCK and we\'ll never call this number again.');
+  }
   lines.push('');
   lines.push('— SpamViking');
   lines.push('');
+  lines.push('---');
   lines.push(`[SV-PHONE job:${ctx.jobId}]`);
   return { subject, body: lines.join('\n') };
 }
@@ -157,17 +168,56 @@ export default async function handler(req, res) {
     const [job] = await select('callback_jobs', `id=eq.${job_id}&select=*`);
     if (!job) return res.status(404).json({ ok: false, error: 'no such job' });
 
-    const kind = req.body.kind || kindFor(job.outcome);
+    // kind comes from the job's actual outcome ONLY — never from the
+    // request body. See the file-header note; this is the fix for the
+    // "email said a human answered on a voicemail call" bug.
+    const kind = kindFor(job.outcome);
     if (!kind) return res.status(200).json({ ok: true, queued: false, reason: `no email for outcome ${job.outcome || 'null'}` });
-
-    const dup = await select('phone_recaps', `job_id=eq.${job_id}&kind=eq.${kind}&select=id`);
-    if (dup.length) return res.status(200).json({ ok: true, kind, queued: false, reason: 'already queued' });
-    // (A duplicate ping is PE's to ignore; we skip it here so one call = one classify.)
 
     const [user] = await select('sv_users', `id=eq.${job.user_id}&select=email,host_name`);
     const [settings] = await select('phone_settings', `user_id=eq.${job.user_id}&select=*`);
     const toggle = { recap: 'notify_recap', voicemail_left: 'notify_voicemail_left', no_answer: 'notify_no_answer' }[kind];
     if (settings && settings[toggle] === false) return res.status(200).json({ ok: true, kind, queued: false, reason: 'user opted out' });
+
+    const existing = await select('phone_recaps', `job_id=eq.${job_id}&kind=eq.${kind}&select=id,body`);
+    if (existing.length) {
+      // The recap for this job/kind already went out. If its body still
+      // shows the "recording not ready yet" placeholder — either branch,
+      // human-answered OR voicemail-left both promise a link "to follow" —
+      // and a link is now available, this call is the recording-ready
+      // follow-up webhook firing. Queue it as a DISTINCT kind so it
+      // doesn't hit the guard below and get silently dropped, which was
+      // the "promised follow-up never arrived" bug (Sep 29, 2026). This
+      // originally only covered kind==='recap' — extended to voicemail_left
+      // too once a real voicemail job (d60efc68) showed the same gap: a
+      // voicemail recap also promises "recording to follow" but never
+      // called recordingLink() at all.
+      const awaitingLinkMarker = { recap: 'Recording is still processing', voicemail_left: 'Recording to follow once it\'s processed' }[kind];
+      const awaitingLink = awaitingLinkMarker && (existing[0].body || '').includes(awaitingLinkMarker);
+      if (awaitingLink) {
+        const link = await recordingLink(job_id);
+        if (link) {
+          const already = await select('phone_recaps', `job_id=eq.${job_id}&kind=eq.recording_ready&select=id`);
+          if (!already.length) {
+            const [num] = await select('callback_numbers', `id=eq.${job.callback_number_id}&select=e164,caller_profile_id`);
+            const [profile] = num?.caller_profile_id ? await select('caller_profile', `e164=eq.${encodeURIComponent(num.caller_profile_id)}&select=claimed_org`) : [null];
+            const { subject, body } = compose('recording_ready', {
+              jobId: job_id,
+              host: job.host_name || user?.host_name || 'Your host',
+              number: num?.e164,
+              org: job.caller_context?.claimed_org || profile?.claimed_org || null,
+              link,
+            });
+            await insert('phone_recaps', {
+              user_id: job.user_id, job_id, kind: 'recording_ready', to_email: user.email, subject, body,
+            }, 'return=minimal');
+            return res.status(200).json({ ok: true, kind: 'recording_ready', queued: true });
+          }
+        }
+        return res.status(200).json({ ok: true, kind, queued: false, reason: 'recording not ready yet' });
+      }
+      return res.status(200).json({ ok: true, kind, queued: false, reason: 'already queued' });
+    }
 
     const [flags] = await select('system_flags', 'select=max_campaign_touches&limit=1').catch(() => [null]);
     const [num] = await select('callback_numbers', `id=eq.${job.callback_number_id}&select=e164,caller_profile_id`);
@@ -175,7 +225,7 @@ export default async function handler(req, res) {
     const others = num?.e164 ? await select('callback_numbers', `e164=eq.${encodeURIComponent(num.e164)}&select=user_id`) : [];
     const userCount = new Set(others.map(o => o.user_id)).size;
     const attempts = await select('call_attempts', `job_id=eq.${job_id}&order=dial_started_at.desc&limit=1&select=ring_seconds,answered_at,dial_started_at`);
-    const rec = kind === 'recap' ? await recordingLink(job_id) : null;
+    const link = kind === 'recap' ? await recordingLink(job_id) : null;
 
     const ctx = {
       jobId: job_id,
@@ -184,12 +234,12 @@ export default async function handler(req, res) {
       org: job.caller_context?.claimed_org || profile?.claimed_org || null,
       minutes: job.minutes_used || null,
       at: fmtTime(attempts[0]?.answered_at || attempts[0]?.dial_started_at || job.scheduled_at, settings?.tz),
-      link: rec?.url || null,
-      linkExpires: rec?.expiresAt ? fmtDate(rec.expiresAt, settings?.tz) : null,
+      link,
       refCode: job.reference_code || null,
       about: aboutNumber(profile, userCount),
       ringSeconds: attempts[0]?.ring_seconds || null,
       moreTouches: Math.max(0, (flags?.max_campaign_touches ?? 3) - (job.campaign_touch ?? 1)),
+      unproven: kind === 'recap' && !hasCallerTurns(job.transcript),
     };
     const { subject, body } = compose(kind, ctx);
 
@@ -197,10 +247,7 @@ export default async function handler(req, res) {
       user_id: job.user_id, job_id, kind, to_email: user.email, subject, body,
     }, 'return=minimal');
 
-    // Classification only makes sense when something was actually said.
-    const pinged = job.transcript ? await pingDisposition(job_id) : false;
-
-    return res.status(200).json({ ok: true, kind, queued: true, classify_pinged: pinged });
+    return res.status(200).json({ ok: true, kind, queued: true });
   } catch (err) {
     console.error('phone-recap', err);
     return res.status(500).json({ ok: false, error: String(err.message || err) });
