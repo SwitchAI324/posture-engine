@@ -2509,8 +2509,26 @@ export default async function handler(req) {
         ? messages[messages.length - 1] && messages[messages.length - 1].role
         : null;
     lastMessageRole = lastRole;
+    // FIXED (2026-09-28, PE — real bug, confirmed live on sv-test-andy-
+    // mulo1igtwwid): this used to be `messages.filter(role==="user").length
+    // > 0`, which counts the synthetic "(call connected)" bootstrap message
+    // splitMessages() prepends to satisfy Anthropic's "first message must
+    // be user" constraint (see that function, ~line 5753). That placeholder
+    // has role "user" but isn't the caller saying anything — same trap the
+    // silentTooLong/turnNow<=1 logic above already had to work around once.
+    // Left as-is, callerHasSpoken read true on a call where the real caller
+    // had never spoken a word, which let the REACTION-CHECK "use the name
+    // if you have it" carve-out (Bits' Q4, Sep 25) fire into genuine
+    // silence — confirmed live: the nudge opened with "William? Still with
+    // me—", a bare-name leak the turn-1 name-strip scrub doesn't even catch
+    // (no comma-greeting clause, different shape entirely). Excluding the
+    // literal placeholder text fixes the gate at the source instead of
+    // trying to regex-catch every way a bare name could leak downstream.
     const callerHasSpoken =
-      messages && messages.filter((m) => m && m.role === "user").length > 0;
+      messages &&
+      messages.some(
+        (m) => m && m.role === "user" && m.content !== "(call connected)"
+      );
     if (lastRole === "assistant" && callerHasSpoken) {
       // REACTION-CHECK (Sep 25, Voice) — a dedicated, faster check distinct
       // from the general silence_beat ladder. Voice arms a one-shot 5.0s
@@ -4871,7 +4889,21 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       messages && messages.length
         ? messages[messages.length - 1] && messages[messages.length - 1].role
         : null;
-    const callerHasSpoken = countUserTurns(messages) > 0;
+    // FIXED (2026-09-28, PE — same defect as the REACTION-CHECK gate
+    // above/elsewhere): countUserTurns(messages) counts the synthetic
+    // "(call connected)" bootstrap message splitMessages() prepends (role
+    // "user", not the caller). That means THIS comment's own stated intent
+    // — "turn 0 opener owns the true call-open and must not be treated as
+    // silence" — never actually held: callerHasSpoken read true from the
+    // very first request, before the real caller had ever spoken. Confirmed
+    // live as the mechanism behind a real leak elsewhere (a REACTION-CHECK
+    // nudge using the target's name into genuine pre-speech silence); this
+    // is the same bug in the general silence-ladder gate, so it's had the
+    // same chance to inject "check in warmly" instructions during the
+    // initial silent-opener window this was written to exclude.
+    const callerHasSpoken = messages.some(
+      (m) => m && m.role === "user" && m.content !== "(call connected)"
+    );
     const isBareSilenceTurn = callerHasSpoken && lastMsgRole === "assistant";
     if (isBareSilenceTurn) {
       mutable +=
@@ -5969,8 +6001,12 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
       // lag on turn 1 only, not a redo of the whole turn.
       let t1Buf = "";               // accumulated turn-1 text not yet safely emitted
       const T1_HOLDBACK = 150;      // chars held back each round — comfortably longer than any realistic match
+      // separator between the name and the greeting verb was originally
+      // comma-only; a real call ("William — good to talk to you") showed
+      // it can also be an em dash (or a bare hyphen used as one), so the
+      // separator class now covers all three rather than just ",".
       const T1_NAME_STRIP_RE =
-        /(?:\b(?:hi|hey|hello|oh)\b[\s,.!—-]*)?["“”]?\b[A-Z][A-Za-z’.-]*(?:\s+[A-Z][A-Za-z’.-]*){0,2}\s*,\s*(?:it'?s\s+|so\s+|really\s+)*(?:good|great|nice|lovely)\s+to\s+(?:meet|talk to|hear from|connect with)\s+you\b[.,!—-]*\s*/gi;
+        /(?:\b(?:hi|hey|hello|oh)\b[\s,.!—-]*)?["“”]?\b[A-Z][A-Za-z’.-]*(?:\s+[A-Z][A-Za-z’.-]*){0,2}\s*[,—-]\s*(?:it'?s\s+|so\s+|really\s+)*(?:good|great|nice|lovely)\s+to\s+(?:meet|talk to|hear from|connect with)\s+you\b[.,!—-]*\s*/gi;
       // utterance emitter: turn+0.5 so the host line sorts after this turn's
       // analysis events but before the next turn — no seq collision.
       const utterTrace =
