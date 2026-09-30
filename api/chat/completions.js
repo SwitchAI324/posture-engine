@@ -3129,6 +3129,23 @@ export default async function handler(req) {
 
   if (!upstream.ok || !upstream.body) {
     const errText = await upstream.text().catch(() => "");
+    // UPSTREAM-ERROR LOGGING (2026-09-30, PE — real gap found live: a call
+    // went dead for ~44s straight, every single retry on PE's own endpoint
+    // coming back 502, and there was NOTHING in Vercel's logs to say WHY —
+    // the real Anthropic status/error text only ever went into the HTTP
+    // response body handed back to the agent, never console.logged here.
+    // This mirrors the logging the STAGE-TRANSITION early-emit branch above
+    // already had (see "STAGE-TRANSITION upstream error after early emit"),
+    // just on the plain/non-early-emit path, which had none at all. Log
+    // only — does not change behavior or retry logic; that's a separate,
+    // bigger question (the agent already retries its own silence-nudge
+    // ladder on top of this, so a second layer of server-side retry needs
+    // its own call, not bundled into a pure observability fix).
+    console.log(
+      "UPSTREAM-ERROR callId=" + JSON.stringify(callId) +
+      " status=" + upstream.status +
+      " body=" + JSON.stringify(errText.slice(0, 500))
+    );
     return new Response(`Upstream error ${upstream.status}: ${errText}`, {
       status: 502,
     });
