@@ -2500,7 +2500,7 @@ export default async function handler(req) {
   // bug). Cached after the first call — later turns don't re-import.
   if (baseSystem) await loadBitDirectives();
   const built = baseSystem
-    ? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil, turnOneOpen)
+    ? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil, turnOneOpen, stageTransitionFired)
     : null;
   const systemBlocks = built ? built.blocks : null;
   const deathBlowFiring = built ? built.deathBlowFiring : false;
@@ -3416,7 +3416,7 @@ async function runBenchArrival({ stored, controls, messages, callId, benchTurn, 
   return { benchAppend, benchPhantomInvoke, benchTakeover };
 }
 
-function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil, preResolvedTurnOneOpen) {
+function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil, preResolvedTurnOneOpen, stageTransitionFired) {
   ammo = ammo || { ammunition: [], byHook: {} };
   let deathBlowFiring = false; // set true on the turn a Death Blow lands
   let firedBitId = null; // fired bit id, set inside the scoring block (where top/fire live); returned for the pe_stall flag
@@ -3847,6 +3847,39 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     const bar = effectiveBar(turn);
     // fire: whether a bit clears the bar this turn.
     let fire = !!(top && top.score >= bar && gap >= MIN_GAP);
+
+    // STAGE-TRANSITION / STALL DOUBLE-COVER GUARD (2026-09-29, Voice's
+    // open question on the BASESYSTEM-CHANGED early-emit work) — Voice's
+    // early-emit filler already tells the agent, BEFORE the model is ever
+    // called, that this specific turn is a known-slow one (a cache-busting
+    // overlay swap). If a FRESH stall-lane bit (BIT-233 et al. — see
+    // laneOf) also lands as `top` on that same turn, the caller would hear
+    // Voice's filler AND the host's own stall-flavored line back to back —
+    // two stacked "sorry, hang on"s from two independent mechanisms, the
+    // exact failure Canon already flagged once for a different pairing
+    // (turn-1 flub + reaction-check). So: suppress a fresh stall-lane fire
+    // on a stage-transition turn only. Deliberately narrow —
+    // stageTransitionFired is read here (a snapshot from the block above,
+    // before buildSystemBlocks ever ran), NOT written, and this check runs
+    // BEFORE the hunt-window floor below, so it only ever blocks a NEW
+    // stall bit from opening on this turn; it does not touch an
+    // already-in-progress hunt-window sustain (that's a continuation of a
+    // stall the caller is already mid-experiencing, not a fresh one landing
+    // on top of the filler — nothing to double up there). Every other
+    // lane (scenario, texture, gag, cpush, forced, death-blow) is
+    // unaffected; only a fresh stall-lane `fire` is dropped, and control
+    // falls through to whatever the turn would otherwise say (plain
+    // business content, no stall flavor layered on).
+    if (fire && top && stageTransitionFired && laneOf(top.id) === "stall") {
+      console.log(
+        "STALL-SUPPRESSED-STAGE-TRANSITION callId=" + JSON.stringify(callId) +
+        " turn=" + turn + " bit=" + top.id +
+        " — Voice's early-emit filler already covers this turn's slow " +
+        "generation; holding back the host's own fresh stall bit to avoid " +
+        "a stacked/double stall on the same turn"
+      );
+      fire = false;
+    }
 
     // ── HUNT-WINDOW FLOOR (STEP 3 beat controller) ────────────────────────
     // If BIT-233 opened a commitment-push scenario in the last few turns, keep
