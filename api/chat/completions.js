@@ -2233,6 +2233,14 @@ export default async function handler(req) {
   const phoneMode =
     body?.metadata?.phone_mode ?? body?.extra_body?.metadata?.phone_mode ?? null;
   const isVoicemailMode = phoneMode === "voicemail";
+  // STAGE-TRANSITION EARLY-EMIT (2026-09-29, Voice's ask) — set true below,
+  // at the exact point BASESYSTEM-CHANGED is detected (the opener overlay
+  // swap or the opening->business latch). Declared here, in the outer
+  // function scope, so it survives past the block that detects it and is
+  // still readable much further down, right before the Anthropic fetch —
+  // see the early-emit stream wrapper near that fetch call for how it's
+  // actually used.
+  let stageTransitionFired = false;
   // Hoisted above the branch below so both the overlay-selection logic AND
   // the buildSystemBlocks call site (after the branch closes) can read it.
   // Voicemail mode has its own separate opener concept entirely (a callback
@@ -2442,6 +2450,43 @@ export default async function handler(req) {
       " usedContinuing=" + usedContinuing +
       " overlayChars=" + (overlay ? overlay.length : 0)
     );
+    // BASESYSTEM-CHANGED (2026-09-29, per Voice's stage-transition-latency
+    // question) — baseSystem is the ONLY thing under the cache_control
+    // breakpoint in buildSystemBlocks (blocks[0]); a per-turn bit's
+    // directive text is pushed as its own separate, uncached block further
+    // down and never touches the cache. So the ONLY two things that can
+    // actually bust the Anthropic prompt cache mid-call are the two overlay
+    // selections resolved right here: opener -> openerOverlayContinuing
+    // (once the host has spoken) and opener/continuing -> businessOverlay
+    // (once the phase latches). This logs the turn a call's overlay mode
+    // actually FLIPS — not every turn, just the transition — so a slow-turn
+    // filler mechanism has a precise, code-backed trigger instead of
+    // inferring "probably a stage transition" from timing alone. Persisted
+    // via stored.lastOverlayMode so the comparison survives across requests
+    // (same durable-state pattern as openerServed above); best-effort,
+    // never blocks the response if the write fails.
+    const overlayMode = useBusiness ? "business" : usedContinuing ? "continuing" : "opener";
+    const priorOverlayMode = stored && stored.lastOverlayMode;
+    if (priorOverlayMode != null && priorOverlayMode !== overlayMode) {
+      console.log(
+        "BASESYSTEM-CHANGED callId=" + JSON.stringify(callId) +
+        " turn=" + turnNow +
+        " from=" + priorOverlayMode +
+        " to=" + overlayMode +
+        " — THIS request's baseSystem differs from the cached prefix; " +
+        "expect cache_creation instead of cache_read on this turn"
+      );
+      // Sets the outer-scope flag declared near phoneMode above — read much
+      // further down, before the Anthropic fetch, to flush an immediate SSE
+      // chunk carrying this signal on the wire, ahead of the slow
+      // generation rather than bundled with its first real token (unlike
+      // pe_flub/pe_stall, this decision is known BEFORE the model is ever
+      // called, so it doesn't have to wait on generation to be true).
+      stageTransitionFired = true;
+    }
+    if (priorOverlayMode !== overlayMode && callId) {
+      waitUntil(setCall(callId, { lastOverlayMode: overlayMode }).catch(() => {}));
+    }
     if (overlay) baseSystem = baseSystem + "\n\n" + overlay;
   }
   // Telegraph beat: fold the host's "someone's joining" warning into its prompt.
@@ -2929,24 +2974,10 @@ export default async function handler(req) {
   // off — passing an already-fetched Response's body reader in isn't enough
   // to abort the underlying connection.
   const firstTokenController = new AbortController();
-  const upstream = await fetch(ANTHROPIC_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": process.env.ANTHROPIC_API_KEY,
-      "anthropic-version": ANTHROPIC_VERSION,
-    },
-    body: JSON.stringify(anthropicReq),
-    signal: firstTokenController.signal,
-  });
-
-  if (!upstream.ok || !upstream.body) {
-    const errText = await upstream.text().catch(() => "");
-    return new Response(`Upstream error ${upstream.status}: ${errText}`, {
-      status: 502,
-    });
-  }
-
+  // meta doesn't depend on `upstream` at all (id/created/model/turn/stall/
+  // etc. are all already known by this point) — built here, BEFORE the
+  // fetch, so both the normal path and the stage-transition early-emit
+  // path below can share one construction instead of duplicating it.
   const meta = {
     id: "chatcmpl-" + crypto.randomUUID(),
     created: Math.floor(Date.now() / 1000),
@@ -3010,6 +3041,98 @@ export default async function handler(req) {
     // gate. Consumed in chunkStr below, same stamping pattern as pe_stall.
     flub: isFlubTurn,
   };
+
+  const anthropicFetchOpts = {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": process.env.ANTHROPIC_API_KEY,
+      "anthropic-version": ANTHROPIC_VERSION,
+    },
+    body: JSON.stringify(anthropicReq),
+    signal: firstTokenController.signal,
+  };
+
+  // STAGE-TRANSITION EARLY-EMIT (2026-09-29, Voice's ask) — pe_stall/
+  // pe_flub can only ever ride on the first REAL content chunk, because
+  // they're detected from the model's own output, which doesn't exist
+  // until Anthropic responds. The BASESYSTEM-CHANGED signal is different:
+  // it's known from call state alone, resolved in buildSystemBlocks, well
+  // BEFORE this function ever calls Anthropic. So when stageTransitionFired
+  // is true, don't wait for the (slow, cache-rebuilding) Anthropic response
+  // at all — flush one synthetic, content-free chunk onto the wire the
+  // instant this function reaches the fetch, carrying nothing but the
+  // signal, THEN do the exact same fetch + anthropicToOpenAISSE transform
+  // every other turn does, relaying its real chunks through unchanged.
+  // Deliberately NOT stamped with delta.role — that's reserved for
+  // anthropicToOpenAISSE's own first real chunk (the role-declaration chunk
+  // pe_stall/bench_speak/pe_flub key off of); this early chunk has an EMPTY
+  // delta so nothing about it could be mistaken for that one or for actual
+  // spoken content, while still riding the same extra_content -> delta.extra
+  // channel the agent already reads pe_stall through.
+  // Every other turn (the overwhelming majority) is completely unaffected —
+  // same fetch, same Response, same code path as before this change.
+  if (stageTransitionFired) {
+    const encoder = new TextEncoder();
+    const earlyChunk = {
+      id: meta.id,
+      object: "chat.completion.chunk",
+      created: meta.created,
+      model: meta.model,
+      choices: [
+        { index: 0, delta: { extra_content: { stage_transition: true } }, finish_reason: null },
+      ],
+    };
+    const earlyRaw = "data: " + JSON.stringify(earlyChunk) + "\n\n";
+    const wrapped = new ReadableStream({
+      async start(controller) {
+        controller.enqueue(encoder.encode(earlyRaw));
+        let upstream;
+        try {
+          upstream = await fetch(ANTHROPIC_URL, anthropicFetchOpts);
+        } catch (e) {
+          console.log("STAGE-TRANSITION fetch threw after early emit: " + (e && e.message));
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+          return;
+        }
+        if (!upstream.ok || !upstream.body) {
+          const errText = await upstream.text().catch(() => "");
+          console.log(
+            "STAGE-TRANSITION upstream error after early emit: " +
+            upstream.status + " " + errText.slice(0, 200)
+          );
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+          return;
+        }
+        const inner = anthropicToOpenAISSE(upstream.body, meta, benchAppend, firstTokenController);
+        const reader = inner.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          controller.enqueue(value);
+        }
+        controller.close();
+      },
+    });
+    return new Response(wrapped, {
+      headers: {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-cache, no-transform",
+        connection: "keep-alive",
+      },
+    });
+  }
+
+  const upstream = await fetch(ANTHROPIC_URL, anthropicFetchOpts);
+
+  if (!upstream.ok || !upstream.body) {
+    const errText = await upstream.text().catch(() => "");
+    return new Response(`Upstream error ${upstream.status}: ${errText}`, {
+      status: 502,
+    });
+  }
 
   return new Response(anthropicToOpenAISSE(upstream.body, meta, benchAppend, firstTokenController), {
     headers: {
