@@ -6,13 +6,20 @@
 // intake.js; this file only owns the email reply copy and the incoming
 // action names, which are UNCHANGED ('cancel'|'retry'|'stop').
 //
-// POST JSON: { sender_email, action?: 'cancel'|'retry'|'stop', job_id? }
-//   action defaults to 'cancel'. job_id optional; if absent, resolves to
-//   the user's newest relevant job.
+// POST JSON: { sender_email, action?: 'cancel'|'retry'|'stop'|'number', job_id?, number? }
+//   action defaults to 'cancel'. job_id optional for cancel/retry/stop (if
+//   absent, resolves to the user's newest relevant job); REQUIRED for
+//   'number', where it means the phone_intakes.id carried in the
+//   [SV-PHONE job:<uuid>] tag on a "we heard a number but couldn't read it"
+//   acknowledgement — see intake.js's needs_number status. 'number' also
+//   requires `number`, the digits the user typed in their reply; anything
+//   Email can find (10 digits, with or without punctuation/leading 1) is
+//   fine, it's normalized/validated in _actions.js. Added Sep 29, 2026 for
+//   Email's garbled-number flow.
 // Header:    x-phone-intake-secret
 // Returns:   { ok, action, done:boolean, reply_subject, reply_body }
 
-import { actionCancel, actionBlock, actionRetry } from './_actions.js';
+import { actionCancel, actionBlock, actionRetry, actionSupplyNumber } from './_actions.js';
 
 const SB = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -44,11 +51,34 @@ export default async function handler(req, res) {
   const action = (req.body?.action || 'cancel').toLowerCase();
   const jobIdIn = req.body?.job_id || null;
   if (!sender_email) return res.status(400).json({ ok: false, error: 'sender_email required' });
-  if (!['cancel', 'retry', 'stop'].includes(action)) return res.status(400).json({ ok: false, error: 'bad action' });
+  if (!['cancel', 'retry', 'stop', 'number'].includes(action)) return res.status(400).json({ ok: false, error: 'bad action' });
+  if (action === 'number' && !jobIdIn) return res.status(400).json({ ok: false, error: 'job_id required for number' });
 
   try {
     const userId = await rpc('user_id_by_email', { p_email: sender_email });
     if (!userId) return res.status(404).json({ ok: false, error: 'unknown sender' });
+
+    // ---- NUMBER: user replied with a callback number after a garbled-
+    // number acknowledgement. job_id here is a phone_intakes.id, not a
+    // callback_jobs.id — see the header comment. ----
+    if (action === 'number') {
+      const numberRaw = req.body?.number;
+      if (!numberRaw) return res.status(200).json({ ok: true, action, done: false, ...reply('Re: your callback number', 'We didn\'t see a number in that reply — could you send just the digits?') });
+      const r = await actionSupplyNumber(userId, jobIdIn, numberRaw);
+      if (!r.done) {
+        if (r.reason === 'invalid_number') {
+          return res.status(200).json({ ok: true, action, done: false, ...reply('Re: your callback number', 'That didn\'t come through as a callable US number — could you send just the 10 digits?') });
+        }
+        if (r.reason === 'blocked') {
+          return res.status(200).json({ ok: true, action, done: false, ...reply('Re: your callback number', `${pretty(r.number)} is on your do-not-call list, so we won't dial it.`) });
+        }
+        if (r.reason === 'wrong_status') {
+          return res.status(200).json({ ok: true, action, done: false, ...reply('Re: your callback number', 'That one\'s already past the point of adding a number — nothing to do here.') });
+        }
+        return res.status(200).json({ ok: true, action, done: false, ...reply('Re: your callback number', 'We couldn\'t match that to a pending voicemail of yours.') });
+      }
+      return res.status(200).json({ ok: true, action, done: true, ...reply('Re: your callback number', `Got it — we'll call ${pretty(r.number)} ${r.phrase}. Reply SKIP to stop that.`) });
+    }
 
     // ---- SKIP (action name: cancel) ----
     if (action === 'cancel') {

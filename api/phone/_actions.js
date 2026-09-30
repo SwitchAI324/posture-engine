@@ -6,8 +6,13 @@
 // (SKIP/BLOCK/RETRY/GO). These functions return facts, never reply text —
 // each caller owns its own copy (email vs SMS read very differently).
 
+import { planCallback, lineTypeFor, refCode, normalizeUsNumber } from './_schedule.js';
+
 const SB = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SCOUT_TOKEN = process.env.SV_SCOUT_TOKEN;
+const SCOUT_URL = process.env.SCOUT_PHONE_URL || 'https://posture-engine.vercel.app/api/scout/phone';
+const CODE_ARCHETYPES = ['b2b_saas', 'account_access', 'gov_threat']; // reference code ON — matches intake.js
 
 async function sb(path, opts = {}) {
   const r = await fetch(`${SB}/rest/v1/${path}`, {
@@ -71,12 +76,88 @@ export async function actionRetry(userId, jobIdIn = null) {
     user_id: userId, intake_id: job.intake_id, callback_number_id: job.callback_number_id,
     archetype: job.archetype, scheduled_at: new Date(Date.now() + minutes * 60000).toISOString(),
     status: 'approved', approved_at: new Date().toISOString(),
-    reference_code: job.reference_code, host_name: job.host_name,
+    reference_code: job.reference_code, reference_code_origin: job.reference_code_origin, host_name: job.host_name,
     dial_extension: job.dial_extension, ask_for: job.ask_for, caller_context: job.caller_context,
     campaign_touch: 1, campaign_parent_id: null,
     fail_reason: `retry_of:${job.id}`,
   }, 'return=minimal');
   return { done: true, number: num?.e164, minutes };
+}
+
+async function pingScout(number) {
+  if (!SCOUT_TOKEN) return;
+  try {
+    await fetch(SCOUT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-sv-scout-token': SCOUT_TOKEN },
+      body: JSON.stringify({ number }),
+      signal: AbortSignal.timeout(3000),
+    });
+  } catch (e) {
+    console.warn('scout ping failed (non-blocking)', String(e.message || e));
+  }
+}
+
+// ---- NUMBER (email only, no SMS/command equivalent — Sep 29, 2026, Email's
+// garbled-number ask): a user replies with a callback number after a "we
+// heard a number but couldn't read it cleanly" acknowledgement. Keyed off
+// phone_intakes.id, NOT callback_jobs — no job exists yet at that point,
+// since intake.js never got a dialable number to create one with. This is
+// the one action here that CREATES a job rather than acting on an existing
+// one; everything else it needs (archetype, pitch, stated hours,
+// reference_number, transcript, ...) was already saved to
+// phone_intakes.classification/transcript at classify time, so nothing is
+// re-derived or re-run through the LLM. ----
+export async function actionSupplyNumber(userId, intakeIdIn, numberRaw) {
+  if (!intakeIdIn) return { done: false, reason: 'no_intake_id' };
+  const number = normalizeUsNumber(numberRaw);
+  if (!number) return { done: false, reason: 'invalid_number' };
+
+  const [intake] = await select('phone_intakes', `id=eq.${intakeIdIn}&user_id=eq.${userId}&select=*`);
+  if (!intake) return { done: false, reason: 'not_found' };
+  if (intake.status !== 'needs_number') return { done: false, reason: 'wrong_status', status: intake.status };
+
+  const a = intake.classification || {};
+
+  await rpc('upsert_caller_profile', {
+    p_e164: number, p_org: a.claimed_org || null, p_summary: a.script_summary || null,
+    p_archetype: a.archetype || 'generic', p_src: 'intake',
+  });
+  await sb('callback_numbers?on_conflict=user_id,e164', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId, intake_id: intake.id, e164: number, provenance: 'stated_by_reply', caller_profile_id: number }),
+    prefer: 'resolution=ignore-duplicates,return=minimal',
+  });
+  const [gate] = await select('callback_numbers', `user_id=eq.${userId}&e164=eq.${encodeURIComponent(number)}&select=id,blocked`);
+  if (!gate || gate.blocked) return { done: false, reason: 'blocked', number };
+
+  const [account] = await select('sv_users', `id=eq.${userId}&select=host_name`);
+  const [settings] = await select('phone_settings', `user_id=eq.${userId}&select=*`);
+  const rules = await select('callback_time_rules', 'active=eq.true&select=*').catch(() => []);
+  const lineType = await lineTypeFor(number);
+  const plan = planCallback({ number, a, settings, rules, lineType });
+
+  await insert('callback_jobs', {
+    user_id: userId, intake_id: intake.id, callback_number_id: gate.id,
+    archetype: a.archetype || 'generic', scheduled_at: plan.scheduledAt.toISOString(), status: 'approved',
+    dial_window: plan.window, approved_at: new Date().toISOString(),
+    reference_code: a.reference_number || (CODE_ARCHETYPES.includes(a.archetype) ? refCode() : null),
+    reference_code_origin: a.reference_number ? 'echoed' : (CODE_ARCHETYPES.includes(a.archetype) ? 'issued' : null),
+    host_name: account?.host_name || null,
+    dial_extension: a.extension || null, ask_for: a.ask_for || null,
+    campaign_touch: 1, campaign_parent_id: null,
+    caller_context: {
+      caller_name: a.agent_label || null, claimed_org: a.claimed_org || null,
+      pitch: a.pitch || null, the_ask: a.the_ask || null, account_refs: a.account_refs || [],
+      reference_number: a.reference_number || null,
+      stated_hours: a.stated_hours || null, stated_tz: a.stated_tz || null,
+      transcript: intake.transcript || null,
+    },
+  }, 'return=minimal');
+  await update('phone_intakes', `id=eq.${intake.id}`, { status: 'queued' });
+  await pingScout(number);
+
+  return { done: true, number, phrase: plan.phrase, pastHours: plan.pastHours, extension: a.extension || null, askFor: a.ask_for || null };
 }
 
 // ---- GO (SMS only, no email equivalent): stop waiting, dial now ----

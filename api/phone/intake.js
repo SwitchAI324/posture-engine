@@ -79,7 +79,7 @@
 // slip_guard_screenshot boolean column (nullable/missing = treated as
 // true/on) — confirm with Data before deploying if unsure it exists.
 
-import { planCallback, lineTypeFor, rand } from './_schedule.js';
+import { planCallback, lineTypeFor, rand, refCode } from './_schedule.js';
 import { processLinks } from './_links.js';
 import { ocrMedia } from './_ocr.js';
 import { actionCancel, actionBlock, actionRetry, actionGo } from './_actions.js';
@@ -169,7 +169,9 @@ Fields:
 - claimed_org: the organization the ${speaker} claims to be from, or null.
 - agent_label: the name the ${speaker} gives for themselves ("this is Steve"), or null.
 - account_refs: any account, case, reference, or invoice numbers the ${speaker} cites, as strings. Empty array if none.
+- reference_number: if one specific reference/case/claim/file number is the one the recipient should quote back when calling ("your case number is 520014695395"), that number as a string, or null. Usually one of the values in account_refs — pulled out here so it's easy to quote verbatim instead of picking through a list.
 - amount_mentioned: a specific dollar amount the ${speaker} mentions, written naturally as it would appear in a sentence (e.g. "$215,000"), or null if no specific amount is stated.
+- garbled_number: true if the ${speaker} says or references a callback number but it comes through unclear, cut off, talked-over, or otherwise unparseable — you can tell a number was meant but can't confidently produce digits for it. False if no number was mentioned at all, or if a number came through cleanly.
 - stated_hours: the hours the ${speaker} says to call back, verbatim ("8AM to 5PM Pacific"), or null.
 - stated_hours_start: those hours as 24h "HH:MM" start, or null.
 - stated_hours_end: those hours as 24h "HH:MM" end, or null.
@@ -204,21 +206,17 @@ Fields:
   j.agent_label = typeof j.agent_label === 'string' && j.agent_label.trim() ? j.agent_label.trim().slice(0, 60) : null;
   if (!j.ask_for && j.agent_label) j.ask_for = j.agent_label;   // "this is Steve" → ask for Steve
   j.account_refs = Array.isArray(j.account_refs) ? j.account_refs.map(String).slice(0, 10) : [];
+  j.reference_number = typeof j.reference_number === 'string' && j.reference_number.trim() ? j.reference_number.trim().slice(0, 40) : null;
   j.pitch_topic = typeof j.pitch_topic === 'string' && j.pitch_topic.trim() ? j.pitch_topic.trim().slice(0, 40) : null;
   j.amount_mentioned = typeof j.amount_mentioned === 'string' && j.amount_mentioned.trim() ? j.amount_mentioned.trim().slice(0, 20) : null;
+  j.garbled_number = j.garbled_number === true;
   return j;
 }
 
-// Short reference code planted in voicemails/callbacks for return-call
-// matching (b2b_saas / account_access / gov_threat archetypes only — see
-// CODE_ARCHETYPES). Was called but never defined anywhere in this file or
-// _schedule.js; any job on one of those archetypes would have thrown here.
-function refCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I ambiguity
-  let s = '';
-  for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
-  return s;
-}
+// refCode() now lives in _schedule.js (imported above) — shared with
+// _actions.js's actionSupplyNumber(), which also plants a reference code
+// when it creates a job. Was previously duplicated here and, before that,
+// called without being defined anywhere.
 
 // ---------- Scouting ping (fire-and-forget, 3s cap, never blocks) ----------
 async function pingScout(number) {
@@ -399,12 +397,14 @@ async function handleSms(req, res) {
             user_id: userId, intake_id: intakeId, callback_number_id: gate.id,
             archetype: b.archetype, scheduled_at: plan.scheduledAt.toISOString(), status: 'approved',
             dial_window: plan.window, approved_at: new Date().toISOString(),
-            reference_code: CODE_ARCHETYPES.includes(b.archetype) ? refCode() : null,
+            reference_code: b.reference_number || (CODE_ARCHETYPES.includes(b.archetype) ? refCode() : null),
+            reference_code_origin: b.reference_number ? 'echoed' : (CODE_ARCHETYPES.includes(b.archetype) ? 'issued' : null),
             host_name: account.host_name || null, dial_extension: b.extension, ask_for: b.ask_for,
             campaign_touch: 1, campaign_parent_id: null,
             caller_context: {
               caller_name: b.agent_label || null, claimed_org: b.claimed_org || null,
               pitch: b.pitch || null, the_ask: b.the_ask || null, account_refs: b.account_refs,
+              reference_number: b.reference_number || null,
               stated_hours: b.stated_hours || null, stated_tz: b.stated_tz || null, transcript: combinedText,
             },
           }, 'return=minimal');
@@ -533,6 +533,23 @@ We didn't hear a callback number in the recording, so there's nothing for
 us to dial. We only ever call numbers a scammer says out loud.
 
 — SpamViking`,
+    };
+  }
+  if (status === 'needs_number') {
+    return {
+      reply_subject: subj,
+      reply_body:
+`Got it. Here's what we heard:
+
+"${ctx.transcript}"
+
+We heard a number in there but couldn't read it cleanly — just reply to
+this email with the number and we'll call it.
+
+— SpamViking
+
+---
+[SV-PHONE job:${ctx.intakeId}]`,
     };
   }
   return { reply_subject: subj, reply_body: 'Something went wrong on our side. We\'ll look into it.' };
@@ -742,7 +759,8 @@ export default async function handler(req, res) {
               archetype: b.archetype, scheduled_at: plan.scheduledAt.toISOString(), status: 'approved',
               dial_window: plan.window,
               approved_at: new Date().toISOString(),
-              reference_code: CODE_ARCHETYPES.includes(b.archetype) ? refCode() : null,
+              reference_code: b.reference_number || (CODE_ARCHETYPES.includes(b.archetype) ? refCode() : null),
+              reference_code_origin: b.reference_number ? 'echoed' : (CODE_ARCHETYPES.includes(b.archetype) ? 'issued' : null),
               host_name: host_name || null,
               dial_extension: b.extension,
               ask_for: b.ask_for,
@@ -751,7 +769,8 @@ export default async function handler(req, res) {
               caller_context: {
                 caller_name: b.agent_label || null, claimed_org: b.claimed_org || null,
                 pitch: b.pitch || null, the_ask: b.the_ask || null,
-                account_refs: b.account_refs, stated_hours: b.stated_hours || null,
+                account_refs: b.account_refs, reference_number: b.reference_number || null,
+                stated_hours: b.stated_hours || null,
                 stated_tz: b.stated_tz || null, transcript: combinedText,
               },
             }, 'return=minimal');
@@ -809,10 +828,22 @@ export default async function handler(req, res) {
       stated_numbers: a.stated_numbers, classification: { ...a, provenance }, status: 'classified',
     });
 
-    // 6. No dialable number → nothing to dial
+    // 6. No dialable number → nothing to dial (yet). A garbled/unparseable
+    // number (Sep 29, 2026, Email's ask) is distinct from no number ever
+    // being stated: we know a callback was wanted, we just couldn't read
+    // the digits, so we ask the sender to retype it instead of dropping the
+    // lead. This reply is tagged with the phone_intakes id, not a
+    // callback_jobs id — no job exists yet. If they reply with a number,
+    // Email routes it to the new 'number' action (_actions.js's
+    // actionSupplyNumber), which creates the job for the first time,
+    // reconstructing everything from the classification saved below.
     if (!a.stated_numbers.length && a.international_numbers.length) {
       await update('phone_intakes', `id=eq.${intakeId}`, { status: 'rejected' });
       return res.status(200).json({ ok: true, intake_id: intakeId, status: 'international', ...replyFor('international', { subject, transcript, number: a.international_numbers[0] }) });
+    }
+    if (!a.stated_numbers.length && a.garbled_number) {
+      await update('phone_intakes', `id=eq.${intakeId}`, { status: 'needs_number' });
+      return res.status(200).json({ ok: true, intake_id: intakeId, status: 'needs_number', ...replyFor('needs_number', { subject, transcript, intakeId }) });
     }
     if (!a.stated_numbers.length) {
       await update('phone_intakes', `id=eq.${intakeId}`, { status: 'rejected' });
@@ -851,7 +882,8 @@ export default async function handler(req, res) {
       archetype: a.archetype, scheduled_at: scheduledAt, status: 'approved',
       dial_window: plan.window,
       approved_at: new Date().toISOString(),
-      reference_code: CODE_ARCHETYPES.includes(a.archetype) ? refCode() : null,
+      reference_code: a.reference_number || (CODE_ARCHETYPES.includes(a.archetype) ? refCode() : null),
+      reference_code_origin: a.reference_number ? 'echoed' : (CODE_ARCHETYPES.includes(a.archetype) ? 'issued' : null),
       host_name: host_name || null,
       dial_extension: a.extension,
       ask_for: a.ask_for,
@@ -863,6 +895,7 @@ export default async function handler(req, res) {
         pitch: a.pitch || null,
         the_ask: a.the_ask || null,
         account_refs: a.account_refs,
+        reference_number: a.reference_number || null,
         stated_hours: a.stated_hours || null,
         stated_tz: a.stated_tz || null,
         transcript,

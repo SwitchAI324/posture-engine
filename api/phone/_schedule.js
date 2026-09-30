@@ -167,8 +167,35 @@ function planCallback({ number, a, settings, rules, lineType = null, now = new D
   return { scheduledAt: at, window: { rule: 'fallback_delay', tz }, phrase: `in about ${delay} minutes` };
 }
 
-const refCode = () => String(rand(1000, 9999));
+// Reference code planted in voicemails/callbacks for return-call matching
+// (b2b_saas / account_access / gov_threat archetypes — see CODE_ARCHETYPES
+// in intake.js). Moved here (Sep 29, 2026) so intake.js and _actions.js's
+// actionSupplyNumber() share one implementation instead of drifting into
+// two formats. This replaces a stale 4-digit-numeric stub that lived here,
+// unexported and unused; the 6-char alphanumeric shape below is the one
+// actually shipped to users today, lifted verbatim from intake.js.
+const refCode = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I ambiguity
+  let s = '';
+  for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+};
+
+// Normalizes a user-typed US/Canada number — "555-123-4567", "(555) 123
+// 4567", "5551234567", "15551234567", "+15551234567" — to E.164, or null if
+// it doesn't resolve to exactly 10 NANP digits with a valid area-code lead
+// digit. Added for actionSupplyNumber() (a user replying with a callback
+// number by email after a garbled-number acknowledgement); v1 stays US/
+// Canada-only, matching the +1-only dial-eligibility rule everywhere else.
+function normalizeUsNumber(raw) {
+  const digits = String(raw || '').replace(/\D/g, '');
+  const ten = digits.length === 11 && digits[0] === '1' ? digits.slice(1) : digits;
+  if (ten.length !== 10) return null;
+  if (!/^[2-9]/.test(ten)) return null; // NANP area codes never start 0 or 1
+  return `+1${ten}`;
+}
+
 const pretty = e164 => `${e164.slice(2, 5)}-${e164.slice(5, 8)}-${e164.slice(8)}`;
 
 
-export { planCallback, lineTypeFor, rand, partsInTz, tzLabel, fmtHM };
+export { planCallback, lineTypeFor, rand, partsInTz, tzLabel, fmtHM, refCode, normalizeUsNumber };
