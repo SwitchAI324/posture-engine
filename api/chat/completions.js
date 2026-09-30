@@ -2574,7 +2574,40 @@ export default async function handler(req) {
       messages.some(
         (m) => m && m.role === "user" && m.content !== "(call connected)"
       );
-    if (lastRole === "assistant" && callerHasSpoken) {
+    // TRAILING-USER-TURN GUARANTEE (2026-09-30, PE — real bug, confirmed
+    // live on sv-test-andy-mundwb558bkl AND sv-test-andy-muo352v6hb2o,
+    // same root cause both times): this used to be gated on
+    // `lastRole === "assistant" && callerHasSpoken`. On a call where the
+    // caller genuinely never says a word all call (both confirmed calls:
+    // RX msgs=2 user=1 asst=1 — the one "user" message is only the
+    // "(call connected)" bootstrap, excluded from callerHasSpoken by the
+    // Sep-28 fix above), callerHasSpoken is false for the ENTIRE call, so
+    // this whole block — including the plain "[The caller has gone quiet
+    // on the line.]" append that turns messagesForModel into one ending in
+    // "user" — got skipped every single time. messagesForModel then stayed
+    // as the raw `messages`, still ending in "assistant" (the host's last
+    // line), and EVERY retry (reaction-check, all 3 silence-nudge beats,
+    // the ladder-exhausted beat — 8 requests, both incidents) got rejected
+    // by Anthropic with the same 400: "This model does not support
+    // assistant message prefill. The conversation must end with a user
+    // message." Confirmed via the new UPSTREAM-ERROR log line added
+    // 2026-09-30 — this is what that log line was for, and it worked:
+    // caught the exact error on its first real occurrence.
+    // FIX: split the two concerns the old single gate conflated. Ending
+    // the array on "user" is a HARD Anthropic API requirement — it must
+    // happen every time lastRole is "assistant", full stop, regardless of
+    // whether the caller has ever spoken. callerHasSpoken should only ever
+    // decide which SYNTHETIC CONTENT is safe to use — specifically,
+    // whether the reaction-check's name-inviting directive text is safe to
+    // send (the Sep-28 fix's real and correct concern: a bare-name leak,
+    // "William? Still with me—", into genuine pre-speech silence). So:
+    // outer gate is now just `lastRole === "assistant"` (always append
+    // something ending in "user"); callerHasSpoken now only gates whether
+    // the REACTION-CHECK branch's own content is used — when it's false,
+    // reactionCheck falls through to the ordinary beat-ladder synthetic
+    // below instead (never a name, same as before), rather than skipping
+    // the append entirely.
+    if (lastRole === "assistant") {
       // REACTION-CHECK (Sep 25, Voice) — a dedicated, faster check distinct
       // from the general silence_beat ladder. Voice arms a one-shot 5.0s
       // timer off the pe_flub-stamped completion (see isFlubTurn below);
@@ -2597,7 +2630,7 @@ export default async function handler(req) {
         body?.extra_body?.metadata?.reaction_check ??
         body?.call?.metadata?.reaction_check ??
         null;
-      if (reactionCheck) {
+      if (reactionCheck && callerHasSpoken) {
         const reactionSynthetic =
           "[This is the reaction-check moment: the caller has stayed quiet " +
           "since your flub-recovery line landed. Give ONE short callback+" +
