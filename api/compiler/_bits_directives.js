@@ -1,5 +1,50 @@
 // api/compiler/_bits_directives.js
 // SpamViking — Bit Directives
+// v13 — Sep 29, 2026 — Added explicit delivery-style guidance to BIT-347
+//   (discrete, one-digit-at-a-time cadence for IVR speech recognition —
+//   that performance style is WHY the fumble is plausible) and BIT-348
+//   (natural grouped speech for a live person, no artificial separation).
+//   Also reframed BIT-347's unresolved-fumble outcome: real IVRs escalate
+//   to a human as their standard failure-recovery path, so an unresolved
+//   fumble reaching a person is likely the MORE common outcome than a
+//   clean read-through, not just an acceptable one — getting the number
+//   right usually just routes deeper into automation instead.
+// v12 — Sep 29, 2026 — Settled 4 open design questions on the number-fumble
+//   bits (Call Design + Bits email): (1) up to 3 attempts, doesn't have to
+//   land clean — an IVR escalating to a human transfer after failures
+//   counts as a win, not a failure; (2) kept as two sibling bit IDs
+//   (BIT-347 IVR, new BIT-348 live-person) rather than one bit with two
+//   entry points — different triggers/registers, same underlying number
+//   and mechanic, cross-referenced in both; (3) the TARGET number stays
+//   fixed across every attempt and across both bits, but the WRONG digits
+//   vary attempt to attempt — repeating the same botch twice reads as
+//   scripted; (4) placement: BIT-347 is pre-human-handoff only (by
+//   definition, since it's IVR-only), BIT-348 is mid-call after some
+//   rapport, never the same turn as BIT-347. BIT-347 rungs 2→3, max
+//   fires 2→3 to match. New BIT-348 added, same family (stall_buy_time),
+//   lighter absurdity (2) since it's a conversational stumble, not a
+//   structural stall.
+// v11 — Sep 29, 2026 — Andrew's correction: BIT-346 (The Case Number)
+//   REMOVED entirely — not needed. BIT-347 (The Digit Fumble) redesigned
+//   around the actual scenario: a reference number spoken in the ORIGINAL
+//   scam voicemail, which the host has to speak into an automated IVR
+//   system on the outbound callback (not a number a live caller gives
+//   mid-conversation). Register changed to solo/reacting-to-a-machine
+//   instead of back-and-forth with a person. Registry: trigger changed to
+//   phone_mode:ivr, call_direction:outbound added, requires_context now
+//   points at the voicemail-extracted reference number. OPEN ITEM flagged
+//   to PE/Data below — this number isn't captured anywhere yet.
+// v10 — Sep 29, 2026 — Two new phone-only bits added per Call Design + Bits
+//   email request: BIT-346 The Case Number (one-shot authenticity anchor —
+//   host invents a case/reference number early, stays consistent via
+//   ordinary same-call recall, no new persistence mechanism needed) and
+//   BIT-347 The Digit Fumble (2-rung stall bit — host botches reading back
+//   a number in play; rung 1 light stumble, rung 2 full restart, always
+//   resolves clean). Both registry entries added too (family:
+//   authenticity_anchor for 346, family: stall_buy_time for 347, matching
+//   BIT-238's existing pattern). Open question flagged to Call Design/PE:
+//   whether BIT-346's number should be host-invented (as written) or
+//   PE-supplied via metadata for cross-call consistency.
 // v9 — Sep 28, 2026 — BIT-902 IF THEY ENGAGE pool replaced with Andrew's own
 //   3 examples (rain-since-childhood, Hawaii-rain non-sequitur, golf-in-
 //   thunderstorms). BIT-901 restructured to match BIT-902's explicit two-
@@ -5999,6 +6044,211 @@ Hard: "So I take glass seriously." closes it. Stop.
 Hard: glass is not mentioned again after this beat.
 Hard: if this bit fires, BIT-307 does not fire again —
   the glass was dealt with. No rung 2, no rung 3.
+`,
+
+"BIT-347": `
+THE DIGIT FUMBLE is active. PHONE ONLY. OUTBOUND ONLY.
+IVR-specific — this is NOT a live-human beat. Sibling to
+BIT-348 The Credibility Number — same reference number, same
+fumble mechanic, different context (machine here, person
+there). If BIT-348 fires later in this same call, it's the
+SAME underlying number, just being fumbled again in a
+different setting — not a new number.
+
+Setup: the original scam voicemail (the one forwarded to
+SpamViking and used to build this callback) contained a
+reference number the caller was told to have ready — a case
+number, confirmation number, or similar, spoken in that
+voicemail. This callback has now hit an automated IVR system
+(not a human), and the IVR is asking for that number — either
+by prompt ("please say or enter your reference number") or
+because the host is volunteering it to move the call forward.
+The host is reading that number, from memory or a note, INTO
+the automated system, and can't get it clean.
+
+This is talking to a machine, not a person — the register is
+different from other fumble beats. No back-and-forth, no
+"was that a one or a seven?" directed at anyone who'll answer.
+It's solo: muttering to self, self-correcting mid-recitation,
+reacting to the IVR's own behavior (a beep, a "please try
+again," a pause that might mean it's still listening).
+
+HOW TO DELIVER IT: speech-recognition IVRs need digits spoken
+discretely — one at a time, a small beat between each, not run
+together the way a person would say a number naturally. That
+slow, careful, one-digit-at-a-time cadence IS what makes losing
+your place plausible — it's not natural speech, it's
+performance for a machine, and performance for a machine is
+easy to fumble. Contrast BIT-348: a live person gets natural
+grouped delivery, no artificial separation.
+
+THE NUMBER ITSELF: the correct target number is fixed — it's
+whatever reference number this job actually has, and it never
+changes across rungs or across this bit's siblings. What
+CHANGES between attempts is which digits get botched and how
+— generate a different wrong version each time. Reciting the
+exact same mistake twice reads as scripted, not fumbled.
+
+RUNG 1 (first attempt, lighter touch):
+  One stumble mid-recitation, self-caught, keeps going:
+  "—four, four, seven, one... wait, sorry, that's not right,
+  four, four, SEVEN, one — okay."
+  Or: "Case number is... hang on, let me get this right...
+  eight, eight, two, three. Eight-eight-two-three."
+  Short. One beat. May or may not go through — see below.
+
+RUNG 2 (later attempt — min 4 turns after rung 1, per
+rung_spacing):
+  The IVR doesn't take it clean — a beep, a "that number
+  wasn't recognized," or just host's own doubt — and the whole
+  number has to be re-read from scratch, slower, more
+  deliberate, maybe irritated at the system itself (never at a
+  person, since there isn't one yet). A DIFFERENT digit gets
+  botched than rung 1 did:
+  "Okay — it didn't take that. Let me try again, slower.
+  Four... four... seven... one. There."
+  May or may not go through — see below.
+
+RUNG 3 (optional, only if the call is still on this IVR — min
+4 turns after rung 2):
+  Same discipline, a third distinct botch. This is the last
+  attempt this bit scripts.
+
+RESOLUTION — does NOT have to land clean. Two valid outcomes:
+  (a) An attempt goes through clean and the call proceeds
+    into the IVR menu / past this step.
+  (b) The IVR itself gives up on voice/digit entry after
+    repeated failures and offers a human transfer ("let me
+    connect you with a representative") — the host takes it,
+    relieved. This is NOT a lesser outcome — it's arguably the
+    MORE LIKELY one, and the better one. Real IVR systems
+    escalate to a human as their standard failure-recovery
+    path; repeated "that wasn't recognized" is the single most
+    common trigger for "let me connect you with someone."
+    Getting the number RIGHT usually routes deeper into
+    automation instead (another menu, an automated
+    confirmation) — success here doesn't reliably mean reaching
+    a person. Never write the unresolved-fumble outcome as the
+    host being defeated; write it as the host being glad to
+    finally talk to someone — that's the actual goal landing.
+  Never let it just dead-end with no exit — every fire either
+  resolves the number or escalates to a human. If neither
+  happens by rung 3, the bit stops trying and the call moves
+  on however the IVR naturally proceeds (hold, disconnect, etc
+  — not this bit's job to write that part).
+
+WHERE IT FITS: only fires once this call has actually reached
+an IVR (not a live human, not voicemail) and the reference
+number from the original voicemail is genuinely in play —
+never fires cold, and never fires if the call connects to a
+live person instead. Early in the call, before any human
+handoff — this whole bit's arc happens BEFORE a person picks
+up, by definition.
+
+HOW FAR TO PUSH IT: up to three attempts, same underlying
+number, each with a different botch. Against a machine that
+doesn't care how long the host takes, lean into mild open
+annoyance at the system — that's fair game here in a way it
+isn't with a live person. Absurdity 3, not 4 — this reads as a
+real person fumbling a number into a phone tree, not a bit.
+
+Hard: phone, outbound only. Never fires on inbound calls or
+  video.
+Hard: only fires once the call has reached an IVR — never a
+  live human, never voicemail.
+Hard: only fires if a reference number from the original
+  voicemail actually exists for this job — never invents one.
+  If no such number was captured, this bit does not fire.
+Hard: the target number is fixed across every attempt and
+  every sibling bit (BIT-348) — only the WRONG digits vary.
+Hard: solo register — no dialogue directed at a person, no
+  "was that a one or a seven?" waiting for someone to answer.
+  React to the SYSTEM (a beep, a rejection, silence), not to
+  a caller.
+Hard: every fire ends in either a clean read-through or an
+  escalation to a human transfer — never an unresolved dead
+  end with nothing after it.
+Hard: max 3 fires per call, minimum 4 turns between them.
+Hard: generate fresh phrasing and a fresh wrong digit each
+  time — never reproduce the examples verbatim, never repeat
+  the same botch twice.
+`,
+
+"BIT-348": `
+THE CREDIBILITY NUMBER is active. PHONE ONLY. Sibling to
+BIT-347 The Digit Fumble — same reference number, same fumble
+mechanic, different context (a live person here, a machine
+there). If BIT-347 already fired this call, this is the SAME
+underlying number, being read back again in conversation —
+not a new one, and don't reset or reinvent it.
+
+Setup: the original scam voicemail contained a reference or
+case number. Mid-call, talking to a live person now, the host
+wants to sound like they're genuinely working the case — so
+they go to quote the number back, to establish credibility.
+And then botch it, in front of the person, same as any other
+verbal fumble.
+
+Unlike BIT-347, this IS a conversational beat — a live person
+is listening and can react. Register matches other live
+fumble beats: a stumble, a self-correction, maybe the caller
+reacts or waits. This is texture on an otherwise-confident
+credibility move, not a structural stall like BIT-347.
+
+HOW TO DELIVER IT: natural grouped speech, the way anyone
+actually says a number out loud in conversation ("forty-four
+seventy-one," not "four... four... seven... one"). No
+artificial digit-by-digit separation — that discrete cadence
+is BIT-347's tell for talking to a machine, and would read as
+strange or robotic said to an actual person. The stumble here
+comes from a normal mis-recall or slip of the tongue, not from
+a performance style.
+
+THE NUMBER ITSELF: same fixed target number as BIT-347 if that
+bit already fired this call (pull it from the same source,
+never regenerate). If BIT-347 hasn't fired yet, this bit still
+needs the job's actual reference number to exist — never
+invents one. What varies between attempts is which digits get
+botched, same discipline as BIT-347.
+
+BEAT (one or two rungs, host's fumble resolves quickly since a
+live person is listening — no reason to drag this one out):
+  RUNG 1: "—so if we pull up your case, that's, let me make
+  sure I've got this right, four four seven — one, right,
+  four-four-seven-one."
+  RUNG 2 (only if it's worth a second beat, min 4 turns after
+  rung 1): host catches themselves having said it wrong a
+  turn or two earlier and corrects it in passing: "Actually,
+  sorry — earlier I said 4471, that's not right, it's 4491.
+  My mistake."
+  ALWAYS resolves within the beat it fires in (or the very
+  next correction beat for rung 2) — never leave a live person
+  sitting on an unresolved wrong number. This is not a stall
+  tool the way BIT-347 is; it's a small credibility stumble,
+  not a structural time-waster.
+
+WHERE IT FITS: mid-call, once the host is already engaged in
+conversation with a live person and wants to lean on the case
+number for credibility — after some rapport or business has
+already happened, not as an opener. Never fires in the same
+turn as BIT-347 (different contexts by definition — one is
+pre-human, one is mid-conversation).
+
+Hard: phone only.
+Hard: never fires before a live person is actually on the
+  line and engaged in conversation.
+Hard: only fires if a reference number from the original
+  voicemail actually exists for this job — pulls the same
+  number BIT-347 used if that bit already fired, never
+  reinvents it.
+Hard: always resolves to the correct number within the beat
+  (or the immediate follow-up correction) — never leaves a
+  live person on an open wrong number.
+Hard: max 2 fires per call, minimum 4 turns between them.
+Hard: generate fresh phrasing and a fresh wrong digit each
+  time — never reproduce the examples verbatim, never repeat
+  the same botch twice, and never repeat a botch BIT-347
+  already used this call.
 `,
 
 "BIT-522": `

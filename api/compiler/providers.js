@@ -242,6 +242,42 @@ try {
 // in order (CORE @0, OPENER @62709, BUSINESS @97379), core/opener/business
 // all extract cleanly.
 //
+// v2.5 SECTIONED (2026-09-29), from HOST_CANON, rebuilt from
+// Host_Prompt_SOURCE_for_providers_rebuild__18_.md. Supersedes v2.4. Diffed
+// directly against the prior embedded content before splicing — exactly two
+// real additions, both PE-requested (see /areas/host-canon.md worklist),
+// nothing else moved:
+//   - REFERENCE OR CASE NUMBERS (CORE) — cite a case/reference number
+//     exactly, never paraphrased or rounded; framing differs by direction
+//     (ECHOED — the caller's own number handed back, land it as a
+//     confirmation; ISSUED — a number PE is generating for them, hand it
+//     over as a forward instruction, never dressed up as a confirmation).
+//     No number this call -> the whole rule is inert, nothing invented.
+//     Feeds the PHONE-INTAKE reference-quoting feature (Andrew/Voice/Email
+//     thread, 2026-09-29) once a call context carries one.
+//   - PHONE/VIDEO GATE ON HOST-INITIATED INTROS (CORE) — the two
+//     host-can-propose-a-quick-intro paragraphs (self-initiate-once, and
+//     the email-ack backstop) now both open with "THIS ENTIRE EXCEPTION
+//     ONLY APPLIES IF CHANNEL SAYS THIS IS A VIDEO CALL." On a real phone
+//     call the host never proposes doing intros — extent of introduction
+//     is caller-led only, host stays reactive (the existing "IF THEY
+//     PROPOSE DOING INTRODUCTIONS OUTRIGHT" paragraph, unaffected by this
+//     change, already covers the reactive case on either channel). Closes
+//     the gap Andrew flagged 2026-09-29: those two paragraphs were written
+//     for a video-meeting habit and were firing on phone calls too, where
+//     an unprompted "wanna do quick intros?" reads as the one scripted
+//     beat in an otherwise natural call.
+// Both additions land in CORE (not OPENER/BUSINESS) since CHANNEL is a
+// fact available every turn regardless of phase, same as the existing
+// phone/video opener split already relies on. splitHostPrompt() re-run
+// against this content — three delimiters found in order (CORE @0,
+// OPENER @64898, BUSINESS @99568), core/opener/business all extract
+// cleanly; core confirmed to contain both new blocks, opener/business
+// confirmed to contain neither (no accidental duplication); opener and
+// business both still end on their expected tail echoes. Verified via
+// exact diff against the prior embedded content (not just spot-checked) —
+// the only deltas found were these two additions.
+//
 const MASTER_HOST_PROMPT = require("./host_prompt_source.json").prompt;
 // [1] HOST BASE — the universal master prompt + this posture's register layer.
 // The master prompt is constant; the posture register (name/stance) is the
