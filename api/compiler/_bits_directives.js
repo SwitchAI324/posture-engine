@@ -1,5 +1,63 @@
 // api/compiler/_bits_directives.js
 // SpamViking — Bit Directives
+// v16 — Sep 30, 2026 — BIT-126/BIT-907, correction to v15: Andrew supplied
+//   the full original "other chats" ask, which v15 misread. Mild curse
+//   words are WANTED, not banned — "damn it," "hell," "for god's sake,"
+//   "jeez," never anything stronger — delivered muttered/thrown-away,
+//   then back up to normal register for the apology. v15's non-word-
+//   exclamation swap ("ugh—"/"gah—"/stifled exhale) is REVERTED in both
+//   bits' return examples and Hard rules back to mild curses. The one-
+//   item-per-pool-fire Hard rule (BIT-907) is unchanged from v15. OPEN
+//   ITEM note updated with the full ask: real silence via
+//   `<expr type="break" label="X"/>` in TWO places (between off-mike
+//   rounds, and before the return specifically), target ~1.0-1.2s for
+//   the return gap vs. the ~0.8s baseline used elsewhere — still not
+//   implemented, still flagged to PE, syntax/bounds unconfirmed.
+// v15 — Sep 30, 2026 — BIT-126/BIT-907, second round of real-call fixes
+//   (call RM_FYefSSe7Es9A), relayed feedback from other chats: (1) real
+//   curse words ("Christ", "hell", "oh, shit", "damn it" etc — introduced
+//   by v14, flagged for a Canon no-go-list check) REMOVED from both bits
+//   and replaced with non-word exclamations/stifled exhales ("ugh—",
+//   "gah—", a stifled exhale) — a cut-off curse still reads as the real
+//   word to a listener and this is published content, so v14's NOTE
+//   flagging this to Canon is now resolved by removing the words rather
+//   than clearing them with Canon; (2) BIT-907's WHAT SHE WANTS pool now
+//   has a Hard rule enforcing exactly ONE item per fire — a real call
+//   stacked two grievances (sourdough starter AND bowling trophy) into
+//   one turn, which read as rambling rather than a real disagreement;
+//   (3) OPEN ITEM added to both bits, not resolved here: relayed feedback
+//   proposes an `<expr type="break" label="X"/>` tag (already used
+//   elsewhere for an ordinary aside, ~0.8s baseline, "PE confirming real
+//   bounds with Voice") as the actual/correct pause mechanism, distinct
+//   from the [BEAT]/[HALF_BEAT]/[LONG_BEAT] bracket tokens both bits use.
+//   Did NOT implement — syntax/duration mapping unconfirmed, and a wrong
+//   guess risks the tag being spoken literally or silently dropped on a
+//   live call. Flagged in both bits' Hard rules for PE to reconcile.
+// v14 — Sep 30, 2026 — BIT-126/BIT-907, from a real call transcript
+//   (sv-test-andy-muo4haks6ii2): pulled the actual generated text and
+//   found ZERO [BEAT]/[HALF_BEAT] tokens anywhere in it, despite both
+//   bits instructing their use. Root cause: both bits also carried a
+//   blanket "Hard: do NOT include sound markers" rule with no exemption
+//   for pacing tokens, written before [BEAT]/[HALF_BEAT]/[LONG_BEAT] were
+//   confirmed live/wired (v6) — the model was very plausibly following
+//   that Hard rule and silently omitting the pacing tokens too. FIXED in
+//   both bits: pacing tokens now explicitly called out as required and
+//   exempt from the stripping restriction, which still applies only to
+//   actual sound-clip markers ([DOG_BARK] etc). Also, per Andrew's
+//   real-call feedback: (1) pre-return gap changed from [BEAT]/
+//   [HALF_BEAT] to [LONG_BEAT] in both bits, to read as longer than the
+//   inter-round gaps; (2) the return itself redesigned from a clean
+//   "sorry" to a muttered, half-swallowed curse/exclamation first, then
+//   the acknowledgment fragment — bumbled, not composed. NOTE: this
+//   introduces mild cursing (damn/hell/shit-adjacent) not previously
+//   used in the library — flagged to Canon for a no-go-list check.
+//   SEPARATE FINDING, not fixed here: BIT-907's SILENT CALLER content
+//   already matches what Andrew described wanting (a callback to the
+//   Joanne interruption before the check-in) — but the same real call
+//   shows a generic "Hey — you still with me? Might've dropped you
+//   there" firing instead, which reads like the general silence ladder,
+//   not this bit's own SILENT CALLER beat. Content is correct; this
+//   looks like a PE-side firing-priority issue, flagged separately.
 // v13 — Sep 29, 2026 — Added explicit delivery-style guidance to BIT-347
 //   (discrete, one-digit-at-a-time cadence for IVR speech recognition —
 //   that performance style is WHY the fumble is plausible) and BIT-348
@@ -2795,9 +2853,17 @@ OFF-MIKE PACING — applies to all three beats:
     doing something physical
   - NO "just a second" preamble to the caller —
     just shift. The caller hears it happen.
-  The RETURN has a [HALF_BEAT] before re-engaging —
-  a moment of re-orienting. Then back in, mid-thought,
-  not starting over. Never a reset phrase.
+  The RETURN has a [LONG_BEAT] before re-engaging, not a
+  [HALF_BEAT] — this needs to read as longer than the gaps
+  between the two off-mike rounds, room for host to
+  actually catch themselves and re-orient before turning
+  back. Then back in, mid-thought, not starting over.
+  Never a reset phrase, and never a clean, composed
+  re-entry — lead with a muttered curse under the breath,
+  quiet and thrown-away, THEN the line back to the caller.
+  MILD register only — "damn it," "hell," "for god's
+  sake," "jeez" — NEVER anything stronger. This is someone
+  catching themselves, not delivering dialogue.
 
 EMOTION TAGGING — on aside turns, emit the tag on each
   distinct beat (neutral/calm for the off-mike rounds,
@@ -2810,13 +2876,16 @@ EMOTION TAGGING — on aside turns, emit the tag on each
 BEAT 1 — SHORT ASIDE (early in call):
   Shift mid-sentence to Joanne. Two rounds, clipped:
   "over there — no, the other one —" [BEAT] "yes, THAT
-  one, I said that already—" then back: "sorry. Joanne."
-  Continue the sentence that was interrupted, not a new one.
+  one, I said that already—" [LONG_BEAT] then back,
+  muttered first: "—jeez, sorry—" (quiet, half to self)
+  "sorry. Joanne." Continue the sentence that was
+  interrupted, not a new one.
 
 BEAT 2 — THE COFFEE ORDER (when the moment allows):
   Shift to Joanne first — two rounds — "one second —"
-  [BEAT] "I know, I know, I'm getting to it—" [BEAT]
-  "I heard you the first time—" then back to the caller.
+  [BEAT] "I know, I know, I'm getting to it—" [LONG_BEAT]
+  "I heard you the first time—" [LONG_BEAT] then back to
+  the caller, muttered first: "—for god's sake, sorry—" (quiet)
   Then explain to caller: "She was wondering how long
   this call was going to last. I'm supposed to make
   coffee. If you must know, she gets this absurd
@@ -2834,9 +2903,9 @@ BEAT 3 — THE RETURN (later in call):
   Joanne reappears. Shift immediately — no preamble.
   Two rounds: [to Joanne] "I know. I'm on a call. I
   haven't forgotten." [BEAT] "I'll get to it, I said
-  I'll get to it—" [HALF_BEAT] then back to caller:
-  "Sorry — she ordered that thing and I never — I'll
-  get to it."
+  I'll get to it—" [LONG_BEAT] then back to caller,
+  muttered first: "—oh, hell—" (barely audible) "sorry
+  — she ordered that thing and I never — I'll get to it."
   Coffee is still not made.
 
 COMEDIC REGISTER: impossible to tell if host is low or
@@ -2858,10 +2927,33 @@ Hard: return is always mid-thought, never a reset.
 Hard: 3 beats across the call — don't compress into one.
 Hard: Joanne never fully resolves — she keeps coming back.
 Hard: coffee order is beat 2 only, not beat 1 or 3.
-Hard: do NOT include sound markers inside any part
-  of the aside turn — markers in split turns are
-  silently stripped until Voice builds segment-aware
-  authorization wiring.
+Hard: [BEAT] and [LONG_BEAT] are REQUIRED in every aside
+  beat — they're the real, Voice-wired dead-air tokens,
+  not the old stripped-in-split-turns sound-clip markers
+  ([DOG_BARK] etc — those still can't be used here,
+  segment-aware audio wiring still isn't built). Pacing
+  tokens are a different system and are live. A beat with
+  none of these tokens is a failed performance.
+Hard: the gap before the return to the caller is
+  [LONG_BEAT], not [HALF_BEAT] or [BEAT] — it needs to
+  read as longer than the gaps between the off-mike rounds.
+Hard: the return always leads with a muttered curse under
+  the breath, quiet and thrown-away, not a clean "sorry" —
+  mild register only ("damn it," "hell," "for god's sake,"
+  "jeez"), never anything stronger. This is someone
+  catching themselves, not performing a line.
+Hard: OPEN ITEM, not yet resolved — relayed feedback
+  proposes real silence via \`<expr type="break"
+  label="X"/>\` in TWO places — between the off-mike
+  rounds, and before the return specifically — target
+  roughly 1.0-1.2s for the return-beat gap (longer than
+  the ~0.8s baseline used elsewhere for an ordinary
+  aside), vs. the [BEAT]/[LONG_BEAT] bracket tokens this
+  bit currently uses. Whether these are the same
+  underlying mechanism or two different ones, and the
+  confirmed tag/duration mapping if separate, is flagged
+  to PE — do not assume either way or guess syntax.
+  Sibling bit BIT-907 carries the same flag.
 `,
 
 "BIT-127": `
@@ -4330,25 +4422,42 @@ say the caller's name. Do not say "good to connect."
 
 OFF-MIKE PACING (same discipline as BIT-126):
   TWO ROUNDS, not one — same as BIT-126. Use the literal
-  [BEAT] token for the gap where her unheard reply lands:
+  [BEAT] token for the gap where her unheard reply lands —
+  don't rush these, let each one actually register as a
+  pause, not a comma:
     Round 1: host says something to her. Clipped.
     [BEAT] (her unheard reply lands here)
     Round 2: host responds to what she just said —
     a real reaction, not a repeat of round 1.
-    [BEAT] THEN notice the caller.
+    [LONG_BEAT] THEN notice the caller.
   Clipped fragments, not full sentences. At least one
   redirect or incomplete thought. Round 2 shows host
   heard something back. No "just a second" preamble —
   just shift into it.
 
-  THE RETURN — this is the shift that has to actually
-  land, not just an emotion tag and a bare word. Give it
-  a short acknowledgment fragment that names what just
-  happened, so the tonal break is audible, not just
-  implied:
-  "sorry — that's Joanne, ignore her."
-  "sorry — whole thing, never mind."
-  "God, sorry — go ahead."
+  THE GAP BEFORE THE RETURN is its own distinct beat, not
+  a continuation of the round-2 gap — use [LONG_BEAT], not
+  [BEAT], here specifically. This is host still half in the
+  Joanne headspace, catching themselves, realizing they've
+  been gone — that realization needs room to actually land
+  before they turn back, longer than the gaps between
+  rounds.
+
+  THE RETURN itself is NOT composed — it's bumbled. Lead
+  with a muttered curse under the breath, quiet and
+  thrown-away, not clearly enunciated — this is someone
+  catching themselves, not delivering a line. MILD
+  register only — "damn it," "hell," "for god's sake,"
+  "jeez" — NEVER anything stronger. THEN the
+  acknowledgment fragment, a little stammered, coming
+  back up to normal register, naming what just happened
+  so the tonal break is audible:
+  [LONG_BEAT] "—oh, hell—" (muttered, quiet)
+    "sorry, that's — that's Joanne, sorry, ignore her."
+  [LONG_BEAT] "—damn it—" (under the breath)
+    "sorry, that's — yeah, ignore that, go ahead."
+  [LONG_BEAT] "—for god's sake—" (quiet, half to self)
+    "sorry, sorry, that's nothing, go ahead."
   Generate fresh, don't reuse these verbatim. Still no
   caller name, still no greeting, still one beat — the
   fragment names the interruption, it doesn't apologize
@@ -4360,8 +4469,14 @@ WHAT SHE WANTS — pick ONE concrete, specific thing with
   real stakes and a history behind it — not domestic
   errand noise (a charger, a drawer, dog food). The
   bar: it should sound like the tail end of an ongoing
-  disagreement, not a request. Draw from this pool, vary
-  per call, generate fresh:
+  disagreement, not a request. EXACTLY ONE item from this
+  pool, full stop — a real call stacked two entries
+  (sourdough starter AND bowling trophy) into a single
+  turn, which reads as rambling, not a real disagreement.
+  Once one item is named, that's the whole disagreement for
+  this beat — no "and another thing," no second grievance
+  layered on. Draw from this pool, vary per call, generate
+  fresh:
   "no, we are NOT naming the sourdough starter after
     your ex, I've made my peace with it, we are not
     relitigating this—"
@@ -4422,10 +4537,35 @@ Hard: off-mike speech is clipped fragments, never a
   full performed sentence.
 Hard: no "just a second"/"hold on" to the caller before
   shifting — just shift.
-Hard: do NOT include sound markers inside this turn —
-  markers in split turns are silently stripped until
-  Voice builds segment-aware authorization wiring (same
-  restriction as BIT-126).
+Hard: [BEAT] and [LONG_BEAT] are REQUIRED in this turn —
+  they're the real, Voice-wired dead-air tokens, not the
+  old stripped-in-split-turns sound-clip markers ([DOG_BARK]
+  etc — those still can't be used here, segment-aware audio
+  wiring still isn't built). Pacing tokens are a different
+  system and are live. Never omit them from this beat — a
+  real call with none of these tokens is a failed
+  performance, not an acceptable shortcut. OPEN ITEM, not
+  yet resolved: relayed feedback proposes real silence via
+  \`<expr type="break" label="X"/>\` in TWO places — between
+  the off-mike rounds, and before the return/noticing-the-
+  caller beat specifically — as the actual mechanism,
+  target roughly 1.0-1.2s for the return-beat gap (longer
+  than the ~0.8s baseline used elsewhere for an ordinary
+  aside), vs. the [BEAT]/[LONG_BEAT] bracket tokens this
+  bit currently uses for the same job. Whether these are
+  the same underlying mechanism or two different ones,
+  and the confirmed tag/duration mapping if separate, is
+  flagged to PE — do not assume either way or guess syntax.
+Hard: the pre-return gap is [LONG_BEAT], not [BEAT] — it
+  needs to read as longer than the gaps between the two
+  off-mike rounds.
+Hard: the return leads with a muttered curse under the
+  breath, quiet and thrown-away — mild register only
+  ("damn it," "hell," "for god's sake," "jeez"), never
+  anything stronger — then comes back up to normal
+  register for the apology fragment.
+Hard: exactly ONE item from the WHAT SHE WANTS pool per
+  fire — never two grievances stacked into the same beat.
 Hard: generate fresh every call — never reproduce
   examples verbatim.
 `,
