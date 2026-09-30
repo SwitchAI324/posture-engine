@@ -1,4 +1,22 @@
 // SpamViking — Bits Registry
+// v7 — Sep 29, 2026 — BIT-347: rungs/max_fires_per_call 2→3 (up to 3
+//   attempts, doesn't have to resolve clean — IVR escalation to a human
+//   is a valid exit). New BIT-348 The Credibility Number added — sibling
+//   to BIT-347, same reference number, live-person mid-call context
+//   instead of IVR, family stall_buy_time, pool middle, absurdity 2.
+//   See directives v12 for full reasoning on the 4 settled design
+//   questions.
+// v6 — Sep 29, 2026 — BIT-346 REMOVED (Andrew's call, not needed).
+//   BIT-347 redesigned: trigger changed to phone_mode:ivr (unconfirmed
+//   live gate, flagged to PE), call_direction:outbound added, pool moved
+//   to early (fires before any human handoff), requires_context now
+//   describes the voicemail-extracted reference number scenario, not a
+//   caller-given number. See directives v11 for full text/reasoning.
+// v5 — Sep 29, 2026 — Two new phone-only bits added, entries inserted after
+//   BIT-345: BIT-346 The Case Number (authenticity_anchor family, one-shot,
+//   pool:early) and BIT-347 The Digit Fumble (stall_buy_time family,
+//   2 rungs, max 2 fires/call, min 4 turns between). Per Call Design + Bits
+//   email request. See directives v10 for full text.
 // v4 — Sep 28, 2026 — BIT-907 (The Arrival): added channel:"video",
 //   matching BIT-126. opener_turn1 is now video-only for 907 — audio-only
 //   calls draw from 901/902 only. Flagged to PE separately.
@@ -2531,6 +2549,47 @@ export const BITS = [
       "CLEAN_UP_GLASS"
     ],
     "requires_context": "fires only after BIT-307 rung 1 confirmed \u2014 first spill only"
+  },
+  {
+    "id": "BIT-347",
+    "name": "The Digit Fumble",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "stall_buy_time",
+    "pool": "early",
+    "trigger": "phone_mode:ivr",
+    "call_direction": "outbound",
+    "cooldown": 4,
+    "rungs": 3,
+    "ceiling": "soft_dead_end",
+    "rung_spacing": {
+      "min_between": 4
+    },
+    "max_fires_per_call": 3,
+    "absurdity": 3,
+    "vocal_tag": "neutral",
+    "channel": "phone",
+    "requires_context": "call has reached an automated IVR (not a live human, not voicemail), and a reference number extracted from the original scam voicemail exists for this job"
+  },
+  {
+    "id": "BIT-348",
+    "name": "The Credibility Number",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "stall_buy_time",
+    "pool": "middle",
+    "call_direction": "outbound",
+    "cooldown": 4,
+    "rungs": 2,
+    "ceiling": "soft_dead_end",
+    "rung_spacing": {
+      "min_between": 4
+    },
+    "max_fires_per_call": 2,
+    "absurdity": 2,
+    "vocal_tag": "neutral",
+    "channel": "phone",
+    "requires_context": "host is live and engaged with a caller and wants to quote the reference number from the original voicemail to sound like they're genuinely working the case — same number BIT-347 used if that bit already fired this call"
   },
   {
     "id": "BIT-522",
