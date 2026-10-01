@@ -44,7 +44,7 @@ export async function getCallBySlug(slug) {
   if (!slug) return null;
   return getCall("slug:" + slug);
 }
-const CALL_PREFIX_COLUMNS = "prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,opener_overlay_continuing,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used,pending_bench_awareness,latest_call_id,active_generation,bench_present,first_seen_at,caller_presenting,pitch_summary,host_name,recording_notice_given,host_turn_count,history_rev_seen,opener_served,handoff_given,gag_open_pending";
+const CALL_PREFIX_COLUMNS = "prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,opener_overlay_continuing,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used,pending_bench_awareness,latest_call_id,active_generation,bench_present,first_seen_at,caller_presenting,pitch_summary,host_name,recording_notice_given,host_turn_count,history_rev_seen,opener_served,handoff_given,gag_open_pending,moves_owed,last_flub_bit_id,last_flub_turn";
 export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const baseUrl = `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}`;
@@ -162,11 +162,27 @@ export async function getCall(callId) {
     // that delivers the greeting it withheld. See completions.js
     // buildSystemBlocks for the full rationale.
     gagOpenPending: rows[0].gag_open_pending ?? false,
+    // MOVES-OWED LATCH (2026-09-30, PE — generalizes gagOpenPending above
+    // to any two-move bit, not just BIT-901). Set post-generation by the
+    // MOVE-SPLIT CLAMP in chat/completions.js the instant it sees that
+    // turn's required [[MOVE_SPLIT]] token (fires whether move 1 stopped
+    // clean or had to be cut off from a stacked move 2) — never set
+    // pre-generation, so this is read-evidence, not a decision guess.
+    // { bitId, setAtTurn } or null. Consumed and cleared on the very next
+    // turn, same one-shot lifecycle gagOpenPending already had.
+    movesOwed: rows[0].moves_owed ?? null,
+    // FLUB-AWARE SILENCE-NUDGE (2026-09-30, PE — Canon's escalation). Which
+    // opener-flub-family bit (family:"opener_turn1" — 901/902/907) most
+    // recently genuinely fired, and on which turn. Never cleared — read
+    // alongside `turn` by the consuming branches in completions.js, which
+    // decide for themselves whether it's still recent enough to matter.
+    lastFlubBitId: rows[0].last_flub_bit_id ?? null,
+    lastFlubTurn: rows[0].last_flub_turn ?? null,
   };
 }
 export async function setCall(
   callId,
-  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, openerOverlayContinuing, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed, pendingBenchAwareness, latestCallId, activeGeneration, benchPresent, firstSeenAt, callerPresenting, pitchSummary, hostName, recordingNoticeGiven, hostTurnCount, historyRevSeen, openerServed, handoffGiven, gagOpenPending }
+  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, openerOverlayContinuing, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed, pendingBenchAwareness, latestCallId, activeGeneration, benchPresent, firstSeenAt, callerPresenting, pitchSummary, hostName, recordingNoticeGiven, hostTurnCount, historyRevSeen, openerServed, handoffGiven, gagOpenPending, movesOwed, lastFlubBitId, lastFlubTurn }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -214,6 +230,9 @@ export async function setCall(
   if (openerServed !== undefined) row.opener_served = openerServed;
   if (handoffGiven !== undefined) row.handoff_given = handoffGiven;
   if (gagOpenPending !== undefined) row.gag_open_pending = gagOpenPending;
+  if (movesOwed !== undefined) row.moves_owed = movesOwed;
+  if (lastFlubBitId !== undefined) row.last_flub_bit_id = lastFlubBitId;
+  if (lastFlubTurn !== undefined) row.last_flub_turn = lastFlubTurn;
   if (callerRedirected !== undefined) row.caller_redirected = callerRedirected;
   if (callerCrude !== undefined) row.caller_crude = callerCrude;
   if (crudeImpersonalCount !== undefined) row.crude_impersonal_count = crudeImpersonalCount;
