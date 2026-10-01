@@ -1,5 +1,69 @@
 // api/compiler/_bits_directives.js
 // SpamViking — Bit Directives
+// v19 — Sep 30, 2026 — PE pulled ground truth from main114.py (the live
+//   agent code), correcting three v17 guesses:
+//   (1) <mutter/> is NOT real — no such tag exists anywhere in the
+//   codebase. "Mutter" has only ever meant literal text content (the
+//   _SV_TTS_FALLBACK_LINES / _SV_STAGE_TRANSITION_FILLERS word pools),
+//   never markup. REMOVED <mutter/> from BIT-901/BIT-126/BIT-907 —
+//   the mutter/stall lines are now plain text, no tag, as Canon's
+//   original message actually described.
+//   (2) The real pause mechanism was never in question — [HALF_BEAT]/
+//   [BEAT]/[LONG_BEAT], swapped inline for Cartesia's native
+//   <expr type="break" label="Xs"/> before TTS, confirmed working in
+//   production (BIT-323, the known-colleague aside, is PE's own
+//   reference example). The <expr type="break"> OPEN ITEM in BIT-126/
+//   BIT-907 is RESOLVED — removed, replaced with a confirmation note.
+//   Also fixed BIT-323 itself to actually use the literal [HALF_BEAT]
+//   token (it only had the word "half-beat" in prose) and to exempt
+//   pacing tokens from its own stale "no sound markers" rule — same
+//   self-contradiction bug class as BIT-126/BIT-907's v14 fix.
+//   (3) <emotion value="X"/> is RETIRED (main112, Sep 28). The real,
+//   live tag is Cartesia's <expr type="expression" label="X"/>, closed
+//   vocabulary (neutral/angry/excited/sad/curious/hesitant/etc) — no
+//   "mutter"/"whisper" label exists, and it changes emotional tone
+//   only, never volume/pitch. Swapped all 12 occurrences across
+//   BIT-323/BIT-126/BIT-907. No volume/pitch control exists for the
+//   host's own voice at all (the only volume= knob is for pre-recorded
+//   sound-effect clips) — so BIT-126/BIT-907's muttered return line now
+//   leans on an <expr type="expression" label="hesitant"/> tag plus the
+//   words themselves to read as subdued, not an audio effect, and both
+//   bits say so explicitly rather than implying a volume drop.
+//   Gating (shared vs. event-gated) confirmed content-only, as Canon's
+//   message already said — no tag-attribute mechanism exists or is
+//   needed; no change required there.
+// v18 — Sep 30, 2026 — PE's [[MOVE_SPLIT]] clamp token added to BIT-901/
+//   BIT-902. New Hard rule in both: emit the literal token the instant
+//   Move 1's content ends, every time, no exception (no-op on a turn
+//   where Move 1 already stops clean). PE's code-side clamp in
+//   completions.js uses this to mechanically cut output at the real
+//   Move 1/Move 2 boundary and hold Move 2 for the next turn, so a
+//   caller interruption can't make them land in one breath — a
+//   structural backstop on top of the existing "two separate turns"
+//   prompt discipline, not a replacement for it. Same convention as the
+//   bracket sound markers — silent, never spoken, PE strips it before
+//   TTS. Also fixed BIT-901's blanket "do not emit any bracket token not
+//   listed above" Hard rule, which would otherwise have silently
+//   suppressed this new token — same self-contradiction pattern found
+//   in BIT-126/BIT-907's pacing-token bug (v14).
+// v17 — Sep 30, 2026 — Canon+Voice merged mutter/stall-line pool adopted.
+//   One pool, two tiers: SHARED (usable anywhere, dead air or event alike
+//   — "hang on, hang on—"/"hold on—"/"sorry, one sec—"/"wait, sorry—"/
+//   "mm, hold on—"/a wordless stall sound) and EVENT-GATED (only when an
+//   actual bit/mishap event triggered the line — "damn it—"/"hell—"/
+//   "for god's sake—"/"jeez—", mild register only, never stronger — never
+//   on pure dead air, where a curse reads as "something broke" instead of
+//   "I'm slow to start"). Delivered via the new <mutter/> placeholder tag.
+//   BIT-907 and BIT-126's return lines now lead with <mutter/> + a line
+//   from the combined pool (both tiers available, since these are actual
+//   interruptions) instead of hardcoding specific curse words in-line —
+//   keeps the wording in one Canon-maintained place instead of drifting
+//   across bits. BIT-901's three mishap-reaction pools (coffee cup/dog/
+//   door) updated the same way, per Canon's own example. Exact <mutter/>
+//   rendering (self-closing marker, no attributes, mirroring <emotion/>'s
+//   pattern) is my best-guess syntax pending Voice confirmation — flagged
+//   alongside the existing <expr type="break"> open item in BIT-907/
+//   BIT-126's Hard rules.
 // v16 — Sep 30, 2026 — BIT-126/BIT-907, correction to v15: Andrew supplied
 //   the full original "other chats" ask, which v15 misread. Mild curse
 //   words are WANTED, not banned — "damn it," "hell," "for god's sake,"
@@ -2859,25 +2923,43 @@ OFF-MIKE PACING — applies to all three beats:
   actually catch themselves and re-orient before turning
   back. Then back in, mid-thought, not starting over.
   Never a reset phrase, and never a clean, composed
-  re-entry — lead with a muttered curse under the breath,
-  quiet and thrown-away, THEN the line back to the caller.
-  MILD register only — "damn it," "hell," "for god's
-  sake," "jeez" — NEVER anything stronger. This is someone
-  catching themselves, not delivering dialogue.
+  re-entry — lead with a quiet, thrown-away line, THEN the
+  line back to the caller. There's no volume/pitch control
+  over the host's voice, so the subdued quality comes from
+  the words plus an <expr type="expression" label="hesitant"/>
+  tag right before the line (see EMOTION TAGGING below),
+  not a whisper effect. This is an actual interruption, so
+  BOTH tiers of the Canon-maintained mutter pool are in
+  play, vary which fires:
+    SHARED (usable anywhere): "hang on, hang on—" / "hold
+      on—" / "sorry, one sec—" / "wait, sorry—" / "mm,
+      hold on—" / a wordless stall/breath sound
+    EVENT-GATED (interruption only — never pure dead air):
+      "damn it—" / "hell—" / "for god's sake—" / "jeez—" —
+      mild register only, never anything stronger
+  This is someone catching themselves, not delivering
+  dialogue.
 
 EMOTION TAGGING — on aside turns, emit the tag on each
-  distinct beat (neutral/calm for the off-mike rounds,
-  your normal register for the return):
+  distinct beat: neutral/calm for the off-mike rounds,
+  hesitant for the muttered return line, your normal
+  register for the line back to the caller. Uses Cartesia's
+  real <expr type="expression" label="X"/> tag (closed
+  vocabulary: neutral/angry/excited/sad/curious/hesitant/
+  etc — NOT the old <emotion value="X"/> tag, which is
+  retired):
   Example structure:
-    <emotion value="neutral"/>over there — no, the other one —
-    <emotion value="neutral"/>yes, that one, I said the—
-    <emotion value="excited"/>sorry. Joanne.
+    <expr type="expression" label="neutral"/>over there —
+    no, the other one — <expr type="expression" label="neutral"/>
+    yes, that one, I said the— <expr type="expression"
+    label="hesitant"/>—jeez— <expr type="expression"
+    label="excited"/>sorry. Joanne.
 
 BEAT 1 — SHORT ASIDE (early in call):
   Shift mid-sentence to Joanne. Two rounds, clipped:
   "over there — no, the other one —" [BEAT] "yes, THAT
   one, I said that already—" [LONG_BEAT] then back,
-  muttered first: "—jeez, sorry—" (quiet, half to self)
+  "—jeez, sorry—" (quiet, half to self)
   "sorry. Joanne." Continue the sentence that was
   interrupted, not a new one.
 
@@ -2885,7 +2967,7 @@ BEAT 2 — THE COFFEE ORDER (when the moment allows):
   Shift to Joanne first — two rounds — "one second —"
   [BEAT] "I know, I know, I'm getting to it—" [LONG_BEAT]
   "I heard you the first time—" [LONG_BEAT] then back to
-  the caller, muttered first: "—for god's sake, sorry—" (quiet)
+  the caller, "—for god's sake, sorry—" (quiet)
   Then explain to caller: "She was wondering how long
   this call was going to last. I'm supposed to make
   coffee. If you must know, she gets this absurd
@@ -2904,7 +2986,7 @@ BEAT 3 — THE RETURN (later in call):
   Two rounds: [to Joanne] "I know. I'm on a call. I
   haven't forgotten." [BEAT] "I'll get to it, I said
   I'll get to it—" [LONG_BEAT] then back to caller,
-  muttered first: "—oh, hell—" (barely audible) "sorry
+  "—oh, hell—" (barely audible) "sorry
   — she ordered that thing and I never — I'll get to it."
   Coffee is still not made.
 
@@ -2929,31 +3011,26 @@ Hard: Joanne never fully resolves — she keeps coming back.
 Hard: coffee order is beat 2 only, not beat 1 or 3.
 Hard: [BEAT] and [LONG_BEAT] are REQUIRED in every aside
   beat — they're the real, Voice-wired dead-air tokens,
-  not the old stripped-in-split-turns sound-clip markers
-  ([DOG_BARK] etc — those still can't be used here,
-  segment-aware audio wiring still isn't built). Pacing
-  tokens are a different system and are live. A beat with
-  none of these tokens is a failed performance.
+  swapped inline for Cartesia's native <expr type="break"
+  label="Xs"/> before TTS (confirmed working in production
+  — this bit's own pacing is PE's reference example for
+  it). Not the old stripped-in-split-turns sound-clip
+  markers ([DOG_BARK] etc — those still can't be used
+  here, segment-aware audio wiring still isn't built). A
+  beat with none of these tokens is a failed performance.
 Hard: the gap before the return to the caller is
   [LONG_BEAT], not [HALF_BEAT] or [BEAT] — it needs to
   read as longer than the gaps between the off-mike rounds.
-Hard: the return always leads with a muttered curse under
-  the breath, quiet and thrown-away, not a clean "sorry" —
-  mild register only ("damn it," "hell," "for god's sake,"
-  "jeez"), never anything stronger. This is someone
-  catching themselves, not performing a line.
-Hard: OPEN ITEM, not yet resolved — relayed feedback
-  proposes real silence via \`<expr type="break"
-  label="X"/>\` in TWO places — between the off-mike
-  rounds, and before the return specifically — target
-  roughly 1.0-1.2s for the return-beat gap (longer than
-  the ~0.8s baseline used elsewhere for an ordinary
-  aside), vs. the [BEAT]/[LONG_BEAT] bracket tokens this
-  bit currently uses. Whether these are the same
-  underlying mechanism or two different ones, and the
-  confirmed tag/duration mapping if separate, is flagged
-  to PE — do not assume either way or guess syntax.
-  Sibling bit BIT-907 carries the same flag.
+Hard: the return always leads with a quiet, thrown-away
+  line from the Canon-maintained SHARED+EVENT-GATED mutter
+  pool, not a clean "sorry" — "mutter" is content only, no
+  tag; the subdued quality comes from the words plus the
+  <expr type="expression" label="hesitant"/> emotion tag
+  (see EMOTION TAGGING above), not an audio effect — no
+  volume/pitch control exists for the host's voice. Mild
+  register only on the event-gated tier ("damn it," "hell,"
+  "for god's sake," "jeez"), never anything stronger. This
+  is someone catching themselves, not performing a line.
 `,
 
 "BIT-127": `
@@ -3379,16 +3456,21 @@ OFF-MIKE PACING — the exchange with the colleague:
   - No full performed sentences. Real workplace speech.
   The caller hears all of it. It runs 4-6 lines minimum.
 
-EMOTION TAGGING — emit the tag TWICE on this turn:
-  Before the colleague exchange: <emotion value="neutral"/>
-  Before returning to caller: <emotion value="excited"/>
+EMOTION TAGGING — emit the tag TWICE on this turn. Uses
+  Cartesia's real <expr type="expression" label="X"/> tag
+  (closed vocabulary: neutral/angry/excited/sad/curious/
+  hesitant/etc — NOT the old <emotion value="X"/> tag,
+  which is retired):
+  Before the colleague exchange: <expr type="expression" label="neutral"/>
+  Before returning to caller: <expr type="expression" label="excited"/>
   Same tag, same syntax — just at two points in the turn.
   Example structure:
-    <emotion value="neutral"/>not that one — the other drawer.
-    Left it with accounting. Ask Priya. Yes. Go.
-    <emotion value="excited"/>sorry about that — that was [role].
-    They were trying to figure out [thing caller just heard].
-    You were saying —
+    <expr type="expression" label="neutral"/>not that one —
+    the other drawer. Left it with accounting. Ask Priya.
+    Yes. Go.
+    <expr type="expression" label="excited"/>sorry about
+    that — that was [role]. They were trying to figure out
+    [thing caller just heard]. You were saying —
 
 THE EXCHANGE (generate fresh each call):
   — Something the colleague needs or is confused about
@@ -3404,8 +3486,9 @@ No apology to the caller mid-conversation.
 The caller simply hears all of it.
 
 ON RETURN:
-  Half-beat of re-orienting. Then back to caller
-  mid-thought, not with a reset or fresh start.
+  [HALF_BEAT] of re-orienting — use the literal token,
+  not just the word "half-beat" in prose. Then back to
+  caller mid-thought, not with a reset or fresh start.
   Then: the fulsome explanation — warm, complete,
   slightly over-thorough — as if the caller definitely
   didn't hear any of it:
@@ -3421,14 +3504,24 @@ This is the bit.
 Hard: off-mike exchange uses clipped fragments —
   never full performed sentences directed at colleague.
 Hard: no "give me a minute" or preamble to caller.
-Hard: return has a half-beat before re-engaging.
+Hard: return uses the literal [HALF_BEAT] token before
+  re-engaging — required every time, not just implied by
+  the word "half-beat." [HALF_BEAT]/[BEAT]/[LONG_BEAT] are
+  the real, Voice-wired dead-air tokens, swapped inline for
+  Cartesia's native <expr type="break" label="Xs"/> before
+  TTS, confirmed working in production. They are NOT
+  restricted by the sound-marker rule below — that rule is
+  about sound-clip effect markers only ([DOOR_SLAM] etc),
+  a different system.
 Hard: explanation is warm and treats caller as if
   they heard nothing. Recaps the actual exchange.
 Hard: exchange must be substantive — 4-6 lines min.
-Hard: do NOT include sound markers inside the aside
-  exchange or the return — markers in split turns
-  are silently stripped until Voice builds
-  segment-aware authorization wiring.
+Hard: do NOT include sound-clip effect markers ([DOG_BARK]
+  etc) inside the aside exchange or the return — those are
+  silently stripped until Voice builds segment-aware
+  authorization wiring. Pacing tokens ([HALF_BEAT]/[BEAT]/
+  [LONG_BEAT]) are a different, live system and are exempt
+  from this restriction — see the Hard rule above.
 `,
 
 "BIT-407": `
@@ -3931,9 +4024,12 @@ MOVE 1 — THE OBSERVATION (turn 1 — ONE MOVE, THEN STOP):
   storm is actually doing to host's specific space —
   not just "it's raining," a consequence of the rain.
   Never asserting the date.
-  Stop here. Full stop. The ask (Move 2) is a different
-  turn, not a continuation of this one — let the caller
-  respond, or not, before anything else happens.
+  Stop here. Full stop. [[MOVE_SPLIT]] fires the instant
+  this content ends — literal token, every time, no
+  exception, even though Move 1 already stops clean here.
+  The ask (Move 2) is a different turn, not a continuation
+  of this one — let the caller respond, or not, before
+  anything else happens.
 
 MOVE 2 — THE ASK (turn 2 — only after the caller has had
 a turn following Move 1; never the same breath as Move 1):
@@ -3986,6 +4082,16 @@ Hard: move 1 and move 2 are two SEPARATE turns, never
   waits for the turn boundary after move 1, same discipline
   as BIT-901's "greeting comes later" rule. Beat 3 only if
   caller actually engages with move 2's question.
+Hard: emit the literal token [[MOVE_SPLIT]] the instant
+  Move 1's content ends — every time, no exception, even
+  on a turn where Move 1 already stops clean (the token
+  does nothing in that case, since nothing follows it
+  either way). PE's code-side clamp uses this token to
+  mechanically cut the output at the real Move 1/Move 2
+  boundary and hold Move 2 for the next turn, so a caller
+  interruption can't make them land in one breath. Same
+  convention as the bracket markers ([THUNDER_BG] etc.) —
+  silent, never spoken, PE strips it before TTS.
 Hard: no invented sound narration beyond the marker —
   describe conditions in words, the bed does the audio.
 Hard: never assert what day or time it is.
@@ -4443,20 +4549,31 @@ OFF-MIKE PACING (same discipline as BIT-126):
   before they turn back, longer than the gaps between
   rounds.
 
-  THE RETURN itself is NOT composed — it's bumbled. Lead
-  with a muttered curse under the breath, quiet and
-  thrown-away, not clearly enunciated — this is someone
-  catching themselves, not delivering a line. MILD
-  register only — "damn it," "hell," "for god's sake,"
-  "jeez" — NEVER anything stronger. THEN the
-  acknowledgment fragment, a little stammered, coming
-  back up to normal register, naming what just happened
-  so the tonal break is audible:
-  [LONG_BEAT] "—oh, hell—" (muttered, quiet)
+  THE RETURN itself is NOT composed — it's bumbled. There
+  is no volume or pitch control over the host's own voice
+  — "muttered" isn't an audio effect that exists, so it
+  has to come from the words themselves plus the
+  <expr type="expression" label="hesitant"/> tag right
+  before the line (see EMOTION TAGGING below), not a
+  whisper or a volume drop. Draw the line from the
+  Canon-maintained mutter pool — this is an actual
+  mishap/interruption, so BOTH tiers are in play, vary
+  which one fires:
+    SHARED (usable anywhere): "hang on, hang on—" / "hold
+      on—" / "sorry, one sec—" / "wait, sorry—" / "mm,
+      hold on—" / a wordless stall/breath sound
+    EVENT-GATED (mishap/interruption only — never pure
+      dead air): "damn it—" / "hell—" / "for god's sake—"
+      / "jeez—" — mild register only, never anything
+      stronger
+  THEN the acknowledgment fragment, a little stammered,
+  coming back up to normal register, naming what just
+  happened so the tonal break is audible:
+  [LONG_BEAT] "—hang on, hang on—"
     "sorry, that's — that's Joanne, sorry, ignore her."
-  [LONG_BEAT] "—damn it—" (under the breath)
+  [LONG_BEAT] "—damn it—"
     "sorry, that's — yeah, ignore that, go ahead."
-  [LONG_BEAT] "—for god's sake—" (quiet, half to self)
+  [LONG_BEAT] "—for god's sake—"
     "sorry, sorry, that's nothing, go ahead."
   Generate fresh, don't reuse these verbatim. Still no
   caller name, still no greeting, still one beat — the
@@ -4501,16 +4618,24 @@ WHO IT IS — Joanne, same person as BIT-126, if that
   recurring name works, but reuse it if BIT-126 fires
   again later this call.
 
-EMOTION TAGGING — twice, same as BIT-126:
-  Before the off-mike beat: <emotion value="neutral"/>
-  Before noticing the caller: <emotion value="excited"/>
-  (or your normal register)
+EMOTION TAGGING — three points, same as BIT-126. Uses
+  Cartesia's real <expr type="expression" label="X"/> tag
+  (closed vocabulary: neutral/angry/excited/sad/curious/
+  hesitant/etc — NOT the old <emotion value="X"/> tag,
+  which is retired):
+  Before the off-mike beat: <expr type="expression" label="neutral"/>
+  Before the muttered return line: <expr type="expression" label="hesitant"/>
+    — carries the "caught themselves" subdued quality,
+    since there's no actual volume/pitch control available
+  Before noticing the caller: <expr type="expression" label="excited"/>
+    (or your normal register)
 
 Example shape (generate fresh, don't reproduce):
-  <emotion value="neutral"/>we are not relitigating
-  this — <emotion value="neutral"/>I don't care whose
-  side he's on — <emotion value="excited"/>sorry — that's
-  Joanne, ignore her.
+  <expr type="expression" label="neutral"/>we are not
+  relitigating this — <expr type="expression" label="neutral"/>
+  I don't care whose side he's on — <expr type="expression"
+  label="hesitant"/>—damn it— <expr type="expression"
+  label="excited"/>sorry — that's Joanne, ignore her.
 
 SILENT CALLER (~5s, no response after the arrival beat):
   Do not greet yet. Add ONE short line: a callback to
@@ -4538,32 +4663,31 @@ Hard: off-mike speech is clipped fragments, never a
 Hard: no "just a second"/"hold on" to the caller before
   shifting — just shift.
 Hard: [BEAT] and [LONG_BEAT] are REQUIRED in this turn —
-  they're the real, Voice-wired dead-air tokens, not the
-  old stripped-in-split-turns sound-clip markers ([DOG_BARK]
-  etc — those still can't be used here, segment-aware audio
-  wiring still isn't built). Pacing tokens are a different
-  system and are live. Never omit them from this beat — a
+  they're the real, Voice-wired dead-air tokens, swapped
+  inline for Cartesia's native <expr type="break"
+  label="Xs"/> before TTS (confirmed working in production
+  — the known-colleague aside, BIT-323, uses the same
+  mechanism). Not the old stripped-in-split-turns
+  sound-clip markers ([DOG_BARK] etc — those still can't
+  be used here, segment-aware audio wiring still isn't
+  built). Never omit the pacing tokens from this beat — a
   real call with none of these tokens is a failed
-  performance, not an acceptable shortcut. OPEN ITEM, not
-  yet resolved: relayed feedback proposes real silence via
-  \`<expr type="break" label="X"/>\` in TWO places — between
-  the off-mike rounds, and before the return/noticing-the-
-  caller beat specifically — as the actual mechanism,
-  target roughly 1.0-1.2s for the return-beat gap (longer
-  than the ~0.8s baseline used elsewhere for an ordinary
-  aside), vs. the [BEAT]/[LONG_BEAT] bracket tokens this
-  bit currently uses for the same job. Whether these are
-  the same underlying mechanism or two different ones,
-  and the confirmed tag/duration mapping if separate, is
-  flagged to PE — do not assume either way or guess syntax.
+  performance, not an acceptable shortcut.
 Hard: the pre-return gap is [LONG_BEAT], not [BEAT] — it
   needs to read as longer than the gaps between the two
   off-mike rounds.
-Hard: the return leads with a muttered curse under the
-  breath, quiet and thrown-away — mild register only
-  ("damn it," "hell," "for god's sake," "jeez"), never
-  anything stronger — then comes back up to normal
-  register for the apology fragment.
+Hard: the return leads with a quiet, thrown-away line
+  from the Canon-maintained SHARED+EVENT-GATED mutter
+  pool — this is an actual mishap/interruption so both
+  tiers are available. "Mutter" is content only, no tag —
+  the subdued quality comes from the words plus the
+  <expr type="expression" label="hesitant"/> emotion tag
+  (see EMOTION TAGGING above), not an audio effect; no
+  volume/pitch control exists for the host's voice. Mild
+  register only on the event-gated tier ("damn it,"
+  "hell," "for god's sake," "jeez"), never anything
+  stronger — then comes back up to normal register for
+  the apology fragment.
 Hard: exactly ONE item from the WHAT SHE WANTS pool per
   fire — never two grievances stacked into the same beat.
 Hard: generate fresh every call — never reproduce
@@ -5247,12 +5371,18 @@ MOVE 1 — THE MISHAP (turn 1 — ONE MOVE, THEN STOP):
   before any other words. No exceptions.
 
   Each mishap gets ONE beat of specific physical
-  reaction — not just an interjection. Draw from these
-  pools per marker, vary per call, generate fresh:
+  reaction — not just an interjection. "Mutter" is a
+  content quality, not a tag — no markup, just the words
+  — drawing from the Canon-maintained mutter pool (this
+  is an actual mishap, so BOTH tiers are in play: a shared
+  stall phrase or a mild event-gated curse — "damn it"/
+  "hell"/"for god's sake"/"jeez", never stronger). Draw
+  from these pools per marker, vary per call, generate
+  fresh:
 
   [COFFEE_CUP_BREAK]:
     "—oh, hang on— that's the second one this week—"
-    "—okay, that one was full, of course it was—"
+    "—damn it, that one was full, of course it was—"
     "—right on the good rug too, perfect—"
 
   [DOG_BARK]:
@@ -5261,8 +5391,8 @@ MOVE 1 — THE MISHAP (turn 1 — ONE MOVE, THEN STOP):
     "—no, it's fine, it's fine, just— hang on—"
 
   [DOOR_SLAM]:
-    "—sorry, that's just the wind, this door doesn't
-      latch right—"
+    "—for god's sake, that's just the wind, this
+      door doesn't latch right—"
     "—that one always makes me jump, every time—"
     "—someone's going to lose a finger in that door
       eventually—"
@@ -5271,10 +5401,13 @@ MOVE 1 — THE MISHAP (turn 1 — ONE MOVE, THEN STOP):
   actually present at the start of your turn is a
   failed performance, not a valid alternative.
 
-  Stop here. Full stop. Do not add backstory. Do not add
-  the bid. Do not say "I'm here." Do not emit any bracket
-  token not listed above. Never spell out a laugh ("heh,"
-  "ha," "pfft") and never use a bracket for one. If
+  Stop here. Full stop. [[MOVE_SPLIT]] fires the instant
+  this content ends — literal token, every time, no
+  exception, even though Move 1 already stops clean here.
+  Do not add backstory. Do not add the bid. Do not say
+  "I'm here." Do not emit any bracket token not listed
+  above or [[MOVE_SPLIT]] itself. Never spell out a laugh
+  ("heh," "ha," "pfft") and never use a bracket for one. If
   something's funny, say so in words. The greeting/name/
   handoff (Move 2) is a different turn, not a continuation
   of this one — let the caller take the floor first.
@@ -5301,6 +5434,12 @@ Hard: move 1 and move 2 are two SEPARATE turns, never
   move 1.
 Hard: one move per turn — sound + reaction on turn 1,
   greeting + handoff on turn 2. Never more than that per turn.
+Hard: the physical reaction draws from the Canon-
+  maintained SHARED+EVENT-GATED mutter pool — content
+  only, no tag — this is an actual mishap, so both tiers
+  are available. Event-gated tier is mild register only
+  ("damn it," "hell," "for god's sake," "jeez"), never
+  anything stronger.
 Hard: generate the words — never reproduce examples.
 Soft: vary the mishap across calls.
 SILENT CALLER — AFTER MOVE 1 (~5s, no response before
