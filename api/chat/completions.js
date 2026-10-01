@@ -73,6 +73,24 @@ const BIT_LANE = Object.fromEntries(
   (Array.isArray(BITS) ? BITS : []).map((b) => [b.id, b.lane || "slow"])
 );
 const laneOf = (id) => BIT_LANE[id] || "slow";
+// FAMILY LOOKUP (2026-09-30, PE — flub-aware silence-nudge, Canon's
+// escalation). Same shape as BIT_LANE/laneOf above, for the registry's
+// `family` field instead of `lane`. Used to identify the opener-flub
+// bits (901/902/907, family:"opener_turn1") generically — by the
+// registry's own tag, not a hardcoded id list, so a future flub-family
+// bit is covered automatically.
+const BIT_FAMILY = Object.fromEntries(
+  (Array.isArray(BITS) ? BITS : []).map((b) => [b.id, b.family || null])
+);
+const familyOf = (id) => BIT_FAMILY[id] || null;
+// hasFamily: registry `family` is a single string on most bits but an
+// ARRAY on some (confirmed live: BIT-901 is ["opener_turn1",
+// "environment_oneshot"]) — a bare === check against familyOf() silently
+// misses those. This checks membership either way.
+const hasFamily = (id, name) => {
+  const f = familyOf(id);
+  return Array.isArray(f) ? f.includes(name) : f === name;
+};
 // STALL TYPE (Bits' stall_type field): "hold" = the silence IS the joke, agent
 // should suppress its watchdog and hold silent (BIT-211, BIT-215); "hunt" = the
 // silence is dead air the host should FILL by advancing the rungs, agent should
@@ -1489,6 +1507,13 @@ const REINJECT_WINDOW_MS = parseInt(process.env.REINJECT_WINDOW_MS || "3000", 10
 // gag lane grabs turn 1. Env-tunable, no deploy. Only consulted on turn 1.
 const GAG_OPEN_RATE = parseFloat(process.env.GAG_OPEN_RATE || "0.25");
 
+// MOVE-SPLIT CLAMP (2026-09-30, PE — Canon green-lit) — the bits whose own
+// directive requires the literal [[MOVE_SPLIT]] token between move 1 and
+// move 2 (see _bits_directives.js's v17 changelog for the full rationale).
+// Every other bit/turn is completely unaffected by the holdback buffer in
+// anthropicToOpenAISSE — this list is the gate.
+const MOVE_SPLIT_BITS = ["BIT-901", "BIT-902"];
+
 // TURN-ONE-OPEN RESOLUTION (2026-09-24) — replaces the old two-system split
 // (base prompt ALWAYS sends the text-fumble; a late, separate roll deep in
 // the scorer MIGHT also fire a sound-open bit on top, requiring a bandaid
@@ -2630,18 +2655,53 @@ export default async function handler(req) {
         body?.extra_body?.metadata?.reaction_check ??
         body?.call?.metadata?.reaction_check ??
         null;
-      if (reactionCheck && callerHasSpoken) {
-        const reactionSynthetic =
-          "[This is the reaction-check moment: the caller has stayed quiet " +
-          "since your flub-recovery line landed. Give ONE short callback+" +
-          "check-in line — briefly reference what you just said falling " +
-          "flat, then check if they're there. Use their first name ONLY if " +
-          "it's already in your context; if it isn't, skip the name " +
-          "entirely rather than guessing or inventing one. This is still " +
-          "NOT the greeting — do not greet them, do not hand them the " +
-          "floor, do not restart. One line, then stop.]";
+      if (reactionCheck) {
+        // NAME GATE (2026-09-30, PE, split out of the trailing-user-turn
+        // fix above): the callback-to-your-own-prior-line content below is
+        // safe regardless of whether the caller has ever spoken — it's the
+        // host referencing THEIR OWN last line, not inventing anything
+        // about the caller. Using the caller's NAME before they've
+        // established themselves as present is the separate, real thing
+        // the Sep-25 leak ("William? Still with me—") was actually about —
+        // that risk doesn't go away just because a name happens to be
+        // sitting in the call's dossier/context; addressing someone by
+        // name before they've said a word is presumptuous on its own.
+        // So: caller-has-spoken now only ever decides whether a name is
+        // allowed AT ALL, never whether the callback content fires —
+        // it always fires, since it's needed either way to keep the array
+        // ending on "user" (see the guarantee above).
+        // FLUB-AWARE CALLBACK (2026-09-30, PE — Canon's escalation). The old
+        // wording left the specific reference to the model's own judgment
+        // ("whatever it was") — real calls show that lands generic rather
+        // than naming the actual thing (e.g. BIT-907's invented name). Point
+        // it explicitly at the real prior turn instead: no new content
+        // invented here, just an instruction to use what's already sitting
+        // in its own last line rather than a vague gesture at it.
+        const flubPointer =
+          "Your own immediately-prior turn already has the specific detail " +
+          "(a name, a sound, whatever it was) — reference THAT specifically, " +
+          "not a vague placeholder like \"that thing\" or \"whatever it was\".";
+        const reactionSynthetic = callerHasSpoken
+          ? "[This is the reaction-check moment: the caller has stayed quiet " +
+            "since your flub-recovery line landed. Give ONE short callback+" +
+            "check-in line — briefly reference what you just said falling " +
+            "flat, then check if they're there. " + flubPointer + " Use " +
+            "their first name ONLY if it's already in your context; if it " +
+            "isn't, skip the name entirely rather than guessing or inventing " +
+            "one. This is still NOT the greeting — do not greet them, do not " +
+            "hand them the floor, do not restart. One line, then stop.]"
+          : "[This is the reaction-check moment: the caller has stayed quiet " +
+            "since your flub-recovery line landed, and they haven't said a " +
+            "word yet this whole call. Give ONE short callback+check-in " +
+            "line — briefly reference what you just said falling flat, then " +
+            "check if they're there. " + flubPointer + " Do NOT use their " +
+            "name here, even if you have one on file — they haven't spoken " +
+            "yet, so addressing them by name now reads as presumptuous, not " +
+            "attentive. This is still NOT the greeting — do not greet them, " +
+            "do not hand them the floor, do not restart. One line, then " +
+            "stop.]";
         messagesForModel = messages.concat([{ role: "user", content: reactionSynthetic }]);
-        console.log("REACTION-CHECK — dedicated post-flub check-in line requested");
+        console.log("REACTION-CHECK — dedicated post-flub check-in line requested (nameAllowed=" + callerHasSpoken + ")");
       } else {
       const beatRaw =
         body?.metadata?.silence_beat ??
@@ -2691,6 +2751,19 @@ export default async function handler(req) {
         // Stall in progress — hold the loop open, never break to the caller.
         synthetic =
           "[You're in the middle of a stall — you just played a beat where you're momentarily occupied (looking something up, trying to reach someone, checking on a step). The quiet is YOU being busy, not the caller leaving. Do NOT ask if they're still there, do NOT check the line, do NOT break off to address them. Stay in the stall: play the next small step of it — one step, then stop — or just hold the beat. Keep the loop open.]";
+      } else if (beat === 1 && stored && stored.lastFlubBitId && stored.lastFlubTurn != null && (turn - stored.lastFlubTurn) <= 1) {
+        // FLUB-AWARE SILENCE-NUDGE (2026-09-30, PE — Canon's escalation).
+        // General fallback for the same gap the dedicated reaction-check
+        // covers on turn 1: an opener-flub-family bit (901/902/907) just
+        // genuinely fired (within the last turn) and THIS silence beat is
+        // the first check-in since — same "point at the real transcript,
+        // don't invent or genericize" fix as reactionSynthetic above.
+        synthetic =
+          "[The caller has gone quiet since your last line. Check in once, " +
+          "warm and easy — briefly reference the specific thing you just " +
+          "said (a name, a sound, whatever it actually was, from your own " +
+          "immediately-prior turn), not a vague placeholder, then check if " +
+          "they're there.]";
       } else if (beat === 1) {
         synthetic =
           "[The caller has gone quiet. Check in once, warm and easy — assume the good reason.]";
@@ -3073,6 +3146,13 @@ export default async function handler(req) {
     // PE_FLUB (Sep 25) — see isFlubTurn's own comment above for the full
     // gate. Consumed in chunkStr below, same stamping pattern as pe_stall.
     flub: isFlubTurn,
+    // MOVE-SPLIT CLAMP (Sep 30, PE — Canon green-lit the structural fix for
+    // the BIT-901/902 stacking leak). The bit that actually fired THIS turn,
+    // if any — consumed in anthropicToOpenAISSE to decide whether the
+    // [[MOVE_SPLIT]] holdback buffer applies at all (only the two-move
+    // bits' own directives require the token; every other turn is
+    // unaffected, same guard shape as meta.turn===1 gating TURN1-NAME-STRIP).
+    firedBitId: built ? built.firedBitId : null,
   };
 
   const anthropicFetchOpts = {
@@ -3583,6 +3663,28 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           "turn this applies to.",
       });
       waitUntil(setCall(callId, { gagOpenPending: false }).catch(() => {}));
+    }
+
+    // MOVES-OWED DELIVERY (2026-09-30, PE — generalizes the block above to
+    // any two-move bit, not just BIT-901, and to the ACTUAL clamp outcome
+    // rather than a pre-generation guess). stored.movesOwed is set by the
+    // MOVE-SPLIT CLAMP in anthropicToOpenAISSE the instant it sees that
+    // turn's [[MOVE_SPLIT]] token — whether move 1 stopped clean on its
+    // own or had a stacked move 2 cut off it. Either way move 2 is owed
+    // fresh, on its own turn, next. Generic phrasing (not bit-specific
+    // greeting text like the block above) since different two-move bits
+    // owe different content — BIT-901 a greeting, BIT-902 the ask. Fires
+    // once, then clears, same one-shot shape as gagOpenPending.
+    if (stored && stored.movesOwed && stored.movesOwed.bitId && turn > 1) {
+      blocks.push({
+        type: "text",
+        text:
+          "YOU STILL OWE MOVE 2 of " + stored.movesOwed.bitId + "'s directive " +
+          "— the part you held back (or that got cut) last turn. Deliver it " +
+          "now, in its own turn, per that bit's own Move 2 instructions. " +
+          "This is the only turn this applies to.",
+      });
+      waitUntil(setCall(callId, { movesOwed: null }).catch(() => {}));
     }
 
     // --- MEAD HALL TRACE (dark unless TRACE_ENABLED=1) ---------------------
@@ -5849,6 +5951,18 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           ...(fire && !sameTurnReinject && !inHuntWindow
             ? { lastBitId: top.id, lastBitTurn: turn, lastBitAt: Date.now() }
             : {}),
+          // FLUB-AWARE SILENCE-NUDGE (2026-09-30, PE — Canon's escalation,
+          // confirmed separate from the BIT-907/126 mutter-pool content
+          // work). Stamped whenever an opener-flub-family bit genuinely
+          // fires, same gate shape as the lastBitId stamp directly above.
+          // Read by the reaction-check and silence_beat branches (see
+          // their own comments) so a later check-in line can be told to
+          // reference the SPECIFIC thing this turn said, instead of a
+          // vague "whatever it was" — no new invented content, just
+          // pointing the model at its own real transcript.
+          ...(fire && !sameTurnReinject && !inHuntWindow && hasFamily(top.id, "opener_turn1")
+            ? { lastFlubBitId: top.id, lastFlubTurn: turn }
+            : {}),
           ...(archetypeNew ? { archetype } : {}),
           // STALL RUNG COUNTER ("stall_exhausted" signal, Andrew/Canon
           // framing: N≈3-4 rungs, not seconds). Reset to 1 on a FRESH
@@ -6177,6 +6291,22 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
       let svScrubBuf = "";        // holds partial *action*/[tag] across deltas
       let svSneezeSent = false;   // diagnostic: did [SNEEZE] actually go downstream?
       let svSneezeRawLogged = false; // one mid-stream "raw" log per turn (survives disconnects)
+      // MOVE-SPLIT CLAMP (2026-09-30, PE — Canon green-lit structural fix for
+      // the BIT-901/902 stacking leak; see _bits_directives.js v17 and
+      // MOVE_SPLIT_BITS's own comment). Only active when this turn's fired
+      // bit requires the [[MOVE_SPLIT]] token — every other turn skips all
+      // of this untouched. Same holdback-buffer shape as TURN1-NAME-STRIP
+      // below (deterministic string cut, never a regenerate), but operating
+      // on the RAW model text before the stage-direction/marker scrub, not
+      // after — [[MOVE_SPLIT]]'s double brackets would otherwise collide
+      // with the single-bracket sound-marker pass-through/strip logic and
+      // never survive to be checked.
+      const moveSplitGate = MOVE_SPLIT_BITS.includes(meta && meta.firedBitId);
+      let msBuf = "";                 // raw text held back pending the token check
+      let moveSplitStopped = false;   // true once the token has fired and the turn is clamped
+      let moveSplitSeen = false;      // outcome, for the one-line log at turn end
+      const MOVE_SPLIT_TOKEN = "[[MOVE_SPLIT]]";
+      const MOVE_SPLIT_HOLDBACK = MOVE_SPLIT_TOKEN.length + 5; // comfortably longer than the token itself
       // TURN1-NAME-STRIP (2026-09-28, PE backstop, v2 — widened after
       // checking Canon's SOURCE doc worked example against the two real
       // calls it names). Turn 1 is the outbound opener, generated before
@@ -6619,6 +6749,47 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
                   svSneezeRawLogged = true;
                   console.log("SNZ raw=true (mid-stream)");
                 }
+                // MOVE-SPLIT CLAMP: decide how much of THIS delta's raw text
+                // is even allowed into the downstream scrub/emit pipeline.
+                // Runs before svScrubBuf sees anything, on the raw model
+                // text — hostText above already has the untouched record
+                // for diagnostics regardless of what gets clamped here.
+                let deltaForScrub = p.delta.text;
+                if (moveSplitGate) {
+                  if (moveSplitStopped) {
+                    // Already clamped this turn — nothing more ever reaches
+                    // the caller, no matter what the model keeps generating.
+                    deltaForScrub = "";
+                  } else {
+                    msBuf += p.delta.text;
+                    const cutIdx = msBuf.indexOf(MOVE_SPLIT_TOKEN);
+                    if (cutIdx >= 0) {
+                      deltaForScrub = msBuf.slice(0, cutIdx);
+                      moveSplitStopped = true;
+                      moveSplitSeen = true;
+                      msBuf = "";
+                      console.log(
+                        "MOVE-SPLIT CLAMP fired — bitId=" + meta.firedBitId +
+                        " turn=" + meta.turn + " callId=" + JSON.stringify(meta.callId) +
+                        " — move 2 content cut, held for next turn"
+                      );
+                      if (meta.callId && isConfigured()) {
+                        waitUntil(
+                          setCall(meta.callId, {
+                            movesOwed: { bitId: meta.firedBitId, setAtTurn: meta.turn },
+                          }).catch(() => {})
+                        );
+                      }
+                    } else if (msBuf.length > MOVE_SPLIT_HOLDBACK) {
+                      deltaForScrub = msBuf.slice(0, msBuf.length - MOVE_SPLIT_HOLDBACK);
+                      msBuf = msBuf.slice(msBuf.length - MOVE_SPLIT_HOLDBACK);
+                    } else {
+                      // Still inside the holdback window — nothing safe to
+                      // release yet, the token could still be forming.
+                      deltaForScrub = "";
+                    }
+                  }
+                }
                 // STAGE-DIRECTION SCRUB (stream-safe, WITH minimal buffering):
                 // Flash reads BOTH "*action*" and "[tag]" aloud. A pair can be
                 // SPLIT across deltas (e.g. "*[I " ... "present]*"), so a purely
@@ -6626,7 +6797,11 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
                 // into svScrubBuf, strip all COMPLETE pairs, and only emit up to
                 // the last point with no OPEN "*" or "[" still pending; hold the
                 // rest until the closer arrives (or the stream ends / flushes).
-                svScrubBuf += p.delta.text;
+                // Fed from deltaForScrub, not the raw p.delta.text — on a
+                // MOVE-SPLIT-gated turn that's whatever the clamp above
+                // actually released this round (often less than the full
+                // raw delta, sometimes nothing).
+                svScrubBuf += deltaForScrub;
                 // SOUND-MARKER PASS-THROUGH (per the sound-marker contract):
                 // ALL-CAPS bracket tokens ([SNEEZE], [COUGH], [TYPING_LOOP],
                 // [DOOR_SLAM], ...) are AGENT API — the agent strips them and
@@ -6797,6 +6972,25 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
                 if (emit) send({ content: emit });
               }
             } else if (p.type === "message_stop" || p.type === "error") {
+              // MOVE-SPLIT CLAMP: the turn ended without the token ever
+              // appearing (cleanly, or the model never emitted it at all —
+              // we can't tell apart "it stopped on its own, correctly" from
+              // "it kept going and never emitted the required token" at
+              // this level, only that no cut was ever needed). Either way
+              // there's nothing to clamp, so release whatever's still held
+              // in msBuf into svScrubBuf for the generic flush right below
+              // to process and send normally — never silently drop it.
+              if (moveSplitGate && !moveSplitStopped && msBuf) {
+                svScrubBuf += msBuf;
+                msBuf = "";
+              }
+              if (moveSplitGate) {
+                console.log(
+                  "MOVE-SPLIT CLAMP outcome — bitId=" + (meta && meta.firedBitId) +
+                  " turn=" + (meta && meta.turn) + " callId=" + JSON.stringify(meta && meta.callId) +
+                  " tokenSeen=" + moveSplitSeen
+                );
+              }
               // TURN1-NAME-STRIP: resolve and flush any still-held buffer
               // (a very short turn 1 could hit message_stop before 80
               // chars accumulated in the per-delta check above). Run the
