@@ -6307,6 +6307,23 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
       let moveSplitSeen = false;      // outcome, for the one-line log at turn end
       const MOVE_SPLIT_TOKEN = "[[MOVE_SPLIT]]";
       const MOVE_SPLIT_HOLDBACK = MOVE_SPLIT_TOKEN.length + 5; // comfortably longer than the token itself
+      // MID-WORD-TAG GUARD (2026-10-01, PE — real bug, confirmed on a live
+      // call: Canon's <expr .../> break/expr tags are only ever supposed to
+      // land between words, but the model once emitted one INSIDE a word
+      // ("...you moved it four degrees w<expr type=\"break\"
+      // label=\"2.0s\"/>ithout telling me—"), so TTS played a real
+      // multi-second silent gap in the middle of "without" — the exact
+      // shape of the "words hanging up" sluggishness Andrew heard. This is
+      // a generation-placement mistake, not something a prompt rule alone
+      // can be trusted to prevent under pressure (same lesson as the
+      // move-split leak above), so it also gets a deterministic code-level
+      // clamp. TAG_SPLIT_HOLDBACK bounds how long a trailing in-progress
+      // word is held back (same holdback shape as MOVE_SPLIT/TURN1-NAME-
+      // STRIP) waiting to see whether a tag lands stuck to it with no
+      // space — 24 chars is generously longer than any real English word,
+      // so this never meaningfully delays ordinary streaming.
+      const TAG_SPLIT_HOLDBACK = 24;
+      const TAG_SPLIT_RELOCATE_RE = /([\w']{1,24})(<[a-zA-Z][\w-]*(?:\s[^<>]*?)?\/>)(?=[\w'])/g;
       // TURN1-NAME-STRIP (2026-09-28, PE backstop, v2 — widened after
       // checking Canon's SOURCE doc worked example against the two real
       // calls it names). Turn 1 is the outbound opener, generated before
@@ -6844,12 +6861,58 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
                 svScrubBuf = svScrubBuf
                   .replace(/\*[^*\n]{0,80}\*/g, "")
                   .replace(/\[[^\]\n]{0,80}\]/g, "");
+                // MID-WORD-TAG GUARD, part 1: relocate any COMPLETE tag
+                // already sitting between two word-char runs in the
+                // buffer right now (the common case — tag and the word
+                // continuation after it usually arrive close together).
+                svScrubBuf = svScrubBuf.replace(TAG_SPLIT_RELOCATE_RE, "$2$1");
                 // Find the earliest still-open action/tag marker; hold from there.
                 var openStar = svScrubBuf.indexOf("*");
                 var openBrk = svScrubBuf.indexOf("[");
                 var holdAt = -1;
                 if (openStar >= 0) holdAt = openStar;
                 if (openBrk >= 0 && (holdAt < 0 || openBrk < holdAt)) holdAt = openBrk;
+                // MID-WORD-TAG GUARD, part 2a: a "<" with no matching ">"
+                // yet is a tag still arriving in pieces (Anthropic can
+                // stream a handful of characters at a time) — hold from
+                // there, same as the star/bracket holds above, so a
+                // partial "<expr typ..." never leaks to TTS mid-tag.
+                var openLt = svScrubBuf.lastIndexOf("<");
+                if (openLt >= 0 && svScrubBuf.indexOf(">", openLt) < 0) {
+                  var ltHoldAt = openLt;
+                  // Also hold back any word-char run immediately BEFORE
+                  // the "<" — otherwise a partial tag like "w<expr typ"
+                  // would still let "w" itself leak out this round, the
+                  // exact word-start a mid-word tag would strand.
+                  var ltPreWord = svScrubBuf.slice(0, ltHoldAt).match(/[\w']{1,24}$/);
+                  if (ltPreWord) ltHoldAt -= ltPreWord[0].length;
+                  if (holdAt < 0 || ltHoldAt < holdAt) holdAt = ltHoldAt;
+                }
+                // MID-WORD-TAG GUARD, part 2b: the buffer's trailing chars
+                // are mid-word right now (no closing punctuation/space
+                // yet) — hold them back rather than emit, in case the
+                // NEXT delta brings a tag stuck directly to them with no
+                // space. If so, part 1 catches and relocates it next
+                // round, before the word-start has gone out the door.
+                var tagWordHold = svScrubBuf.match(/[\w']{1,24}$/);
+                if (tagWordHold) {
+                  var tagWordHoldAt = svScrubBuf.length - tagWordHold[0].length;
+                  if (holdAt < 0 || tagWordHoldAt < holdAt) holdAt = tagWordHoldAt;
+                }
+                // MID-WORD-TAG GUARD, part 2c: a word run immediately
+                // followed by a NOW-COMPLETE tag, with nothing after it
+                // yet, is still ambiguous — the next character decides
+                // whether the tag was stuck mid-word (another word char,
+                // caught by part 1 next round) or legitimately placed
+                // (space/punctuation, nothing to fix). Hold the whole
+                // word+tag span one more round rather than guess.
+                var trailingTagHold = svScrubBuf.match(
+                  /[\w']{1,24}<[a-zA-Z][\w-]*(?:\s[^<>]*?)?\/>$/
+                );
+                if (trailingTagHold) {
+                  var trailingTagHoldAt = svScrubBuf.length - trailingTagHold[0].length;
+                  if (holdAt < 0 || trailingTagHoldAt < holdAt) holdAt = trailingTagHoldAt;
+                }
                 var emit;
                 if (holdAt >= 0) { emit = svScrubBuf.slice(0, holdAt); svScrubBuf = svScrubBuf.slice(holdAt); }
                 else { emit = svScrubBuf; svScrubBuf = ""; }
@@ -7017,6 +7080,10 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
                   .replace(/\[([A-Z0-9_]{2,32})\]/g, "\u0001$1\u0001")
                   .replace(/\*[^*\n]{0,80}\*/g, "")
                   .replace(/\[[^\]\n]{0,80}\]/g, "");
+                // MID-WORD-TAG GUARD — same relocation as the per-delta
+                // pass above, one last time on whatever's left at stream
+                // end (nothing more is coming, so no holdback needed here).
+                flush = flush.replace(TAG_SPLIT_RELOCATE_RE, "$2$1");
                 var os = flush.indexOf("*"), ob = flush.indexOf("[");
                 var cut = -1;
                 if (os >= 0) cut = os;
