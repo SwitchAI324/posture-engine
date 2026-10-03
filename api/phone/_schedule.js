@@ -97,7 +97,7 @@ function planCallback({ number, a, settings, rules, lineType = null, now = new D
   // Test override: tiny delay → ignore windows. Never for campaign touches.
   if (delayMax <= 5 && !notBefore) {
     const at = new Date(now.getTime() + delay * 60000);
-    return { scheduledAt: at, window: { rule: 'test_override', tz: settings?.tz || 'America/New_York' }, phrase: `in about ${delay} minutes` };
+    return { scheduledAt: at, window: { rule: 'test_override', tz: settings?.tz || 'America/New_York' }, phrase: `in about ${delay} minute${delay === 1 ? '' : 's'}` };
   }
 
   const ac = /^\+1(\d{3})/.exec(number || '')?.[1];
@@ -164,7 +164,7 @@ function planCallback({ number, a, settings, rules, lineType = null, now = new D
   }
   // Nothing fit in 10 days (shouldn't happen): fall back to delay.
   const at = new Date(now.getTime() + delay * 60000);
-  return { scheduledAt: at, window: { rule: 'fallback_delay', tz }, phrase: `in about ${delay} minutes` };
+  return { scheduledAt: at, window: { rule: 'fallback_delay', tz }, phrase: `in about ${delay} minute${delay === 1 ? '' : 's'}` };
 }
 
 // Reference code planted in voicemails/callbacks for return-call matching
