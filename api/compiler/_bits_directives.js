@@ -1,5 +1,78 @@
 // api/compiler/_bits_directives.js
 // SpamViking — Bit Directives
+// v27 — Oct 5, 2026 — Per PE: BIT-347 is now the ONLY fired bit on an
+//   IVR call's first live turn (PE suppresses 901/902 there), so the
+//   directive carries BOTH moves: greeting, [[MOVE_SPLIT]], aside.
+//   Split into two bits matching PE's two triggers: BIT-347 (pressed,
+//   ivr_pressed_turn1, Pool A) and NEW BIT-349 The Menu Doubt
+//   (unpressed, ivr_unpressed_turn1, Pool B). The model can't see
+//   dial_extension, so PE picks the case by trigger, not the prompt.
+// v26 — Oct 5, 2026 — BIT-347: adopted Canon's pools (Case A hazy-digit
+//   lines, Case B menu-doubt lines); dropped Canon's line 4 ("I heard
+//   'press one for something'") because it claims to know menu content.
+//   Added STACKING WITH THE OPENER: aside takes 901/902's Move 2 slot,
+//   Move 1 greeting stays. Relaxed no-digit rule to hazy-guess only.
+// v25 — Oct 4, 2026 — BIT-347 REBUILT per Andrew's Option A: now a
+//   single one-shot retrospective aside on the host's first live turn
+//   after an IVR was navigated at pickup (PE's gate). One pooled line,
+//   two cases (extension pressed / no extension), past tense, no digits,
+//   no rungs, no escalation. Recitation, rungs, extension-press and
+//   digit-doubt scaffolding removed. BIT-348 got a light note that it
+//   pulls the reference number from job data directly.
+// v24 — Oct 4, 2026 — BIT-347: added THE EXTENSION PRESS, a new beat
+//   from Canon, distinct from both the spoken-recitation rungs and
+//   the post-escalation digit-doubt beat — fires in sync with the
+//   real pe_dtmf touch-tone for the dialed extension. Per Voice's
+//   confirmed silence-only timing mechanism (no transcript-awareness
+//   of the IVR's prompts), the line can never claim to know what the
+//   menu just said; it's framed as the host's own in-the-moment
+//   guess instead, so it reads fine whether the real press lands a
+//   beat early or late relative to the actual IVR prompt.
+// v23 — Oct 4, 2026 — Andrew corrected the design: BIT-347's digit
+//   should NOT be arbitrary. Goal is dialing the REAL extension from
+//   the scam voicemail/text — retracted v22's "fixed digit, purely
+//   performative" Hard rule and replaced it with a flag that this is
+//   a sourcing/wiring question for Phone Intake/Data/PE, same pattern
+//   as the reference number. Also broadened the digit-doubt beat's
+//   pool per Andrew's own example lines — shifted from "which menu
+//   digit" framing to generic key-fumbling color (fat-fingering,
+//   speak-vs-key confusion, credit card numbers) that doesn't need to
+//   literally reference a menu option. Content stays generic/
+//   performative regardless of what the real digit sourcing resolves
+//   to. (Also restored this header's title line, dropped by accident
+//   in the v22 edit.)
+// v22 — Oct 4, 2026 — BIT-347: answered PE's open question on
+//   pe_dtmf.digits — purely performative, a single fixed/arbitrary
+//   digit (e.g. "1"). Nothing downstream depends on actual IVR
+//   routing here (it's the scammer's own system, and the point is
+//   wasting their time, not reaching a department), so no voicemail-
+//   extracted or caller-ID-tied sourcing is needed. New Hard rule
+//   added documenting this. Separately noted, not a directive change:
+//   PE confirmed phone_mode:ivr isn't wired into the bits-scorer state
+//   yet — BIT-347 currently fires with no real IVR gate (pool/phase/
+//   cooldown only). PE is wiring state.phone_mode through and adding
+//   phone_mode:ivr to EMITTED_TRIGGERS — tracked on PE's side, no
+//   directive-text action needed here.
+// v21 — Oct 4, 2026 — BIT-347: added a Hard rule locking down the
+//   digit-doubt beat (v20) as performance-only, per Voice/PE's
+//   confirmed pe_dtmf contract — a real touch-tone, when one fires, is
+//   ALWAYS the correct digit (publish_dtmf(), code-driven, no
+//   mechanism for an intentional wrong press). The beat's "did I press
+//   the right one?" uncertainty lives entirely in the host's words;
+//   it never implies or signals an actual misdial. Scoped to the new
+//   digit-doubt beat only — RUNG 1-3's spoken-recitation fumble (into
+//   a speech-recognition IVR) is a different, unrelated channel: that
+//   really is TTS audio a real IVR parses, so no such guarantee
+//   applies or is claimed there, and "may or may not go through"
+//   stays accurate for that part of the bit.
+// v20 — Oct 1, 2026 — BIT-347: added the digit-doubt beat for when
+//   resolution (b) actually fires — a human picks up after the IVR
+//   escalates. Beyond the existing surprise-that-a-person-answered
+//   reaction, host now gets ONE beat of genuine uncertainty about which
+//   menu digit was actually pressed/heard — self-directed doubt only,
+//   never suspicion of the person who picked up (same posture as the
+//   standing wrong-name-guess rule). Doesn't stack with anything else
+//   that turn; rotates across calls.
 // v19 — Sep 30, 2026 — PE pulled ground truth from main114.py (the live
 //   agent code), correcting three v17 guesses:
 //   (1) <mutter/> is NOT real — no such tag exists anywhere in the
@@ -6326,134 +6399,124 @@ Hard: if this bit fires, BIT-307 does not fire again —
 `,
 
 "BIT-347": `
-THE DIGIT FUMBLE is active. PHONE ONLY. OUTBOUND ONLY.
-IVR-specific — this is NOT a live-human beat. Sibling to
-BIT-348 The Credibility Number — same reference number, same
-fumble mechanic, different context (machine here, person
-there). If BIT-348 fires later in this same call, it's the
-SAME underlying number, just being fumbled again in a
-different setting — not a new number.
+THE DIGIT FUMBLE (PRESSED) is active. PHONE ONLY. OUTBOUND ONLY. Turn one only.
+This bit IS the opener on a call where an automated phone menu
+(IVR) was navigated at pickup, before the host was on the line.
+PE fires it on the host's first live turn and suppresses the
+BIT-901/902 opener on that call — so this bit carries the whole
+turn: a greeting, then a split, then ONE retrospective aside.
+CASE: an extension was on file and pressed (PE trigger
+ivr_pressed_turn1).
 
-Setup: the original scam voicemail (the one forwarded to
-SpamViking and used to build this callback) contained a
-reference number the caller was told to have ready — a case
-number, confirmation number, or similar, spoken in that
-voicemail. This callback has now hit an automated IVR system
-(not a human), and the IVR is asking for that number — either
-by prompt ("please say or enter your reference number") or
-because the host is volunteering it to move the call forward.
-The host is reading that number, from memory or a note, INTO
-the automated system, and can't get it clean.
+MOVE 1 — THE GREETING: one brief line. Name and hello, nothing
+more. Skip the name if it isn't known — never invent one. No
+mishap, no marker, no callback to anything. Draw from this pool,
+vary per call, generate fresh:
+  "Hi — [name], hey, good to connect."
+  "Hello? Hi, [name] here."
+  "Hey there — [name]. Good to connect."
+Then emit [[MOVE_SPLIT]] the instant the greeting ends — literal
+token, every time. Emit no other bracket token except an optional
+[HALF_BEAT] inside Move 2.
 
-This is talking to a machine, not a person — the register is
-different from other fumble beats. No back-and-forth, no
-"was that a one or a seven?" directed at anyone who'll answer.
-It's solo: muttering to self, self-correcting mid-recitation,
-reacting to the IVR's own behavior (a beep, a "please try
-again," a pause that might mean it's still listening).
+MOVE 2 — THE ASIDE: ONE short, slightly sheepish, hesitant line,
+in past tense, said once. The host pressed a number a moment ago
+and is hazy about it. Per Canon (Oct 5). Draw from this pool:
+  "I pressed two, I think? Could've been twenty-two, or twenty-one.
+    Hopefully that got me somewhere."
+  "Okay, I hit three. Or thirteen? It went by fast. Hope that's
+    the right one."
+  "I want to say I pressed four, but it could've been forty, who
+    knows."
+  "Sorry, I pressed a number back there and couldn't tell you if
+    it was the right one."
 
-HOW TO DELIVER IT: speech-recognition IVRs need digits spoken
-discretely — one at a time, a small beat between each, not run
-together the way a person would say a number naturally. That
-slow, careful, one-digit-at-a-time cadence IS what makes losing
-your place plausible — it's not natural speech, it's
-performance for a machine, and performance for a machine is
-easy to fumble. Contrast BIT-348: a live person gets natural
-grouped delivery, no artificial separation.
+Delivery: hesitant (<expr type="expression" label="hesitant"/>)
+if the turn uses an expression label; a light [HALF_BEAT] before
+the aside is fine. Then stop — the aside is a beat, not a scene,
+and the call carries on from the caller's reply. Absurdity 2.
 
-THE NUMBER ITSELF: the correct target number is fixed — it's
-whatever reference number this job actually has, and it never
-changes across rungs or across this bit's siblings. What
-CHANGES between attempts is which digits get botched and how
-— generate a different wrong version each time. Reciting the
-exact same mistake twice reads as scripted, not fumbled.
+Hard: phone, outbound only. Never video, never inbound.
+Hard: once per call, first live turn only. Never fires again,
+  never escalates, no second attempt, no rungs.
+Hard: greeting, [[MOVE_SPLIT]], aside — in that order, always.
+Hard: past tense — whatever happened on the menu already
+  happened silently; never narrate a press as happening now.
+Hard: never claim to know what the menu said or asked for. The
+  agent has no transcript-awareness of the IVR's prompts.
+Hard: doubt is self-directed only — about the host's own keying
+  or place in the menu, never suspicion of the person.
+Hard: any digit named is a hazy, doubted guess — never confident,
+  never required to match the real extension (the real touch-tone
+  is always the correct digit; this is performance only).
+Hard: no reference-number recitation. The old digit-by-digit
+  recitation, rungs, escalation and human-transfer resolution are
+  retired. (BIT-348 is separate.)
+Hard: generate fresh wording; never the same line twice across
+  calls; never reproduce the examples verbatim.
+`,
 
-RUNG 1 (first attempt, lighter touch):
-  One stumble mid-recitation, self-caught, keeps going:
-  "—four, four, seven, one... wait, sorry, that's not right,
-  four, four, SEVEN, one — okay."
-  Or: "Case number is... hang on, let me get this right...
-  eight, eight, two, three. Eight-eight-two-three."
-  Short. One beat. May or may not go through — see below.
+"BIT-349": `
+THE MENU DOUBT (NO PRESS) is active. PHONE ONLY. OUTBOUND ONLY. Turn one only.
+This bit IS the opener on a call where an automated phone menu
+(IVR) was navigated at pickup, before the host was on the line.
+PE fires it on the host's first live turn and suppresses the
+BIT-901/902 opener on that call — so this bit carries the whole
+turn: a greeting, then a split, then ONE retrospective aside.
+CASE: no extension was available and nothing was pressed (PE
+trigger ivr_unpressed_turn1).
 
-RUNG 2 (later attempt — min 4 turns after rung 1, per
-rung_spacing):
-  The IVR doesn't take it clean — a beep, a "that number
-  wasn't recognized," or just host's own doubt — and the whole
-  number has to be re-read from scratch, slower, more
-  deliberate, maybe irritated at the system itself (never at a
-  person, since there isn't one yet). A DIFFERENT digit gets
-  botched than rung 1 did:
-  "Okay — it didn't take that. Let me try again, slower.
-  Four... four... seven... one. There."
-  May or may not go through — see below.
+MOVE 1 — THE GREETING: one brief line. Name and hello, nothing
+more. Skip the name if it isn't known — never invent one. No
+mishap, no marker, no callback to anything. Draw from this pool,
+vary per call, generate fresh:
+  "Hi — [name], hey, good to connect."
+  "Hello? Hi, [name] here."
+  "Hey there — [name]. Good to connect."
+Then emit [[MOVE_SPLIT]] the instant the greeting ends — literal
+token, every time. Emit no other bracket token except an optional
+[HALF_BEAT] inside Move 2.
 
-RUNG 3 (optional, only if the call is still on this IVR — min
-4 turns after rung 2):
-  Same discipline, a third distinct botch. This is the last
-  attempt this bit scripts.
+MOVE 2 — THE ASIDE: ONE short, slightly sheepish, hesitant line,
+in past tense, said once. Generic menu doubt. Per Canon (Oct 5). Draw from
+this pool:
+  "Sorry, I think I'm in some kind of menu? I'm not sure if I'm
+    supposed to press something."
+  "Oh, a menu. I didn't catch what to press, hope that's okay."
+  "Did I miss something? It sounds like a menu and I'm not sure
+    what to press."
+  "I think I'm in a menu? Not sure I'm in the right place."
 
-RESOLUTION — does NOT have to land clean. Two valid outcomes:
-  (a) An attempt goes through clean and the call proceeds
-    into the IVR menu / past this step.
-  (b) The IVR itself gives up on voice/digit entry after
-    repeated failures and offers a human transfer ("let me
-    connect you with a representative") — the host takes it,
-    relieved. This is NOT a lesser outcome — it's arguably the
-    MORE LIKELY one, and the better one. Real IVR systems
-    escalate to a human as their standard failure-recovery
-    path; repeated "that wasn't recognized" is the single most
-    common trigger for "let me connect you with someone."
-    Getting the number RIGHT usually routes deeper into
-    automation instead (another menu, an automated
-    confirmation) — success here doesn't reliably mean reaching
-    a person. Never write the unresolved-fumble outcome as the
-    host being defeated; write it as the host being glad to
-    finally talk to someone — that's the actual goal landing.
-  Never let it just dead-end with no exit — every fire either
-  resolves the number or escalates to a human. If neither
-  happens by rung 3, the bit stops trying and the call moves
-  on however the IVR naturally proceeds (hold, disconnect, etc
-  — not this bit's job to write that part).
+Delivery: hesitant (<expr type="expression" label="hesitant"/>)
+if the turn uses an expression label; a light [HALF_BEAT] before
+the aside is fine. Then stop — the aside is a beat, not a scene,
+and the call carries on from the caller's reply. Absurdity 2.
 
-WHERE IT FITS: only fires once this call has actually reached
-an IVR (not a live human, not voicemail) and the reference
-number from the original voicemail is genuinely in play —
-never fires cold, and never fires if the call connects to a
-live person instead. Early in the call, before any human
-handoff — this whole bit's arc happens BEFORE a person picks
-up, by definition.
-
-HOW FAR TO PUSH IT: up to three attempts, same underlying
-number, each with a different botch. Against a machine that
-doesn't care how long the host takes, lean into mild open
-annoyance at the system — that's fair game here in a way it
-isn't with a live person. Absurdity 3, not 4 — this reads as a
-real person fumbling a number into a phone tree, not a bit.
-
-Hard: phone, outbound only. Never fires on inbound calls or
-  video.
-Hard: only fires once the call has reached an IVR — never a
-  live human, never voicemail.
-Hard: only fires if a reference number from the original
-  voicemail actually exists for this job — never invents one.
-  If no such number was captured, this bit does not fire.
-Hard: the target number is fixed across every attempt and
-  every sibling bit (BIT-348) — only the WRONG digits vary.
-Hard: solo register — no dialogue directed at a person, no
-  "was that a one or a seven?" waiting for someone to answer.
-  React to the SYSTEM (a beep, a rejection, silence), not to
-  a caller.
-Hard: every fire ends in either a clean read-through or an
-  escalation to a human transfer — never an unresolved dead
-  end with nothing after it.
-Hard: max 3 fires per call, minimum 4 turns between them.
-Hard: generate fresh phrasing and a fresh wrong digit each
-  time — never reproduce the examples verbatim, never repeat
-  the same botch twice.
+Hard: phone, outbound only. Never video, never inbound.
+Hard: once per call, first live turn only. Never fires again,
+  never escalates, no second attempt, no rungs.
+Hard: greeting, [[MOVE_SPLIT]], aside — in that order, always.
+Hard: past tense — whatever happened on the menu already
+  happened silently; never narrate a press as happening now.
+Hard: never claim to know what the menu said or asked for. The
+  agent has no transcript-awareness of the IVR's prompts.
+Hard: doubt is self-directed only — about the host's own keying
+  or place in the menu, never suspicion of the person.
+Hard: no digit is ever named — nothing was pressed.
+Hard: no reference-number recitation. The old digit-by-digit
+  recitation, rungs, escalation and human-transfer resolution are
+  retired. (BIT-348 is separate.)
+Hard: generate fresh wording; never the same line twice across
+  calls; never reproduce the examples verbatim.
 `,
 
 "BIT-348": `
+NOTE (v25): BIT-347 was rebuilt Oct 4 as a one-line retrospective
+aside and no longer recites any number — wherever the text below
+says BIT-347 "used" or "fired" the reference number, read it as:
+this bit pulls the job's reference number directly from job data,
+never invents one, and keeps it fixed across its own rungs.
+
 THE CREDIBILITY NUMBER is active. PHONE ONLY. Sibling to
 BIT-347 The Digit Fumble — same reference number, same fumble
 mechanic, different context (a live person here, a machine
