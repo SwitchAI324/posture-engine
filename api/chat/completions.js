@@ -1512,7 +1512,46 @@ const GAG_OPEN_RATE = parseFloat(process.env.GAG_OPEN_RATE || "0.25");
 // move 2 (see _bits_directives.js's v17 changelog for the full rationale).
 // Every other bit/turn is completely unaffected by the holdback buffer in
 // anthropicToOpenAISSE — this list is the gate.
-const MOVE_SPLIT_BITS = ["BIT-901", "BIT-902"];
+const MOVE_SPLIT_BITS = ["BIT-901", "BIT-902", "BIT-347", "BIT-349"];
+
+// IVR OPENER (2026-10-05, PE — Bits' BIT-347/349 rebuild, Andrew's OK).
+// On an outbound phone call where AMD detected an IVR at pickup
+// (metadata.amd === "machine-ivr"), the host's first live turn is opened by
+// ONE of two bits, picked by whether a dial extension is on file:
+//   extension present (it was pressed)  -> BIT-347 (ivr_pressed_turn1)
+//   no extension                        -> BIT-349 (ivr_unpressed_turn1)
+// Each bit's directive carries the whole turn: greeting, [[MOVE_SPLIT]],
+// then one past-tense aside (the aside lands on turn 2 via the clamp's
+// movesOwed). The warm-up bar blocks the scorer on turns 1-2, so this is a
+// direct fire path (same family as the sound-open pick) — and it REPLACES
+// the 901/902 coin flip on those calls, so no second opener competes.
+// OFF BY DEFAULT (2026-10-05, Canon's recommendation): CORE still carries
+// its own "turn one never includes a greeting" ban, which collides with the
+// bits' greeting until Canon ships the IVR carve-out (host prompt v0.29).
+// Deploy this file dark; flip IVR_OPEN=1 in Vercel env once v0.29 is live.
+// IVR_OPEN=0 (or unset) = no IVR path, normal 901/902 roll.
+const IVR_OPEN_ENABLED = process.env.IVR_OPEN === "1";
+const IVR_OPEN_PRESSED_BIT = "BIT-347";
+const IVR_OPEN_UNPRESSED_BIT = "BIT-349";
+const IVR_OPEN_BIT_IDS = [IVR_OPEN_PRESSED_BIT, IVR_OPEN_UNPRESSED_BIT];
+// Turn-2 owed-move directive re-injection: IVR bits only by default (the
+// generic "you still owe Move 2" line has no directive text behind it on
+// turn 2). MOVES_OWED_REINJECT_ALL=1 extends it to every two-move bit
+// (901/902 included) if the same gap shows up there.
+const MOVES_OWED_REINJECT_ALL = process.env.MOVES_OWED_REINJECT_ALL === "1";
+
+// Reads the IVR context off a request body + stored call state. amd rides
+// metadata (standing flag); dial_extension prefers the agent's own value
+// over the hydrate-time call_prefix copy — same preference as scorerState.
+function readIvrCtx(body, stored) {
+  const amd = body?.metadata?.amd ?? body?.extra_body?.metadata?.amd ?? null;
+  const metaExt =
+    body?.metadata?.dial_extension ?? body?.extra_body?.metadata?.dial_extension ?? null;
+  return {
+    amd,
+    dialExtension: metaExt || (stored ? stored.dialExtension : null) || null,
+  };
+}
 
 // TURN-ONE-OPEN RESOLUTION (2026-09-24) — replaces the old two-system split
 // (base prompt ALWAYS sends the text-fumble; a late, separate roll deep in
@@ -1544,10 +1583,35 @@ const MOVE_SPLIT_BITS = ["BIT-901", "BIT-902"];
 // the opener_turn1 family on Bits' side, at which point this becomes a no-op.
 const TURN1_OPEN_EXCLUDE = ["BIT-905"];
 
-function resolveTurnOneOpen(stored, turnNow) {
+function resolveTurnOneOpen(stored, turnNow, ivrCtx) {
   const alreadyFiredThisCall = !!(stored && stored.lastBitId);
   if (turnNow !== 1 || alreadyFiredThisCall) {
     return { mode: "text_fumble", bitId: null };
+  }
+  // IVR OPENER (see IVR_OPEN_ENABLED above): an IVR call's first live turn
+  // is opened by BIT-347/349 and the 901/902 coin flip below is skipped
+  // entirely. Only if the chosen bit is a real active registry entry —
+  // otherwise fall through to the normal roll rather than open with nothing.
+  if (
+    IVR_OPEN_ENABLED &&
+    ivrCtx &&
+    ivrCtx.amd === "machine-ivr" &&
+    !(stored && (stored.hostTurnCount || 0) > 0)
+  ) {
+    const ivrBitId = ivrCtx.dialExtension ? IVR_OPEN_PRESSED_BIT : IVR_OPEN_UNPRESSED_BIT;
+    const ivrBit = BITS.find((b) => b.id === ivrBitId && b.status === "active");
+    if (ivrBit) {
+      console.log(
+        "TURN1-OPEN-RESOLVE mode=ivr_open bitId=" + ivrBitId +
+        " extensionOnFile=" + !!ivrCtx.dialExtension +
+        " (901/902 roll skipped)"
+      );
+      return { mode: "ivr_open", bitId: ivrBitId };
+    }
+    console.log(
+      "TURN1-OPEN-RESOLVE ivr_open wanted " + ivrBitId +
+      " but it is missing/inactive in the registry — falling through to the normal roll"
+    );
   }
   const eligible = BITS.filter(
     (b) =>
@@ -2288,7 +2352,7 @@ export default async function handler(req) {
   // number, not a mess/sound choice) — never resolve a sound-open there.
   const turnOneOpen = isVoicemailMode
     ? { mode: "text_fumble", bitId: null }
-    : resolveTurnOneOpen(stored, countUserTurns(messages));
+    : resolveTurnOneOpen(stored, countUserTurns(messages), readIvrCtx(body, stored));
   if (isVoicemailMode) {
     const callbackNumber =
       body?.metadata?.callback_number ?? body?.extra_body?.metadata?.callback_number ?? null;
@@ -2469,9 +2533,24 @@ export default async function handler(req) {
     // rules a bit can't recite on PE's behalf. Continuing now swaps in
     // ONLY on real evidence the host has already spoken (turn 2+), same
     // as a baseline-flub call.
+    // IVR OPENER (2026-10-05): on an IVR call's turn 1 the host's greeting
+    // is part of BIT-347/349's own directive, so the full opener overlay's
+    // turn-one-only content (the "arrive out of a mess" text-fumble and the
+    // no-greeting-before-the-caller-speaks ban) would fight it. Use the
+    // Continuing overlay for that turn when it's available; if it isn't
+    // populated, fall back to the full opener like before (no regression).
+    // Also true on a same-turn regeneration of turn 1 (LiveKit preemptive
+    // generation): by then the first generation has already stamped
+    // lastBitId, so resolveTurnOneOpen returns text_fumble — keep the same
+    // overlay the first generation got.
+    const ivrOpenTurn =
+      (turnOneOpen && turnOneOpen.mode === "ivr_open") ||
+      (IVR_OPEN_ENABLED &&
+        countUserTurns(messages) === 1 &&
+        !!(stored && IVR_OPEN_BIT_IDS.includes(stored.lastBitId)));
     const usedContinuing =
       !useBusiness &&
-      hostAlreadySpokeForOverlay &&
+      (hostAlreadySpokeForOverlay || ivrOpenTurn) &&
       continuingAvailable;
     const overlay = useBusiness
       ? stored.businessOverlay
@@ -2792,7 +2871,7 @@ export default async function handler(req) {
         // Stall in progress — hold the loop open, never break to the caller.
         synthetic =
           "[You're in the middle of a stall — you just played a beat where you're momentarily occupied (looking something up, trying to reach someone, checking on a step). The quiet is YOU being busy, not the caller leaving. Do NOT ask if they're still there, do NOT check the line, do NOT break off to address them. Stay in the stall: play the next small step of it — one step, then stop — or just hold the beat. Keep the loop open.]";
-      } else if (beat === 1 && stored && stored.lastFlubBitId && stored.lastFlubTurn != null && (turn - stored.lastFlubTurn) <= 1) {
+      } else if (beat === 1 && stored && stored.lastFlubBitId && stored.lastFlubTurn != null && (countUserTurns(messages) - stored.lastFlubTurn) <= 1) { // was bare `turn` (undefined in this scope) — fixed 2026-10-05
         // FLUB-AWARE SILENCE-NUDGE (2026-09-30, PE — Canon's escalation).
         // General fallback for the same gap the dedicated reaction-check
         // covers on turn 1: an opener-flub-family bit (901/902/907) just
@@ -3720,14 +3799,43 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // owe different content — BIT-901 a greeting, BIT-902 the ask. Fires
     // once, then clears, same one-shot shape as gagOpenPending.
     if (stored && stored.movesOwed && stored.movesOwed.bitId && turn > 1) {
+      // OWED-DIRECTIVE RE-INJECTION (2026-10-05, Bits' question): a bit's
+      // directive text is only injected on the turn the bit FIRES, and the
+      // warm-up bar keeps the scorer from firing anything on turn 2 — so
+      // without this the model is told to deliver "Move 2 of BIT-xxx" with
+      // no text of that bit in front of it (it can only guess from the
+      // transcript). Append the directive itself, for the IVR bits by
+      // default (MOVES_OWED_REINJECT_ALL=1 widens it to every two-move
+      // bit). The directive's own "turn one only / first live turn only"
+      // and "emit [[MOVE_SPLIT]]" lines refer to the turn it FIRED; the
+      // note below says Move 1 is done and the token must not appear again.
+      const owedBitId = stored.movesOwed.bitId;
+      const owedDirective =
+        (MOVES_OWED_REINJECT_ALL || IVR_OPEN_BIT_IDS.includes(owedBitId)) &&
+        BIT_DIRECTIVES && BIT_DIRECTIVES[owedBitId] && String(BIT_DIRECTIVES[owedBitId]).trim()
+          ? String(BIT_DIRECTIVES[owedBitId]).trim()
+          : null;
       blocks.push({
         type: "text",
         text:
-          "YOU STILL OWE MOVE 2 of " + stored.movesOwed.bitId + "'s directive " +
+          "YOU STILL OWE MOVE 2 of " + owedBitId + "'s directive " +
           "— the part you held back (or that got cut) last turn. Deliver it " +
           "now, in its own turn, per that bit's own Move 2 instructions. " +
-          "This is the only turn this applies to.",
+          "This is the only turn this applies to." +
+          (owedDirective
+            ? "\n\nTHE DIRECTIVE, for reference — deliver ONLY its Move 2 " +
+              "(the aside) now. Move 1 (the greeting) is already done: do " +
+              "not repeat it, and do not emit [[MOVE_SPLIT]] again. This " +
+              "IS the sanctioned turn for Move 2, so its \"turn one only\" " +
+              "and \"first live turn only\" limits are satisfied, not " +
+              "violated. Respond to anything the caller just said first, " +
+              "in a clause at most, then the aside.\n\n" + owedDirective
+            : ""),
       });
+      console.log(
+        "MOVES-OWED-DELIVER bitId=" + owedBitId + " turn=" + turn +
+        " directiveReinjected=" + !!owedDirective
+      );
       waitUntil(setCall(callId, { movesOwed: null }).catch(() => {}));
     }
 
@@ -4042,19 +4150,24 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       // phone_mode kept generically (voicemail-mode branch above, and any
       // future use) even though the old "phone_mode:ivr" trigger built on
       // it is confirmed dead and removed — see _bits_scorer.js.
-      phone_mode: phoneMode,
+      // SCOPE FIX (2026-10-05): this runs inside buildSystemBlocks, a separate
+      // function from the handler where phoneMode/amdCategory/metaDialExtension
+      // are declared — referencing them here threw ReferenceError on every
+      // phone turn. Read them off `body`/`stored` locally instead.
+      phone_mode:
+        body?.metadata?.phone_mode ?? body?.extra_body?.metadata?.phone_mode ?? null,
       // DIAL_EXTENSION (2026-10-04) — the real extracted extension, read
       // off call_prefix. No longer gates BIT-347 (that bit no longer sends
       // a live DTMF press — see amd/host_turn_count below), but kept for
       // any bit/dialogue that wants to know whether one is on file.
-      dial_extension: metaDialExtension || (stored ? stored.dialExtension : null),
+      dial_extension: readIvrCtx(body, stored).dialExtension,
       // AMD + HOST_TURN_COUNT (2026-10-04, BIT-347 rebuild, Andrew's
       // Option-A scope call) — amdCategory read above; Voice confirmed
       // "machine-ivr" is a STANDING flag (true every turn for the rest of
       // the call), so host_turn_count narrows "ivr_navigated_turn1" to
       // fire once, on the host's first live turn, using PE's own existing
       // counter — no new one-shot flag needed from Voice for this gate.
-      amd: amdCategory,
+      amd: readIvrCtx(body, stored).amd,
       host_turn_count: stored ? (stored.hostTurnCount || 0) : 0,
     };
     // LOADOUT then rank: selectBit narrows to the bits that fit this moment,
@@ -4488,7 +4601,40 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // doesn't need anyway.
     let gagOpen = false;
     const turnOneOpen =
-      preResolvedTurnOneOpen || resolveTurnOneOpen(stored, turn);
+      preResolvedTurnOneOpen || resolveTurnOneOpen(stored, turn, readIvrCtx(body, stored));
+    // IVR OPENER (2026-10-05, see IVR_OPEN_ENABLED): fire BIT-347/349 as the
+    // turn's one bit. Bypasses the warm-up bar the same way the sound-open
+    // pick below does. The bit comes from the full registry if the ranked
+    // pool dropped it (pool/phase gating), but only while it's status
+    // "active" — the kill switch for a bad bit stays the registry itself.
+    // Deliberately NOT gagOpen: that flag stamps a "you still owe the
+    // greeting" debt, and here the greeting is already Move 1 of the
+    // bit's own directive (the aside is the debt, owed via movesOwed).
+    let ivrOpen = false;
+    if (!fire && turnOneOpen.mode === "ivr_open" && turnOneOpen.bitId) {
+      const ivrBit =
+        ranked.find((r) => r.id === turnOneOpen.bitId) ||
+        (() => {
+          const reg = (Array.isArray(BITS) ? BITS : []).find(
+            (b) => b && b.id === turnOneOpen.bitId && b.status === "active"
+          );
+          return reg ? { ...reg, score: 999, excluded: false, breakdown: {} } : null;
+        })();
+      if (ivrBit) {
+        top = ivrBit;
+        fire = true;
+        ivrOpen = true;
+        console.log(
+          "IVR-OPEN FIRING bit=" + turnOneOpen.bitId + " turn=" + turn +
+          " (warm-up bar bypassed; 901/902 suppressed)"
+        );
+      } else {
+        console.log(
+          "IVR-OPEN-MISS wanted=" + turnOneOpen.bitId +
+          " not in ranked pool or registry — no opener bit this turn"
+        );
+      }
+    }
     if (!fire && turnOneOpen.mode === "sound_open" && turnOneOpen.bitId) {
       const gagBit = ranked.find((r) => r.id === turnOneOpen.bitId);
       if (gagBit) {
@@ -5677,6 +5823,8 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
           ? "force"
           : gagOpen
           ? "gag_open"
+          : ivrOpen
+          ? "ivr_open"
           : starvationFired
           ? "starvation"
           : firedArmedBit
@@ -5916,6 +6064,7 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
             turn,
             phase,
             ...(gagOpen ? { gag_open: true } : {}),
+            ...(ivrOpen ? { ivr_open: true } : {}),
             top3: ranked.slice(0, 3).map((r) => r.name + ":" + r.score.toFixed(1)),
           })
       );
@@ -7100,7 +7249,12 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
                 // the firstDeltaSeen block above, so this only delays
                 // SENDING, never the TTFT measurement or the one-time
                 // quote/vocalTag transforms.
-                if (meta && meta.turn === 1) {
+                // IVR-OPEN EXEMPTION (2026-10-05): BIT-347/349's Move 1 IS a
+                // name + greeting by design (Bits' directive, Canon-approved
+                // pools), on a call where the "caller" is an automated menu,
+                // so the name/"good to connect" strip would cut the bit's own
+                // required line. Every other turn 1 is still stripped.
+                if (meta && meta.turn === 1 && !IVR_OPEN_BIT_IDS.includes(meta.firedBitId)) {
                   t1Buf += emit;
                   emit = "";
                   t1Buf = t1Buf.replace(T1_NAME_STRIP_RE, function (m) {
@@ -7144,7 +7298,7 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
               // same strip once more over whatever's left (a match could
               // be sitting right at the tail we were holding back) and
               // release all of it — there's no more text coming to wait on.
-              if (meta && meta.turn === 1 && t1Buf) {
+              if (meta && meta.turn === 1 && t1Buf) { // (t1Buf stays empty on IVR-open turns — see the exemption above)
                 t1Buf = t1Buf.replace(T1_NAME_STRIP_RE, function (m) {
                   console.log(
                     "TURN1-NAME-STRIP fired (at flush) — turn=1 callId=" +
