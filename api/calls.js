@@ -126,17 +126,21 @@ export default async function handler(req) {
       await insertCallOutcome({
         targetId,
         callOutcome: b.call_outcome,
-        // vapi_call_id (2026-09-03, corrected per Data) — this IS the real,
-        // only column on `calls` for the external call reference; it's
-        // just named for the old system. Written from b.call_id (the
-        // LiveKit room name, same value the transcript save below already
-        // uses) rather than b.vapi_call_id — that field has documented
-        // history of arriving empty (the Aug-8 call_transcripts fix), so
-        // prefer the value already confirmed reliable, falling back to
-        // b.vapi_call_id only if the agent genuinely doesn't send call_id
-        // on some path. updateCallRecording (the recording_ready action
-        // below) matches on this exact column later — its correctness
-        // depends on this write actually landing a good value.
+        // HARD RENAME (2026-10-03, Data) — this column is now calls.room_name,
+        // not calls.vapi_call_id (Data's rename, PE side updated to match;
+        // see _store.js insertCallOutcome/updateCallDisposition). Same real
+        // column for the external call reference, now named for what it
+        // actually holds. Written from b.call_id (the LiveKit room name,
+        // same value the transcript save below already uses) rather than
+        // b.vapi_call_id — that field has documented history of arriving
+        // empty (the Aug-8 call_transcripts fix), so prefer the value
+        // already confirmed reliable, falling back to b.vapi_call_id only
+        // if the agent genuinely doesn't send call_id on some path. The
+        // disposition PATCH below (updateCallDisposition) matches on this
+        // exact column later — its correctness depends on this write
+        // actually landing a good value. (The `vapiCallId` param/variable
+        // names here and in _store.js are left as-is — only the DB column
+        // changed.)
         vapiCallId: b.call_id ?? b.vapi_call_id ?? null,
         startedAt: b.started_at,
         endedAt: b.ended_at,
