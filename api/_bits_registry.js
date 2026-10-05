@@ -1,4 +1,11 @@
 // SpamViking — Bits Registry
+// v9 — Oct 5, 2026 — BIT-347 trigger -> ivr_pressed_turn1 (PE: phone_mode:ivr
+//   is dead), cooldown 999 (one-shot). NEW BIT-349 The Menu Doubt, trigger
+//   ivr_unpressed_turn1 (the no-extension case). Both carry greeting +
+//   [[MOVE_SPLIT]] + aside; PE suppresses 901/902 on IVR calls.
+// v8 — Oct 4, 2026 — BIT-347 rebuilt as a one-shot first-live-turn aside:
+//   removed rungs, ceiling, rung_spacing, max_fires_per_call; absurdity
+//   3→2; requires_context rewritten. Trigger key left as-is (PE owns it).
 // v7 — Sep 29, 2026 — BIT-347: rungs/max_fires_per_call 2→3 (up to 3
 //   attempts, doesn't have to resolve clean — IVR escalation to a human
 //   is a valid exit). New BIT-348 The Credibility Number added — sibling
@@ -2557,19 +2564,13 @@ export const BITS = [
     "archetypes": "universal",
     "family": "stall_buy_time",
     "pool": "early",
-    "trigger": "phone_mode:ivr",
+    "trigger": "ivr_pressed_turn1",
     "call_direction": "outbound",
-    "cooldown": 4,
-    "rungs": 3,
-    "ceiling": "soft_dead_end",
-    "rung_spacing": {
-      "min_between": 4
-    },
-    "max_fires_per_call": 3,
-    "absurdity": 3,
+    "cooldown": 999,
+    "absurdity": 2,
     "vocal_tag": "neutral",
     "channel": "phone",
-    "requires_context": "call has reached an automated IVR (not a live human, not voicemail), and a reference number extracted from the original scam voicemail exists for this job"
+    "requires_context": "one-shot opener on the first live turn when an IVR was navigated at pickup AND an extension was pressed (Pool A: hazy-digit doubt); carries greeting + [[MOVE_SPLIT]] + aside; PE suppresses 901/902 on this call"
   },
   {
     "id": "BIT-348",
@@ -2590,6 +2591,21 @@ export const BITS = [
     "vocal_tag": "neutral",
     "channel": "phone",
     "requires_context": "host is live and engaged with a caller and wants to quote the reference number from the original voicemail to sound like they're genuinely working the case — same number BIT-347 used if that bit already fired this call"
+  },
+  {
+    "id": "BIT-349",
+    "name": "The Menu Doubt",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "stall_buy_time",
+    "pool": "early",
+    "trigger": "ivr_unpressed_turn1",
+    "call_direction": "outbound",
+    "cooldown": 999,
+    "absurdity": 2,
+    "vocal_tag": "neutral",
+    "channel": "phone",
+    "requires_context": "one-shot opener on the first live turn when an IVR was navigated at pickup and NO extension was available/pressed (Pool B: generic menu doubt); carries greeting + [[MOVE_SPLIT]] + aside; PE suppresses 901/902 on this call"
   },
   {
     "id": "BIT-522",

@@ -44,7 +44,7 @@ export async function getCallBySlug(slug) {
   if (!slug) return null;
   return getCall("slug:" + slug);
 }
-const CALL_PREFIX_COLUMNS = "prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,opener_overlay_continuing,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used,pending_bench_awareness,latest_call_id,active_generation,bench_present,first_seen_at,caller_presenting,pitch_summary,host_name,recording_notice_given,host_turn_count,history_rev_seen,opener_served,handoff_given,gag_open_pending,moves_owed,last_flub_bit_id,last_flub_turn";
+const CALL_PREFIX_COLUMNS = "prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,opener_overlay_continuing,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used,pending_bench_awareness,latest_call_id,active_generation,bench_present,first_seen_at,caller_presenting,pitch_summary,host_name,recording_notice_given,host_turn_count,history_rev_seen,opener_served,handoff_given,gag_open_pending,moves_owed,last_flub_bit_id,last_flub_turn,dial_extension";
 export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const baseUrl = `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}`;
@@ -178,11 +178,21 @@ export async function getCall(callId) {
     // decide for themselves whether it's still recent enough to matter.
     lastFlubBitId: rows[0].last_flub_bit_id ?? null,
     lastFlubTurn: rows[0].last_flub_turn ?? null,
+    // DIAL_EXTENSION (2026-10-04, PE/Bits/Phone Intake — pe_dtmf real-value
+    // fix) — the real extension extracted from the scam voicemail/text at
+    // intake, same value Voice's agent already auto-presses via SIP at
+    // dial time (see api/phone/dial.js). Resolved once at hydrate from
+    // callback_jobs (readPhoneJobFields) and persisted here, same "resolve
+    // once, read every turn" pattern archetype/hostName already use —
+    // needed so completions.js can thread the REAL digit into pe_dtmf
+    // instead of a placeholder. null on every web call and on a phone job
+    // where intake never found an extension.
+    dialExtension: rows[0].dial_extension || null,
   };
 }
 export async function setCall(
   callId,
-  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, openerOverlayContinuing, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed, pendingBenchAwareness, latestCallId, activeGeneration, benchPresent, firstSeenAt, callerPresenting, pitchSummary, hostName, recordingNoticeGiven, hostTurnCount, historyRevSeen, openerServed, handoffGiven, gagOpenPending, movesOwed, lastFlubBitId, lastFlubTurn }
+  { prefix, postureLine, pressure, engagement, phase, targetId, arrivalState, benchLog, controlUrl, pendingHandoff, stallCount, lastBitId, lastBitTurn, lastBitAt, businessLatched, openerOverlay, openerOverlayContinuing, businessOverlay, archetype, characterId, commitmentPush, bitFireHistory, huntRungCount, callerRedirected, huntRungTurn, callerCrude, crudeImpersonalCount, crudePersonalCount, markerCounts, markerLastTurn, pricingRaised, textureInvited, lastStallResolvedTurn, expertiseLevelUsed, pendingBenchAwareness, latestCallId, activeGeneration, benchPresent, firstSeenAt, callerPresenting, pitchSummary, hostName, recordingNoticeGiven, hostTurnCount, historyRevSeen, openerServed, handoffGiven, gagOpenPending, movesOwed, lastFlubBitId, lastFlubTurn, dialExtension }
 ) {
   if (!isConfigured()) {
     throw new Error(
@@ -233,6 +243,7 @@ export async function setCall(
   if (movesOwed !== undefined) row.moves_owed = movesOwed;
   if (lastFlubBitId !== undefined) row.last_flub_bit_id = lastFlubBitId;
   if (lastFlubTurn !== undefined) row.last_flub_turn = lastFlubTurn;
+  if (dialExtension !== undefined) row.dial_extension = dialExtension;
   if (callerRedirected !== undefined) row.caller_redirected = callerRedirected;
   if (callerCrude !== undefined) row.caller_crude = callerCrude;
   if (crudeImpersonalCount !== undefined) row.crude_impersonal_count = crudeImpersonalCount;
@@ -648,7 +659,9 @@ export async function insertCallOutcome({
   if (!targetId) throw new Error("target_id required");
   const row = { target_id: targetId };
   if (callOutcome !== undefined) row.call_outcome = callOutcome;
-  if (vapiCallId !== undefined) row.vapi_call_id = vapiCallId;
+  // HARD RENAME (Data, confirmed) — calls.vapi_call_id is now calls.room_name
+  // (same LiveKit room name value, just the column renamed on Data's side).
+  if (vapiCallId !== undefined) row.room_name = vapiCallId;
   if (startedAt !== undefined) row.started_at = startedAt;
   if (endedAt !== undefined) row.ended_at = endedAt;
   if (durationSeconds !== undefined) row.duration_seconds = durationSeconds;
@@ -681,7 +694,9 @@ export async function updateCallDisposition(vapiCallId, { disposition, threatTar
   if (threatTarget !== undefined) row.threat_target = threatTarget;
   if (!Object.keys(row).length) return false;
   const r = await fetch(
-    `${URL}/rest/v1/${CALLS}?vapi_call_id=eq.${encodeURIComponent(vapiCallId)}`,
+    // HARD RENAME (Data) — match on room_name, not vapi_call_id (see
+    // insertCallOutcome above; same column, same value, new name).
+    `${URL}/rest/v1/${CALLS}?room_name=eq.${encodeURIComponent(vapiCallId)}`,
     {
       cache: "no-store",
       method: "PATCH",

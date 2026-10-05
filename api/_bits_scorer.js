@@ -214,6 +214,31 @@ const EMITTED_TRIGGERS = new Set([
                         // even though Phone Intake only asked for outbound
                         // today; costs nothing and closes the obvious next
                         // ask before it's needed.
+  // "phone_mode:ivr" REMOVED (2026-10-04) — confirmed DEAD by Voice: turn
+  // detection is held manual for the entire silent AMD→press→live window,
+  // so no /chat/completions request is ever generated while phone_mode
+  // reads "ivr" (it's "live" by the time any turn fires), and nothing
+  // ever re-stamps "ivr" mid-call (AMD runs once, at pickup). This trigger
+  // could structurally never have matched. Replaced below with
+  // "ivr_navigated_turn1", built on the real signal Voice confirmed exists:
+  // metadata.amd stays "machine-ivr" for the rest of the call once set.
+  "ivr_pressed_turn1",   // 2026-10-05, Canon's Pool A: same gate as
+                        // ivr_navigated_turn1 AND an extension was on file
+                        // (so it was pressed). Truthy state.dial_extension.
+  "ivr_unpressed_turn1", // Pool B: same gate, NO extension (nothing was
+                        // pressed). Mutually exclusive with the above, so
+                        // a call only ever qualifies for one pool.
+  "ivr_navigated_turn1", // state.amd === "machine-ivr" && state.host_turn_count
+                        // === 0 — 2026-10-04, BIT-347 rebuilt per Andrew's
+                        // scope call (Option A: a single first-live-turn
+                        // retrospective aside, not a live mid-call press —
+                        // see Voice's Q3: no agent-side press hook exists
+                        // for a second/mid-call IVR, and building one is a
+                        // separate, unscoped project, parked unless real
+                        // calls show it's needed). host_turn_count is PE's
+                        // own existing counter (call_prefix.host_turn_count),
+                        // not a new flag from Voice — no agent-side build
+                        // needed for this gate at all.
   // NOTE: call_phase_late is intentionally NOT here. It tags only the 700-series
   // death-blows, which never pass through normal loadout() — they fire via
   // selectDeathBlow() (separate end-of-call path, threshold bypassed). The
@@ -254,6 +279,23 @@ function triggerPresent(trigger, state) {
       return state.call_direction === "outbound";
     case "call_direction:inbound":
       return state.call_direction === "inbound";
+    case "ivr_pressed_turn1":
+      return state.amd === "machine-ivr" && state.host_turn_count === 0 && !!state.dial_extension;
+    case "ivr_unpressed_turn1":
+      return state.amd === "machine-ivr" && state.host_turn_count === 0 && !state.dial_extension;
+    case "ivr_navigated_turn1":
+      // REPLACES the dead "phone_mode:ivr" trigger (see EMITTED_TRIGGERS'
+      // comment for the full story — that gate could never match).
+      // metadata.amd === "machine-ivr" is a STANDING flag Voice confirmed
+      // stays true for the rest of the call once AMD detects an IVR at
+      // pickup (the live-restamp keeps the AMD category); host_turn_count
+      // === 0 narrows it to the host's FIRST live turn only, so this fires
+      // once, not every turn for the whole call. Deliberately does NOT
+      // require dial_extension — per Andrew's Option-A scope, the aside
+      // should fire either way (content varies the line by whether an
+      // extension was pressed or not; this gate only decides WHEN, not
+      // which line).
+      return state.amd === "machine-ivr" && state.host_turn_count === 0;
     default:
       // Not an allowlisted trigger — should never reach here (loadout guards).
       // Fail SAFE toward eligibility so a mis-call can't silently blackhole a bit.

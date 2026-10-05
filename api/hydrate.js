@@ -197,6 +197,13 @@ function formatRecordingObjectionExitDirective() {
 // CRYPTO_INVESTMENT") as closely as possible, though a capable model
 // shouldn't need exact-case matching to self-select correctly.
 function formatArchetypeSignal(archetype) {
+  // DRIFT CHECK (2026-10-03) — log-only, see _archetype.js's own header.
+  // Checked against the raw token.archetype value, NOT the "generic"
+  // fallback below — that's PE's own sentinel for "no archetype set", not
+  // a real value, and would otherwise false-positive on every
+  // archetype-less call.
+  const { logIfUnknownArchetype } = require("./_archetype.js");
+  logIfUnknownArchetype(archetype, "hydrate");
   const value = (archetype || "generic").toUpperCase();
   return "ARCHETYPE: " + value;
 }
@@ -1309,7 +1316,7 @@ async function readDossierFloor(targetId) {
 // Write the compiled prefix to call_prefix via the store. setCall handles the
 // upsert; we pass prefix + archetype (+ the initial posture line so turn 1 has
 // one before the engine sets its own).
-async function writePrefix(callId, prefix, archetype, postureLine, targetId, overlays, latestCallId, hostName) {
+async function writePrefix(callId, prefix, archetype, postureLine, targetId, overlays, latestCallId, hostName, dialExtension) {
   const { setCall } = require("./_store.js");
   // targetId rides the same path archetype does: resolved once here from the
   // booking token, frozen on the call_prefix row, read back by completions on
@@ -1347,6 +1354,16 @@ async function writePrefix(callId, prefix, archetype, postureLine, targetId, ove
     // those broken checks — same "resolve once at hydrate time, read many
     // times" pattern prefix/targetId already use.
     ...(hostName !== undefined ? { hostName } : {}),
+    // DIAL-EXTENSION PERSISTENCE (2026-10-04) — dial_extension is the real
+    // extension pulled from the scam voicemail/text during Phone Intake
+    // (readPhoneJobFields, below), already used today for the one-shot
+    // mechanical SIP DTMF press in api/phone/dial.js. It was never
+    // persisted onto call_prefix, so the host's own prompt/turn state had
+    // no awareness of it. Same "resolve once at hydrate, read every turn
+    // via stored" pattern as archetype/hostName/targetId above —
+    // completions.js reads stored.dialExtension to fill pe_dtmf.digits
+    // with the real value instead of a placeholder.
+    ...(dialExtension !== undefined ? { dialExtension } : {}),
   });
 }
 
@@ -1417,7 +1434,11 @@ async function rehydrateSlug(slug) {
   prefix = prefix.split("Andrea").join(hostName);
   const initialPosture = posture.toUpperCase() + " — warm and forward.";
   const overlays = { openerOverlay, openerOverlayContinuing, businessOverlay };
-  await writePrefix("slug:" + slug, prefix, cfg.tactic, initialPosture, cfg.target, overlays, null, hostName);
+  // No phone job lookup in this re-hydrate path (slug-only self-heal of a
+  // stale host name/prefix) — pass undefined, not null, so setCall's
+  // `!== undefined` guard leaves any already-stored dial_extension alone
+  // instead of wiping it out on every re-hydrate.
+  await writePrefix("slug:" + slug, prefix, cfg.tactic, initialPosture, cfg.target, overlays, null, hostName, undefined);
   console.log("rehydrateSlug: refreshed slug=" + slug + " hostName=" + hostName);
   return { prefix, hostName, openerOverlay, openerOverlayContinuing, businessOverlay };
 }
@@ -1428,6 +1449,22 @@ module.exports = async function handler(req, res) {
   // ("slug:<slug>") so it exists BEFORE the Vapi call_id is known — this
   // removes the hydrate-vs-first-turn race. If call_id is supplied we also
   // write it there. completions reads call_id first, then the slug key.
+  // TIMING (2026-10-04, Data's ask — the 8,486ms /api/hydrate on the 21:06
+  // call had no per-step breakdown, so "cold start vs. slow Supabase reads"
+  // couldn't be answered). tMark() logs the delta since the PREVIOUS mark,
+  // not since t0, so each logged number is "how long did THIS step take,"
+  // not a running total — easier to spot which single step is the slow
+  // one on a real slow call. Every mark is best-effort (never throws) so
+  // this can't itself add latency or break hydrate on a logging hiccup.
+  const t0 = Date.now();
+  let tLast = t0;
+  function tMark(label) {
+    try {
+      const now = Date.now();
+      console.log("HYDRATE-TIMING " + label + "=" + (now - tLast) + "ms");
+      tLast = now;
+    } catch {}
+  }
   try {
     const url = new URL(req.url, "http://x");
     const slug = url.searchParams.get("slug");
@@ -1473,8 +1510,10 @@ module.exports = async function handler(req, res) {
     } catch (e) {
       console.log("hydrate: sound_markers body-read failed (non-fatal): " + (e && e.message));
     }
+    tMark("bodyRead");
 
     const token = await readToken(slug);
+    tMark("readToken");
     if (!token) {
       res.setHeader("Content-Type", "application/json");
       res.statusCode = 404;
@@ -1506,40 +1545,49 @@ module.exports = async function handler(req, res) {
     // Voice/SMS chat for call-live notifications. Same reasoning applies
     // — pays the cost of the slowest of three now, not three sequential
     // round trips.
-    const [hostConfigVoice, dossierFloor, ownerUserId] = await Promise.all([
+    //
+    // jobId MOVED UP (2026-10-04, Data's ask) — it only ever depended on
+    // slug/token.callback_job_id, both already available right after
+    // readToken, so there was never a real reason readPhoneJobFields had
+    // to wait for the three reads below to finish first. readPhoneJobFields
+    // itself already returns null with NO fetch when jobId is falsy (see
+    // its own guard), so passing null for a non-phone token costs nothing
+    // — the same "no-op for web tokens" behavior as before, just now
+    // folded into the parallel group instead of a 4th sequential await
+    // after it. readCallerProfile still CANNOT join this group — it
+    // genuinely depends on phoneJobFields.callback_number_id, a result
+    // this exact Promise.all produces; that one stays sequential below.
+    const jobId =
+      (slug && slug.startsWith("ph-") && slug.slice(3)) ||
+      token.callback_job_id ||
+      null;
+    const [hostConfigVoice, dossierFloor, ownerUserId, phoneJobFields] = await Promise.all([
       readHostConfigVoice(token.host_name),
       readDossierFloor(token.target_id),
       readUserIdByEmail(token.owner_email),
+      token.channel === "phone" ? readPhoneJobFields(jobId) : Promise.resolve(null),
     ]);
+    // Label says "Parallel4" so a slow number here reads as "the slowest
+    // of the four parallel reads," not "all four summed" — Promise.all
+    // pays the cost of whichever one lagged, not their total.
+    tMark("parallel4(hostConfig+dossier+ownerUserId+phoneJobFields[" +
+      (token.channel === "phone" ? "ran" : "skipped-not-phone") + "])");
 
     // PHONE JOB FIELDS (2026-09-04, revised 2026-09-07 for inbound) — see
     // readPhoneJobFields' own comment for the full context. Only
     // meaningful for channel='phone' tokens; a no-op (null) for every
     // web token, and fails soft exactly like the dossier floor above if
-    // the lookup comes back empty for any reason.
+    // the lookup comes back empty for any reason. (jobId/the actual call
+    // now live above, folded into the parallel group — see that comment.)
     //
-    // jobId resolves from EITHER source, whichever applies: outbound
-    // ph-<job_id> slugs encode it directly (slug.slice(3)); inbound
-    // in-<house_call_id> slugs do NOT encode a job id at all (a
-    // different identifier space), so those rely on
-    // token.callback_job_id instead — Data's schema addition, stamped
-    // by Booking's mint-token when a mode='user' inbound call resolves
-    // to the job whose planted number it's calling back. Both paths
-    // converge on the exact same downstream lookup/formatting, no
-    // duplicated logic.
-    const jobId =
-      (slug && slug.startsWith("ph-") && slug.slice(3)) ||
-      token.callback_job_id ||
-      null;
-    const phoneJobFields = token.channel === "phone"
-      ? await readPhoneJobFields(jobId)
-      : null;
-    // Dependent on phoneJobFields.callback_number_id, so this can't join
-    // the earlier Promise.all above (that one runs before phoneJobFields
-    // exists at all) — genuinely sequential, not an oversight.
+    // Dependent on phoneJobFields.callback_number_id — phoneJobFields IS
+    // now a RESULT of the Promise.all above (see 2026-10-04 comment there),
+    // so this genuinely cannot join that group: it needs that group's
+    // output as its own input. Still sequential, still not an oversight.
     const callerProfile = await readCallerProfile(
       phoneJobFields && phoneJobFields.callback_number_id
     );
+    tMark("readCallerProfile");
     const expectedPlaybookBlock = formatExpectedPlaybookBlock(callerProfile);
     const callerContextBrief = formatCallerContextBrief(
       phoneJobFields && phoneJobFields.caller_context
@@ -1693,6 +1741,9 @@ module.exports = async function handler(req, res) {
     };
 
     const assembled = assemblePrefix(cfg);
+    // Pure CPU/string-assembly, no network — isolates "compile itself is
+    // slow" (unlikely, but now provable) from the network steps around it.
+    tMark("assemblePrefix(cpu-only)");
     let prefix = assembled.stablePrefix;
     // MARKER-THRESHOLD CONSISTENCY CHECK (Aug 7). Bits' per-marker
     // escalation table (in completions.js) is authored against marker
@@ -1802,9 +1853,15 @@ module.exports = async function handler(req, res) {
     // latestCallId only ever passed here (the slug: row) — null when callId
     // isn't known yet at this point in the request (still correct: means
     // "no live call for this slug right now," which is real information).
-    await writePrefix("slug:" + slug, prefix, cfg.tactic, initialPosture, cfg.target, overlays, callId || null, hostName);
+    // dialExtension: same phoneJobFields.dial_extension already read above
+    // for the response payload (line ~1890) — threaded onto call_prefix
+    // here too so completions.js can read it every turn via stored.dialExtension.
+    const dialExtension = (phoneJobFields && phoneJobFields.dial_extension) || null;
+    await writePrefix("slug:" + slug, prefix, cfg.tactic, initialPosture, cfg.target, overlays, callId || null, hostName, dialExtension);
+    tMark("writePrefix(slug-key)");
     if (callId) {
-      await writePrefix(callId, prefix, cfg.tactic, initialPosture, cfg.target, overlays, undefined, hostName);
+      await writePrefix(callId, prefix, cfg.tactic, initialPosture, cfg.target, overlays, undefined, hostName, dialExtension);
+      tMark("writePrefix(call_id-key)");
     }
 
     // CACHE WARM — fired here, non-blocking, so it never delays hydrate's
@@ -1815,6 +1872,12 @@ module.exports = async function handler(req, res) {
     // the identical env var, same account/deploy).
     waitUntil(warmCache(prefix, callId));
 
+    // TOTAL (2026-10-04) — sum of every step above, i.e. the number Data's
+    // 8,486ms reading corresponds to. Logged alongside the per-step marks
+    // (not replacing "hydrate OK") so a slow call shows both "how long did
+    // the whole request take" and "which single step actually ate the
+    // time" in the same log line, no cross-referencing timestamps needed.
+    console.log("HYDRATE-TIMING total=" + (Date.now() - t0) + "ms slug=" + slug);
     console.log(
       "hydrate OK slug=" +
         slug +
