@@ -46,6 +46,20 @@ const fmtTime = (iso, tz) => {
 };
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
+// Subject-line fallback when the claimed-org quote would push the subject
+// past a length a mail client truncates mid-word (Oct 1, 2026, Andrew's
+// report on job e9aef2b2 — 'wasted 5 minutes of "business credit issuance
+// tea…'). Minutes/outcome come first either way; the org quote is the part
+// that gets dropped, never truncated mid-word.
+function recapSubject(host, minutes, org, number) {
+  const numOrOrg = org ? `"${org}"` : pretty(number);
+  let subj = minutes ? `${host} wasted ${plural(minutes, 'minute')} of ${numOrOrg}` : `${host} called ${numOrOrg} back`;
+  if (subj.length > 60) {
+    subj = minutes ? `${host} wasted ${plural(minutes, 'minute')} of ${pretty(number)}` : `${host} called ${pretty(number)} back`;
+  }
+  return subj;
+}
+
 async function recordingLink(jobId) {
   try {
     const r = await fetch(`${RECORDING_LINK_URL}?slug=ph-${jobId}`, {
@@ -68,6 +82,13 @@ function kindFor(outcome) {
   // answered_human with no proof anyone actually spoke (see `unproven`,
   // computed in the handler from the transcript) — that's a variant of
   // 'recap', not a separate kind.
+  // answered_ivr (Oct 5, 2026): Voice's IVR navigation now writes this ONLY
+  // when a phone menu answered and navigation ended with no human reached
+  // (fail_reason "ivr: no human reached (<reason>)"); a person reached
+  // after the menu is answered_human. So it is NOT a conversation — it
+  // gets the no-answer-style email, reworded (see compose). Must be
+  // checked before the startsWith('answered') catch-all below.
+  if (outcome === 'answered_ivr') return 'no_answer';
   if (outcome.startsWith('answered')) return 'recap';
   if (outcome === 'voicemail_left') return 'voicemail_left';
   if (['no_answer', 'rang_out', 'busy'].includes(outcome)) return 'no_answer';
@@ -93,7 +114,7 @@ function aboutNumber(profile, userCount) {
 }
 
 function compose(kind, ctx) {
-  const { host, number, org, minutes, at, link, refCode, about, ringSeconds, unproven } = ctx;
+  const { host, number, org, minutes, at, link, refCode, about, ringSeconds, unproven, ivr } = ctx;
   const who = org ? `"${org}"` : pretty(number);
   const lines = [];
   let subject;
@@ -106,17 +127,19 @@ function compose(kind, ctx) {
     // here specifically — unlike a normal recap, there's real doubt this
     // one landed at all.
     subject = `Not sure how ${host}'s call to ${who} went`;
+    if (subject.length > 60) subject = `Not sure how ${host}'s call to ${pretty(number)} went`;
     lines.push(`Your callback to ${pretty(number)} happened at ${at}, but we can't confirm anyone actually spoke — could be a bad connection, a fast hangup, or our own recording missing the other side.`);
-    lines.push('');
-    lines.push(link ? `Listen for yourself: ${link}\n(link works for 7 days)` : 'Recording is still processing — we\'ll send the link when it\'s ready.');
+    // One email, no promises (Oct 1, 2026, Andrew's ruling): either this
+    // carries a working link or it says nothing about a recording at all —
+    // never "processing," never "we'll send it when it's ready."
+    if (link) { lines.push(''); lines.push(`Listen for yourself: ${link}\n(link works for 7 days)`); }
     lines.push('');
     lines.push('Reply RETRY to try again, SKIP to cancel any follow-up call already queued, or BLOCK to never call this number again.');
   } else if (kind === 'recap') {
-    subject = minutes ? `${host} wasted ${plural(minutes, 'minute')} of ${who}` : `${host} called ${who} back`;
+    subject = recapSubject(host, minutes, org, number);
     lines.push(`Your callback to ${pretty(number)} happened at ${at}. A human answered.`);
     if (minutes) lines.push(`${host} kept them on for ${plural(minutes, 'minute')}.`);
-    lines.push('');
-    lines.push(link ? `Listen: ${link}\n(link works for 7 days)` : 'Recording is still processing — we\'ll send the link when it\'s ready.');
+    if (link) { lines.push(''); lines.push(`Listen: ${link}\n(link works for 7 days)`); }
     // Reference-code aside removed (Sep 29, 2026, Recording's ask) — it's
     // an internal matching device with nothing for the user to act on.
   } else if (kind === 'voicemail_left') {
@@ -132,21 +155,25 @@ function compose(kind, ctx) {
     } else {
       lines.push(`If we don't hear from them, that's it for this one.`);
     }
-    lines.push('');
-    lines.push(`Recording to follow once it's processed.`);
-  } else if (kind === 'recording_ready') {
-    subject = `Recording ready — ${host}'s call to ${who}`;
-    lines.push(`The recording from that call is ready.`);
-    lines.push('');
-    lines.push(`Listen: ${link}\n(link works for 7 days)`);
+    if (link) { lines.push(''); lines.push(`Listen: ${link}\n(link works for 7 days)`); }
+    // No "recording to follow" promise here either — one email, same rule.
+  } else if (ivr) {
+    // Menu answered, nobody reached. Not "no answer" (it did pick up) and
+    // not a recap (no human). Kind stays 'no_answer' so the user's
+    // notify_no_answer toggle and the one-email-per-kind rule still apply.
+    subject = `Only a phone menu at ${pretty(number)}`;
+    lines.push(`We called ${pretty(number)} at ${at}. A phone menu answered, and we couldn't get through to a person.`);
+    lines.push('Reply RETRY to try again, or BLOCK to never call this number.');
   } else {
     subject = `No answer at ${pretty(number)}`;
     lines.push(`We called ${pretty(number)} at ${at}${ringSeconds ? ` and it rang about ${ringSeconds} seconds` : ''} — no answer.`);
     lines.push('Reply RETRY to try again, or BLOCK to never call this number.');
   }
 
-  if (about && kind !== 'recording_ready') { lines.push(''); lines.push(about); }
-  if (kind !== 'recording_ready' && !unproven) {
+  if (about) { lines.push(''); lines.push(about); }
+  // The no_answer branches already offer BLOCK in their own RETRY/BLOCK
+  // line; adding this too made those emails mention BLOCK twice.
+  if (!unproven && kind !== 'no_answer') {
     lines.push('');
     lines.push('Reply BLOCK and we\'ll never call this number again.');
   }
@@ -179,44 +206,43 @@ export default async function handler(req, res) {
     const toggle = { recap: 'notify_recap', voicemail_left: 'notify_voicemail_left', no_answer: 'notify_no_answer' }[kind];
     if (settings && settings[toggle] === false) return res.status(200).json({ ok: true, kind, queued: false, reason: 'user opted out' });
 
-    const existing = await select('phone_recaps', `job_id=eq.${job_id}&kind=eq.${kind}&select=id,body`);
+    // One email per (job_id, kind), period — no distinct "recording_ready"
+    // follow-up anymore (Oct 1, 2026, Andrew's ruling: either the one email
+    // has the recording, or it says nothing about one — never a promise of
+    // a later link). If we already sent this job's email, we're done.
+    const existing = await select('phone_recaps', `job_id=eq.${job_id}&kind=eq.${kind}&select=id`);
     if (existing.length) {
-      // The recap for this job/kind already went out. If its body still
-      // shows the "recording not ready yet" placeholder — either branch,
-      // human-answered OR voicemail-left both promise a link "to follow" —
-      // and a link is now available, this call is the recording-ready
-      // follow-up webhook firing. Queue it as a DISTINCT kind so it
-      // doesn't hit the guard below and get silently dropped, which was
-      // the "promised follow-up never arrived" bug (Sep 29, 2026). This
-      // originally only covered kind==='recap' — extended to voicemail_left
-      // too once a real voicemail job (d60efc68) showed the same gap: a
-      // voicemail recap also promises "recording to follow" but never
-      // called recordingLink() at all.
-      const awaitingLinkMarker = { recap: 'Recording is still processing', voicemail_left: 'Recording to follow once it\'s processed' }[kind];
-      const awaitingLink = awaitingLinkMarker && (existing[0].body || '').includes(awaitingLinkMarker);
-      if (awaitingLink) {
-        const link = await recordingLink(job_id);
-        if (link) {
-          const already = await select('phone_recaps', `job_id=eq.${job_id}&kind=eq.recording_ready&select=id`);
-          if (!already.length) {
-            const [num] = await select('callback_numbers', `id=eq.${job.callback_number_id}&select=e164,caller_profile_id`);
-            const [profile] = num?.caller_profile_id ? await select('caller_profile', `e164=eq.${encodeURIComponent(num.caller_profile_id)}&select=claimed_org`) : [null];
-            const { subject, body } = compose('recording_ready', {
-              jobId: job_id,
-              host: job.host_name || user?.host_name || 'Your host',
-              number: num?.e164,
-              org: job.caller_context?.claimed_org || profile?.claimed_org || null,
-              link,
-            });
-            await insert('phone_recaps', {
-              user_id: job.user_id, job_id, kind: 'recording_ready', to_email: user.email, subject, body,
-            }, 'return=minimal');
-            return res.status(200).json({ ok: true, kind: 'recording_ready', queued: true });
-          }
-        }
-        return res.status(200).json({ ok: true, kind, queued: false, reason: 'recording not ready yet' });
-      }
       return res.status(200).json({ ok: true, kind, queued: false, reason: 'already queued' });
+    }
+
+    // recap and voicemail_left are the two outcomes where a recording can
+    // exist at all (no_answer never produces one). For those, wait for a
+    // real link before sending — UNLESS we're already past the 5-minute
+    // fallback window from hangup, in which case send the plain recap with
+    // no recording mention rather than hold it indefinitely. This endpoint
+    // gets POSTed twice in the normal case — once at hangup (dispatcher),
+    // once at recordings.status='ready' (Recording's webhook) — so the
+    // hangup POST is expected to come back "awaiting recording" and the
+    // ready POST is what actually sends the email. recap-sweep.js covers
+    // the case where the ready POST never arrives at all.
+    //
+    // ASSUMPTION flagged, not confirmed: job.updated_at is used as "when
+    // this job's outcome was written" (i.e. hangup time). If Data/PE know
+    // of a more precise column (a dedicated ended_at/completed_at), swap
+    // it in here and in recap-sweep.js — updated_at is a guess at what's
+    // actually available, not a confirmed contract.
+    const recordingEligible = kind === 'recap' || kind === 'voicemail_left';
+    let link = null;
+    if (recordingEligible) {
+      link = await recordingLink(job_id);
+      if (!link) {
+        const hangupAt = job.updated_at ? new Date(job.updated_at).getTime() : null;
+        const elapsedMs = hangupAt ? Date.now() - hangupAt : Infinity;
+        if (elapsedMs < 5 * 60 * 1000) {
+          return res.status(200).json({ ok: true, kind, queued: false, reason: 'awaiting recording' });
+        }
+        // else: fallback window elapsed — fall through and send without one.
+      }
     }
 
     const [flags] = await select('system_flags', 'select=max_campaign_touches&limit=1').catch(() => [null]);
@@ -225,7 +251,6 @@ export default async function handler(req, res) {
     const others = num?.e164 ? await select('callback_numbers', `e164=eq.${encodeURIComponent(num.e164)}&select=user_id`) : [];
     const userCount = new Set(others.map(o => o.user_id)).size;
     const attempts = await select('call_attempts', `job_id=eq.${job_id}&order=dial_started_at.desc&limit=1&select=ring_seconds,answered_at,dial_started_at`);
-    const link = kind === 'recap' ? await recordingLink(job_id) : null;
 
     const ctx = {
       jobId: job_id,
@@ -240,6 +265,7 @@ export default async function handler(req, res) {
       ringSeconds: attempts[0]?.ring_seconds || null,
       moreTouches: Math.max(0, (flags?.max_campaign_touches ?? 3) - (job.campaign_touch ?? 1)),
       unproven: kind === 'recap' && !hasCallerTurns(job.transcript),
+      ivr: job.outcome === 'answered_ivr',
     };
     const { subject, body } = compose(kind, ctx);
 
