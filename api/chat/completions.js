@@ -22,7 +22,7 @@ export const config = { runtime: "edge" };
 
 import { getCall, getCallBySlug, setCall, isConfigured, appendBitEvent, clearDeathBlow, getControls, stampArm, fireArm, fireForce, saveTranscript, clearBench } from "../_store.js";
 import { selectBit, rankBits, DEPLOY_THRESHOLD, selectTextureBit, rankTextureCandidates, explainExclusion } from "../_bits_scorer.js";
-import { archetypeFromBody } from "../_archetype.js";
+import { archetypeFromBody, logIfUnknownArchetype } from "../_archetype.js";
 // ── ACCUSATION DETECTION (Aug 5, extracted from _gears_tells.js/_gears.js as
 // part of removing gears entirely) ────────────────────────────────────────
 // This is NOT part of the suspicion state machine that's being removed — it's
@@ -2258,6 +2258,22 @@ export default async function handler(req) {
   const phoneMode =
     body?.metadata?.phone_mode ?? body?.extra_body?.metadata?.phone_mode ?? null;
   const isVoicemailMode = phoneMode === "voicemail";
+  // AMD CATEGORY (2026-10-04, BIT-347 rebuild) — Voice confirmed this is a
+  // STANDING flag: metadata.amd reads "machine-ivr" on EVERY turn for the
+  // rest of the call once AMD detects an IVR at pickup, not a one-shot.
+  // Read the same two-path way as phoneMode above (metadata vs
+  // extra_body.metadata) since it rides the same channel.
+  const amdCategory =
+    body?.metadata?.amd ?? body?.extra_body?.metadata?.amd ?? null;
+  // DIAL_EXTENSION FROM THE AGENT (2026-10-05, Canon's ask: Pool A = an
+  // extension was pressed, Pool B = none). Voice confirmed metadata.
+  // dial_extension rides every turn on an AMD machine-ivr call, and in
+  // that branch "extension present" means it WAS pressed — so the agent's
+  // own value is the truest "pressed" signal. Preferred over the
+  // call_prefix copy (stored.dialExtension, a hydrate-time snapshot of the
+  // job); the copy is only the fallback if metadata doesn't carry it.
+  const metaDialExtension =
+    body?.metadata?.dial_extension ?? body?.extra_body?.metadata?.dial_extension ?? null;
   // STAGE-TRANSITION EARLY-EMIT (2026-09-29, Voice's ask) — set true below,
   // at the exact point BASESYSTEM-CHANGED is detected (the opener overlay
   // swap or the opening->business latch). Declared here, in the outer
@@ -2543,6 +2559,31 @@ export default async function handler(req) {
   // the Supabase column default. null when no bit fired this turn.
   const firedVocalTag = built && built.firedBitId
     ? ((BITS.find((b) => b.id === built.firedBitId) || {}).vocal_tag || "excited")
+    : null;
+  // PE_DTMF (2026-10-04, BIT-347/Voice; corrected same day per Andrew —
+  // the digit must be the REAL extension, never an arbitrary/hardcoded
+  // placeholder). CURRENTLY UNUSED, kept as generic plumbing: Andrew's
+  // Option-A scope call for BIT-347 means it no longer sends a live
+  // mid-call press (that's now a one-off dialogue aside, see
+  // "ivr_navigated_turn1" in _bits_scorer.js) — no bit in the registry
+  // emits pe_dtmf today. Left in place since Voice's Q3 flagged a real
+  // mid-call press as a possible later build (Option B, parked); if that
+  // ever gets built, this is the channel it would ride. stored.dialExtension
+  // is the actual extension extracted
+  // from the scam voicemail/text at Phone Intake (callback_jobs.dial_extension,
+  // threaded onto call_prefix in hydrate.js's writePrefix — same "resolve
+  // once, read every turn" pattern as archetype/hostName). That real value
+  // is the ONLY source of the digit sent via publish_dtmf() per Voice's
+  // agreed contract — never varied for a "fumble" (that's host dialogue
+  // only, Canon/Bits' content, layered over the one real press). The
+  // registry's own dtmf_digit field is kept ONLY as a last-resort fallback
+  // for a bit fired with no real extension on file (should not normally
+  // happen once _bits_scorer.js's trigger gate requires one); it is never
+  // preferred over the real value.
+  const firedDtmfDigit = built && built.firedBitId
+    ? ((stored && stored.dialExtension) ||
+       (BITS.find((b) => b.id === built.firedBitId) || {}).dtmf_digit ||
+       null)
     : null;
 
   // SILENCE BARE-TURN → the Anthropic API treats a messages array whose LAST
@@ -3153,6 +3194,9 @@ export default async function handler(req) {
     // bits' own directives require the token; every other turn is
     // unaffected, same guard shape as meta.turn===1 gating TURN1-NAME-STRIP).
     firedBitId: built ? built.firedBitId : null,
+    // PE_DTMF — see firedDtmfDigit's own comment above. null on every
+    // normal turn; consumed in the extra_content merge below.
+    dtmfDigit: firedDtmfDigit,
   };
 
   const anthropicFetchOpts = {
@@ -3756,8 +3800,16 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
         ? { [stored.lastBitId]: Math.max(0, turn - stored.lastBitTurn) }
         : {};
     // sticky if already hydrated; else from this request's metadata; else flat.
-    const archetype =
-      (stored && stored.archetype) || archetypeFromBody(body) || "universal";
+    const rawArchetype = (stored && stored.archetype) || archetypeFromBody(body);
+    const archetype = rawArchetype || "universal";
+    // DRIFT CHECK (2026-10-03) — log-only, see _archetype.js's own header.
+    // Checked against rawArchetype, NOT the defaulted `archetype` value —
+    // "universal" is PE's own fallback sentinel, not a real archetype, and
+    // would otherwise false-positive on every archetype-less call (still
+    // the common case as of this write — see Email's unset-by-default
+    // status). Checked once per call here (not every turn) since archetype
+    // is sticky off `stored` after the first turn anyway.
+    if (!stored) logIfUnknownArchetype(rawArchetype, "completions");
     const archetypeNew =
       archetype !== "universal" && (!stored || stored.archetype !== archetype);
 
@@ -3987,6 +4039,23 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       // signal, so a direct "are you a bot?" gets same-turn eligibility
       // instead of a one-turn lag.
       caller_questioned_humanity: accusation === "ai",
+      // phone_mode kept generically (voicemail-mode branch above, and any
+      // future use) even though the old "phone_mode:ivr" trigger built on
+      // it is confirmed dead and removed — see _bits_scorer.js.
+      phone_mode: phoneMode,
+      // DIAL_EXTENSION (2026-10-04) — the real extracted extension, read
+      // off call_prefix. No longer gates BIT-347 (that bit no longer sends
+      // a live DTMF press — see amd/host_turn_count below), but kept for
+      // any bit/dialogue that wants to know whether one is on file.
+      dial_extension: metaDialExtension || (stored ? stored.dialExtension : null),
+      // AMD + HOST_TURN_COUNT (2026-10-04, BIT-347 rebuild, Andrew's
+      // Option-A scope call) — amdCategory read above; Voice confirmed
+      // "machine-ivr" is a STANDING flag (true every turn for the rest of
+      // the call), so host_turn_count narrows "ivr_navigated_turn1" to
+      // fire once, on the host's first live turn, using PE's own existing
+      // counter — no new one-shot flag needed from Voice for this gate.
+      amd: amdCategory,
+      host_turn_count: stored ? (stored.hostTurnCount || 0) : 0,
     };
     // LOADOUT then rank: selectBit narrows to the bits that fit this moment,
     // then ranks that focused set (not all 71). threshold:0 so we apply our own
@@ -6223,6 +6292,21 @@ function anthropicToOpenAISSE(anthropicBody, meta, appendText, firstTokenControl
       outDelta = {
         ...outDelta,
         extra_content: { ...(outDelta.extra_content || {}), pe_flub: true },
+      };
+    }
+    // PE_DTMF (2026-10-04, Bits/Voice — BIT-347 "The Digit Fumble") — same
+    // channel/pattern as pe_stall/bench_speak/pe_flub above: PRE-DETERMINED
+    // before generation starts (meta.dtmfDigit, set from the fired bit's
+    // registry dtmf_digit field — see firedDtmfDigit's own comment), stamped
+    // on the first/role chunk only, merged so it coexists with the others.
+    // Per Voice's agreed contract: digits is the ONLY field, no fumble/
+    // variation — the agent presses exactly this digit, every time, full
+    // stop. Any "did I press the right one?" uncertainty is host dialogue
+    // only (Canon/Bits' content), layered over this one real press.
+    if (meta.dtmfDigit && delta && delta.role) {
+      outDelta = {
+        ...outDelta,
+        extra_content: { ...(outDelta.extra_content || {}), pe_dtmf: { digits: String(meta.dtmfDigit) } },
       };
     }
     // RECORDING-STOP SIGNAL (2026-09-07, Recording — REVISED design,
