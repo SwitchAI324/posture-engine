@@ -19,12 +19,20 @@
 // the job aging past 5 minutes) stays in recap.js; this file only finds
 // the stragglers and re-pokes them.
 //
-// Header: x-phone-intake-secret (both incoming, on this endpoint, and
-// outgoing, when it calls /api/phone/recap).
+// Auth: accepts EITHER of two things, since this endpoint has two different
+// callers —
+//   - Vercel Cron's own automatic call: a GET with
+//     `Authorization: Bearer <CRON_SECRET>`, where CRON_SECRET is a Vercel
+//     project env var Vercel sets that header FROM automatically. Vercel
+//     Cron cannot send a custom header, so the usual x-phone-intake-secret
+//     scheme this project uses everywhere else does NOT work here.
+//   - A manual/test call: the normal x-phone-intake-secret header, same as
+//     every other endpoint in this file set.
 
 const SB = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SECRET = process.env.PHONE_INTAKE_SECRET;
+const CRON_SECRET = process.env.CRON_SECRET;
 const RECAP_URL = process.env.PHONE_RECAP_URL || 'https://posture-engine.vercel.app/api/phone/recap';
 const FALLBACK_MINUTES = 5;
 
@@ -45,7 +53,10 @@ async function sb(path, opts = {}) {
 const select = (table, filter) => sb(`${table}?${filter}`, { method: 'GET' });
 
 export default async function handler(req, res) {
-  if (!SECRET || req.headers['x-phone-intake-secret'] !== SECRET) return res.status(401).json({ ok: false, error: 'bad secret' });
+  const authHeader = req.headers['authorization'] || '';
+  const cronOk = !!CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`;
+  const manualOk = !!SECRET && req.headers['x-phone-intake-secret'] === SECRET;
+  if (!cronOk && !manualOk) return res.status(401).json({ ok: false, error: 'bad secret' });
 
   try {
     const cutoff = new Date(Date.now() - FALLBACK_MINUTES * 60000).toISOString();
