@@ -559,6 +559,42 @@ async function readToken(slug) {
   return rows[0] || null;
 }
 
+// Build a synthetic phone token from callback_jobs when booking_tokens has no
+// row for a clean ph-<uuid> slug. Returns null for any other slug shape or a
+// missing job, so web/in- slugs keep their 404 behaviour.
+async function tokenFromPhoneJob(slug) {
+  const m = /^ph-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(slug || "");
+  if (!m) return null;
+  const URL = process.env.SUPABASE_URL;
+  const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+  if (!URL || !KEY) return null;
+  const h = { apikey: KEY, authorization: `Bearer ${KEY}` };
+  const jr = await fetch(
+    `${URL}/rest/v1/callback_jobs?id=eq.${m[1]}&select=id,archetype,host_name,user_id&limit=1`,
+    { headers: h }
+  );
+  if (!jr.ok) throw new Error("job read failed " + jr.status);
+  const job = (await jr.json())[0];
+  if (!job) return null;
+  let ownerEmail = null;
+  if (job.user_id) {
+    const ur = await fetch(
+      `${URL}/rest/v1/sv_users?id=eq.${encodeURIComponent(job.user_id)}&select=email&limit=1`,
+      { headers: h }
+    );
+    if (ur.ok) ownerEmail = ((await ur.json())[0] || {}).email || null;
+  }
+  return {
+    slug,
+    channel: "phone",
+    archetype: job.archetype || null,
+    host_name: job.host_name || null,
+    target_id: null,
+    owner_email: ownerEmail,
+    callback_job_id: job.id,
+  };
+}
+
 // PHONE JOB FIELDS (2026-09-04, Voice/Booking) — channel='phone' tokens
 // were deliberately trimmed to {slug, channel, archetype, host_name,
 // target_id} only (my own earlier ruling: dial_extension/ask_for/
@@ -1512,8 +1548,20 @@ module.exports = async function handler(req, res) {
     }
     tMark("bodyRead");
 
-    const token = await readToken(slug);
+    let token = await readToken(slug);
     tMark("readToken");
+    // PHONE TOKEN FALLBACK (2026-10-06): a ph-<uuid> slug whose
+    // booking_tokens row is missing (room started by hand, token purged)
+    // used to 404 and the host ran with NO prompt. If the slug is a clean
+    // ph-<uuid> and the callback_jobs row exists, build the token from the
+    // job instead. Read-only: nothing is written to booking_tokens.
+    if (!token) {
+      try { token = await tokenFromPhoneJob(slug); } catch (e) {
+        console.log("hydrate: TOKEN-FALLBACK-FROM-JOB failed (non-fatal): " + (e && e.message));
+      }
+      if (token) console.log("hydrate: TOKEN-FALLBACK-FROM-JOB used slug=" + slug + " archetype=" + (token.archetype || "null") + " host=" + (token.host_name || "null"));
+      tMark("tokenFromPhoneJob");
+    }
     if (!token) {
       res.setHeader("Content-Type", "application/json");
       res.statusCode = 404;
