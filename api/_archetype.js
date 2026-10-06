@@ -52,6 +52,9 @@ export const KNOWN_ARCHETYPES = [
 export function logIfUnknownArchetype(value, where) {
   if (!value) return; // null/undefined/"" = universal, not a mismatch
   if (KNOWN_ARCHETYPES.includes(value)) return;
+  // "generic" / "universal" are the deliberate no-archetype values (Phone
+  // Intake writes "generic" on jobs it could not classify) — not a mismatch.
+  if (value === "generic" || value === "universal") return;
   try {
     console.log(
       `ARCHETYPE-UNKNOWN (${where}): "${value}" not in KNOWN_ARCHETYPES — ` +
