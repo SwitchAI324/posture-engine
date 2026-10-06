@@ -732,12 +732,25 @@ export async function cancelForce(callId, { bitId } = {}) {
   return true;
 }
 
+// recordings.recording_url is stored as the BARE object key in the
+// "recordings" bucket (e.g. "ph-<id>.mp3") — one shape for every writer
+// (livekit-webhook, /api/calls close). Writers have been seen passing the
+// full S3 URL or a "storage/v1/s3/recordings/..." path; both are reduced to the
+// file name here, the single choke point. null/"" pass through unchanged.
+export function normalizeRecordingKey(u) {
+  if (u === null || u === undefined || u === "") return u;
+  let p = String(u);
+  try { p = new URL(p).pathname; } catch { p = p.split("?")[0]; }
+  try { p = decodeURIComponent(p); } catch { /* keep as-is */ }
+  return p.replace(/\/+$/, "").split("/").pop() || null;
+}
+
 export async function upsertRecording({ slug, recordingUrl, durationSec, status, userId }) {
   if (!isConfigured()) throw new Error("store not configured");
   if (!slug) throw new Error("slug required");
   const channel = /^(ph-|in-)/.test(String(slug)) ? "phone" : "web";
   const row = { slug, channel };
-  if (recordingUrl !== undefined) row.recording_url = recordingUrl;
+  if (recordingUrl !== undefined) row.recording_url = normalizeRecordingKey(recordingUrl);
   if (durationSec !== undefined) row.duration_sec = durationSec;
   if (status !== undefined) row.status = status;
   if (userId !== undefined) row.user_id = userId;
