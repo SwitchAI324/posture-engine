@@ -1714,6 +1714,13 @@ function buildRecordingNoticeDirective() {
 // register, and gets richer once that pass lands, without this
 // function needing to change.
 function buildVoicemailOverlay(callbackNumber, referenceCode, archetype) {
+  // Spoken form for the model to read out digit by digit (2026-10-06, Voice):
+  // "+15077057726" -> "5 0 7, 7 0 5, 7 7 2 6". The exact number string stays in
+  // the text below as the source of truth.
+  const _digits = String(callbackNumber || "").replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+  const spokenDigits = _digits.length === 10
+    ? [_digits.slice(0, 3), _digits.slice(3, 6), _digits.slice(6)].map((g) => g.split("").join(" ")).join(", ")
+    : _digits.split("").join(" ");
   const codeArchetypes = new Set(["b2b_saas", "account_access", "gov_threat"]);
   const includeCode = codeArchetypes.has(archetype) && !!referenceCode;
 
@@ -1735,13 +1742,22 @@ function buildVoicemailOverlay(callbackNumber, referenceCode, archetype) {
   }
 
   return (
+    "[THIS IS A VOICEMAIL RECORDING, NOT A LIVE CALL — NO ONE IS ON THE LINE. " +
+    "This OVERRIDES every opening, greeting and \"let them respond\" rule above. " +
+    "Your first words are the START of one continuous message: do not say " +
+    "\"hello?\", do not greet and wait, do not ask who is there, and do not " +
+    "stop after a line or two. The rule that turn one \"lands on the mess and " +
+    "ONE small-talk remark, then stops\" does NOT apply here. Say the whole " +
+    "message in this one turn, and " +
+    "say the callback number digit by digit within your first few sentences.]\n\n" +
     "[VOICEMAIL MODE — you've reached voicemail, not a live person. Leave " +
     "a genuinely long, well-meaning, bumbling message — not a brief " +
     "functional one. You are trying hard to be thorough and helpful, lose " +
     "the thread more than once, circle back. Roughly 60-90 seconds. Never " +
     "a clipped goodbye.]\n\n" +
     "YOUR REAL CALLBACK NUMBER (state this exactly, it's real data, not " +
-    "invented): " + callbackNumber + ". Repeat it 3-4 times through the " +
+    "invented): " + callbackNumber + ". When you say it aloud, read it digit by " +
+    "digit, like this: " + spokenDigits + ". Repeat it 3-4 times through the " +
     "message, spaced out, not just once at the end — each time with a " +
     "different excuse (\"let me say that again,\" \"just in case that " +
     "didn't come through,\" \"one more time for good measure,\" \"in case " +
@@ -2370,7 +2386,11 @@ export default async function handler(req) {
       baseSystem =
         (baseSystem || "") +
         "\n\n" +
-        buildVoicemailOverlay(callbackNumber, referenceCodeMeta, archetypeMeta);
+        buildVoicemailOverlay(callbackNumber, referenceCodeMeta, archetypeMeta) +
+        // The phone agent's own SITUATION system message is dropped whenever a
+        // stored prefix exists (baseSystem = stored.prefix above), so carry it
+        // forward here in voicemail mode only (2026-10-06, Voice).
+        (vapiSystem ? "\n\n[NOTE FROM THE PHONE AGENT FOR THIS SAME CALL]\n" + vapiSystem : "");
     } else {
       // No real number to state means this directive would ask the model
       // to invent one — worse than not injecting it at all. Log loudly;
@@ -2622,7 +2642,36 @@ export default async function handler(req) {
   const built = baseSystem
     ? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil, turnOneOpen, stageTransitionFired)
     : null;
-  const systemBlocks = built ? built.blocks : null;
+  let systemBlocks = built ? built.blocks : null;
+  // CACHE LAYOUT (2026-10-06, Voice's turn-1 cache-miss question): hydrate's
+  // warm-up request caches the stored PREFIX alone, but the overlay (opener /
+  // continuing / business / voicemail) is appended to the same text block, so
+  // the real turn-1 block never matched the warmed one and paid the full cache
+  // build. Split that one block into [prefix (cached)] + [tail (own cache
+  // breakpoint)] — identical text and order for the model, but block 0 now
+  // matches hydrate's warm-up, and an overlay swap later in the call only
+  // rebuilds the small tail instead of the whole prefix. Guarded: only when the
+  // block really starts with the stored prefix, otherwise left untouched.
+  const _prefixText = stored && stored.prefix ? stored.prefix : null;
+  if (
+    systemBlocks && _prefixText && systemBlocks[0] &&
+    typeof systemBlocks[0].text === "string" &&
+    systemBlocks[0].text.length > _prefixText.length &&
+    systemBlocks[0].text.startsWith(_prefixText)
+  ) {
+    const _tail = systemBlocks[0].text.slice(_prefixText.length);
+    systemBlocks = [
+      { type: "text", text: _prefixText, cache_control: { type: "ephemeral" } },
+      { type: "text", text: _tail, cache_control: { type: "ephemeral" } },
+      ...systemBlocks.slice(1),
+    ];
+  }
+  if (systemBlocks && isVoicemailMode) {
+    systemBlocks = [
+      ...systemBlocks,
+      { type: "text", text: "[VOICEMAIL: the greeting just ended and the beep sounded. Begin your one continuous message now — the whole message, not a one-line opener.]" },
+    ];
+  }
   const deathBlowFiring = built ? built.deathBlowFiring : false;
   // STALL FLAG for the agent (Spot 1: top-level pe_stall on the first SSE chunk).
   // True when the bit that fired THIS turn is a stall-lane bit (BIT-233 et al.),
@@ -4825,6 +4874,17 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // extending the breaker to forced fires is a separate, open design
     // question (does forcing mean "win the ranking" or "fire no matter
     // what") that hasn't been decided yet, not something to fold in here.
+    // VOICEMAIL MODE (2026-10-06, Voice): no bits on a voicemail. A fired bit's
+    // directive (e.g. an opener with [[MOVE_SPLIT]]) would compete with, or the
+    // clamp would cut, the one continuous message. buildSystemBlocks cannot see
+    // the handler's isVoicemailMode, so read phone_mode from the body here.
+    if (
+      fire &&
+      (body?.metadata?.phone_mode ?? body?.extra_body?.metadata?.phone_mode ?? null) === "voicemail"
+    ) {
+      console.log("VOICEMAIL-MODE bit suppressed id=" + (top && top.id) + " turn=" + turn);
+      fire = false;
+    }
     const DOMINANCE_RATIO_MAX = parseFloat(process.env.DOMINANCE_RATIO_MAX || "0.5");
     const DOMINANCE_MIN_TURNS = parseInt(process.env.DOMINANCE_MIN_TURNS || "6", 10);
     if (fire && !forcedFire && top && turn >= DOMINANCE_MIN_TURNS) {
