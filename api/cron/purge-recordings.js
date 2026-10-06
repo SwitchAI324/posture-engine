@@ -13,7 +13,9 @@
 // here and liable to drift. View is filtered to purged_at IS NULL
 // already (Recording, 2026-09-20) and exposes slug + channel + id.
 //
-// STORAGE KEY: recordings/<slug>.ogg, universally — same extension and
+// STORAGE KEY (UPDATED 2026-10-06): taken from recordings.recording_url (the
+// file name at the end; egress now writes .mp3, older files are .ogg). The
+// text below describes the older all-.ogg assumption: recordings/<slug>.ogg, universally — same extension and
 // same path shape for both web and phone rows (Recording confirmed
 // against real bucket contents, both channels, 2026-09-20). No
 // per-channel branching needed despite the view exposing `channel`.
@@ -66,6 +68,20 @@ async function sbRest(path, opts = {}) {
   return text ? JSON.parse(text) : null;
 }
 
+// Object key inside the "recordings" bucket = the FILE NAME at the end of
+// recording_url (2026-10-06, Recording). recording_url may be a bare key, a
+// bucket-prefixed key, or the full storage URL (egress delivers ".mp3" now,
+// older files are ".ogg") — never rebuild the key from the slug + a guessed
+// extension. Returns null when there is nothing usable.
+function objectKeyFromRecordingUrl(u) {
+  if (!u) return null;
+  let p = String(u);
+  try { p = new URL(p).pathname; } catch { p = p.split("?")[0]; }
+  try { p = decodeURIComponent(p); } catch { /* keep as-is */ }
+  const name = p.replace(/\/+$/, "").split("/").pop();
+  return name || null;
+}
+
 // Supabase Storage's remove endpoint: POST /storage/v1/object/remove
 // with { prefixes: [...] } — plural even for one object.
 async function storageRemove(objectKey) {
@@ -116,8 +132,15 @@ export default async function handler(req, res) {
       results.push({ id: id || null, ok: false, error: "row missing id or slug" });
       continue;
     }
-    const objectKey = `${slug}.ogg`;
     try {
+      // Key comes from the row's own recording_url (file name at the end),
+      // so .mp3 and .ogg files are both found. Falls back to the old
+      // <slug>.ogg guess only when the row has no usable recording_url.
+      let urlRows = null;
+      try { urlRows = await sbRest(`recordings?id=eq.${encodeURIComponent(id)}&select=recording_url&limit=1`, { method: "GET" }); } catch (e) { /* fall back below */ }
+      const fromUrl = objectKeyFromRecordingUrl(urlRows && urlRows[0] && urlRows[0].recording_url);
+      const objectKey = fromUrl || `${slug}.ogg`;
+      console.log(`purge-recordings: row ${id} slug=${slug} key=${objectKey} source=${fromUrl ? "recording_url" : "slug-fallback"}`);
       await storageRemove(objectKey);
       await sbRest(`recordings?id=eq.${encodeURIComponent(id)}`, {
         method: "PATCH",
