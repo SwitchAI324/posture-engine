@@ -45,6 +45,39 @@ export async function getCallBySlug(slug) {
   return getCall("slug:" + slug);
 }
 const CALL_PREFIX_COLUMNS = "prefix,posture_line,pressure,engagement,phase,target_id,arrival_state,bench_log,control_url,pending_handoff,stall_count,last_bit_id,last_bit_turn,last_bit_at,business_latched,opener_overlay,opener_overlay_continuing,business_overlay,archetype,character_id,commitment_push,bit_fire_history,hunt_rung_count,caller_redirected,hunt_rung_turn,caller_crude,crude_impersonal_count,crude_personal_count,marker_counts,marker_last_turn,pricing_raised,texture_invited,last_stall_resolved_turn,expertise_level_used,pending_bench_awareness,latest_call_id,active_generation,bench_present,first_seen_at,caller_presenting,pitch_summary,host_name,recording_notice_given,host_turn_count,history_rev_seen,opener_served,handoff_given,gag_open_pending,moves_owed,last_flub_bit_id,last_flub_turn,dial_extension";
+// CALL-STATE RESET FOR A REUSED ROOM (2026-10-06). Phone rooms are named
+// ph-<job_id>, so a retried / re-armed job (and every test on the same job)
+// lands on the PREVIOUS call's call_prefix row: businessLatched, host turn
+// count, bit cooldowns, first_seen_at (a 22-hour-old first_seen made
+// silentTooLong fire on turn 1) all carried over, and the opener overlay never
+// loaded. hydrate runs once per call before the first turn, so it clears the
+// row here. Only rows idle for 90s+ are deleted — a live call updates its row
+// every turn, so an in-progress call is never wiped. Fails soft; returns the
+// number of rows deleted (or -1 on failure).
+export async function resetCallRow(callId, idleMs = 90000) {
+  if (!isConfigured() || !callId) return -1;
+  try {
+    const cutoff = new Date(Date.now() - idleMs).toISOString();
+    const r = await fetch(
+      `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}&updated_at=lt.${encodeURIComponent(cutoff)}`,
+      {
+        method: "DELETE",
+        cache: "no-store",
+        headers: { apikey: KEY, authorization: `Bearer ${KEY}`, prefer: "return=representation" },
+      }
+    );
+    if (!r.ok) {
+      console.log("resetCallRow FAILED status=" + r.status + " callId=" + callId);
+      return -1;
+    }
+    const rows = await r.json().catch(() => []);
+    return Array.isArray(rows) ? rows.length : 0;
+  } catch (e) {
+    console.log("resetCallRow THREW callId=" + callId + " " + (e && e.message));
+    return -1;
+  }
+}
+
 export async function getCall(callId) {
   if (!isConfigured() || !callId) return null;
   const baseUrl = `${URL}/rest/v1/${TABLE}?call_id=eq.${encodeURIComponent(callId)}`;

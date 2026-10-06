@@ -1905,6 +1905,19 @@ module.exports = async function handler(req, res) {
     // for the response payload (line ~1890) — threaded onto call_prefix
     // here too so completions.js can read it every turn via stored.dialExtension.
     const dialExtension = (phoneJobFields && phoneJobFields.dial_extension) || null;
+    // FRESH-CALL RESET (2026-10-06): a ph-<job_id> room is reused by retries
+    // and tests, and completions keys call state on that same id. Clear the
+    // previous call's row (idle 90s+ only) so this call starts at turn one.
+    if (typeof slug === "string" && slug.startsWith("ph-")) {
+      try {
+        const { resetCallRow } = require("./_store.js");
+        const cleared = await resetCallRow(slug);
+        console.log("hydrate: CALL-STATE-RESET slug=" + slug + " rowsCleared=" + cleared);
+      } catch (e) {
+        console.log("hydrate: CALL-STATE-RESET failed (non-fatal): " + (e && e.message));
+      }
+      tMark("resetCallRow");
+    }
     await writePrefix("slug:" + slug, prefix, cfg.tactic, initialPosture, cfg.target, overlays, callId || null, hostName, dialExtension);
     tMark("writePrefix(slug-key)");
     if (callId) {
