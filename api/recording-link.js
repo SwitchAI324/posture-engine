@@ -62,6 +62,20 @@ async function verifyUserSession(req) {
   return null; // { userId } when implemented
 }
 
+// Object key inside the "recordings" bucket = the FILE NAME at the end of
+// recording_url (2026-10-06, Recording). recording_url may be a bare key, a
+// bucket-prefixed key, or the full storage URL (egress delivers ".mp3" now,
+// older files are ".ogg") — never rebuild the key from the slug + a guessed
+// extension. Returns null when there is nothing usable.
+function objectKeyFromRecordingUrl(u) {
+  if (!u) return null;
+  let p = String(u);
+  try { p = new URL(p).pathname; } catch { p = p.split("?")[0]; }
+  try { p = decodeURIComponent(p); } catch { /* keep as-is */ }
+  const name = p.replace(/\/+$/, "").split("/").pop();
+  return name || null;
+}
+
 async function generateSignedUrl(objectPath) {
   const r = await fetch(
     `${SUPABASE_URL}/storage/v1/object/sign/${BUCKET}/${objectPath}`,
@@ -125,6 +139,7 @@ module.exports = async function handler(req, res) {
       `recordings?slug=eq.${encodeURIComponent(slug)}&select=recording_url,user_id,status&limit=1`
     );
   } catch (e) {
+    console.error("recording-link: row read failed slug=" + slug + " err=" + String(e && e.message ? e.message : e));
     res.statusCode = 500;
     return res.end(JSON.stringify({ error: String(e && e.message ? e.message : e) }));
   }
@@ -151,12 +166,18 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const url_ = await generateSignedUrl(row.recording_url);
+    const objectKey = objectKeyFromRecordingUrl(row.recording_url);
+    if (!objectKey) {
+      res.statusCode = 404;
+      return res.end(JSON.stringify({ error: "not found" }));
+    }
+    const url_ = await generateSignedUrl(objectKey);
     const expiresAt = new Date(Date.now() + SIGNED_URL_EXPIRES_SECONDS * 1000).toISOString();
     res.setHeader("Content-Type", "application/json");
     res.statusCode = 200;
     return res.end(JSON.stringify({ url: url_, expires_at: expiresAt }));
   } catch (e) {
+    console.error("recording-link: sign failed slug=" + slug + " recording_url=" + row.recording_url + " err=" + String(e && e.message ? e.message : e));
     res.statusCode = 500;
     return res.end(JSON.stringify({ error: String(e && e.message ? e.message : e) }));
   }
