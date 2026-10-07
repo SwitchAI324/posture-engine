@@ -1,5 +1,15 @@
 // api/compiler/_bits_directives.js
 // SpamViking — Bit Directives
+// v29 — Oct 7, 2026 — BIT-350: Canon approved the wording as written
+//   (check on / worth a look). Added Canon's gate reminders as Hard
+//   rules: never on BIT-347/349 calls, never during hold/transfer.
+// v28 — Oct 7, 2026 — NEW BIT-350 The Mailbox Gag: one-shot teasing
+//   callback ("last time I couldn't leave a message"), gated by PE on
+//   prior_mailbox_unavailable, window turn 3 to ~8, blocked on IVR and
+//   voicemail. Built from Canon's 5 variants with three changes: every
+//   line now says "last time" (4 and 5 didn't), no line says "set up"
+//   a mailbox (it implies the reason, which the host must never state),
+//   and the lines read as teasing rather than scolding.
 // v27 — Oct 5, 2026 — Per PE: BIT-347 is now the ONLY fired bit on an
 //   IVR call's first live turn (PE suppresses 901/902 there), so the
 //   directive carries BOTH moves: greeting, [[MOVE_SPLIT]], aside.
@@ -6508,6 +6518,66 @@ Hard: no reference-number recitation. The old digit-by-digit
   retired. (BIT-348 is separate.)
 Hard: generate fresh wording; never the same line twice across
   calls; never reproduce the examples verbatim.
+`,
+
+"BIT-350": `
+THE MAILBOX GAG is active. PHONE ONLY. OUTBOUND ONLY. ONE-SHOT.
+A teasing callback to a prior failed contact: the host tried this
+person on an earlier call, got no voicemail to leave a message on,
+and now — talking to a real person at last — mentions it, lightly.
+PE gates this: it only fires when the job's call metadata says a
+prior call hit an unavailable mailbox (prior_mailbox_unavailable),
+only inside a turn window (earliest turn 3, expires around turn 8),
+and never on IVR or voicemail calls. Voice already rolled the
+dice on whether it happens at all — if this bit is in front of you,
+it is firing. Don't hedge, don't skip it.
+
+WHAT IT IS: one short spoken line. A playful nudge about the
+mailbox, not a complaint. Friendly, a little amused, gone in
+a breath. Absurdity 1.
+
+THE LINE — draw from this pool, vary per call, generate fresh
+(rewording is better than copying; never the same line twice
+across calls):
+  "Oh hey, before I forget — last time I tried you and couldn't
+    leave a message. Might be worth checking your voicemail.
+    I'll remind you."
+  "Funny thing, I called last time and your mailbox wouldn't
+    take anything. Worth a look sometime."
+  "Good, a real person this time. Last time I couldn't leave a
+    message. Just saying, voicemail's pretty handy."
+  "Hey, quick thing — last time I called, your voicemail didn't
+    pick up for me. A working mailbox is a good thing to have,
+    honestly."
+  "Maybe check on your mailbox, by the way! Last time I couldn't
+    leave anything. I'll remind you."
+
+Then drop it. Return to whatever the call is doing. If the caller
+reacts, one light beat back at most — never a lecture, never a
+second pass at it.
+
+Hard: spoken line only — no sound marker, no bracket token, no
+  expression tag needed.
+Hard: teasing, never accusing. The host is amused, not annoyed,
+  and never implies the person did something wrong.
+Hard: never say WHY the mailbox didn't take a message. Never say
+  it was full, never say it wasn't set up, never guess. The host
+  only knows it "wouldn't take anything" / "couldn't leave a
+  message." Don't tell them to "set up" a mailbox — that implies
+  the reason; use "check on" / "take a look at" / "worth a look."
+Hard: the line never starts with a dash, ellipsis or filler
+  punctuation — it opens on a word.
+Hard: always "last time" — never "the other day," "yesterday,"
+  "a while back," or any other time reference. The host doesn't
+  know how long ago it was.
+Hard: once per call, never repeated, never revisited. If the host
+  said "I'll remind you," it is NOT a promise the host acts on
+  later — do not circle back.
+Hard: doesn't stack with another aside or callback the same turn.
+Hard: phone, outbound only. Never fires on IVR or voicemail, and
+  never on a call where BIT-347/349 fired.
+Hard: never during a hold or transfer — only in live conversation
+  with a person.
 `,
 
 "BIT-348": `
