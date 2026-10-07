@@ -239,22 +239,31 @@ async function dispatchAgent(job, slug) {
   return true;
 }
 
-// ── NO-ANSWER RETRY: when a call ends outcome='no_answer', re-arm it up to 2
-//    retries (3 total dials) via Data's retry_callback_job RPC, which owns the
-//    cap + attempt_count (we never touch attempt_count). Spacing is retry-number
-//    aware: retry 1 = +2h, retry 2 = +1d (read attempt_count to pick it). Timing
-//    goes through pick-time (plausible hour, avoids the hour it just failed at).
-//    voicemail_left is NOT here — the campaign handles that.
+// ── NO-ANSWER / IVR / BUSY RETRY: when a call ends outcome='no_answer',
+//    'answered_ivr' (automated menu, no human) OR 'busy' (line in use) — Andrew's
+//    rulings 2026-10-06 — re-arm it up to 2 retries (3 total dials) via Data's
+//    retry_callback_job RPC, which owns the cap + attempt_count (we never touch
+//    attempt_count). Spacing is retry-number aware: retry 1 = +2h, retry 2 = +1d
+//    (read attempt_count to pick it). Timing goes through pick-time (plausible
+//    hour, avoids the hour it just failed at). voicemail_left is NOT here — the
+//    campaign handles that (slower 72h/192h path). rejected/disconnected are NOT
+//    retried. (SIP 480 "phone off" is written as no_answer agent-side, so it
+//    retries under the no_answer rule.)
 //
-//    Idempotency: filter status='completed' — a re-armed job flips to 'approved'
-//    (outcome may stay stale 'no_answer'), so it won't re-match and double-bump.
-//    attempt_count < 2 excludes already-capped jobs so we don't spam the RPC.
+//    STATUS FILTER — match BOTH 'completed' and 'failed'. Per Voice's taxonomy
+//    (2026-10-06) these three outcomes all land with status='failed'. An earlier
+//    version of this scan filtered status='completed' ONLY — which would have made
+//    it match NOTHING (retries silently never firing). Matching both terminal
+//    states is robust whichever status the agent writes, and still excludes
+//    re-armed jobs: retry_callback_job flips the job to 'approved' (outcome may
+//    stay stale), which is neither 'completed' nor 'failed', so it won't re-match
+//    and double-bump. attempt_count < 2 excludes already-capped jobs.
 const RETRY_1_HOURS = 2;    // first retry: +2h
 const RETRY_2_HOURS = 24;   // second retry: +1d
 async function retryScan() {
   const url =
     `${SUPABASE_URL}/rest/v1/callback_jobs` +
-    `?outcome=eq.no_answer&status=eq.completed&attempt_count=lt.2` +
+    `?outcome=in.(no_answer,answered_ivr,busy)&status=in.(completed,failed)&attempt_count=lt.2` +
     `&order=status_changed_at.asc&limit=25` +
     `&select=id,callback_number_id,scheduled_at,attempt_count`;
   const r = await fetch(url, { headers: { ...sb, Accept: 'application/json' } });
@@ -315,8 +324,9 @@ function authorized(req) {
 //    are NOT guarded, so a plain insert works; we never re-arm via this path.
 //
 //    Idempotent: only spawns if no next-touch child already exists for the chain.
-//    Stop conditions (spec): touch cap; any 'answered*' outcome ever on this
-//    number (a human ended it); caller_profile.status='dead' or number blocked.
+//    Stop conditions (spec): touch cap; a HUMAN was reached on this number
+//    (outcome='answered_human' — see note at the guard); caller_profile.status=
+//    'dead' or number blocked.
 //
 //    TIME-OF-DAY: next-touch send time comes from Phone Intake's /api/phone/
 //    pick-time (tz-aware plausible window in the scammer's zone), asked for the
@@ -364,9 +374,13 @@ async function campaignScan() {
       // STOP: number blocked
       if (job.callback_numbers && job.callback_numbers.blocked) continue;
 
-      // STOP: any 'answered*' outcome ever on this number (a human ended it)
+      // STOP: a HUMAN was reached on this number. Must be eq.answered_human, NOT
+      // like.answered* — 'answered_ivr' means an automated menu with NO human
+      // reached, and now feeds the retry path (Andrew, 2026-10-06), so it must
+      // NOT stop the voicemail campaign. Only answered_human means a person ended
+      // it. (If Voice ever adds another human-reached outcome, add it here.)
       const ans = await fetch(
-        `${SUPABASE_URL}/rest/v1/callback_jobs?callback_number_id=eq.${job.callback_number_id}&outcome=like.answered*&select=id&limit=1`,
+        `${SUPABASE_URL}/rest/v1/callback_jobs?callback_number_id=eq.${job.callback_number_id}&outcome=eq.answered_human&select=id&limit=1`,
         { headers: { ...sb, Accept: 'application/json' } });
       if (ans.ok && (await ans.json()).length > 0) continue;
 
@@ -448,9 +462,10 @@ module.exports = async (req, res) => {
   }
 
   try {
-    // Voicemail campaign + no-answer retry: spawn next touches / re-arm no_answer
-    // jobs. Run every tick regardless of busy state (they only schedule FUTURE
-    // jobs, dial nothing). Wrapped so a hiccup never blocks dispatching.
+    // Voicemail campaign + no-answer/ivr/busy retry: spawn next touches / re-arm
+    // no_answer + answered_ivr + busy jobs. Run every tick regardless of busy
+    // state (they only schedule FUTURE jobs, dial nothing). Wrapped so a hiccup
+    // never blocks dispatching.
     let campaign = { spawned: 0 };
     try { campaign = await campaignScan(); } catch (e) { campaign = { spawned: 0, error: String(e.message || e) }; }
     let retry = { rearmed: 0 };
