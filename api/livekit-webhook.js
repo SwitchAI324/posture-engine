@@ -439,7 +439,10 @@ module.exports = async function handler(req, res) {
       recordingUrl,
       durationSec,
       status,
-      userId,
+      // Never send null: merge-duplicates would blank an owner that an
+      // earlier event (or a later manual stamp) already set. Omitting the
+      // key leaves the stored user_id untouched.
+      userId: userId || undefined,
     });
   } catch (e) {
     console.log("livekit-webhook: upsertRecording failed for slug=" + slug + ": " + (e && e.message ? e.message : e));
