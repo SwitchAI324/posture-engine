@@ -62,19 +62,8 @@ async function verifyUserSession(req) {
   return null; // { userId } when implemented
 }
 
-// Object key inside the "recordings" bucket = the FILE NAME at the end of
-// recording_url (2026-10-06, Recording). recording_url may be a bare key, a
-// bucket-prefixed key, or the full storage URL (egress delivers ".mp3" now,
-// older files are ".ogg") — never rebuild the key from the slug + a guessed
-// extension. Returns null when there is nothing usable.
-function objectKeyFromRecordingUrl(u) {
-  if (!u) return null;
-  let p = String(u);
-  try { p = new URL(p).pathname; } catch { p = p.split("?")[0]; }
-  try { p = decodeURIComponent(p); } catch { /* keep as-is */ }
-  const name = p.replace(/\/+$/, "").split("/").pop();
-  return name || null;
-}
+// Object-key helper is shared with /api/recordings (2026-10-06).
+const { objectKeyFromRecordingUrl } = require("./_recording_key.js");
 
 async function generateSignedUrl(objectPath) {
   const r = await fetch(
