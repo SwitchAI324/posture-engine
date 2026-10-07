@@ -1,4 +1,5 @@
 // api/version.js
+// BUILD: version-report v2 2026-10-07
 // ----------------------------------------------------------------------
 // GET /api/version            -> plain-text report (copy/paste into any chat)
 // GET /api/version?json=1     -> same data as JSON
@@ -31,6 +32,25 @@ const READERS = {
   "recordings-token.js": () => fs.readFileSync(path.join(__dirname, "recordings-token.js"), "utf8"),
   "recording-link.js": () => fs.readFileSync(path.join(__dirname, "recording-link.js"), "utf8"),
   "cron/purge-recordings.js": () => fs.readFileSync(path.join(__dirname, "cron/purge-recordings.js"), "utf8"),
+  // files owned by other chats: hash + BUILD label shown, no expected markers yet
+  "phone/recap.js": () => fs.readFileSync(path.join(__dirname, "phone/recap.js"), "utf8"),
+  "phone/dispatch-callbacks.js": () => fs.readFileSync(path.join(__dirname, "phone/dispatch-callbacks.js"), "utf8"),
+  "phone/dial.js": () => fs.readFileSync(path.join(__dirname, "phone/dial.js"), "utf8"),
+  "phone/intake.js": () => fs.readFileSync(path.join(__dirname, "phone/intake.js"), "utf8"),
+  "phone/inbound-check.js": () => fs.readFileSync(path.join(__dirname, "phone/inbound-check.js"), "utf8"),
+  "phone/inbound-complete.js": () => fs.readFileSync(path.join(__dirname, "phone/inbound-complete.js"), "utf8"),
+  "phone/prompt-compile.js": () => fs.readFileSync(path.join(__dirname, "phone/prompt-compile.js"), "utf8"),
+  "phone/sms-inbound.js": () => fs.readFileSync(path.join(__dirname, "phone/sms-inbound.js"), "utf8"),
+  "phone/sms-send.js": () => fs.readFileSync(path.join(__dirname, "phone/sms-send.js"), "utf8"),
+  "phone/sms-optin.js": () => fs.readFileSync(path.join(__dirname, "phone/sms-optin.js"), "utf8"),
+  "phone/call-live.js": () => fs.readFileSync(path.join(__dirname, "phone/call-live.js"), "utf8"),
+  "_emails.js": () => fs.readFileSync(path.join(__dirname, "_emails.js"), "utf8"),
+  "book.js": () => fs.readFileSync(path.join(__dirname, "book.js"), "utf8"),
+  "claim.js": () => fs.readFileSync(path.join(__dirname, "claim.js"), "utf8"),
+  "share-link.js": () => fs.readFileSync(path.join(__dirname, "share-link.js"), "utf8"),
+  "join.js": () => fs.readFileSync(path.join(__dirname, "join.js"), "utf8"),
+  "calls.js": () => fs.readFileSync(path.join(__dirname, "calls.js"), "utf8"),
+  "control.js": () => fs.readFileSync(path.join(__dirname, "control.js"), "utf8"),
 };
 
 // marker strings that must appear in the CURRENT version of each file.
@@ -73,6 +93,13 @@ const SECRETS = [
   "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET",
 ];
 
+// A file may carry a line like  // BUILD: recap v14 2026-10-07  near the top.
+// Shown next to its hash so a human can compare it with what a chat said it shipped.
+function buildLabel(text) {
+  const m = /BUILD:\s*([^\n\r]{1,80})/.exec(String(text).slice(0, 4000));
+  return m ? m[1].trim().replace(/\*\/\s*$/, "").trim() : null;
+}
+
 function hashOf(text) {
   return crypto.createHash("sha1").update(text).digest("hex").slice(0, 8);
 }
@@ -87,7 +114,7 @@ async function build() {
       continue;
     }
     const checks = (EXPECT[name] || []).map(([label, needle]) => ({ label, ok: text.includes(needle) }));
-    files[name] = { readable: true, hash: hashOf(text), bytes: text.length, checks };
+    files[name] = { readable: true, hash: hashOf(text), bytes: text.length, build: buildLabel(text), checks };
   }
 
   const registry = {};
@@ -128,12 +155,12 @@ function toText(d) {
   if (d.deployment.commit_message) L.push("commit message: " + d.deployment.commit_message);
   L.push("");
   let missing = 0, unreadable = 0;
-  L.push("FILES (hash = same hash means same file)");
+  L.push("FILES  (ok = expected pieces found, -- = no checks yet, [..] = the file's own BUILD label)");
   for (const [name, f] of Object.entries(d.files)) {
     if (!f.readable) { unreadable++; L.push("  ?  " + name + "  not readable here"); continue; }
     const bad = f.checks.filter((c) => !c.ok);
     missing += bad.length;
-    L.push("  " + (bad.length ? "XX" : "ok") + "  " + name + "  #" + f.hash + (bad.length ? "  MISSING: " + bad.map((c) => c.label).join("; ") : ""));
+    L.push("  " + (bad.length ? "XX" : (f.checks.length ? "ok" : "--")) + "  " + name + "  #" + f.hash + (f.build ? "  [" + f.build + "]" : "") + (bad.length ? "  MISSING: " + bad.map((c) => c.label).join("; ") : ""));
   }
   L.push("");
   L.push("REGISTRY: " + (d.registry.error ? "error " + d.registry.error
