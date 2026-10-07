@@ -1,7 +1,9 @@
 // api/recordings-token.js
 // ----------------------------------------------------------------------
 // POST /api/recordings-token   header: x-phone-intake-secret
-// body: { "user_id": "<uuid>", "ttl_seconds": 3600 }
+// body: { "user_id": "<uuid>", "ttl_seconds": 3600, "slug": "ph-<job_id>"? }
+// Optional slug (2026-10-06): the token then carries it and /api/recordings
+// returns ONLY that recording (still checked against the token user_id).
 // Mints the token /api/recordings expects. SERVER-TO-SERVER ONLY — same
 // PHONE_INTAKE_SECRET gate as /api/recording-link; a browser must never hold
 // that secret, so Mead Hall's server side (or Email's sender) calls this, or
@@ -10,6 +12,7 @@
 // ----------------------------------------------------------------------
 const { sign, UUID_RE } = require("./_recording_token.js");
 
+const SLUG_RE = /^[A-Za-z0-9_-]{1,200}$/;
 const DEFAULT_TTL = 60 * 60;
 const MAX_TTL = 90 * 24 * 60 * 60;
 
@@ -46,5 +49,12 @@ module.exports = async function handler(req, res) {
   if (!Number.isFinite(ttl) || ttl <= 0) ttl = DEFAULT_TTL;
   ttl = Math.min(Math.floor(ttl), MAX_TTL);
   const exp = Math.floor(Date.now() / 1000) + ttl;
-  return send(res, 200, { token: sign({ user_id: body.user_id, exp }, SECRET), exp });
+  const claims = { user_id: body.user_id, exp };
+  if (body.slug !== undefined && body.slug !== null && body.slug !== "") {
+    if (typeof body.slug !== "string" || !SLUG_RE.test(body.slug)) {
+      return send(res, 400, { error: "slug invalid" });
+    }
+    claims.slug = body.slug;
+  }
+  return send(res, 200, { token: sign(claims, SECRET), exp });
 };

@@ -88,6 +88,11 @@ module.exports = async function handler(req, res) {
     return send(res, 500, { error: "could not load recordings" });
   }
   if (!Array.isArray(rows)) rows = [];
+  // Slug-scoped token (single-recording email link): keep only that slug.
+  // rows already belong to the token's user_id, so this can only narrow.
+  if (typeof claims.slug === "string" && claims.slug) {
+    rows = rows.filter((row) => row && row.slug === claims.slug);
+  }
   rows = rows.slice(0, MAX_ROWS);
 
   const recordings = await Promise.all(
