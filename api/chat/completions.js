@@ -4218,6 +4218,14 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
       // counter — no new one-shot flag needed from Voice for this gate.
       amd: readIvrCtx(body, stored).amd,
       host_turn_count: stored ? (stored.hostTurnCount || 0) : 0,
+      // PRIOR MAILBOX UNAVAILABLE (2026-10-07, BIT-350): Voice rolled 1-in-3
+      // and sends this on live human calls only. Standing flag (rides every
+      // turn like amd). true or "true" counts; anything else is absent.
+      prior_mailbox_unavailable: (() => {
+        const v = body?.metadata?.prior_mailbox_unavailable ??
+          body?.extra_body?.metadata?.prior_mailbox_unavailable ?? null;
+        return v === true || v === "true";
+      })(),
     };
     // LOADOUT then rank: selectBit narrows to the bits that fit this moment,
     // then ranks that focused set (not all 71). threshold:0 so we apply our own
@@ -4230,6 +4238,21 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     const bar = effectiveBar(turn);
     // fire: whether a bit clears the bar this turn.
     let fire = !!(top && top.score >= bar && gap >= MIN_GAP);
+
+    // MAILBOX GAG (2026-10-07, BIT-350): the flag means Voice already rolled,
+    // so when BIT-350 is eligible (flag + turn 3..8 + not IVR/voicemail, all
+    // enforced in the scorer's trigger gate) it takes the slot — still
+    // respecting MIN_GAP so it never lands right after another bit. Cooldown
+    // 999 in the registry makes it once per call. Later consumers (hunt
+    // window, Director force, death blow) run after this and still override.
+    if (scorerState.prior_mailbox_unavailable === true && gap >= MIN_GAP) {
+      const mbx = ranked.find((r) => r && r.id === "BIT-350");
+      if (mbx) {
+        top = mbx;
+        fire = true;
+        console.log("MAILBOX-GAG FIRING callId=" + JSON.stringify(callId) + " turn=" + turn + " (flag from Voice, BIT-350 eligible)");
+      }
+    }
 
     // STAGE-TRANSITION / STALL DOUBLE-COVER GUARD (2026-09-29, Voice's
     // open question on the BASESYSTEM-CHANGED early-emit work) — Voice's
