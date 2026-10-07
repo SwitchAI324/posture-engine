@@ -99,6 +99,9 @@
   var API = (qp.get('api') || 'https://posture-engine.vercel.app/api/recordings');
 
   var EXPIRES_MS = 3600 * 1000;   // play_url_expires_in_seconds default; overwritten by the response
+  // Clip screen (video-editor timeline w/ bit markers) is UNBUILT. Keep the per-row clip badge
+  // visible but inert (informational only). When the clip screen ships, make the badge a link.
+  var CLIPS_SHOWN = true;
   var lastLoadedAt = 0;
 
   function esc(s){ return String(s==null?'':s).replace(/[<>&"]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];}); }
@@ -155,7 +158,10 @@
       else if(r.channel) tags.push('<span class="tag chan">'+esc(r.channel)+'</span>');
       var oLabel = outcomeLabel(r.outcome);
       if(oLabel) tags.push('<span class="tag out">'+esc(oLabel)+'</span>');
-      if(r.clip_flag) tags.push('<span class="tag flag">✂ clip</span>');
+      // clip badge: purely informational for now (the clip/timeline screen isn't built).
+      // Inert — looks like a status tag, not a button. Flip CLIPS_LINKED to true (and give it
+      // an href/handler) once the clip screen exists.
+      if(r.clip_flag && CLIPS_SHOWN) tags.push('<span class="tag flag" title="marked for a clip">✂ clip</span>');
 
       var right;
       if(purged){
