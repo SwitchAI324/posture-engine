@@ -222,6 +222,10 @@ const EMITTED_TRIGGERS = new Set([
   // could structurally never have matched. Replaced below with
   // "ivr_navigated_turn1", built on the real signal Voice confirmed exists:
   // metadata.amd stays "machine-ivr" for the rest of the call once set.
+  "prior_mailbox_unavailable", // 2026-10-07, BIT-350 (The Mailbox Gag). Voice
+                        // looked up the previous call and ROLLED 1-in-3; the
+                        // metadata flag means "rolled and eligible" — PE never
+                        // rolls again. Window turn 3..8, never IVR/voicemail.
   "ivr_pressed_turn1",   // 2026-10-05, Canon's Pool A: same gate as
                         // ivr_navigated_turn1 AND an extension was on file
                         // (so it was pressed). Truthy state.dial_extension.
@@ -279,6 +283,16 @@ function triggerPresent(trigger, state) {
       return state.call_direction === "outbound";
     case "call_direction:inbound":
       return state.call_direction === "inbound";
+    case "prior_mailbox_unavailable": {
+      // Flag (already rolled by Voice) + window + never IVR / voicemail.
+      const t = state.turn ?? 0;
+      return (
+        state.prior_mailbox_unavailable === true &&
+        t >= 3 && t <= 8 &&
+        state.phone_mode !== "voicemail" &&
+        state.amd !== "machine-ivr"
+      );
+    }
     case "ivr_pressed_turn1":
       return state.amd === "machine-ivr" && state.host_turn_count === 0 && !!state.dial_extension;
     case "ivr_unpressed_turn1":

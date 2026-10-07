@@ -24,7 +24,10 @@
 //   in-<house_call_id> -> house_calls.matched_job_id -> callback_jobs.
 //                         user_id; no matched job = null (house-mode,
 //                         admin-only, not a failure)
-//   anything else (web) -> null, ON PURPOSE, HELD. Voice is still
+//   anything else (web) -> Data's resolve_recording_owner(p_slug) RPC
+//                         (2026-10-07; was held as null until Data's
+//                         verified-identity resolver existed). Old note:
+//                         HELD. Voice is still
 //                         settling the new web file-naming scheme and
 //                         Data still has open questions about
 //                         booking_tokens' lifetime; guessing a web join
@@ -261,8 +264,43 @@ async function resolveRecordingOwner(slug) {
       return null;
     }
   }
-  // WEB — HELD, returns null on purpose. See file header.
-  return null;
+  // WEB (and anything else): Data's resolve_recording_owner() RPC, which does
+  // the suffix strip, the booking_tokens lookup and the verified-identity
+  // check. We pass the BARE slug and trust its answer only if it is a uuid.
+  // Never throws; any failure = null (unowned), logged so a wrong argument
+  // name or a missing function is visible instead of silently blank.
+  return await resolveOwnerViaRpc(slug);
+}
+
+const OWNER_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+async function resolveOwnerViaRpc(slug) {
+  const SB_URL = process.env.SUPABASE_URL;
+  const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!SB_URL || !SB_KEY) return null;
+  try {
+    const r = await fetch(SB_URL + "/rest/v1/rpc/resolve_recording_owner", {
+      method: "POST",
+      headers: { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_slug: slug }),
+    });
+    const text = await r.text();
+    if (!r.ok) {
+      console.log("livekit-webhook: resolve_recording_owner non-ok slug=" + slug + " status=" + r.status + " body=" + text.slice(0, 300));
+      return null;
+    }
+    let v = text ? JSON.parse(text) : null;
+    if (Array.isArray(v)) v = v[0];
+    if (v && typeof v === "object") v = Object.values(v)[0];
+    if (typeof v === "string" && OWNER_UUID_RE.test(v)) {
+      console.log("livekit-webhook: resolve_recording_owner OK slug=" + slug + " owner=" + v.slice(0, 8) + "...");
+      return v;
+    }
+    console.log("livekit-webhook: resolve_recording_owner returned no owner slug=" + slug);
+    return null;
+  } catch (e) {
+    console.log("livekit-webhook: resolve_recording_owner threw slug=" + slug + ": " + (e && e.message ? e.message : e));
+    return null;
+  }
 }
 
 async function triggerPhoneRecap(slug) {
@@ -279,7 +317,7 @@ async function triggerPhoneRecap(slug) {
         "Content-Type": "application/json",
         "x-phone-intake-secret": PHONE_INTAKE_SECRET,
       },
-      body: JSON.stringify({ job_id: jobId }),
+      body: JSON.stringify({ job_id: jobId, recording_status: "ready" }),
     });
     if (!r.ok) {
       console.log(

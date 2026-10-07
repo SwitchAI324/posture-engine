@@ -1,4 +1,16 @@
 // SpamViking — Bits Registry
+// v12 — Oct 7, 2026 — Host Canon v0.29 IVR carve-out confirmed live (Andrew):
+//   BIT-347 and BIT-349 flipped back to "active", park_reason removed.
+//   Nothing else changed.
+// v11 — Oct 7, 2026 — NEW BIT-350 The Mailbox Gag (trigger
+//   prior_mailbox_unavailable, pool none = any phase, cooldown 999, phone/
+//   outbound, family dossier_prior_reference). BIT-347/349 REMAIN PARKED
+//   (v0.29 not confirmed live) — no change to them.
+// v10 — Oct 5, 2026 — BIT-347 and BIT-349 set to status "parked" (park_reason
+//   added). They stay parked until Host Canon's v0.29 IVR carve-out is live;
+//   registry status is the on/off switch for PE's IVR turn-1 path (no env
+//   var). Everything else unchanged. When Andrew confirms v0.29 is live, v11
+//   flips both back to "active" and drops park_reason.
 // v9 — Oct 5, 2026 — BIT-347 trigger -> ivr_pressed_turn1 (PE: phone_mode:ivr
 //   is dead), cooldown 999 (one-shot). NEW BIT-349 The Menu Doubt, trigger
 //   ivr_unpressed_turn1 (the no-extension case). Both carry greeting +
@@ -2571,6 +2583,21 @@ export const BITS = [
     "vocal_tag": "neutral",
     "channel": "phone",
     "requires_context": "one-shot opener on the first live turn when an IVR was navigated at pickup AND an extension was pressed (Pool A: hazy-digit doubt); carries greeting + [[MOVE_SPLIT]] + aside; PE suppresses 901/902 on this call"
+  },
+  {
+    "id": "BIT-350",
+    "name": "The Mailbox Gag",
+    "status": "active",
+    "archetypes": "universal",
+    "family": "dossier_prior_reference",
+    "pool": "none",
+    "trigger": "prior_mailbox_unavailable",
+    "call_direction": "outbound",
+    "cooldown": 999,
+    "absurdity": 1,
+    "vocal_tag": "neutral",
+    "channel": "phone",
+    "requires_context": "call metadata prior_mailbox_unavailable=true (a prior call hit an unavailable mailbox); PE enforces the window (earliest turn 3, expires ~turn 8) and blocks IVR/voicemail calls; Voice rolls the 1-in-3, PE does not roll again"
   },
   {
     "id": "BIT-348",
