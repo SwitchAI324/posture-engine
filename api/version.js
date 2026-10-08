@@ -1,5 +1,5 @@
 // api/version.js
-// BUILD: version-report v2 2026-10-07
+// BUILD: version-report v3 2026-10-07
 // ----------------------------------------------------------------------
 // GET /api/version            -> plain-text report (copy/paste into any chat)
 // GET /api/version?json=1     -> same data as JSON
@@ -51,6 +51,24 @@ const READERS = {
   "join.js": () => fs.readFileSync(path.join(__dirname, "join.js"), "utf8"),
   "calls.js": () => fs.readFileSync(path.join(__dirname, "calls.js"), "utf8"),
   "control.js": () => fs.readFileSync(path.join(__dirname, "control.js"), "utf8"),
+  "render.js": () => fs.readFileSync(path.join(__dirname, "render.js"), "utf8"),
+  "browse.js": () => fs.readFileSync(path.join(__dirname, "browse.js"), "utf8"),
+  "trapline.js": () => fs.readFileSync(path.join(__dirname, "trapline.js"), "utf8"),
+  "_pools.js": () => fs.readFileSync(path.join(__dirname, "_pools.js"), "utf8"),
+  "meeting.js": () => fs.readFileSync(path.join(__dirname, "meeting.js"), "utf8"),
+  "phone/mint-token.js": () => fs.readFileSync(path.join(__dirname, "phone/mint-token.js"), "utf8"),
+  "phone/status.js": () => fs.readFileSync(path.join(__dirname, "phone/status.js"), "utf8"),
+  // root-level HTML pages (one folder up from api/)
+  "book.html": () => fs.readFileSync(path.join(__dirname, "..", "book.html"), "utf8"),
+  "claim.html": () => fs.readFileSync(path.join(__dirname, "..", "claim.html"), "utf8"),
+  "join.html": () => fs.readFileSync(path.join(__dirname, "..", "join.html"), "utf8"),
+  "reschedule.html": () => fs.readFileSync(path.join(__dirname, "..", "reschedule.html"), "utf8"),
+  "phone-status.html": () => fs.readFileSync(path.join(__dirname, "..", "phone-status.html"), "utf8"),
+  "sms-optin.html": () => fs.readFileSync(path.join(__dirname, "..", "sms-optin.html"), "utf8"),
+  "terms.html": () => fs.readFileSync(path.join(__dirname, "..", "terms.html"), "utf8"),
+  "privacy.html": () => fs.readFileSync(path.join(__dirname, "..", "privacy.html"), "utf8"),
+  "mead_hall_live.html": () => fs.readFileSync(path.join(__dirname, "..", "mead_hall_live.html"), "utf8"),
+  "sim_director.html": () => fs.readFileSync(path.join(__dirname, "..", "sim_director.html"), "utf8"),
 };
 
 // marker strings that must appear in the CURRENT version of each file.
@@ -97,7 +115,7 @@ const SECRETS = [
 // Shown next to its hash so a human can compare it with what a chat said it shipped.
 function buildLabel(text) {
   const m = /BUILD:\s*([^\n\r]{1,80})/.exec(String(text).slice(0, 4000));
-  return m ? m[1].trim().replace(/\*\/\s*$/, "").trim() : null;
+  return m ? m[1].trim().replace(/(\*\/|-->)\s*$/, "").trim() : null;
 }
 
 function hashOf(text) {
