@@ -1,3 +1,4 @@
+// BUILD: dispatch-callbacks v1 2026-10-07
 // /api/phone/dispatch-callbacks  — the phone callback dispatcher.
 //
 // Vercel cron (every minute). Picks a due, approved callback_job, checks
