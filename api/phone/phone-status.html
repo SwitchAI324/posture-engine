@@ -1,0 +1,159 @@
+<!-- BUILD: phone-status v1 2026-10-07 -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Phone system status — SpamViking</title>
+<style>
+  :root{
+    --page:#f3f5f8; --card:#ffffff; --ink:#25405f; --mut:#6b7a8d;
+    --line:#dbe2ea; --accent:#2f5fd6; --ok:#2f8f5b; --okbg:#e6f4ec;
+    --off:#b04632; --offbg:#f7e7e3; --warn:#9a6a1a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--ink);
+    font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  main{max-width:860px;margin:0 auto;padding:28px 18px 60px}
+  .top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+  h1{font-size:20px;margin:0}
+  .meta{color:var(--mut);font-size:13px}
+  .meta button{font:inherit;font-size:13px;color:var(--accent);background:none;border:0;cursor:pointer;padding:0;margin-left:10px}
+  /* armed banner */
+  .banner{border-radius:12px;padding:18px 20px;margin-bottom:20px;border:1px solid var(--line);
+    display:flex;align-items:center;gap:14px;font-weight:600;font-size:18px}
+  .banner .dot{width:14px;height:14px;border-radius:50%;flex:none}
+  .banner.on{background:var(--okbg);color:var(--ok)} .banner.on .dot{background:var(--ok)}
+  .banner.off{background:var(--offbg);color:var(--off)} .banner.off .dot{background:var(--off)}
+  .banner .sub{font-weight:400;font-size:13px;color:var(--mut);margin-left:auto}
+  /* stat tiles */
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px}
+  .tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .tile .n{font-size:30px;font-weight:600;line-height:1}
+  .tile .l{color:var(--mut);font-size:13px;margin-top:6px}
+  .tile.hot .n{color:var(--accent)}
+  section h2{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);margin:0 0 10px}
+  .row24{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:6px 16px;margin-bottom:22px}
+  .row24 .item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)}
+  .row24 .item:last-child{border-bottom:0}
+  .row24 .k{color:var(--ink)} .row24 .v{font-weight:600}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{text-align:left;padding:10px 14px;font-size:13.5px;border-bottom:1px solid var(--line)}
+  th{color:var(--mut);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+  tr:last-child td{border-bottom:0}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600}
+  .pill.completed{background:var(--okbg);color:var(--ok)}
+  .pill.failed{background:var(--offbg);color:var(--off)}
+  .pill.dialing{background:#e7eefc;color:var(--accent)}
+  .pill.approved{background:#eef1f5;color:var(--mut)}
+  .err{background:var(--offbg);color:var(--off);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:20px}
+  .note{color:var(--warn);font-size:13px;margin-top:6px}
+  .empty{color:var(--mut);font-style:italic;padding:14px}
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <h1>Phone system status</h1>
+    <div class="meta"><span id="updated">loading…</span><button id="refresh" type="button">Refresh</button></div>
+  </div>
+
+  <div id="err" class="err" style="display:none"></div>
+
+  <div class="banner off" id="banner">
+    <span class="dot"></span>
+    <span id="armedText">Checking…</span>
+    <span class="sub" id="autonote">auto-refreshes every 15s</span>
+  </div>
+
+  <div class="tiles">
+    <div class="tile hot"><div class="n" id="qDue">–</div><div class="l">Due now (waiting to dial)</div></div>
+    <div class="tile"><div class="n" id="qFuture">–</div><div class="l">Scheduled later</div></div>
+    <div class="tile"><div class="n" id="qDialing">–</div><div class="l">Dialing right now</div></div>
+  </div>
+
+  <section>
+    <h2>Last 24 hours</h2>
+    <div class="row24" id="counts"><div class="empty">loading…</div></div>
+  </section>
+
+  <section>
+    <h2>Recent calls</h2>
+    <table>
+      <thead><tr><th>When</th><th>Archetype</th><th>Status</th><th>Outcome</th></tr></thead>
+      <tbody id="recent"><tr><td colspan="4" class="empty">loading…</td></tr></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+  // Forward ?key= from this page's own URL to the status endpoint (auth gate).
+  var KEY = new URLSearchParams(location.search).get("key") || "";
+  var STATUS_URL = "/api/phone/status" + (KEY ? ("?key=" + encodeURIComponent(KEY)) : "");
+
+  function esc(s){ return String(s == null ? "" : s).replace(/[&<>]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c]; }); }
+  function fmt(ts){ if(!ts) return ""; try { return new Date(ts).toLocaleString([], {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}); } catch(e){ return ts; } }
+
+  function render(d){
+    document.getElementById("err").style.display = "none";
+    // armed banner
+    var b = document.getElementById("banner");
+    var armed = d.armed === true;
+    b.className = "banner " + (armed ? "on" : "off");
+    document.getElementById("armedText").textContent = armed
+      ? "ARMED — the dialer is making calls"
+      : "OFF — no calls will be placed";
+    // queue
+    var q = d.queue || {};
+    document.getElementById("qDue").textContent = q.approved_due != null ? q.approved_due : "–";
+    document.getElementById("qFuture").textContent = q.approved_future != null ? q.approved_future : "–";
+    document.getElementById("qDialing").textContent = q.dialing != null ? q.dialing : "–";
+    // 24h counts
+    var c = d.counts_24h || {};
+    var keys = Object.keys(c).sort(function(a,b){ return c[b]-c[a]; });
+    var cEl = document.getElementById("counts");
+    if(!keys.length){ cEl.innerHTML = '<div class="empty">No calls in the last 24 hours.</div>'; }
+    else {
+      cEl.innerHTML = keys.map(function(k){
+        return '<div class="item"><span class="k">'+esc(k)+'</span><span class="v">'+c[k]+'</span></div>';
+      }).join("");
+    }
+    // recent
+    var rEl = document.getElementById("recent");
+    var rows = d.recent || [];
+    if(!rows.length){ rEl.innerHTML = '<tr><td colspan="4" class="empty">No calls yet.</td></tr>'; }
+    else {
+      rEl.innerHTML = rows.map(function(j){
+        var st = esc(j.status || "");
+        var out = esc(j.outcome || j.fail_reason || "");
+        return "<tr><td>"+fmt(j.status_changed_at)+"</td><td>"+esc(j.archetype||"")+
+          '</td><td><span class="pill '+st+'">'+st+"</span></td><td>"+out+"</td></tr>";
+      }).join("");
+    }
+    document.getElementById("updated").textContent = "Updated " + fmt(d.now || new Date().toISOString());
+  }
+
+  function showErr(msg){
+    var e = document.getElementById("err");
+    e.style.display = "block";
+    e.textContent = msg;
+  }
+
+  function load(){
+    fetch(STATUS_URL, { cache: "no-store" })
+      .then(function(r){
+        if(r.status === 401){ throw new Error("Unauthorized — add ?key=YOUR_SECRET to this page's URL."); }
+        return r.json();
+      })
+      .then(function(d){ if(d && d.ok){ render(d); } else { showErr((d && d.error) || "Could not load status."); } })
+      .catch(function(e){ showErr(e.message || "Could not reach the status endpoint."); });
+  }
+
+  document.getElementById("refresh").addEventListener("click", load);
+  load();
+  setInterval(load, 15000);
+</script>
+</body>
+</html>
