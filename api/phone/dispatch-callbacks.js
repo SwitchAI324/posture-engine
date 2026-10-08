@@ -1,4 +1,4 @@
-// BUILD: dispatch-callbacks v1 2026-10-07
+// BUILD: dispatch-callbacks v2 2026-10-07
 // /api/phone/dispatch-callbacks  — the phone callback dispatcher.
 //
 // Vercel cron (every minute). Picks a due, approved callback_job, checks
@@ -326,8 +326,9 @@ function authorized(req) {
 //
 //    Idempotent: only spawns if no next-touch child already exists for the chain.
 //    Stop conditions (spec): touch cap; a HUMAN was reached on this number
-//    (outcome='answered_human' — see note at the guard); caller_profile.status=
-//    'dead' or number blocked.
+//    (outcome='answered_human' — see note at the guard); the number was ever
+//    stamped 'disconnected' (backstop, see note at the guard); caller_profile.
+//    status='dead' or number blocked.
 //
 //    TIME-OF-DAY: next-touch send time comes from Phone Intake's /api/phone/
 //    pick-time (tz-aware plausible window in the scammer's zone), asked for the
@@ -384,6 +385,18 @@ async function campaignScan() {
         `${SUPABASE_URL}/rest/v1/callback_jobs?callback_number_id=eq.${job.callback_number_id}&outcome=eq.answered_human&select=id&limit=1`,
         { headers: { ...sb, Accept: 'application/json' } });
       if (ans.ok && (await ans.json()).length > 0) continue;
+
+      // STOP (backstop): the number was ever stamped 'disconnected'. Normally
+      // mark_number_dead sets caller_profile.status='dead' (checked below), but
+      // that RPC is UPDATE-only — if a number ever lacks a caller_profile row it
+      // silently no-ops and the dead-stop never fires. This outcome-level check
+      // doesn't depend on caller_profile, so a disconnected number still stops the
+      // campaign in that case. (Data 2026-10-07: all current numbers have a
+      // profile row, so this is insurance against a future gap, not a live hole.)
+      const disc = await fetch(
+        `${SUPABASE_URL}/rest/v1/callback_jobs?callback_number_id=eq.${job.callback_number_id}&outcome=eq.disconnected&select=id&limit=1`,
+        { headers: { ...sb, Accept: 'application/json' } });
+      if (disc.ok && (await disc.json()).length > 0) continue;
 
       // STOP: caller_profile.status='dead' for this number (best-effort)
       if (job.callback_numbers && job.callback_numbers.e164) {
