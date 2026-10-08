@@ -1,11 +1,16 @@
+// BUILD: recap v1 2026-10-07
 // api/phone/recap.js
 // Builds the post-callback email for the SV user and queues it in
 // phone_recaps for Barbara to send. Idempotent per (job_id, kind).
 //
 // Triggers:
-//   - Recording webhook: POST {job_id} when recordings.status='ready'
-//   - Dispatcher: POST {job_id} after mark_callback_job for any outcome
-// Neither documented trigger sends an explicit `kind` — kind is always
+//   - Recording webhook: POST {job_id, recording_status:'ready'} when
+//     recordings.status='ready' (PE adds recording_status to the body,
+//     Oct 6, 2026, Recording's answer). That field IS the ready signal.
+//   - Dispatcher / agent: POST {job_id} after mark_callback_job for any
+//     outcome (no recording_status)
+//   - recap-sweep.js: POST {job_id} for stragglers (no recording_status)
+// None of these sends an explicit `kind` — kind is always
 // derived from callback_jobs.outcome (see kindFor), never taken from the
 // request body. An earlier version trusted a body-supplied `kind` when
 // present, which let an outcome/kind mismatch slip through and produce an
@@ -14,13 +19,31 @@
 // Header: x-phone-intake-secret
 // Returns: { ok, kind, queued:boolean, reason? }
 //
+// Recording link (Oct 6, 2026, Andrew's ruling + Recording's contract): one
+// link PER CALL, no login needed. When the recording is ready we mint a
+// token scoped to that one recording (POST /api/recordings-token with
+// {user_id, slug:'ph-<job_id>', ttl_seconds}) and email
+// https://live.spamviking.com/recordings.html?token=<token>. The slug rides
+// inside the signed token. TTL = 30 days = the recordings retention window;
+// if Data/PE change retention, change RECORDING_LINK_TTL_SECONDS below (the
+// "link works for N days" copy follows it). Tokens can't be revoked today
+// (Recording's answer) — only rotating RECORDING_TOKEN_SECRET kills them all.
+// We no longer call /api/recording-link at all (Recording asked: it's
+// server-to-server only and shouldn't gain a second consumer).
+//
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, PHONE_INTAKE_SECRET,
-//      RECORDING_LINK_URL (optional; default posture-engine /api/recording-link)
+//      RECORDINGS_TOKEN_URL (optional; default posture-engine
+//      /api/recordings-token), RECORDINGS_PAGE_URL (optional; default
+//      https://live.spamviking.com/recordings.html)
 
 const SB = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SECRET = process.env.PHONE_INTAKE_SECRET;
-const RECORDING_LINK_URL = process.env.RECORDING_LINK_URL || 'https://posture-engine.vercel.app/api/recording-link';
+const RECORDINGS_TOKEN_URL = process.env.RECORDINGS_TOKEN_URL || 'https://posture-engine.vercel.app/api/recordings-token';
+const RECORDINGS_PAGE_URL = process.env.RECORDINGS_PAGE_URL || 'https://live.spamviking.com/recordings.html';
+// Keep equal to the recordings retention window (30 days as of Oct 6, 2026).
+const RECORDING_LINK_TTL_SECONDS = 30 * 24 * 60 * 60;
+const LINK_DAYS = Math.round(RECORDING_LINK_TTL_SECONDS / 86400);
 
 async function sb(path, opts = {}) {
   const r = await fetch(`${SB}/rest/v1/${path}`, {
@@ -60,16 +83,25 @@ function recapSubject(host, minutes, org, number) {
   return subj;
 }
 
-async function recordingLink(jobId) {
+// Mints a token scoped to this one call's recording and returns the page
+// URL, or null on ANY failure (not configured, network, bad response). A
+// null just means this email goes out with no mention of a recording.
+async function mintRecordingLink(userId, jobId) {
   try {
-    const r = await fetch(`${RECORDING_LINK_URL}?slug=ph-${jobId}`, {
-      headers: { 'x-phone-intake-secret': SECRET },
+    const r = await fetch(RECORDINGS_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-phone-intake-secret': SECRET },
+      body: JSON.stringify({ user_id: userId, slug: `ph-${jobId}`, ttl_seconds: RECORDING_LINK_TTL_SECONDS }),
       signal: AbortSignal.timeout(5000),
     });
-    if (!r.ok) return null;
+    if (!r.ok) { console.warn('recordings-token', r.status); return null; }
     const j = await r.json().catch(() => null);
-    return j?.url || j?.signed_url || j?.link || null;
-  } catch { return null; }
+    if (!j?.token) return null;
+    return `${RECORDINGS_PAGE_URL}?token=${encodeURIComponent(j.token)}`;
+  } catch (e) {
+    console.warn('recordings-token failed', String(e.message || e));
+    return null;
+  }
 }
 
 function kindFor(outcome) {
@@ -89,6 +121,15 @@ function kindFor(outcome) {
   // gets the no-answer-style email, reworded (see compose). Must be
   // checked before the startsWith('answered') catch-all below.
   if (outcome === 'answered_ivr') return 'no_answer';
+  // disconnected (Oct 7, 2026, Voice's answer): SIP 404/410/604 — the number
+  // is invalid / not in service, and Voice marks it dead. This is the ONLY
+  // outcome we treat as "your number is dead" — our own errors and carrier
+  // errors are stamped no_answer (told apart only by fail_reason text) and
+  // an answered "not in service" announcement lands as failed, so none of
+  // those may claim the number is bad. Same email kind as no_answer, with its
+  // own wording (see compose), so the notify_no_answer toggle and the
+  // one-email-per-kind rule still apply and no schema change is needed.
+  if (outcome === 'disconnected') return 'no_answer';
   if (outcome.startsWith('answered')) return 'recap';
   if (outcome === 'voicemail_left') return 'voicemail_left';
   if (['no_answer', 'rang_out', 'busy'].includes(outcome)) return 'no_answer';
@@ -114,7 +155,7 @@ function aboutNumber(profile, userCount) {
 }
 
 function compose(kind, ctx) {
-  const { host, number, org, minutes, at, link, refCode, about, ringSeconds, unproven, ivr } = ctx;
+  const { host, number, org, minutes, at, link, refCode, about, ringSeconds, unproven, ivr, badNumber } = ctx;
   const who = org ? `"${org}"` : pretty(number);
   const lines = [];
   let subject;
@@ -132,14 +173,14 @@ function compose(kind, ctx) {
     // One email, no promises (Oct 1, 2026, Andrew's ruling): either this
     // carries a working link or it says nothing about a recording at all —
     // never "processing," never "we'll send it when it's ready."
-    if (link) { lines.push(''); lines.push(`Listen for yourself: ${link}\n(link works for 7 days)`); }
+    if (link) { lines.push(''); lines.push(`Listen to this call: ${link}\n(link works for ${LINK_DAYS} days)`); }
     lines.push('');
     lines.push('Reply RETRY to try again, SKIP to cancel any follow-up call already queued, or BLOCK to never call this number again.');
   } else if (kind === 'recap') {
     subject = recapSubject(host, minutes, org, number);
     lines.push(`Your callback to ${pretty(number)} happened at ${at}. A human answered.`);
     if (minutes) lines.push(`${host} kept them on for ${plural(minutes, 'minute')}.`);
-    if (link) { lines.push(''); lines.push(`Listen: ${link}\n(link works for 7 days)`); }
+    if (link) { lines.push(''); lines.push(`Listen to this call: ${link}\n(link works for ${LINK_DAYS} days)`); }
     // Reference-code aside removed (Sep 29, 2026, Recording's ask) — it's
     // an internal matching device with nothing for the user to act on.
   } else if (kind === 'voicemail_left') {
@@ -155,8 +196,14 @@ function compose(kind, ctx) {
     } else {
       lines.push(`If we don't hear from them, that's it for this one.`);
     }
-    if (link) { lines.push(''); lines.push(`Listen: ${link}\n(link works for 7 days)`); }
+    if (link) { lines.push(''); lines.push(`Listen to this call: ${link}\n(link works for ${LINK_DAYS} days)`); }
     // No "recording to follow" promise here either — one email, same rule.
+  } else if (badNumber) {
+    // Dead number (outcome disconnected). No RETRY — re-dialing a number
+    // that isn't in service is pointless, and Booking never re-dials it.
+    subject = `Couldn't reach ${pretty(number)}`;
+    lines.push(`We tried ${pretty(number)} at ${at}, but the number isn't in service, so we couldn't reach anyone.`);
+    lines.push('Nothing more for us to do on this one.');
   } else if (ivr) {
     // Menu answered, nobody reached. Not "no answer" (it did pick up) and
     // not a recap (no human). Kind stays 'no_answer' so the user's
@@ -188,7 +235,8 @@ function compose(kind, ctx) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'POST only' });
   if (!SECRET || req.headers['x-phone-intake-secret'] !== SECRET) return res.status(401).json({ ok: false, error: 'bad secret' });
-  const { job_id } = req.body || {};
+  const { job_id, recording_status } = req.body || {};
+  const recordingReady = recording_status === 'ready';
   if (!job_id) return res.status(400).json({ ok: false, error: 'job_id required' });
 
   try {
@@ -216,15 +264,20 @@ export default async function handler(req, res) {
     }
 
     // recap and voicemail_left are the two outcomes where a recording can
-    // exist at all (no_answer never produces one). For those, wait for a
-    // real link before sending — UNLESS we're already past the 5-minute
-    // fallback window from hangup, in which case send the plain recap with
-    // no recording mention rather than hold it indefinitely. This endpoint
-    // gets POSTed twice in the normal case — once at hangup (dispatcher),
-    // once at recordings.status='ready' (Recording's webhook) — so the
-    // hangup POST is expected to come back "awaiting recording" and the
-    // ready POST is what actually sends the email. recap-sweep.js covers
-    // the case where the ready POST never arrives at all.
+    // exist at all (no_answer never produces one). The ready signal is the
+    // webhook POST's recording_status:'ready' (see header) — it only fires
+    // when recordings.status='ready'. Cases:
+    //   - ready POST: mint the per-call token and send with the link. If
+    //     minting fails, send WITHOUT a link rather than hold the email.
+    //   - any other POST (hangup, sweep) within 5 minutes of hangup: hold
+    //     ("awaiting recording") — the ready POST is expected to follow.
+    //   - any other POST past the 5-minute fallback window: send with no
+    //     recording mention rather than hold it indefinitely. recap-sweep.js
+    //     covers the case where the ready POST never arrives at all.
+    // Known gap (flagged, not fixed): if the ready POST ever lands BEFORE
+    // the job's outcome is written, it gets "no email for outcome null"
+    // above and nothing re-pokes with recording_status, so that email goes
+    // out without a link after the fallback window.
     //
     // ASSUMPTION flagged, not confirmed: job.updated_at is used as "when
     // this job's outcome was written" (i.e. hangup time). If Data/PE know
@@ -234,8 +287,9 @@ export default async function handler(req, res) {
     const recordingEligible = kind === 'recap' || kind === 'voicemail_left';
     let link = null;
     if (recordingEligible) {
-      link = await recordingLink(job_id);
-      if (!link) {
+      if (recordingReady) {
+        link = await mintRecordingLink(job.user_id, job_id);
+      } else {
         const hangupAt = job.updated_at ? new Date(job.updated_at).getTime() : null;
         const elapsedMs = hangupAt ? Date.now() - hangupAt : Infinity;
         if (elapsedMs < 5 * 60 * 1000) {
@@ -266,6 +320,7 @@ export default async function handler(req, res) {
       moreTouches: Math.max(0, (flags?.max_campaign_touches ?? 3) - (job.campaign_touch ?? 1)),
       unproven: kind === 'recap' && !hasCallerTurns(job.transcript),
       ivr: job.outcome === 'answered_ivr',
+      badNumber: job.outcome === 'disconnected',
     };
     const { subject, body } = compose(kind, ctx);
 

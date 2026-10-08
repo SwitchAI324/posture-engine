@@ -1,3 +1,4 @@
+// BUILD: schedule v1 2026-10-07
 // api/phone/_schedule.js
 // Shared call-window scheduling. Imported by intake.js (first touch) and
 // pick-time.js (campaign touches 2 and 3) so the two can never drift.
@@ -87,7 +88,14 @@ function pickRule(rules, group, lineType) {
 // Returns { scheduledAt: Date, window: {...}, phrase: string }
 // opts.avoidHour  — don't land in this local hour (previous touch's hour)
 // opts.notBefore   — Date; don't schedule before this instant (campaign day offset)
-function planCallback({ number, a, settings, rules, lineType = null, now = new Date(), avoidHour = null, notBefore = null }) {
+// opts.immediate   — for GO (_actions.js): within a 'random' window, land
+//   on the earliest valid instant instead of a random point in the window.
+//   Still goes through the same day/window-finding as everything else, so
+//   it can't land outside business hours — it only removes the randomness
+//   within whichever window (today's, if still open, else the next valid
+//   one) ends up chosen. Fixed-time rules (end_minus/start_plus) ignore
+//   this flag; they're deterministic already.
+function planCallback({ number, a, settings, rules, lineType = null, now = new Date(), avoidHour = null, notBefore = null, immediate = false }) {
   const delayMin = settings?.callback_delay_min ?? 20;
   const delayMax = settings?.callback_delay_max ?? 60;
   const delay = rand(delayMin, delayMax);
@@ -138,11 +146,11 @@ function planCallback({ number, a, settings, rules, lineType = null, now = new D
       const lo = Math.max(winStart.getTime(), earliest.getTime());
       const hi = winEnd.getTime();
       if (lo >= hi) continue;
-      target = new Date(lo + Math.random() * (hi - lo));
+      target = immediate ? new Date(lo) : new Date(lo + Math.random() * (hi - lo));
       // Consecutive touches shouldn't land in the same hour — a number that
       // screens at 10am may not at 6pm. Try a few draws, then give up rather
       // than push the call outside a plausible window.
-      if (avoidHour !== null) {
+      if (!immediate && avoidHour !== null) {
         for (let k = 0; k < 12 && partsInTz(target, tz).hh === avoidHour; k++) {
           target = new Date(lo + Math.random() * (hi - lo));
         }

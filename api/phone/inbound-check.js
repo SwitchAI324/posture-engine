@@ -1,3 +1,4 @@
+// BUILD: inbound-check v1 2026-10-07
 // api/phone/inbound-check.js
 // Called by the LiveKit agent the moment an inbound call arrives, BEFORE it
 // answers. Decides whether to pick up at all and whether this is a house

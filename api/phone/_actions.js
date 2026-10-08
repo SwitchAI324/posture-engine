@@ -1,3 +1,4 @@
+// BUILD: actions v1 2026-10-07
 // api/phone/_actions.js
 // Shared job-control actions: skip a pending call, block a number, retry a
 // completed/failed one, or (SMS only) go — stop waiting and dial now.
@@ -160,13 +161,44 @@ export async function actionSupplyNumber(userId, intakeIdIn, numberRaw) {
   return { done: true, number, phrase: plan.phrase, pastHours: plan.pastHours, extension: a.extension || null, askFor: a.ask_for || null };
 }
 
-// ---- GO (SMS only, no email equivalent): stop waiting, dial now ----
+// ---- GO (SMS, and email as of Oct 5, 2026): stop waiting out the random
+// delay, but still land inside a valid dial window — does NOT just stamp
+// scheduled_at=now like it used to. That let GO fire a dial attempt at any
+// hour, window or no window (e.g. a 3am dial to a number whose scammer
+// call center is long closed). Fixed (Oct 4, 2026): re-run planCallback
+// with the real window-finding (archetype's stated hours if any, else the
+// number's area-code business-hours rule) and callback_delay_min forced to
+// 0, plus the new `immediate` flag so a 'random' window resolves to its
+// earliest valid instant instead of a random point in it. If now is
+// already inside the window, this lands within seconds, same as before;
+// if not, it jumps to the next valid opening instead of firing blind.
+// Pulls the original classification back off phone_intakes (via
+// job.intake_id) for stated-hours data — callback_jobs itself only keeps
+// the verbatim display string, not the parsed start/end/tz fields.
 export async function actionGo(userId, jobIdIn = null) {
   const job = await resolveJob(userId, jobIdIn, 'pending_only');
   if (!job || !['pending', 'approved'].includes(job.status)) {
-    return { done: false, reason: 'nothing_pending' };
+    // status lets callers word the "nothing to do" reply honestly:
+    // dialing = call already underway, completed/failed = already
+    // happened, cancelled = user skipped it. null = no job found at all.
+    return { done: false, reason: 'nothing_pending', status: job?.status || null };
   }
-  await update('callback_jobs', `id=eq.${job.id}`, { scheduled_at: new Date().toISOString() });
   const [num] = await select('callback_numbers', `id=eq.${job.callback_number_id}&select=e164`);
-  return { done: true, job, number: num?.e164 };
+  const [intake] = job.intake_id
+    ? await select('phone_intakes', `id=eq.${job.intake_id}&select=classification`)
+    : [];
+  const a = intake?.classification || {};
+  const [settings] = await select('phone_settings', `user_id=eq.${userId}&select=*`);
+  const rules = await select('callback_time_rules', 'active=eq.true&select=*').catch(() => []);
+  const lineType = await lineTypeFor(num?.e164);
+  const plan = planCallback({
+    number: num?.e164, a, settings: { ...settings, callback_delay_min: 0 },
+    rules, lineType, now: new Date(), immediate: true,
+  });
+  await update('callback_jobs', `id=eq.${job.id}`, { scheduled_at: plan.scheduledAt.toISOString(), dial_window: plan.window });
+  // soon = the dispatcher cron (runs every minute) will pick it up almost
+  // immediately, so callers can honestly say "now" instead of reading
+  // back the window phrase.
+  const soon = plan.scheduledAt.getTime() - Date.now() < 2 * 60000;
+  return { done: true, job, number: num?.e164, phrase: plan.phrase, pastHours: plan.pastHours, soon };
 }

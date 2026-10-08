@@ -1,3 +1,4 @@
+// BUILD: cancel v1 2026-10-07
 // api/phone/cancel.js
 // Called by Barbara's Apps Script on a user reply of CANCEL/SKIP, RETRY, or
 // STOP/BLOCK. Email vocabulary now shows SKIP/BLOCK to the user (matching
@@ -6,8 +7,12 @@
 // intake.js; this file only owns the email reply copy and the incoming
 // action names, which are UNCHANGED ('cancel'|'retry'|'stop').
 //
-// POST JSON: { sender_email, action?: 'cancel'|'retry'|'stop'|'number', job_id?, number? }
-//   action defaults to 'cancel'. job_id optional for cancel/retry/stop (if
+// POST JSON: { sender_email, action?: 'cancel'|'retry'|'stop'|'go'|'number', job_id?, number? }
+//   'go' (added Oct 5, 2026, Email's ask): stop waiting out the callback
+//   delay for the user's pending job — still lands inside a valid dial
+//   window (see actionGo in _actions.js), so it can't fire outside
+//   business hours. Same payload shape as cancel/stop/retry.
+//   action defaults to 'cancel'. job_id optional for cancel/retry/stop/go (if
 //   absent, resolves to the user's newest relevant job); REQUIRED for
 //   'number', where it means the phone_intakes.id carried in the
 //   [SV-PHONE job:<uuid>] tag on a "we heard a number but couldn't read it"
@@ -19,7 +24,7 @@
 // Header:    x-phone-intake-secret
 // Returns:   { ok, action, done:boolean, reply_subject, reply_body }
 
-import { actionCancel, actionBlock, actionRetry, actionSupplyNumber } from './_actions.js';
+import { actionCancel, actionBlock, actionRetry, actionSupplyNumber, actionGo } from './_actions.js';
 
 const SB = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -51,7 +56,7 @@ export default async function handler(req, res) {
   const action = (req.body?.action || 'cancel').toLowerCase();
   const jobIdIn = req.body?.job_id || null;
   if (!sender_email) return res.status(400).json({ ok: false, error: 'sender_email required' });
-  if (!['cancel', 'retry', 'stop', 'number'].includes(action)) return res.status(400).json({ ok: false, error: 'bad action' });
+  if (!['cancel', 'retry', 'stop', 'go', 'number'].includes(action)) return res.status(400).json({ ok: false, error: 'bad action' });
   if (action === 'number' && !jobIdIn) return res.status(400).json({ ok: false, error: 'job_id required for number' });
 
   try {
@@ -87,6 +92,19 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, action, done: false, ...reply('Re: skip', 'Nothing is waiting to be called right now, so there was nothing to skip.') });
       }
       return res.status(200).json({ ok: true, action, done: true, ...reply('Re: skip', 'Skipped. We won\'t call that number.') });
+    }
+
+    // ---- GO: stop waiting, call as soon as a valid window allows ----
+    if (action === 'go') {
+      const r = await actionGo(userId, jobIdIn);
+      if (!r.done) {
+        const why = r.status === 'dialing' ? 'That call is already underway.'
+          : (r.status === 'completed' || r.status === 'failed') ? 'That call already happened, so there\'s nothing left to speed up. Reply RETRY to try that number again.'
+          : r.status === 'cancelled' ? 'That one was skipped, so there\'s nothing to call. Reply RETRY if you changed your mind.'
+          : 'Nothing is waiting to be called right now, so there was nothing to speed up.';
+        return res.status(200).json({ ok: true, action, done: false, ...reply('Re: go', why) });
+      }
+      return res.status(200).json({ ok: true, action, done: true, ...reply('Re: go', `On it. We'll call ${pretty(r.number)} ${r.soon ? 'now' : r.phrase}. Reply SKIP to stop that.`) });
     }
 
     // ---- BLOCK (action name: stop) ----

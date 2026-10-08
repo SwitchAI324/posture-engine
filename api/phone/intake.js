@@ -1,3 +1,4 @@
+// BUILD: intake v1 2026-10-07
 // api/phone/intake.js
 // Phone Intake v1 (voicemail share) + text/screenshot/SMS link reading and
 // dial-with-warn-first (v1.2).
@@ -164,7 +165,7 @@ Fields:
 - confidence: number 0..1 that the archetype is right.
 - stated_numbers: phone numbers the ${speaker.toUpperCase()} explicitly gives as a number to call back, in E.164 with country code (+1XXXXXXXXXX for US/Canada, +44... etc). Only numbers actually written/spoken in the ${noun} itself — never a number that only appears as part of a URL or link. Empty array if none.
 - number_count: how many times the primary callback number appears.
-- extension: digits the ${speaker} says to enter after the number connects ("press 4", "extension 204"), as a digit string, or null.
+- extension: digits to try if a menu answers the callback number: either digits the ${speaker} says to enter after the number connects ("press 4", "extension 204"), OR a digit offered during THIS ${noun} as an alternative to calling the number ("press 2 or call me back at 555-0100" → extension "2") — that second case is a same-call option, not a confirmed menu step on the callback line itself, so only capture it when it's the one digit mentioned (don't guess if multiple digits are offered for different purposes). As a digit string, or null.
 - ask_for: the person and/or department the ${speaker} says to ask for ("Jim in the fraud department"), or null.
 - claimed_org: the organization the ${speaker} claims to be from, or null.
 - agent_label: the name the ${speaker} gives for themselves ("this is Steve"), or null.
@@ -266,7 +267,7 @@ function smsReplyForContent(linkRows, dial, skippedImages) {
     parts.push('No link found.');
   }
   if (dial.kind === 'queued') {
-    parts.push(`We'll call ${pretty(dial.number)} soon. Reply SKIP to stop, GO to call now, BLOCK to never call it.`);
+    parts.push(`We'll call ${pretty(dial.number)} soon. Reply SKIP to stop, GO to stop waiting, BLOCK to never call it.`);
   } else if (dial.kind === 'international') {
     parts.push(`Number found (${dial.number}) is outside the US — not calling it.`);
   } else if (dial.kind === 'blocked') {
@@ -324,7 +325,7 @@ async function handleSms(req, res) {
       }
       if (cmd === 'GO') {
         const r = await actionGo(userId);
-        return res.status(200).json({ ok: true, status: 'action', reply_body: r.done ? `On it — calling ${pretty(r.number)} now.` : 'Nothing pending to call now.' });
+        return res.status(200).json({ ok: true, status: 'action', reply_body: r.done ? `On it — calling ${pretty(r.number)} ${r.soon ? 'now' : r.phrase}.` : 'Nothing pending to call now.' });
       }
       // Contract says only SKIP/BLOCK/RETRY/GO arrive here — don't silently
       // drop an unrecognized word, surface it instead.
