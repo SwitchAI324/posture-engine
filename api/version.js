@@ -1,5 +1,5 @@
 // api/version.js
-// BUILD: version-report v8 2026-10-09
+// BUILD: version-report v9 2026-10-09
 // ----------------------------------------------------------------------
 // GET /api/version            -> plain-text report (copy/paste into any chat)
 // GET /api/version?json=1     -> same data as JSON
@@ -85,6 +85,7 @@ const EXPECT = {
     ["voicemail mode fix", "VOICEMAIL-MODE bit suppressed"],
     ["prefix/tail cache split", "_prefixText"],
     ["identity pivot wired", "IDENTITY-PIVOT callId"],
+    ["gag-open call-kind gate", "gag opens skipped"],
   ],
   "_identity_pivot.js": [["pivot module", "planIdentityPivot"], ["story save", "set_call_identity_story"]],
   "compiler/_identity_pivots.js": [["Canon line library", "stand_in"], ["stand-in lines are standing facts", "never at his desk"]],
