@@ -23,7 +23,7 @@ export const config = { runtime: "edge" };
 import { getCall, getCallBySlug, setCall, isConfigured, appendBitEvent, clearDeathBlow, getControls, stampArm, fireArm, fireForce, saveTranscript, clearBench } from "../_store.js";
 import { selectBit, rankBits, DEPLOY_THRESHOLD, selectTextureBit, rankTextureCandidates, explainExclusion } from "../_bits_scorer.js";
 import { archetypeFromBody, logIfUnknownArchetype } from "../_archetype.js";
-import { pivotMode, loadPivotLibrary, planIdentityPivot, saveIdentityStory } from "../_identity_pivot.js";
+import { pivotMode, loadPivotLibrary, planIdentityPivot, saveIdentityStory, slugFromBody } from "../_identity_pivot.js";
 // ── ACCUSATION DETECTION (Aug 5, extracted from _gears_tells.js/_gears.js as
 // part of removing gears entirely) ────────────────────────────────────────
 // This is NOT part of the suspicion state machine that's being removed — it's
@@ -74,6 +74,13 @@ const BIT_LANE = Object.fromEntries(
   (Array.isArray(BITS) ? BITS : []).map((b) => [b.id, b.lane || "slow"])
 );
 const laneOf = (id) => BIT_LANE[id] || "slow";
+// CHANNEL LOOKUP (2026-10-09) — registry `channel` ("video" | "audio" |
+// "phone"; untagged = any). Used by the turn-one open pick so a video-only
+// bit (BIT-907) can never be drawn on a phone call.
+const BIT_CHANNEL = Object.fromEntries(
+  (Array.isArray(BITS) ? BITS : []).map((b) => [b.id, b.channel || "any"])
+);
+const channelOf = (id) => BIT_CHANNEL[id] || "any";
 // FAMILY LOOKUP (2026-09-30, PE — flub-aware silence-nudge, Canon's
 // escalation). Same shape as BIT_LANE/laneOf above, for the registry's
 // `family` field instead of `lane`. Used to identify the opener-flub
@@ -1548,9 +1555,22 @@ function readIvrCtx(body, stored) {
   const amd = body?.metadata?.amd ?? body?.extra_body?.metadata?.amd ?? null;
   const metaExt =
     body?.metadata?.dial_extension ?? body?.extra_body?.metadata?.dial_extension ?? null;
+  // callKind (2026-10-09): "outbound_phone" (slug ph-*, the host placed the
+  // call), "inbound_phone" (in-*), "phone" (prefix says phone, direction
+  // unknown), else "video". Read from the slug so it works even when
+  // hydrate failed and there is no prefix.
+  const slug = String(slugFromBody(body) || "");
+  const callKind = slug.startsWith("ph-")
+    ? "outbound_phone"
+    : slug.startsWith("in-")
+    ? "inbound_phone"
+    : stored && stored.prefix && stored.prefix.includes("this is a real phone call")
+    ? "phone"
+    : "video";
   return {
     amd,
     dialExtension: metaExt || (stored ? stored.dialExtension : null) || null,
+    callKind,
   };
 }
 
@@ -1614,12 +1634,22 @@ function resolveTurnOneOpen(stored, turnNow, ivrCtx) {
       " but it is missing/inactive in the registry — falling through to the normal roll"
     );
   }
+  // CALL KIND GATE (2026-10-09, Andrew): no gag opener at all when the host
+  // placed the call (the person answering "hello" should hear who is
+  // calling), and video-only bits (BIT-907) never on any phone call.
+  const callKind = (ivrCtx && ivrCtx.callKind) || "video";
+  const isPhoneKind = callKind !== "video";
+  if (callKind === "outbound_phone") {
+    console.log("TURN1-OPEN-RESOLVE mode=text_fumble callKind=outbound_phone (gag opens skipped)");
+    return { mode: "text_fumble", bitId: null };
+  }
   const eligible = BITS.filter(
     (b) =>
       b.status === "active" &&
       laneOf(b.id) === "gag" &&
       phaseOf(b.id) === "opening" &&
-      !TURN1_OPEN_EXCLUDE.includes(b.id)
+      !TURN1_OPEN_EXCLUDE.includes(b.id) &&
+      !(isPhoneKind && channelOf(b.id) === "video")
   );
   if (eligible.length && Math.random() < GAG_OPEN_RATE) {
     // More than one eligible bit is a real possibility once Bits/Canon add
@@ -1628,7 +1658,8 @@ function resolveTurnOneOpen(stored, turnNow, ivrCtx) {
     const chosen = eligible[Math.floor(Math.random() * eligible.length)];
     console.log(
       "TURN1-OPEN-RESOLVE mode=sound_open bitId=" + chosen.id +
-      " eligibleCount=" + eligible.length + " rate=" + GAG_OPEN_RATE
+      " eligibleCount=" + eligible.length + " rate=" + GAG_OPEN_RATE +
+      " callKind=" + callKind
     );
     return { mode: "sound_open", bitId: chosen.id };
   }
