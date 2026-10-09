@@ -236,10 +236,20 @@ async function sendAdminRecordingNotification({ slug, recordingUrl, durationSec,
 
 // See file header for the full design. Returns a user_id or null; never
 // throws (each branch catches its own lookup failure and logs it).
+const JOB_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function resolveRecordingOwner(slug) {
   if (!slug) return null;
   if (slug.startsWith("ph-")) {
     const jobId = slug.slice(3);
+    // Hand-dispatched test calls (ph-test-...) have no job row: use the
+    // optional TEST_OWNER_USER_ID so their recording still gets an owner,
+    // and never query callback_jobs with a non-uuid id (400 noise).
+    if (!JOB_UUID_RE.test(jobId)) {
+      return /^test-/.test(jobId) && /^[0-9a-f-]{36}$/i.test(process.env.TEST_OWNER_USER_ID || "")
+        ? process.env.TEST_OWNER_USER_ID
+        : null;
+    }
     try {
       return await getCallbackJobOwner(jobId);
     } catch (e) {
@@ -306,6 +316,10 @@ async function resolveOwnerViaRpc(slug) {
 async function triggerPhoneRecap(slug) {
   if (!slug.startsWith("ph-")) return;
   const jobId = slug.slice(3); // strip "ph-"
+  if (!JOB_UUID_RE.test(jobId)) {
+    console.log("livekit-webhook: recap trigger skipped, not a real job id (test slug?): " + slug);
+    return;
+  }
   if (!PHONE_INTAKE_SECRET) {
     console.log("livekit-webhook: PHONE_INTAKE_SECRET not configured, skipping recap trigger for " + slug);
     return;

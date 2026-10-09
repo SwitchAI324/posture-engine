@@ -1,5 +1,5 @@
 // api/version.js
-// BUILD: version-report v7 2026-10-09
+// BUILD: version-report v8 2026-10-09
 // ----------------------------------------------------------------------
 // GET /api/version            -> plain-text report (copy/paste into any chat)
 // GET /api/version?json=1     -> same data as JSON
@@ -93,6 +93,7 @@ const EXPECT = {
   "compiler/host_prompt_source.json": [["v0.29 IVR pickup exception", "EXCEPTION, IVR PICKUP ONLY"], ["v0.30 stand-in is a standing arrangement", "STANDING ARRANGEMENT"], ["v0.31 identity lines paragraph", "IDENTITY LINES HANDED TO YOU"]],
   "hydrate.js": [
     ["phone token fallback", "TOKEN-FALLBACK-FROM-JOB"],
+    ["test-slug tokens", "TEST-SLUG synthetic token"],
     ["call-state reset", "CALL-STATE-RESET"],
   ],
   "_store.js": [
@@ -103,6 +104,7 @@ const EXPECT = {
     ["ready signal to recap", 'recording_status: "ready"'],
     ["web owner resolver", "resolve_recording_owner OK"],
     ["owner never blanked", "userId: userId || undefined"],
+    ["non-uuid job guard", "recap trigger skipped"],
   ],
   "recordings.js": [["slug-scoped tokens", "claims.slug"]],
   "recordings-token.js": [["slug in token mint", "SLUG_RE"]],
@@ -112,7 +114,7 @@ const EXPECT = {
 
 const FLAGS = [
   "IVR_OPEN", "TRIGGER_MATCH", "TEXTURE_ROTATION", "MOVES_OWED_REINJECT_ALL",
-  "GAG_OPEN_RATE", "IDENTITY_PIVOT", "MIN_GAP", "INJECT_BAR", "MAX_TOKENS", "ANTHROPIC_MODEL",
+  "GAG_OPEN_RATE", "IDENTITY_PIVOT", "TEST_HOST_NAME", "TEST_OWNER_EMAIL", "TEST_OWNER_USER_ID", "MIN_GAP", "INJECT_BAR", "MAX_TOKENS", "ANTHROPIC_MODEL",
 ];
 const SECRETS = [
   "RECORDING_TOKEN_SECRET", "PHONE_INTAKE_SECRET", "CRON_SECRET",

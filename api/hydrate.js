@@ -1,3 +1,4 @@
+// BUILD: hydrate v+test-slugs 2026-10-09
 // SpamViking — PREFIX HYDRATE (the missing step that fixes NULL call_prefix)
 // ----------------------------------------------------------------------
 // WHY THIS EXISTS: call_prefix.prefix was NULL on every live call because
@@ -563,6 +564,25 @@ async function readToken(slug) {
 // row for a clean ph-<uuid> slug. Returns null for any other slug shape or a
 // missing job, so web/in- slugs keep their 404 behaviour.
 async function tokenFromPhoneJob(slug) {
+  // TEST SLUGS (2026-10-09): a hand-dispatched test call such as ph-test-oct9b
+  // has no callback_jobs row, so it used to 404 and the host ran with NO prompt
+  // (it did not know it had placed the call). ph-test-<letters/digits/-/_> now
+  // gets a synthetic token with defaults. Optional env: TEST_HOST_NAME (host
+  // name), TEST_OWNER_EMAIL (so the owner/user_id resolves). Real calls are
+  // unaffected: they use ph-<uuid> and need their real job row.
+  const tm = /^ph-test-[A-Za-z0-9_-]{1,60}$/.exec(slug || "");
+  if (tm) {
+    console.log("hydrate: TEST-SLUG synthetic token for slug=" + slug);
+    return {
+      slug,
+      channel: "phone",
+      archetype: null,
+      host_name: process.env.TEST_HOST_NAME || null,
+      target_id: null,
+      owner_email: process.env.TEST_OWNER_EMAIL || null,
+      callback_job_id: null,
+    };
+  }
   const m = /^ph-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(slug || "");
   if (!m) return null;
   const URL = process.env.SUPABASE_URL;

@@ -420,7 +420,10 @@ export async function saveIdentityStory({ slug, e164, topic, story }) {
     if (!SB_URL || !SB_KEY) { console.log("IDENTITY-PIVOT SAVE skipped: store not configured"); return false; }
     const m = /^ph-(.+)$/.exec(String(slug || ""));
     if (!m) { console.log("IDENTITY-PIVOT SAVE skipped: slug is not a ph- outbound slug (" + JSON.stringify(slug) + ")"); return false; }
-    const userId = await getCallbackJobOwner(m[1]);
+    // test slugs (ph-test-...) have no job row: optional TEST_OWNER_USER_ID
+    const userId = /^test-/.test(m[1])
+      ? (/^[0-9a-f-]{36}$/i.test(process.env.TEST_OWNER_USER_ID || "") ? process.env.TEST_OWNER_USER_ID : null)
+      : await getCallbackJobOwner(m[1]);
     if (!userId) { console.log("IDENTITY-PIVOT SAVE skipped: no owner for job " + m[1]); return false; }
     const r = await fetch(SB_URL + "/rest/v1/rpc/set_call_identity_story", {
       method: "POST",
