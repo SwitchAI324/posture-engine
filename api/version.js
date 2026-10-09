@@ -1,5 +1,5 @@
 // api/version.js
-// BUILD: version-report v5 2026-10-08
+// BUILD: version-report v6 2026-10-08
 // ----------------------------------------------------------------------
 // GET /api/version            -> plain-text report (copy/paste into any chat)
 // GET /api/version?json=1     -> same data as JSON
@@ -86,7 +86,7 @@ const EXPECT = {
   "compiler/_identity_pivots.js": [["Canon line library", "stand_in"], ["stand-in lines are standing facts", "never at his desk"]],
   "_bits_scorer.js": [["BIT-350 trigger", "prior_mailbox_unavailable"]],
   "compiler/_bits_directives.js": [["BIT-350 directive", "BIT-350"]],
-  "compiler/host_prompt_source.json": [["v0.29 IVR pickup exception", "EXCEPTION, IVR PICKUP ONLY"], ["v0.30 stand-in is a standing arrangement", "STANDING ARRANGEMENT"]],
+  "compiler/host_prompt_source.json": [["v0.29 IVR pickup exception", "EXCEPTION, IVR PICKUP ONLY"], ["v0.30 stand-in is a standing arrangement", "STANDING ARRANGEMENT"], ["v0.31 identity lines paragraph", "IDENTITY LINES HANDED TO YOU"]],
   "hydrate.js": [
     ["phone token fallback", "TOKEN-FALLBACK-FROM-JOB"],
     ["call-state reset", "CALL-STATE-RESET"],

@@ -142,19 +142,34 @@ const NAME_STOP = new Set(("someone somebody anyone anybody the a an your you my
 const CAP = "([A-Za-z][A-Za-z'\u2019-]{1,20})"; // one word; capital letter is checked on the original text
 const TITLE = "(?:mr\\.?|mrs\\.?|ms\\.?|miss|dr\\.?)?\\s*";
 // Patterns that capture a NAME (capital letter required in the transcript).
+// loose: true = patterns where a capitalized word is often NOT a person
+// ("I want X", "looking for X", "get me X"). For those the word must be a
+// known first name, or carry a title (Mr/Mrs/Ms/Dr).
 const STAND_IN_RES = [
-  new RegExp("\\b(?:is|was)\\s+" + CAP + "\\s+(?:there|in|available|around|home|in the office|at (?:his|her) desk)\\b", "i"),
-  new RegExp("\\b(?:speak|speaking|talk|talking|chat|chatting)\\s+(?:to|with)\\s+(?:a\\s+|the\\s+)?" + TITLE + CAP, "i"),
-  new RegExp("\\b(?:put|get)\\s+" + TITLE + CAP + "\\s+(?:on|now|please|back)\\b", "i"),
-  new RegExp("\\b(?:get me|give me|connect me (?:to|with)|transfer me to)\\s+" + TITLE + CAP, "i"),
-  new RegExp("\\bwhere(?:'s|\u2019s| is)\\s+" + TITLE + CAP, "i"),
-  new RegExp("\\b(?:looking|asking|calling|here)\\s+for\\s+" + TITLE + CAP, "i"),
-  new RegExp("\\bi\\s+(?:was|am|'m)?\\s*(?:supposed|expecting|trying|hoping|wanting)\\s+to\\s+(?:speak|talk|reach|get)(?:\\s+(?:to|with|ahold of|hold of))?\\s+" + TITLE + CAP, "i"),
-  new RegExp("\\bi\\s+(?:thought|assumed|figured)\\s+(?:i\\s+was|this\\s+was|it\\s+was|you\\s+were)\\s+(?:talking to|speaking (?:to|with)|reaching|calling|getting)?\\s*" + TITLE + CAP, "i"),
-  new RegExp("\\b(?:told|promised)\\b[^.?!]{0,60}\\b(?:speak(?:ing)?|talk(?:ing)?)\\s+(?:to|with)\\s+" + TITLE + CAP, "i"),
-  new RegExp("\\b(?:i\\s+(?:want|need|wanted|needed))\\s+(?:to\\s+(?:speak|talk)\\s+(?:to|with)\\s+)?" + TITLE + CAP, "i"),
-  new RegExp("\\b(?:i\\s+only\\s+(?:deal|talk|speak|work)\\s+with)\\s+" + TITLE + CAP, "i"),
+  { loose: false, re: new RegExp("\\b(?:is|was)\\s+" + CAP + "\\s+(?:there|in|available|around|home|in the office|at (?:his|her) desk)\\b", "i") },
+  { loose: false, re: new RegExp("\\b(?:speak|speaking|talk|talking|chat|chatting)\\s+(?:to|with)\\s+(?:a\\s+|the\\s+)?" + TITLE + CAP, "i") },
+  { loose: false, re: new RegExp("\\b(?:put|get)\\s+" + TITLE + CAP + "\\s+(?:on|now|please|back)\\b", "i") },
+  { loose: true,  re: new RegExp("\\b(?:get me|give me|connect me (?:to|with)|transfer me to)\\s+" + TITLE + CAP, "i") },
+  { loose: false, re: new RegExp("\\bwhere(?:'s|\u2019s| is)\\s+" + TITLE + CAP, "i") },
+  { loose: true,  re: new RegExp("\\b(?:looking|asking|calling|here)\\s+for\\s+" + TITLE + CAP, "i") },
+  { loose: false, re: new RegExp("\\bi\\s+(?:was|am|'m)?\\s*(?:supposed|expecting|trying|hoping|wanting)\\s+to\\s+(?:speak|talk|reach|get)(?:\\s+(?:to|with|ahold of|hold of))?\\s+" + TITLE + CAP, "i") },
+  { loose: false, re: new RegExp("\\bi\\s+(?:thought|assumed|figured)\\s+(?:i\\s+was|this\\s+was|it\\s+was|you\\s+were)\\s+(?:talking to|speaking (?:to|with)|reaching|calling|getting)?\\s*" + TITLE + CAP, "i") },
+  { loose: false, re: new RegExp("\\b(?:told|promised)\\b[^.?!]{0,60}\\b(?:speak(?:ing)?|talk(?:ing)?)\\s+(?:to|with)\\s+" + TITLE + CAP, "i") },
+  { loose: true,  re: new RegExp("\\b(?:i\\s+(?:want|need|wanted|needed))\\s+(?:to\\s+(?:speak|talk)\\s+(?:to|with)\\s+)?" + TITLE + CAP, "i") },
+  { loose: false, re: new RegExp("\\b(?:i\\s+only\\s+(?:deal|talk|speak|work)\\s+with)\\s+" + TITLE + CAP, "i") },
 ];
+// Companies, brands, institutions and role words: never a request for a PERSON.
+const NOT_A_PERSON = new Set(("microsoft windows apple iphone ipad mac amazon google gmail android chrome facebook meta instagram whatsapp netflix paypal venmo zelle cashapp coinbase bitcoin visa mastercard amex discover chase citibank citi wells fargo boa bank banks bankofamerica capital one usbank pnc truist geico progressive statefarm allstate medicare medicaid irs ssa social security treasury fbi dea doj fedex ups usps dhl walmart target costco kroger walgreens cvs lowes lowe's homedepot depot bestbuy best buy geek squad norton mcafee avast kaspersky avg verizon att at&t tmobile t-mobile sprint comcast xfinity spectrum cox dell hp lenovo asus acer samsung sony lg intel amd nvidia cisco oracle adobe zoom dropbox yahoo outlook hotmail aol ebay etsy steam tesla ford toyota honda uber lyft airbnb expedia spotify hulu disney openai chatgpt support department dept service services customer technical tech security fraud billing accounts account sales team company office desk agent representative rep help helpdesk center centre division government federal state police sheriff court lawyer attorney doctor hospital clinic pharmacy insurance warranty refund refunds payment payments orders order shipping delivery claims claim compliance legal marketing management admin administration operator dispatcher technician specialist supervisor manager director").split(" "));
+function looksLikePerson(word, hasTitle, loose) {
+  const w = String(word || "").toLowerCase().replace(/[^a-z']/g, "");
+  if (!w) return false;
+  if (NOT_A_PERSON.has(w)) return false;
+  if (hasTitle) return true; // "Mr. Patel": a title makes it a person
+  if (/(?:ware|soft|tion|ment|ing|ness|bank|corp|inc|llc|net|tel|com)$/.test(w) && !MALE.has(w) && !FEMALE.has(w)) return false;
+  const known = MALE.has(w) || FEMALE.has(w);
+  if (loose) return known;
+  return true;
+}
 const INSIST_RE = /\b(?:put|get)\s+(?:[A-Za-z.]+\s+){0,2}on\b|\bi\s+(?:only|just)\s+(?:deal|talk|speak|work)\s+with\b|\bi(?:'m|\u2019m| am)\s+not\s+(?:talking|speaking)\s+to\s+you\b|\bnot\s+you\b|\blet\s+me\s+(?:talk|speak)\s+to\b|\bi\s+(?:want|need)\s+(?:him|her)\b|\bwho\s+are\s+you\s+to\b/i;
 
 const VOICE_RE = /\byou\s+(?:sound|seem)\s+(?:like\s+)?(?:a\s+|an\s+)?(?:man|woman|guy|girl|lady|female|male|boy|different|young|old)\b|\byour\s+voice\b|\bis\s+this\s+(?:really\s+|actually\s+)?(?:a\s+)?(?:man|woman|guy|girl|lady)\b|\bare\s+you\s+(?:a\s+)?(?:man|woman|guy|girl|lady|male|female)\b|\bthat(?:'s|\u2019s|\s+is)\s+not\s+(?:a\s+|the\s+)?(?:man|woman|guy|girl|lady)\b|\bi\s+thought\s+(?:i\s+was|this\s+was|you\s+were)\s+(?:talking|speaking)?\s*(?:to|with)?\s*(?:a\s+)?(?:man|woman|guy|girl|lady)\b/i;
@@ -179,12 +194,18 @@ export function detectChallenge(text, ctx) {
   if (!t) return null;
   const hostFirst = ctx.hostFirst;
   // 1) stand-in: asks for someone who is not the host
-  for (const re of STAND_IN_RES) {
+  for (const { re, loose } of STAND_IN_RES) {
     const m = re.exec(t);
     if (!m) continue;
     // the captured name must really be capitalized in the transcript
     if (!/^[A-Z]/.test(m[1])) continue;
-    const name = cleanName(m[1], hostFirst);
+    const hasTitle = /\b(?:mr|mrs|ms|miss|dr)\b\.?\s/i.test(m[0]);
+    if (!looksLikePerson(m[1], hasTitle, loose)) continue;
+    let name = cleanName(m[1], hostFirst);
+    if (name && hasTitle) {
+      const tm = /\b(mr|mrs|ms|miss|dr)\b\.?\s/i.exec(m[0]);
+      if (tm) name = tm[1][0].toUpperCase() + tm[1].slice(1).toLowerCase() + (/^(?:miss)$/i.test(tm[1]) ? " " : ". ") + name;
+    }
     if (name) return { topic: "stand_in", name, insist: INSIST_RE.test(t) };
   }
   // insist with no name ("put him on") only matters when a stand-in is already in play
@@ -253,7 +274,7 @@ export function toldInThisCall(messages, topic) {
 }
 function assistantMentions(messages, name) {
   const said = norm((messages || []).filter((m) => m && m.role === "assistant").map((m) => textOf(m.content)).join(" . "));
-  return !!name && said.split(" ").includes(norm(name).split(" ")[0]);
+  return !!name && said.split(" ").includes(norm(name).split(" ").pop());
 }
 
 const RULES =
@@ -294,7 +315,7 @@ export function planIdentityPivot({ body, stored, messages, hostName, isSilenceB
   if (hit.topic === "stand_in") {
     const saved = known.stand_in;
     const earlier = saved || (told ? "__EARLIER__" : null);
-    if (hit.name && saved && !saved.toLowerCase().includes(hit.name.split(" ")[0].toLowerCase())) {
+    if (hit.name && saved && !saved.toLowerCase().includes(hit.name.split(" ").pop().toLowerCase())) {
       return { directive: null, save: null, state: null, log: "topic=stand_in skipped (saved story is about someone else) name=" + hit.name };
     }
     if (hit.name && !saved && told && !assistantMentions(messages, hit.name)) {
