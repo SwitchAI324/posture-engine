@@ -23,6 +23,7 @@ export const config = { runtime: "edge" };
 import { getCall, getCallBySlug, setCall, isConfigured, appendBitEvent, clearDeathBlow, getControls, stampArm, fireArm, fireForce, saveTranscript, clearBench } from "../_store.js";
 import { selectBit, rankBits, DEPLOY_THRESHOLD, selectTextureBit, rankTextureCandidates, explainExclusion } from "../_bits_scorer.js";
 import { archetypeFromBody, logIfUnknownArchetype } from "../_archetype.js";
+import { pivotMode, loadPivotLibrary, planIdentityPivot, saveIdentityStory } from "../_identity_pivot.js";
 // ── ACCUSATION DETECTION (Aug 5, extracted from _gears_tells.js/_gears.js as
 // part of removing gears entirely) ────────────────────────────────────────
 // This is NOT part of the suspicion state machine that's being removed — it's
@@ -2639,6 +2640,7 @@ export default async function handler(req) {
   // first or a fire falls back to the name-only loadout pointer (the sanding
   // bug). Cached after the first call — later turns don't re-import.
   if (baseSystem) await loadBitDirectives();
+  if (pivotMode() !== "off") await loadPivotLibrary(); // identity pivot: see _identity_pivot.js
   const built = baseSystem
     ? buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil, turnOneOpen, stageTransitionFired)
     : null;
@@ -6031,6 +6033,28 @@ function buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, con
     // retry since nothing about the payload changed, cascading into the
     // caller hearing nothing and the call dying). Guard: only push when
     // there's real content.
+    // IDENTITY PIVOT (2026-10-08, Host Canon's library; outbound phone calls
+    // only, gated by IDENTITY_PIVOT=1|log and metadata.voice_e164). Fires ONLY
+    // when the caller's latest line reacts to who answered (asks for someone
+    // else, remarks on the name/voice/accent). Never volunteered. The chosen
+    // line's standing-fact story is saved first-wins per (user, number) via
+    // Data's set_call_identity_story; a repeat question in the same call is
+    // recognised from the host's own earlier turns. See _identity_pivot.js.
+    try {
+      const pivot = planIdentityPivot({
+        body, stored, messages,
+        hostName: (stored && stored.hostName) || hostNameFromBody(body),
+        isSilenceBeat: isSilenceBeatRequest,
+      });
+      if (pivot) {
+        console.log("IDENTITY-PIVOT callId=" + JSON.stringify(callId) + " turn=" + turn + " " + pivot.log);
+        if (pivot.directive) mutable += "\n\n" + pivot.directive;
+        if (pivot.save) waitUntil(saveIdentityStory(pivot.save).catch(() => {}));
+      }
+    } catch (e) {
+      console.log("IDENTITY-PIVOT error (ignored): " + (e && e.message));
+    }
+
     if (mutable) blocks.push({ type: "text", text: mutable });
 
     // VISIBILITY: the fit read, every turn, watchable in Vercel logs.
@@ -7527,6 +7551,7 @@ export async function runHostTurn({ messages, callId, meta }) {
   if (benchPhantomInvoke) baseSystem = baseSystem + "\n\n" + benchPhantomInvoke;
 
   await loadBitDirectives(); // see the handler site — must precede buildSystemBlocks
+  if (pivotMode() !== "off") await loadPivotLibrary();
   const built = buildSystemBlocks(baseSystem, stored, messages, callId, body, ammo, controls, waitUntil);
   const systemBlocks = built ? built.blocks : null;
   const deathBlowFiring = built ? built.deathBlowFiring : false;
