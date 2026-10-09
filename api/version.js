@@ -1,5 +1,5 @@
 // api/version.js
-// BUILD: version-report v3 2026-10-07
+// BUILD: version-report v5 2026-10-08
 // ----------------------------------------------------------------------
 // GET /api/version            -> plain-text report (copy/paste into any chat)
 // GET /api/version?json=1     -> same data as JSON
@@ -25,6 +25,8 @@ const READERS = {
   "_bits_registry.js": () => fs.readFileSync(path.join(__dirname, "_bits_registry.js"), "utf8"),
   "compiler/_bits_directives.js": () => fs.readFileSync(path.join(__dirname, "compiler/_bits_directives.js"), "utf8"),
   "compiler/host_prompt_source.json": () => fs.readFileSync(path.join(__dirname, "compiler/host_prompt_source.json"), "utf8"),
+  "_identity_pivot.js": () => fs.readFileSync(path.join(__dirname, "_identity_pivot.js"), "utf8"),
+  "compiler/_identity_pivots.js": () => fs.readFileSync(path.join(__dirname, "compiler/_identity_pivots.js"), "utf8"),
   "hydrate.js": () => fs.readFileSync(path.join(__dirname, "hydrate.js"), "utf8"),
   "_store.js": () => fs.readFileSync(path.join(__dirname, "_store.js"), "utf8"),
   "livekit-webhook.js": () => fs.readFileSync(path.join(__dirname, "livekit-webhook.js"), "utf8"),
@@ -78,10 +80,13 @@ const EXPECT = {
     ["BIT-350 mailbox gag", "MAILBOX-GAG FIRING"],
     ["voicemail mode fix", "VOICEMAIL-MODE bit suppressed"],
     ["prefix/tail cache split", "_prefixText"],
+    ["identity pivot wired", "IDENTITY-PIVOT callId"],
   ],
+  "_identity_pivot.js": [["pivot module", "planIdentityPivot"], ["story save", "set_call_identity_story"]],
+  "compiler/_identity_pivots.js": [["Canon line library", "stand_in"], ["stand-in lines are standing facts", "never at his desk"]],
   "_bits_scorer.js": [["BIT-350 trigger", "prior_mailbox_unavailable"]],
   "compiler/_bits_directives.js": [["BIT-350 directive", "BIT-350"]],
-  "compiler/host_prompt_source.json": [["v0.29 IVR pickup exception", "EXCEPTION, IVR PICKUP ONLY"]],
+  "compiler/host_prompt_source.json": [["v0.29 IVR pickup exception", "EXCEPTION, IVR PICKUP ONLY"], ["v0.30 stand-in is a standing arrangement", "STANDING ARRANGEMENT"]],
   "hydrate.js": [
     ["phone token fallback", "TOKEN-FALLBACK-FROM-JOB"],
     ["call-state reset", "CALL-STATE-RESET"],
@@ -103,7 +108,7 @@ const EXPECT = {
 
 const FLAGS = [
   "IVR_OPEN", "TRIGGER_MATCH", "TEXTURE_ROTATION", "MOVES_OWED_REINJECT_ALL",
-  "GAG_OPEN_RATE", "MIN_GAP", "INJECT_BAR", "MAX_TOKENS", "ANTHROPIC_MODEL",
+  "GAG_OPEN_RATE", "IDENTITY_PIVOT", "MIN_GAP", "INJECT_BAR", "MAX_TOKENS", "ANTHROPIC_MODEL",
 ];
 const SECRETS = [
   "RECORDING_TOKEN_SECRET", "PHONE_INTAKE_SECRET", "CRON_SECRET",
