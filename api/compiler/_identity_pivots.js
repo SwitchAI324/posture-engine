@@ -9,9 +9,9 @@
 // the host to say she/her when the person named reads as female.
 //
 // PROPOSED (not yet signed off by Andrew): stand_in.authority, stand_in.firm
-// -- kept easy to swap. Lean-in line 1 is flagged needs_check (Canon: the
-// George Foreman numbers are from low-quality sources) and is NEVER used
-// until that flag is removed.
+// -- kept easy to swap. Lean-in line 1 (George Foreman) was flagged
+// needs_check; released 2026-10-08 (Andrew accepts the small risk). Set
+// "needs_check": true on any lean_in entry to hold it back again.
 // The surname rule is stored as data only; it is NOT wired (see below).
 // ----------------------------------------------------------------------
 
@@ -82,7 +82,7 @@ const LIB = {
     "lean_in": [
       {
         "line": "It's a family name. Everyone in my family is named {name}. You know, George Foreman had 12 kids and five of the boys were named George.",
-        "needs_check": true
+        "needs_check": false
       },
       {
         "line": "To get another 20% off coupon at Applebee's, I used {name} for the second sign-up and never changed it back.",
