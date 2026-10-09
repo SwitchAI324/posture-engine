@@ -1,5 +1,5 @@
 // api/version.js
-// BUILD: version-report v6 2026-10-08
+// BUILD: version-report v7 2026-10-09
 // ----------------------------------------------------------------------
 // GET /api/version            -> plain-text report (copy/paste into any chat)
 // GET /api/version?json=1     -> same data as JSON
@@ -41,6 +41,10 @@ const READERS = {
   "phone/intake.js": () => fs.readFileSync(path.join(__dirname, "phone/intake.js"), "utf8"),
   "phone/inbound-check.js": () => fs.readFileSync(path.join(__dirname, "phone/inbound-check.js"), "utf8"),
   "phone/inbound-complete.js": () => fs.readFileSync(path.join(__dirname, "phone/inbound-complete.js"), "utf8"),
+  "phone/cancel.js": () => fs.readFileSync(path.join(__dirname, "phone/cancel.js"), "utf8"),
+  "phone/recap-sweep.js": () => fs.readFileSync(path.join(__dirname, "phone/recap-sweep.js"), "utf8"),
+  "phone/_actions.js": () => fs.readFileSync(path.join(__dirname, "phone/_actions.js"), "utf8"),
+  "phone/_schedule.js": () => fs.readFileSync(path.join(__dirname, "phone/_schedule.js"), "utf8"),
   "phone/prompt-compile.js": () => fs.readFileSync(path.join(__dirname, "phone/prompt-compile.js"), "utf8"),
   "phone/sms-inbound.js": () => fs.readFileSync(path.join(__dirname, "phone/sms-inbound.js"), "utf8"),
   "phone/sms-send.js": () => fs.readFileSync(path.join(__dirname, "phone/sms-send.js"), "utf8"),
