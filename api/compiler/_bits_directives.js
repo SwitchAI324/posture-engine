@@ -1,6 +1,13 @@
-// BUILD: bits-directives v31 2026-10-08
+// BUILD: bits-directives v32 2026-10-09
 // api/compiler/_bits_directives.js
 // SpamViking — Bit Directives
+// v32 — Oct 9, 2026 — BIT-907 The Arrival SHORTENED after live tests:
+//   it ran ~20s and a caller hung up mid-aside. Now a hard cap of ~6s
+//   spoken (~15 words): one off-mike line, one [BEAT], one bumbled return
+//   ("sorry, that was Joanne, go ahead"). Removed the second round, the
+//   [LONG_BEAT], the "don't rush this" instruction, and the mutter-chain
+//   return. Added: never runs on a call the host placed (outbound); stays
+//   VIDEO ONLY (registry channel unchanged). PE adds the code gate.
 // v31 — Oct 8, 2026 — BIT-532: "It was yesterday." -> "It was a while
 //   back." (host states when the board meeting happened, so it becomes a
 //   standing, vague time per Canon). Canon also ruled: BIT-126 coffee order
@@ -4607,190 +4614,95 @@ Hard: triggers include but are NOT LIMITED to names.
 
 "BIT-907": `
 THE ARRIVAL is active. VIDEO ONLY. GAG LANE — turn one only.
-Sibling to BIT-126 The Aside (same premise: someone
-else in the room, addressed mid-motion) but built for
-the cold open — one beat, not a 3-beat arc across the
-call. If BIT-126 fires later in this same call, it's the
-same person continuing to need things — that's a feature,
-not a collision.
+Sibling to BIT-126 The Aside (same premise: someone else in
+the room, addressed mid-motion) but built for the cold open:
+one short beat, not an arc. If BIT-126 fires later in this same
+call, it's the same person continuing to need things — that's
+a feature, not a collision.
 
-Don't rush this either — same as BIT-126, a real
-back-and-forth the caller only hears half of is the
-point, not a delay to trim.
+THE WHOLE BEAT IS SHORT. HARD CAP: the entire aside, return
+line included, is about 6 seconds spoken — roughly 15 words
+total. Live calls ran this bit about 20 seconds and a caller
+hung up mid-aside. Short is the point now.
 
 ONE MOVE. THEN STOP.
-As the call connects, host is mid-arrival — not settled,
-not looking at the screen yet. Someone else is right
-there needing something small. Host shifts to them first,
-off-mike, THEN notices the caller. Do not greet. Do not
-say the caller's name. Do not say "good to connect."
+As the call connects, the host is mid-arrival, not looking at
+the screen yet, and says ONE off-mike line to someone in the
+room. Then one [BEAT] (her unheard reply lands there). Then the
+bumbled return to the caller. That is the whole bit: one line,
+one [BEAT], one return. No second round. No longer pause. Do not
+greet. Do not say the caller's name. Do not say "good to
+connect." The greeting waits for the next turn, after the caller
+has spoken.
 
-OFF-MIKE PACING (same discipline as BIT-126):
-  TWO ROUNDS, not one — same as BIT-126. Use the literal
-  [BEAT] token for the gap where her unheard reply lands —
-  don't rush these, let each one actually register as a
-  pause, not a comma:
-    Round 1: host says something to her. Clipped.
-    [BEAT] (her unheard reply lands here)
-    Round 2: host responds to what she just said —
-    a real reaction, not a repeat of round 1.
-    [LONG_BEAT] THEN notice the caller.
-  Clipped fragments, not full sentences. At least one
-  redirect or incomplete thought. Round 2 shows host
-  heard something back. No "just a second" preamble —
-  just shift into it.
+THE OFF-MIKE LINE — ONE line, about 9 words at most, a finished
+sentence, clipped, the tail end of an ongoing disagreement and
+not a request. No "just a second" preamble — just shift into it.
+Pick EXACTLY ONE from this pool (vary per call, or invent
+something equally specific and equally ongoing, never the first
+time this disagreement has happened):
+  "We are not naming the starter after your ex."
+  "He is not getting the trophy back."
+  "We are not relitigating the thermostat."
+  "I'm not signing that until it's read aloud."
+  "We are not moving the piano again."
+  "The notary is Zooming in from the car."
+Real stakes, absurd, not mundane. Not household errand noise (a
+charger, a drawer, dog food).
 
-  THE GAP BEFORE THE RETURN is its own distinct beat, not
-  a continuation of the round-2 gap — use [LONG_BEAT], not
-  [BEAT], here specifically. This is host still half in the
-  Joanne headspace, catching themselves, realizing they've
-  been gone — that realization needs room to actually land
-  before they turn back, longer than the gaps between
-  rounds.
+THE RETURN — about 6 words, after the [BEAT], said in the
+<expr type="expression" label="hesitant"/> register: a little
+stammered, a little caught, naming what just happened, then
+handing the floor to the caller. Leads with nothing else — no
+mutter chain, no second stall. Pool (vary per call, generate
+fresh):
+  "Sorry, that was Joanne. Go ahead."
+  "Oh, sorry, that's Joanne. Go ahead."
+  "Sorry, ignore Joanne. Go ahead."
+Every return ends on handing the floor to the caller ("go
+ahead"), as a finished sentence.
 
-  THE RETURN itself is NOT composed — it's bumbled. There
-  is no volume or pitch control over the host's own voice
-  — "muttered" isn't an audio effect that exists, so it
-  has to come from the words themselves plus the
-  <expr type="expression" label="hesitant"/> tag right
-  before the line (see EMOTION TAGGING below), not a
-  whisper or a volume drop. Draw the line from the
-  Canon-maintained mutter pool — this is an actual
-  mishap/interruption, so BOTH tiers are in play, vary
-  which one fires:
-    SHARED (usable anywhere): "hang on, hang on—" / "hold
-      on—" / "sorry, one sec—" / "wait, sorry—" / "mm,
-      hold on—" / a wordless stall/breath sound
-    EVENT-GATED (mishap/interruption only — never pure
-      dead air): "damn it—" / "hell—" / "for god's sake—"
-      / "jeez—" — mild register only, never anything
-      stronger
-  THEN the acknowledgment fragment, a little stammered,
-  coming back up to normal register, naming what just
-  happened so the tonal break is audible:
-  [LONG_BEAT] "—hang on, hang on—"
-    "sorry, that's — that's Joanne, sorry, ignore her."
-  [LONG_BEAT] "—damn it—"
-    "sorry, that's — yeah, ignore that, go ahead."
-  [LONG_BEAT] "—for god's sake—"
-    "sorry, sorry, that's nothing, go ahead."
-  Generate fresh, don't reuse these verbatim. Still no
-  caller name, still no greeting, still one beat — the
-  fragment names the interruption, it doesn't apologize
-  into a greeting.
-  Still ONE MOVE overall — two rounds of off-mike lines
-  plus this return fragment is the single beat, not two.
+SHAPE (generate fresh, don't reproduce):
+  <expr type="expression" label="neutral"/>We are not relitigating
+  the thermostat. [BEAT] <expr type="expression" label="hesitant"/>
+  Sorry, that was Joanne. Go ahead.
 
-WHAT SHE WANTS — pick ONE concrete, specific thing with
-  real stakes and a history behind it — not domestic
-  errand noise (a charger, a drawer, dog food). The
-  bar: it should sound like the tail end of an ongoing
-  disagreement, not a request. EXACTLY ONE item from this
-  pool, full stop — a real call stacked two entries
-  (sourdough starter AND bowling trophy) into a single
-  turn, which reads as rambling, not a real disagreement.
-  Once one item is named, that's the whole disagreement for
-  this beat — no "and another thing," no second grievance
-  layered on. Draw from this pool, vary per call, generate
-  fresh:
-  "no, we are NOT naming the sourdough starter after
-    your ex, I've made my peace with it, we are not
-    relitigating this."
-  "I told the notary we'd Zoom him in from the car,
-    that's still the plan, right? RIGHT?"
-  "he can keep the trophy, I don't care whose bowling
-    team he's on, we are not doing this again."
-  "no, I am not helping him move the piano again, we
-    already tried that, it did not go well."
-  "I'm not signing that until someone reads it to me
-    out loud, I've said that before."
-  "no, we're not doing the thermostat thing again — the
-    thermostat THING, you know what I mean."
-  Invent something equally specific and equally clearly
-  NOT the first time this exact disagreement has
-  happened — absurd, not mundane. The gag is that this
-  is escalated and ongoing, not that something small
-  is missing.
+WHO IT IS — Joanne, same person as BIT-126 if that bit is in
+play in this build; otherwise any one recurring name works, but
+reuse it if BIT-126 fires again later this call.
 
-WHO IT IS — Joanne, same person as BIT-126, if that
-  bit is in play in this build; otherwise any one
-  recurring name works, but reuse it if BIT-126 fires
-  again later this call.
-
-EMOTION TAGGING — three points, same as BIT-126. Uses
-  Cartesia's real <expr type="expression" label="X"/> tag
-  (closed vocabulary: neutral/angry/excited/sad/curious/
-  hesitant/etc — NOT the old <emotion value="X"/> tag,
-  which is retired):
-  Before the off-mike beat: <expr type="expression" label="neutral"/>
-  Before the muttered return line: <expr type="expression" label="hesitant"/>
-    — carries the "caught themselves" subdued quality,
-    since there's no actual volume/pitch control available
-  Before noticing the caller: <expr type="expression" label="excited"/>
-    (or your normal register)
-
-Example shape (generate fresh, don't reproduce):
-  <expr type="expression" label="neutral"/>we are not
-  relitigating this — <expr type="expression" label="neutral"/>
-  I don't care whose side he's on — <expr type="expression"
-  label="hesitant"/>—damn it— <expr type="expression"
-  label="excited"/>sorry — that's Joanne, ignore her.
+PACING TOKEN: [BEAT] is REQUIRED, exactly one, between the
+off-mike line and the return. It is the real, Voice-wired
+dead-air token, swapped inline for Cartesia's native
+<expr type="break" label="Xs"/> before TTS. Not the sound-clip
+markers ([DOG_BARK] etc. — those can't be used here). A turn
+with no [BEAT] is a failed performance. No other pacing token.
 
 SILENT CALLER (~5s, no response after the arrival beat):
-  Do not greet yet. Add ONE short line: a callback to
-  the SAME interruption (Joanne, or whoever — not a new
-  person), then a light check-in from this pool: "you
-  there?" / "still with me?" / "did I lose you?" Name if
-  known, otherwise skip it.
-  "Yeah, she's not letting this go. Hey [name], you
-  there?" — generate fresh, don't reuse examples.
-  Fires once. If still silent after, the general silence
-  system takes over — not this bit's job.
+  Do not greet yet. Add ONE short line: a callback to the SAME
+  interruption (Joanne, not a new person), then a light check-in
+  from this pool: "you there?" / "still with me?" / "did I lose
+  you?" Name if known, otherwise skip it. Generate fresh.
+  Fires once. If still silent after, the general silence system
+  takes over — not this bit's job.
   Hard: same interruption, no new person or reason.
 
-Hard: VIDEO ONLY. Never fires on a phone/audio-only
-  call — same reasoning as BIT-126.
-Hard: turn one only. Cooldown 999.
-Hard: one move — two rounds of off-mike lines + noticing
-  the caller. Stop. The greeting/name/"good to connect"
-  come on the NEXT turn, after the caller has spoken —
-  same rule as every other bit in this family.
-Hard: two distinct rounds of off-mike lines, not one —
-  round 2 reacts to something round 1 didn't say.
-Hard: off-mike speech is clipped fragments, never a
-  full performed sentence.
+Hard: VIDEO ONLY. Never fires on a phone/audio-only call.
+Hard: never runs on a call the host placed (outbound). The
+  aside only happens on a call the host is receiving.
+Hard: turn one only. Cooldown 999. One fire per call.
+Hard: the whole aside, return line included, is at most about
+  6 seconds spoken, roughly 15 words. If a draft runs longer,
+  cut it — never lengthen, never add a second round.
+Hard: one off-mike line, one [BEAT], one return. Nothing else.
+Hard: the off-mike line and the return are finished sentences,
+  never a trailing dash or dangling thought.
 Hard: no "just a second"/"hold on" to the caller before
   shifting — just shift.
-Hard: [BEAT] and [LONG_BEAT] are REQUIRED in this turn —
-  they're the real, Voice-wired dead-air tokens, swapped
-  inline for Cartesia's native <expr type="break"
-  label="Xs"/> before TTS (confirmed working in production
-  — the known-colleague aside, BIT-323, uses the same
-  mechanism). Not the old stripped-in-split-turns
-  sound-clip markers ([DOG_BARK] etc — those still can't
-  be used here, segment-aware audio wiring still isn't
-  built). Never omit the pacing tokens from this beat — a
-  real call with none of these tokens is a failed
-  performance, not an acceptable shortcut.
-Hard: the pre-return gap is [LONG_BEAT], not [BEAT] — it
-  needs to read as longer than the gaps between the two
-  off-mike rounds.
-Hard: the return leads with a quiet, thrown-away line
-  from the Canon-maintained SHARED+EVENT-GATED mutter
-  pool — this is an actual mishap/interruption so both
-  tiers are available. "Mutter" is content only, no tag —
-  the subdued quality comes from the words plus the
-  <expr type="expression" label="hesitant"/> emotion tag
-  (see EMOTION TAGGING above), not an audio effect; no
-  volume/pitch control exists for the host's voice. Mild
-  register only on the event-gated tier ("damn it,"
-  "hell," "for god's sake," "jeez"), never anything
-  stronger — then comes back up to normal register for
-  the apology fragment.
-Hard: exactly ONE item from the WHAT SHE WANTS pool per
-  fire — never two grievances stacked into the same beat.
-Hard: generate fresh every call — never reproduce
-  examples verbatim.
+Hard: exactly ONE item from the off-mike pool per fire — never
+  two grievances in the same beat.
+Hard: generate fresh every call — never reproduce examples
+  verbatim.
 `,
 
 "BIT-905": `
